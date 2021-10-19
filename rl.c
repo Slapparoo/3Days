@@ -146,7 +146,7 @@ typedef struct {
 void SetTerminalAttrs(COldTAttrs* old) {
     struct termios attrs;
     tcgetattr(STDIN_FILENO, &attrs);
-    old->imode = attrs;
+    if(old) old->imode = attrs;
     attrs.c_lflag &= ~(ICANON | ISIG | IEXTEN | ECHO);
     attrs.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
     attrs.c_cflag |= (CS8);
@@ -184,28 +184,19 @@ void InitRL() {
     omode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), omode);
     #endif
-    SetTerminalAttrs(NULL);
 }
 
 char* rl(char* prompt) {
+    COldTAttrs old;
+    SetTerminalAttrs(&old);
     //fflush(stdout);
     int bufferHeight=1;
     static int firstRun;
-    COldTAttrs old;
     int cursor_x, cursor_y;
     char buffer[2048];
     //Used when "coming back from" history
     char _buffer[2048];
     buffer[0] = 0;
-    DWORD cnt;
-    if(GetNumberOfConsoleInputEvents(STDIN_FILENO,&cnt)) {
-        if(cnt) {
-          char buffer2[cnt+1];
-          buffer2[cnt]=0;
-          ReadConsole(STDIN_FILENO,buffer2,cnt,NULL,NULL);
-          strcat(buffer,buffer2);
-        }
-    }
     _GetCursorPos(&cursor_x, &cursor_y);
     int cursor_pos = 0;
     int hist = HistorySize();
