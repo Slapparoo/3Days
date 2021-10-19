@@ -36,7 +36,10 @@ static char *__WordAtPoint(char *text) {
     return strncpy(TD_MALLOC(1+text-orig),orig,text-orig);
 }
 void EnterDebugger() {
-    if(!Compiler.debugMode) return;
+    if(!Compiler.debugMode) {
+      fprintf(stderr, "Run with -d or -b to use the debugger.\n");
+      return;
+    }
     VisitBreakpoint(NULL);
 }
 void DbgPrintVar(CType *type,void *ptr) {
@@ -276,7 +279,6 @@ loop:
     char *_gcs=strdup(s); //Garbage collected
     if(strlen(s)) strcpy(prevCommand,s);
     if(!strlen(s)) _gcs=strdup(prevCommand);
-    if(strlen(s)) AddHistory(s);
     TD_FREE(s);
     s=__SkipWhitespace(_gcs);
     char *word=__WordAtPoint(s);

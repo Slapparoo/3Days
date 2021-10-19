@@ -22,6 +22,9 @@
 F64 ToF64(I64 i) {
   return i;
 }
+I64 ToI64(F64 i) {
+  return i;
+}
 F64 Clamp(F64 d,F64 lo,F64 hi)
 {//Clamp to F64 [] range.
   if (d<lo)

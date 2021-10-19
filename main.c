@@ -22,6 +22,8 @@ static struct arg_file *tagsArg;
 static struct arg_file *errsFile;
 ExceptBuf SigPad;
 char CompilerPath[1024];
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
+#define ENABLE_VIRTUAL_TERMINAL_INPUT 0x200 
 int main(int argc,char **argv) {
     #ifndef TARGET_WIN32
     char *rp=realpath(argv[0],NULL);
@@ -29,6 +31,17 @@ int main(int argc,char **argv) {
     free(rp);
     #else
     GetFullPathNameA(argv[0],sizeof(CompilerPath),CompilerPath,NULL);
+    DWORD imode, origImode;
+    GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &imode);
+    origImode = imode;
+    imode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT|ENABLE_PROCESSED_INPUT);
+    imode |= ENABLE_VIRTUAL_TERMINAL_INPUT ;
+    SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), imode);
+    DWORD omode, origOmode;
+    GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &omode);
+    origOmode = omode;
+    omode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), omode);
     #endif
     void *argtable[]= {
         helpArg=arg_lit0("h", "help", "Display this help message."),

@@ -280,7 +280,6 @@ void InitREPL() {
 void WaitForInput() {
     if(Lexer.isFreeToFlush) FlushLexer();
     char *input=rl("HolyCC:>> ");
-    if(strlen(input)) AddHistory(input);
 set:
     ;
     //Add to REPL_SOURCE_NAME's file lines

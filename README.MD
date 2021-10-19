@@ -59,7 +59,19 @@ I64 x=#exe{StreamPrint("10");};
   #include "/File.HC"
   #endif
   ```
-
+ - Don't put declarations in for statements as per TempleOS
+ ```
+ //Dont
+ for(I64 x=10;x>=0;x--) "%d\n",x;
+ //Do
+ I64 x;
+ for(x=10;x>=0;x--) "%d\n",x;
+ ```
+ - Explicit typecasts are bit-for-bit. Look up IEEE754 if you use `x(F64)`,(otherwise dont typecast between F64/I64 or use `ToF64()`/`ToI64()`)
+ ```
+ pi==(0x400921FB54442D18(F64));
+ I64 int_pi=ToI64(pi);
+ ```
 # Internals
 This compiler uses a modified myjit which runs under windows(new feature),linux(and breifly tested on FreeBSD). The main part of the Compiler is in compile.c. The compiler uses a value stack for temporary values(if they are on the stack on the same time they interfere). The grammar is in `HolyC.y`. The lexer uses a rope data structure provided by a patched `ext/mropes`.  I plan on making a game with this compiler so I will add to the runtime as needed. If you want to add functions,look at `runtime.c`,but a functional text editor is provided in `HolyEd/EDITOR.HC`.
 
@@ -83,3 +95,4 @@ You can contribute by adding to the runtime(see `runtime.c` and `HCRT/`).  Nice 
  - https://github.com/argtable/argtable3
  - https://jimjag.github.io/epm/
  - https://pdcurses.org/
+ - https://sourceforge.net/projects/mingweditline/
