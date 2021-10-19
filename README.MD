@@ -65,3 +65,14 @@ You can contribute by adding to the runtime(see `runtime.c` and `HCRT/`).  Nice 
  - A Holy Bible API and such
  - An assembler(I am working on it,i consider this to be a secondary feature as i want the compiler to be architecture independent`See HolyEd/ASM.HC`)
  - Make this friendly to compile on FreeBSD(use yacc instead of bison and favor FreeBSD's gmake)
+
+# Credits
+ - https://github.com/martincohen/x64
+ - https://github.com/ruimaciel/mropes
+ - http://myjit.sourceforge.net/index.htm
+ - https://github.com/rxi/map
+ - https://github.com/rxi/vec
+ - C_Unescaper(me nrootconauto@gmail.com)
+ - https://github.com/argtable/argtable3
+ - https://jimjag.github.io/epm/
+ - https://pdcurses.org/
