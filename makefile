@@ -7,9 +7,9 @@ installer: 3d epm
 	./epm --setup-image logo.gif 3Days HolyCC.list
 main.o: main.c
 	$(CC) $(CFLAGS) -c  main.c -o $@
-3d: tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o HolyC.o tosprn.o gc.o debugger.o rope.o main.o at3.o exceptLin.o
+3d: tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o main.o at3.o exceptLin.o
 	gcc $(CFLAGS) $^ -lm -lncurses -ltinfo -lpthread -o $@
-3d_tests: tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tests.c HolyC.o tosprn.o gc.o debugger.o rope.o exceptLin.o
+3d_tests: tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tests.c tosprn.o gc.o debugger.o rope.o exceptLin.o
 	gcc $(CFLAGS) $^ -lm -lncurses -ltinfo -lpthread -o $@
 epm:
 	cd ext/epm-5.0.0 && sh ./configure  --enable-fltk  && make && cp epm ../..

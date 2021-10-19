@@ -5,9 +5,9 @@ all: 3d_tests.exe 3d.exe
 	echo "Done"
 main.obj: main.c
 	$(CC) $(CFLAGS) -c  main.c -o $@
-3d.exe:  vec.obj rt.obj exceptWin.obj jitlib-core.obj map.obj compile.obj pool.obj lexer.obj HolyC.obj unesc.obj HolyC.obj tosprn.obj gc.obj debugger.obj rope.obj main.obj at3.obj rl.obj  tags.obj pdcurses.a
+3d.exe:  vec.obj rt.obj exceptWin.obj jitlib-core.obj map.obj compile.obj lexer.obj HolyC.obj unesc.obj tosprn.obj gc.obj debugger.obj rope.obj main.obj at3.obj rl.obj  tags.obj pdcurses.a
 	$(CC) $(CFLAGS)   $^  -lm -o $@
-3d_tests.exe: vec.obj exceptWin.obj rt.obj jitlib-core.obj map.obj compile.obj pool.obj lexer.obj HolyC.obj unesc.obj tests.c HolyC.obj tosprn.obj gc.obj debugger.obj rope.obj  rl.obj  tags.obj pdcurses.a
+3d_tests.exe: vec.obj exceptWin.obj rt.obj jitlib-core.obj map.obj compile.obj lexer.obj unesc.obj tests.c HolyC.obj tosprn.obj gc.obj debugger.obj rope.obj  rl.obj  tags.obj pdcurses.a
 	$(CC) $(CFLAGS)   $^  -lm  -o $@
 pdcurses.a:
 	cd ext\PDCurses-3.9\wincon && make && copy pdcurses.a ..\..\..
@@ -27,8 +27,6 @@ jitlib-core.obj: ext/myjit/myjit/jitlib-core.c
 	$(CC) $(CFLAGS) -c ext/myjit/myjit/jitlib-core.c -o $@
 tosprn.obj: TOSPrint.c $(HEADERS)
 	$(CC) $(CFLAGS) -c TOSPrint.c -o $@
-pool.obj: ext/pool/pool.c
-	$(CC) $(CFLAGS) -c ext/pool/pool.c -o $@
 unesc.obj: ext/C_Unescaper/escaper.c
 	$(CC) $(CFLAGS) -c ext/C_Unescaper/escaper.c -o unesc.obj
 rope.obj: ext/mropes/src/rope.c

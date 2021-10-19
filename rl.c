@@ -21,15 +21,6 @@ typedef struct {
     char* history[HISTORY_SIZE];
 } CLIFO;
 static CLIFO History;
-void InitRL() {
-    AddGCRoot(&History,sizeof(History));
-    #ifdef TARGET_WIN32
-    DWORD omode;
-    GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &omode);
-    omode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), omode);
-    #endif
-}
 int HistoryIsEmpty() {
     return History.cur == 0 && History.start == History.end;
 }
@@ -141,12 +132,12 @@ void SetTerminalAttrs(COldTAttrs* old) {
     origOmode = omode;
     omode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), omode);
-    old->omode = origOmode;
-    old->imode = origImode;
+    if(old) old->omode = origOmode;
+    if(old) old->imode = origImode;
 }
 void RestoreTermianlAttrs(COldTAttrs* old) {
-    SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), old->imode);
-    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), old->omode);
+    //SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), old->imode);
+    //SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), old->omode);
 }
 #else
 typedef struct {
@@ -162,10 +153,10 @@ void SetTerminalAttrs(COldTAttrs* old) {
     attrs.c_oflag &= ~(OPOST);
     attrs.c_cc[VMIN] = 0;
     attrs.c_cc[VTIME] = 1;
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &attrs);
+    tcsetattr(STDIN_FILENO, TCSANOW, &attrs);
 }
 void RestoreTermianlAttrs(COldTAttrs* old) {
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &old->imode);
+    tcsetattr(STDIN_FILENO, TCSANOW, &old->imode);
 }
 #endif
 CCompletion* (*rlACGen)(const char *start,long offset,const char* text,long *length);
@@ -185,18 +176,36 @@ void RefreshLineShrink(long offset,long oldsize,long newsize) {
     WriteStdout(buffer);
     WriteStdout("\x1b[?25h"); //Turn on cursor
 }
+void InitRL() {
+    AddGCRoot(&History,sizeof(History));
+    #ifdef TARGET_WIN32
+    DWORD omode;
+    GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &omode);
+    omode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), omode);
+    #endif
+    SetTerminalAttrs(NULL);
+}
+
 char* rl(char* prompt) {
-    fflush(stdout);
+    //fflush(stdout);
     int bufferHeight=1;
     static int firstRun;
-
     COldTAttrs old;
-    SetTerminalAttrs(&old);
     int cursor_x, cursor_y;
     char buffer[2048];
     //Used when "coming back from" history
     char _buffer[2048];
     buffer[0] = 0;
+    DWORD cnt;
+    if(GetNumberOfConsoleInputEvents(STDIN_FILENO,&cnt)) {
+        if(cnt) {
+          char buffer2[cnt+1];
+          buffer2[cnt]=0;
+          ReadConsole(STDIN_FILENO,buffer2,cnt,NULL,NULL);
+          strcat(buffer,buffer2);
+        }
+    }
     _GetCursorPos(&cursor_x, &cursor_y);
     int cursor_pos = 0;
     int hist = HistorySize();
