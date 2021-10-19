@@ -34,6 +34,12 @@ class ABCDEF:ABC {I64 d,e,f;};
 ABCDEF a={1,2,3,4,5,6};
 "%d,%d\n",a.a,a.d;
 ```
+## First 64bits only
+TempleOS only takes the first 64bit of any type passed to a function,so dont pass big classes as arguments
+```
+class {I64 first,last;} ten={10,0xffff};
+"%d\n",ten;
+```
 ## exe
 This compiler is JIT so you can #exe(among other things)
 ```
@@ -65,6 +71,7 @@ You can contribute by adding to the runtime(see `runtime.c` and `HCRT/`).  Nice 
  - A Holy Bible API and such
  - An assembler(I am working on it,i consider this to be a secondary feature as i want the compiler to be architecture independent`See HolyEd/ASM.HC`)
  - Make this friendly to compile on FreeBSD(use yacc instead of bison and favor FreeBSD's gmake)
+ - Make a `Help` function.
 
 # Credits
  - https://github.com/martincohen/x64
