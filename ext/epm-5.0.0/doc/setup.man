@@ -1,0 +1,59 @@
+.\"
+.\" Manual page for the ESP Package Manager (EPM) setup GUI.
+.\"
+.\" Copyright 2020 by Jim Jagielski
+.\" Copyright 1999-2017 by Michael R Sweet
+.\" Copyright 1999-2007 by Easy Software Products, all rights reserved.
+.\"
+.\" Licensed under the Apache License, Version 2.0 (the "License");
+.\" you may not use this file except in compliance with the License.
+.\" You may obtain a copy of the License at
+.\"
+.\"    http://www.apache.org/licenses/LICENSE-2.0
+.\" 
+.\" Unless required by applicable law or agreed to in writing, software
+.\" distributed under the License is distributed on an "AS IS" BASIS,
+.\" WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+.\" See the License for the specific language governing permissions and
+.\" limitations under the License.
+.\"
+.TH setup 1 "ESP Package Manager" "20 November 2020" "Jim Jagielski"
+.SH NAME
+setup \- graphical setup program for the esp package manager
+.SH SYNOPSIS
+.B setup
+[
+.I directory
+]
+.SH DESCRIPTION
+.BR setup (1)
+provides a graphical installation interface for EPM-generated portable installation packages.
+It presents a step-by-step dialog for collecting a list of packages to install and accepting any license agreements for those packages.
+.LP
+.B setup
+searches for products in the current directory or the directory specified on the command-line.
+.SH INSTALLATION TYPES
+The default type of installation is "custom".
+That is, users will be able to select from the list of products and install them.
+.LP
+.B setup
+also supports other types of installations.
+The \fIsetup.types\fR file, if present, defines the other installation types.
+.SH SEE ALSO
+.BR epm (1),
+.BR setup.types (5).
+.SH COPYRIGHT
+Copyright \[co] 1999-2017 by Michael R Sweet, All Rights Reserved.
+Copyright \[co] 2020 by Jim Jagielski, All Rights Reserved.
+.LP
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+.LP
+   http://www.apache.org/licenses/LICENSE-2.0
+.LP
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.

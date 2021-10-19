@@ -1,0 +1,79 @@
+#
+# Sample software list file for the ESP Package Manager (EPM).
+#
+# Copyright © 2020 by Jim Jagielski
+# Copyright © 1999-2020 by Michael R Sweet
+# Copyright © 1999-2007 by Easy Software Products, all rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Directories...
+$prefix=/usr/local
+$exec_prefix=/usr/local
+$bindir=${exec_prefix}/bin
+$datarootdir=/usr/local/share
+$datadir=/usr/local/share
+$docdir=${datadir}/doc/epm
+$libdir=/usr/local/lib
+$mandir=${datarootdir}/man
+$srcdir=.
+
+# Product information
+%product ESP Package Manager (EPM)
+%copyright 1999-2020 by Michael R Sweet, All Rights Reserved.
+%copyright 2020 by Jim Jagielski, All Rights Reserved.
+%vendor Michael R Sweet, Jim Jagielski
+%license ${srcdir}/COPYING
+%readme ${srcdir}/README.md
+%description Universal software packaging tool for UNIX.
+%version 5.0.0 500
+
+# Executables
+%system all
+f 0555 root sys ${bindir}/epm epm
+f 0555 root sys ${bindir}/epminstall epminstall
+f 0555 root sys ${bindir}/mkepmlist mkepmlist
+
+# Documentation
+%subpackage documentation
+%description Documentation
+f 0444 root sys ${docdir}/README $srcdir/README.md
+f 0444 root sys ${docdir}/COPYING $srcdir/COPYING
+f 0444 root sys ${docdir}/epm-book.html $srcdir/doc/epm-book.html
+
+# Man pages
+%subpackage man
+%description Man pages
+d 0755 root sys ${mandir}/man1 -
+f 0444 root sys ${mandir}/man1/epm.1 $srcdir/doc/epm.1
+f 0444 root sys ${mandir}/man1/epminstall.1 $srcdir/doc/epminstall.1
+f 0444 root sys ${mandir}/man1/mkepmlist.1 $srcdir/doc/mkepmlist.1
+f 0444 root sys ${mandir}/man5/epm.list.5 $srcdir/doc/epm.list.5
+
+# GUI files...
+$GUIS=setup uninst
+
+%if GUIS
+%subpackage
+f 0555 root sys ${libdir}/epm/setup setup
+f 0555 root sys ${libdir}/epm/uninst uninst
+
+%system darwin
+f 0444 root sys ${datadir}/epm/default.icns default.icns
+%system all
+
+%subpackage man
+f 0444 root sys ${mandir}/man1/setup.1 $srcdir/doc/setup.1
+f 0444 root sys ${mandir}/man5/setup.types.5 $srcdir/doc/setup.types.5
+
+%endif

@@ -1,0 +1,10 @@
+%product 3D
+%copyright None
+%license LICENSE
+%readme README.MD
+%description A HolyC Compiler for linux and windows
+%vendor nrootconauto@gmail.com
+%version 0.0.1
+
+f 755 root sys /usr/local/bin/3d 3d
+f 644 root sys /usr/local/include/HolyC/ HCRT/*

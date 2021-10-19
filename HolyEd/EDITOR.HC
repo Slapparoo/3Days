@@ -1,0 +1,2308 @@
+#include "KEYS.HC"
+#include "ROPE.HC"
+#define EDIT_UNUSED 0
+#define EDIT_INS_STR 3
+#define EDIT_DEL_STR 4
+class CUndoInfo {
+    I64 type;
+    I64 at;
+    union {
+        U8 inserted_char;
+        U8 removed_char;
+        U8* inserted_str;
+        U8* removed_str;
+    };
+};
+#define UNDO_INFO_LENGTH 512
+#define TAG_MACRO 1
+#define TAG_UNION 2
+#define TAG_CLASS 3
+#define TAG_VAR 4
+#define TAG_FUNC 5
+CHashTable *TagFiles=HashTableNew(1<<7);
+class CTrie {
+    CTrie *ents[26+10+1+1]; //a...z/0-9/_/.
+    U8 *fn; //From TagFiles
+    U8 *fullname;
+    U8 * name;
+    I64 ln;
+    U8 kind;
+};
+I64 TrieChrIdx(U8 chr) {
+    I64 idx;
+    switch(chr) {
+    case '0'...'9':
+        idx=26+chr-'0';
+        break;
+    case 'a'...'z':
+        idx=chr-'a';
+        break;
+    case 'A'...'Z':
+        idx=chr-'A';
+       break;
+    case '_':
+        idx=26+10;
+        break;
+    case '.':
+        idx=26+10+1;
+        break;
+    default:
+      idx=-1;
+    }
+    return idx;
+}
+CTrie *TrieIns(CTrie *t,U8 *name,CTrie * child) {
+    if(!*name) {
+      t->name=StrNew(child->name);
+      t->fullname=child->fullname;
+      t->fn=child->fn;
+      t->ln=child->ln;
+      t->kind=child->kind;
+      Free(child);
+      return child;
+    }
+    I64 idx=TrieChrIdx(*name);
+    CTrie *b=t->ents[idx];
+    if(!b)
+        t->ents[idx]=MAlloc(sizeof(CTrie));
+    TrieIns(t->ents[idx],name+1,child);
+    return t;
+}
+U0 FreeTrie(CTrie *t) {
+  if(!t) return;
+  I64 cnt=sizeof(t->ents)/sizeof(*t->ents);
+  while(--cnt>=0) {
+    FreeTrie(t->ents[cnt]);
+  }
+  Free(t->name);
+    Free(t->fullname);
+  Free(t);
+}
+CTrie *TagNew(U8 *fullname,U8 *name,U8 *fn,I64 ln,U8 kind) {
+    CTrie *t=MAlloc(sizeof(CTrie));
+    t->name=StrNew(name);
+    t->fullname=StrNew(fullname);
+    t->ln=ln;
+    t->kind=kind;
+loop:
+    CHash *ff=HashFind(fn,TagFiles);
+    if(ff) {
+        t->fn=ff->str;
+    } else {
+        CHash *new=MAlloc(sizeof(CHash));
+        new->str=StrNew(fn);
+        HashAdd(new,TagFiles);
+        goto loop;
+    }
+    return t;
+}
+CTrie *ReadTags(U8 *file) {
+    CTrie *ret=MAlloc(sizeof(CTrie));
+    I64 len;
+    U8 *text=FileRead(file,&len);
+    U8 *en=text+len,*fullname;
+    U8 buf1[256],buf2[256],buf3[256];
+    U8 *_buf1=buf1,*_buf2=buf2,*_buf3=buf3;
+    I64 ln;
+loop:
+    if(text!=en) {
+        text=StrScan(text,"%s\t%s\t",&_buf1,&_buf2);
+        ln=Str2I64(text,,&text);
+        fullname=StrNew(buf1);
+        U8 type=TAG_VAR;
+        if(*text==';') {
+            text++;
+attrloop:
+            if(*text=='\t') {
+                text++;
+                if(0==StrNCmp("kind:",text,len=StrLen("kind:"))) {
+                    text+=len;
+                    switch(*text) {
+                    case 'c':
+                        type=TAG_CLASS;
+                        break;
+                    case 'm':
+                        type=TAG_MACRO;
+                        break;
+                    case 'f':
+                        type=TAG_FUNC;
+                        break;
+                    case 'u':
+                        type=TAG_UNION;
+                        break;
+                    case 'v':
+                        type=TAG_VAR;
+                        break;
+                    default:
+                        throw('InvType');
+                    }
+                    text++;
+                    goto attrloop;
+                }
+                if(0==StrNCmp("struct:",text,len=StrLen("struct:"))) {
+                    text+=len;
+                    U8 *tdelim=StrFirstOcc(text,"\x0d\n\t");
+                    U8 *ofclass=StrNCpy(MAlloc(tdelim-text+1),text,tdelim-text);
+                    ofclass[tdelim-text]=0;
+                    Free(fullname);
+                    fullname=MStrPrint("%s.%s",ofclass,buf1);
+                    text=tdelim;
+                    goto attrloop;
+                }
+                if(0==StrNCmp("union:",text,len=StrLen("union:"))) {
+                    text+=len;
+                    tdelim=StrFirstOcc(text,"\x0d\n\t");
+                    ofclass=StrNCpy(MAlloc(tdelim-text+1),text,tdelim-text);
+                    ofclass[tdelim-text]=0;
+                    Free(fullname);
+                    fullname=MStrPrint("%s.%s",ofclass,buf1);
+                    text=tdelim;
+                    goto attrloop;
+                }
+            } else if(*text==0x0d) {
+              //Cariage return
+              text++;
+              if(*text++=='\n')
+                  goto ins;
+            }
+            else if(*text++=='\n')
+                goto ins;
+            else {
+              "%s\n",text;
+              throw('Tag');
+            }
+        } else if(*text++!='\n') {
+            "%s\n",text;
+            throw('Tag');
+        }
+ins:
+        TrieIns(ret,fullname,TagNew(fullname,buf1,buf2,ln,type));
+        Free(fullname);
+        goto loop;
+    }
+en:
+    Free(text);
+    return ret;
+}
+#define DIAG_WARN 0
+#define DIAG_ERR 1
+class CDiag {
+    CDiag *prev,*next;
+    I64 type,ln,col;
+    //From TagFiles
+    U8 *fn,*msg;
+};
+CDiag *ParseDiags(U8 *file) {
+    I64 cnt,len;
+    U8 *text=FileRead(file,&cnt);
+    U8 *ptr=text;
+    CDiag *prev=NULL;
+    while(*ptr) {
+        CDiag *new=MAlloc(sizeof(CDiag));
+        new->prev=prev;
+        if(prev) prev->next=new;
+        new->fn=MAlloc(1024);
+        try {
+            //fn:ln:col [WARNING|ERROR] [msg]
+            //Filename can contain ':' so ensure a number follows the ':'
+            U8 *fnstart=ptr;
+            loop:
+            U8 *colon=StrFirstOcc(ptr,":");
+            if(!colon) goto fail;
+            if(Bt(&char_bmp_dec_numeric,colon[1])) {
+                StrNCpy(new->fn,fnstart,colon-fnstart);
+                ptr=colon+1;
+            } else {
+                ptr=colon+1;
+                goto loop;
+            }
+            ptr=StrScan(ptr,"%d:%d: ",&new->ln,&new->col);
+            if(0==StrNCmp(ptr,"WARNING",len=StrLen("WARNING"))) {
+                ptr+=len;
+                new->type=DIAG_WARN;
+            } else if(0==StrNCmp(ptr,"ERROR",len=StrLen("ERROR"))) {
+                ptr+=len;
+                new->type=DIAG_ERR;
+            }
+            U8 *nl=StrFirstOcc(ptr,"\n");
+            new->msg=StrNCpy(MAlloc(nl-ptr+1),ptr,nl-ptr);
+            prev=new;
+            ptr=nl+1;
+        } catch {
+            Fs->catch_except=TRUE;
+            goto fail;
+        }
+    }
+    CDiag *first=prev;
+    while(prev) {first=prev;prev=prev->prev;}
+    Free(text);
+    return first;
+    fail:
+    Free(text);
+    return NULL;
+}
+U0 FreeDiags(CDiag *errs) {
+  if(!errs) return;
+  FreeDiags(errs->next);
+  Free(errs->fn);
+  Free(errs->msg);
+  Free(errs);
+}
+U0 __FuzzyMatch(CTrie *trie,U8 *name,I64 *cnt,CTrie **dumpto) {
+    if(!trie) return;
+    if(!*name) {
+        if(trie->name) {
+            if(dumpto)
+                dumpto[*cnt]=trie;
+            ++*cnt;
+        }
+    }
+    I64 idx=-1;
+    if(*name)
+        idx=TrieChrIdx(*name);
+    I64 cnt2=sizeof(trie->ents)/sizeof(*trie->ents);
+    while(--cnt2>=0) {
+        if(cnt2!=idx)
+            __FuzzyMatch(trie->ents[cnt2],name,cnt,dumpto);
+        else
+            __FuzzyMatch(trie->ents[cnt2],name+1,cnt,dumpto);
+    }
+}
+I64 MatchCmp(U0 *a,U0 *b) {
+    CTrie **A=a,**B=b;
+    return StrLen(A[0]->fullname)-StrLen(B[0]->fullname);
+}
+CTrie **FuzzyMatch(CTrie *trie,U8 *name,I64 *cnt=NULL) {
+    I64 cnt2=0;
+    __FuzzyMatch(trie,name,&cnt2,NULL);
+    CTrie **ents=MAlloc(sizeof(CTrie*)*(cnt2+1));
+    cnt2=0;
+    __FuzzyMatch(trie,name,&cnt2,ents);
+    if(cnt) *cnt=cnt2;
+    ents[cnt2]=NULL;
+    QSort(ents(U8*),cnt2,sizeof(CTrie*),&MatchCmp);
+    return ents;
+}
+CHashTable *keywords=HashTableNew(1<<5);
+U0 AddKeyword(U8i *text) {
+    CHash *h=MAlloc(sizeof(CHash));
+    h->str=StrNew(text);
+    h->type=1;
+    HashAdd(h,keywords);
+}
+U8 *kws[]= {
+    "union",
+    "catch",
+    "class",
+    "try",
+    "if",
+    "else",
+    "for",
+    "while",
+    "extern",
+    "_extern",
+    "return",
+    "sizeof",
+    "intern",
+    "do",
+    "goto",
+    "break",
+    "switch",
+    "start",
+    "end",
+    "case",
+    "default",
+    "public",
+    "import",
+    "_import",
+    "lastclass",
+    "static",
+    "U0",
+    "U8i",
+    "I8i",
+    "U16i",
+    "I16i",
+    "U32i",
+    "I32i",
+    "U64i",
+    "I64i",
+    "F64",
+    "Bool",
+    "#include",
+    "#exe",
+    "#define",
+    "#assert",
+    "#if",
+    "#else",
+    "#endif",
+    "#ifdef",
+    "#ifndef",
+};
+I64 cnt=sizeof(kws)/sizeof(*kws);;
+while(--cnt>=0) {
+    AddKeyword(kws[cnt]);
+}
+#define ED_RET_OK 1
+#define ED_RET_QUIT 2
+
+#define ED_LNF_COMMENTED_OUT 1
+#define ED_LNF_COMMENTED_START (1<<1)
+#define ED_LNF_COMMENTED_END (1<<2)
+#define ED_LNF_ERR (1<<3)
+#define ED_LNF_WARN (1<<4)
+class CLine {
+    CLine *prev,*next;
+    I64 line,length,flags;
+    CDiag *diag;
+    //Used with ED_LNF_COMMENTED_START
+    CLine *commentStart;
+    CRope *text;
+    //Will be invalided when CEditor.line_cache_size is lesser than line number
+    I64 cached_offset;
+};
+I64 IndentLevel(CLine *ln) {
+    U8 *txt=Rope2Str(ln->text);
+    I64 cnt=0;
+    while(txt[cnt]==' ') cnt++;
+    cnt/=4;
+    Free(txt);
+    return cnt;
+}
+//Color pairs
+#define CP_KW 1
+#define CP_WORD 2
+#define CP_TOK 3
+#define CP_NUM 4
+#define CP_STR 5
+#define CP_WHITE 6
+#define CP_LINUM 7
+#define CP_COMMENT 8
+#define CP_AC_SEL 9
+#define CP_AC_UNSEL 10
+#define CP_MENU_SEL 11
+#define CP_MENU_UNSEL 12
+#define CP_FUZZY_SEL_A 13
+#define CP_FUZZY_UNSEL_A 14
+#define CP_FUZZY_SEL_B 15
+#define CP_FUZZY_UNSEL_B 16
+#define CP_LINUM_ERR 17
+#define CP_LINUM_WARN 18
+#define CP_CURSOR 19
+class CEditor {
+    WINDOW * window;
+    CUndoInfo undo_info[UNDO_INFO_LENGTH];
+    I64 undo_info_cur;
+    I64 undo_info_end;
+    I64 undo_info_start;
+
+    Bool *dirty_screen_lines;
+    I64 vp_start_line;
+    I64 x_scroll;
+    I64 curx,cury;
+    //The expected x position,,we can enter a line that isnt as long as our expected curx
+    I64 _curx;
+    I64 h,w;
+    CLine *lines;
+    I64 line_count;
+    //
+    CLine **line_cache;
+    I64 line_cache_size;
+    //
+    CTrie *tags;
+    CDiag *diags;
+    U8 *fn;
+    I64 margin_top,margin_bottom;
+};
+U0 WriteWithinWin(WINDOW *win,U8 *text,I64 x_scroll=0);
+I64 OpenFile(U8 *name,I64 ln=0);
+I64 ShowDiagsWindow(CEditor *parent) {
+    CDiag *first=parent->diags;
+    I64 y_scroll=0,x_scroll=0,curln=0,ret=ED_RET_OK;
+    CDiag *iter=first;
+    I64 cnt=0;
+    while(iter) cnt++,iter=iter->next;
+    iter=first;
+    CDiag **lines=MAlloc(cnt*sizeof(CDiag*));
+    cnt=0;
+    while(iter) {lines[cnt++]=iter;iter=iter->next;}
+    WINDOW *win=newwin(getmaxy(stdscr),getmaxx(stdscr),0,0);
+    wbkgdset(win,COLOR_PAIR(CP_WHITE));
+    draw:
+    I64 h=getmaxy(stdscr);
+    I64 cap=MinI64(y_scroll+h,cnt);
+    I64 cnt2=0;
+    dloop:
+    if(cnt2+y_scroll>=cnt) {
+    clear:
+      while(cnt2<getmaxy(win)) {
+        wmove(win,cnt2++,0);
+        wclrtoeol(win);
+      }
+      goto inp;
+    }
+    if(cnt2+y_scroll==curln) {
+      wattron(win,COLOR_PAIR(CP_FUZZY_SEL_B));
+    } else {
+      wattron(win,COLOR_PAIR(CP_FUZZY_UNSEL_A));
+    }
+    wmove(win,cnt2,0);
+    I64 off=-x_scroll;
+    CDiag *cur=lines[cnt2++ +y_scroll];
+    U8 *lncol=MStrPrint("%s:%d:%d: ",cur->fn,cur->ln,cur->col);
+    WriteWithinWin(win,lncol,off);
+    off+=StrLen(lncol);
+    Free(lncol);
+
+    if(cur->type==DIAG_ERR) {
+        WriteWithinWin(win,"ERROR",off);
+        //TODO COLOR
+        off+=StrLen("ERROR");
+    } else {
+        WriteWithinWin(win,"WARNING",off);
+        //TODO COLOR
+        off+=StrLen("WARNING");
+    }
+    if(StrFirstOcc(cur.msg,"\r\n")) *StrFirstOcc(cur.msg,"\n\r")=0;
+    WriteWithinWin(win,cur->msg,off);
+    wclrtoeol(win);
+    if(cnt2+y_scroll<cap) goto dloop;
+    goto clear;
+    inp:
+    redrawwin(win);
+    I64 key=GetKey(win);
+    switch(key) {
+        case ED_KEY_ESCAPE: goto exit;
+        case ERR: goto inp;
+        case ED_KEY_PAGEUP:
+        curln=MaxI64(0,curln-getmaxy(win));
+        break;
+        case ED_KEY_PAGEDOWN:
+        curln=MinI64(cnt,curln+getmaxy(win));
+        break;
+        case ED_KEY_RIGHT: ++x_scroll; break;
+        case ED_KEY_LEFT: x_scroll=MaxI64(0,--x_scroll); break;
+        case ED_KEY_UP: curln=MinI64(MaxI64(0,--curln),cnt); break;
+        case ED_KEY_DOWN: curln++; break;
+        case '\n':
+        if(curln<cnt) {
+            ret=OpenFile(lines[curln]->fn,lines[curln]->ln);
+            goto exit;
+        } else {
+            goto exit;
+        }
+        break;
+        case ED_KEY_RESIZE:
+        wresize(win,getmaxy(stdscr),getmaxx(stdscr));
+        redrawwin(win);
+        break;
+    }
+    if(curln<y_scroll) y_scroll=curln;
+    else if(curln>=getmaxy(win)+y_scroll) y_scroll=curln-getmaxy(win)+1;
+    goto draw;
+    exit:
+    delwin(win);
+    Free(lines);
+    redrawwin(parent->window);
+    return ret;
+}
+
+I64 UndoBufSize(CEditor* ed) {
+    if (ed->undo_info_end > ed->undo_info_start)
+    return ed->undo_info_end - ed->undo_info_start;
+    else
+    return (UNDO_INFO_LENGTH - ed->undo_info_start) + ed->undo_info_end;
+}
+U0 InsUndoInfo(CUndoInfo* info, CEditor* ed) {
+    ed->undo_info_end = (ed->undo_info_cur + ed->undo_info_start) % UNDO_INFO_LENGTH;
+
+    if (ed->undo_info_cur != UNDO_INFO_LENGTH) {
+        ed->undo_info_cur++;
+    } else if (ed->undo_info_end == ed->undo_info_start) {
+        ed->undo_info_start = (ed->undo_info_start + 1) % UNDO_INFO_LENGTH;
+    }
+
+    //Destroy old value
+    switch (ed->undo_info[ed->undo_info_end]->type) {
+        case EDIT_DEL_STR:
+        Free(ed->undo_info[ed->undo_info_end]->removed_str);
+        break;
+
+        case EDIT_INS_STR:
+        Free(ed->undo_info[ed->undo_info_end]->inserted_str);
+        break;
+    }
+
+    ed->undo_info[ed->undo_info_end] = *info;
+    ed->undo_info_end = (ed->undo_info_cur + ed->undo_info_start) % UNDO_INFO_LENGTH;
+}
+CUndoInfo* GetUndoInfo(CEditor* ed) {
+    if ((ed->undo_info_cur + ed->undo_info_start) % UNDO_INFO_LENGTH == ed->undo_info_end)
+    if (ed->undo_info_cur)
+    return NULL;
+
+    I64 i = (ed->undo_info_cur + ed->undo_info_start) % UNDO_INFO_LENGTH;
+    I64 s = ed->undo_info_start;
+    I64 e = ed->undo_info_end;
+
+    if (s == e) goto en;
+
+    if (s < e) {
+        if (!(s <= i < e)) return NULL;
+    } else if (e <= i < s) return NULL;
+
+    en:
+
+    if (ed->undo_info[i]->type == EDIT_UNUSED)
+    return NULL;
+
+    return &ed->undo_info[i];
+}
+class CBuffer:CHash {
+  CEditor *ed;
+};
+CHashTable *buffers=HashTableNew(1<<5);
+U0 FocusCursor(CEditor *ed,I64 lmargin=0) {
+    //https://stackoverflow.com/questions/1811955/ncurses-terminal-size
+    wtimeout(stdscr,0);
+    wgetch(stdscr);
+    I64 w=getmaxx(ed->window)-lmargin;
+    if(ed->curx<ed->x_scroll) {
+        ed->x_scroll=ed->curx;
+    } else if(ed->x_scroll+w<=ed->curx) {
+        ed->x_scroll=ed->curx-w+1;
+    }
+    if(ed->cury<ed->vp_start_line) {
+        ed->vp_start_line=ed->cury;
+    } else if(ed->vp_start_line+getmaxy(ed->window)-ed->margin_top<=ed->cury) {
+        ed->vp_start_line=ed->cury-getmaxy(ed->window)+1+ed->margin_top;
+    }
+}
+I64 GetLinum(CEditor *ed,CLine *ln) {
+    CLine *s=ed->lines;
+    I64 num=0;
+    while(s) {
+        if(s==ln)
+            return num;
+        num++;
+        s=s->next;
+    }
+    return -1;
+}
+I64 GetLineCount(CEditor *ed) {
+  I64 ret=0;
+  CLine *ln=ed->lines;
+  while(ln) {
+    ln=ln->next,ret++;
+  }
+  return ret;
+}
+CLine *GetLine(CEditor *ed,I64 ln) {
+    if(ed->line_cache_size>ln)
+      return ed->line_cache[ln];
+    CLine *s=ed->lines;
+    if(s->cached_offset!=0) throw('');
+    I64 num=0,off=0;
+    if(MSize(ed->line_cache)/sizeof(CLine*)<=ln) {
+      I64 pow2=1;
+      while((1<<pow2)<=ln) pow2++;
+      CLine **new=MAlloc((1<<pow2)*sizeof(CLine*));
+      MemNCpy(new,ed->line_cache,sizeof(CLine*)*ed->line_cache_size);
+        if(ed->line_cache_size){
+         s=ed->line_cache[ed->line_cache_size-1];
+         off=s->cached_offset;
+         num=ed->line_cache_size-1;
+        }
+        Free(ed->line_cache);
+        ed->line_cache=new;
+    }
+    while(s) {
+      ed->line_cache[num]=s;
+      s->cached_offset=off;
+        if(num==ln) {
+          ed->line_cache_size=MaxI64(ln,ed->line_cache_size);
+          return s;
+        }
+        off+=RopeLength(s->text);
+        s=s->next;
+        num++;
+    }
+    ed->line_cache_size=num;
+    return NULL;
+}
+I64 GetLineOffset(CEditor *ed,I64 ln) {
+    CLine *ln2=GetLine(ed,ln);
+    if(ln2) return ln2->cached_offset;
+    return -1;
+}
+
+U0 DirtyLinesBelow(CEditor *ed,I64 ln) {
+    ed->line_cache_size=ln;
+    ln-=ed->vp_start_line;
+}
+U0 WriteWithinWin(WINDOW *win,U8 *text,I64 x_scroll=0) {
+    I64 l=StrLen(text)+x_scroll;
+    I64 s=x_scroll;
+    while(s!=l) {
+        if(getmaxx(win)>=s>=0) {
+          if(text[s-x_scroll]=='\t')
+            waddch(win,' ');
+           else
+            waddch(win,text[s-x_scroll]);
+        }
+        s++;
+    }
+}
+U0 WriteWithinView(CEditor *ed,U8 *text,I64 off) {
+    I64 l=StrLen(text);
+    I64 s=off;
+    I64 e=off+l;
+    while(s!=e) {
+        if(ed->x_scroll+ed->w>=s>=ed->x_scroll) {
+          if(text[s-off]=='\t')
+            waddch(ed->window,' ');
+          else
+            waddch(ed->window,text[s-off]);
+        }
+        s++;
+    }
+}
+Bool IsEscaped(U8 *sstart,U8 *chr) {
+    if(chr-1>=sstart)
+        if(chr[-1]=='\\')
+            return !IsEscaped(sstart,chr-1);
+    return FALSE;
+}
+CLine *SearchForMLCommmentStart(CLine *s) {
+    while(s) {
+        if(s->flags&ED_LNF_COMMENTED_START)
+            if(!(s->flags&ED_LNF_COMMENTED_OUT))
+                return s;
+        s=s->prev;
+    }
+    return NULL;
+}
+CLine *SearchForMLCommmentEnd(CLine *s) {
+    while(s) {
+        if(s->flags&ED_LNF_COMMENTED_END)
+            return s;
+        s=s->next;
+    }
+    return NULL;
+}
+U0 Highlight(CEditor *ed,CLine *ln,Bool dryRun=FALSE) {
+    U8 *text=Rope2Str(ln->text);
+    U8 *buf=MAlloc(StrLen(text)+1);
+    I64 idx=0,ns=0;
+    if(ln->prev) {
+        if(!(ln->prev->flags&ED_LNF_COMMENTED_OUT))
+            ln->flags&=~ED_LNF_COMMENTED_OUT;
+        if(!(ln->flags&ED_LNF_COMMENTED_END))
+            if((ln->prev->flags&ED_LNF_COMMENTED_OUT)||(ln->prev->flags&ED_LNF_COMMENTED_START))
+                ln->flags|=ED_LNF_COMMENTED_OUT;
+    }
+    I64 isCommentedOut1=(ln->flags&ED_LNF_COMMENTED_OUT)||(ln->flags&ED_LNF_COMMENTED_START);
+    ln->flags&=~ED_LNF_COMMENTED_START;
+    I64 isMlEnd1=ln->flags&ED_LNF_COMMENTED_END;
+    if((ln->flags&ED_LNF_COMMENTED_END)||(ln->flags&ED_LNF_COMMENTED_OUT)) {
+        while(text[idx]) {
+            if(0==StrNCmp(text+idx,"*/",2)) {
+                idx+=2;
+                wattron(ed->window,COLOR_PAIR(CP_COMMENT));
+                StrNCpy(buf,text,idx);
+                buf[idx]=0;
+                if(!dryRun) WriteWithinView(ed,buf,0);
+                ln->flags|=ED_LNF_COMMENTED_END;
+                ln->flags&=~ED_LNF_COMMENTED_OUT;
+                goto s;
+            }
+            idx++;
+        }
+        wattron(ed->window,COLOR_PAIR(CP_COMMENT));
+        if(!dryRun) WriteWithinView(ed,text,0);
+        ln->flags&=~ED_LNF_COMMENTED_END;
+        ln->flags|=ED_LNF_COMMENTED_OUT;
+    }
+s:
+    U8 *orig=text;
+    U8 *nl=StrFirstOcc(text,"\n");
+    if(nl) *nl=0;
+loop:
+    ns=idx;
+    //Try lexing name
+    if(!Bt(char_bmp_dec_numeric,text[idx]))
+        while(Bt(char_bmp_alpha_numeric,text[idx])||text[idx]=='#') idx++;
+    if(ns!=idx) {
+        StrNCpy(buf,&text[ns],idx-ns);
+        buf[idx-ns]=0;
+        CHash *kw;
+        if(kw=HashFind(buf,keywords)) {
+            wattron(ed->window,COLOR_PAIR(CP_KW));
+        } else {
+            wattron(ed->window,COLOR_PAIR(CP_WORD));
+        }
+        if(!dryRun) WriteWithinView(ed,buf,ns);
+        goto loop;
+    }
+
+    if(text[idx]=='/') {
+        if(text[idx+1]=='/') {
+            StrCpy(buf,text+idx);
+            wattron(ed->window,COLOR_PAIR(CP_COMMENT));
+            if(!dryRun) WriteWithinView(ed,text+ns,idx);
+            idx=StrLen(text);
+            goto loop;
+        } else if(text[idx+1]=='*') {
+            idx++;
+            while(text[idx]) {
+                if(0==StrNCmp(text+idx,"*/",2)) {
+                    idx+=2;
+                    StrNCpy(buf,text+ns,idx-ns);
+                    buf[idx-ns]=0;
+                    wattron(ed->window,COLOR_PAIR(CP_COMMENT));
+                    if(!dryRun) WriteWithinView(ed,buf,ns);
+                    goto loop;
+                }
+                idx++;
+            }
+            wattron(ed->window,COLOR_PAIR(CP_COMMENT));
+            if(!dryRun) WriteWithinView(ed,text+ns,ns);
+            ln->flags|=ED_LNF_COMMENTED_START;
+            //Dry run hgihlight until we find a line end
+            CLine *nxtln=ln->next;
+            for(; nxtln;) {
+                Highlight(ed, nxtln, TRUE); //Will set ED_LNF_COMMENTED_OUT;
+                if(nxtln->flags&ED_LNF_COMMENTED_END) break;
+                nxtln=nxtln->next;
+            }
+        }
+    }
+    //Try lexing a string
+    if(StrOcc("'\"",text[idx])) {
+        U8 term=text[idx++];
+        U8 sseek[2]= {term,0};
+sloop:
+        U8 *sfind=StrFirstOcc(text+idx,sseek);
+        if(!sfind) {
+            wattron(ed->window,COLOR_PAIR(CP_STR));
+            if(!dryRun) WriteWithinView(ed,text+ns,idx);
+            idx=StrLen(text);
+        } else if(IsEscaped(text,sfind)) {
+            idx=sfind-orig+1;
+            goto sloop;
+        } else {
+            idx=sfind-orig+1;
+            wattron(ed->window,COLOR_PAIR(CP_STR));
+            StrNCpy(buf,text+ns,idx-ns);
+            buf[idx-ns]=0;
+            if(!dryRun) WriteWithinView(ed,buf,ns);
+            goto loop;
+        }
+    }
+
+    //Lex numbers
+    ns=idx;
+    while (Bt(char_bmp_white_space,text[idx])) idx++;
+    if(ns!=idx)  {
+        StrNCpy(buf,text+ns,idx-ns);
+        buf[idx-ns]=0;
+        wattron(ed->window,COLOR_PAIR(CP_WHITE));
+        if(!dryRun) WriteWithinView(ed,buf,ns);
+        goto loop;
+    }
+    U8 *idx2=text+idx;
+    Str2I64(text+idx,,&idx2);
+    if(idx2!=text+idx) {
+        idx=idx2-text;
+        StrNCpy(buf,text+ns,idx-ns);
+        buf[idx-ns]=0;
+        wattron(ed->window,COLOR_PAIR(CP_NUM));
+        if(!dryRun) WriteWithinView(ed,buf,ns);
+        goto loop;
+    }
+    Str2F64(idx2,&idx2);
+    if(text+idx!=idx2) {
+        idx=idx2-text;
+        StrNCpy(buf,text+ns,idx-ns);
+        buf[idx-ns]=0;
+        wattron(ed->window,COLOR_PAIR(CP_NUM));
+        if(!dryRun) WriteWithinView(ed,buf,ns);
+        goto loop;
+    }
+    if(!text[idx]) goto en;
+    wattron(ed->window,COLOR_PAIR(CP_TOK));
+    buf[1]=0;
+    buf[0]=text[idx];
+    if(!dryRun) WriteWithinView(ed,buf,idx);
+    idx++;
+    goto loop;
+en:
+    I64 isMlEnd2=ln->flags&ED_LNF_COMMENTED_END;
+    I64 isCommentedOut2=(ln->flags&ED_LNF_COMMENTED_OUT)||(ln->flags&ED_LNF_COMMENTED_START);
+    if(isMlEnd1!=isMlEnd2||(isCommentedOut1!=isCommentedOut2)) {
+        if(ln->next)
+            Highlight(ed, ln->next, TRUE); //Is recursive
+    }
+    wattron(ed->window,COLOR_PAIR(CP_WHITE));
+    wclrtoeol(ed->window);
+    Free(buf);
+}
+U0 __EditorInsText(CEditor *ed,U8 *text,I64 at) {
+    U8 *buf;
+    I64 ln_off=0;
+    CLine *ln=ed->lines,*prev=NULL;
+    I64 linum=0;
+    while(ln) {
+        if(ln_off<=at<ln_off+RopeLength(ln->text)) break;
+        ln_off+=RopeLength(ln->text);
+        prev=ln;
+        ln=ln->next,linum++;
+    }
+    DirtyLinesBelow(ed,GetLinum(ed,ln));
+
+    if(ln_off<=at&&!ln) {
+        if(prev) {
+            ln=prev;
+            ln_off-=RopeLength(ln->text);
+        } else {
+            CLine *nl=MAlloc(sizeof(CLine));
+            ed->line_count++;
+            nl->prev=prev;
+            if(prev) prev->next=nl;
+            ln=nl;
+            ln->text=RopeAppendText(NULL,"");
+            if(!ed->lines) ed->lines=nl;
+        }
+    }
+    ln->text=RopeInsText(ln->text, text, at-ln_off);
+    ln->text=RopeCondense(ln->text);
+    Highlight(ed, ln, TRUE);
+    CLine *start_ln=ln;
+loop:
+    U8 *text2=Rope2Str(ln->text);
+    U8 *nl3=StrFirstOcc(text2,"\n");
+    if(nl3)
+        if(nl3[1]) {
+            CRope *right;
+            RopeSplit(ln->text,  nl3-text2+1, &ln->text, &right);
+            //Insert a blank line
+            nl=MAlloc(sizeof(CLine));
+            ed->line_count++;
+            nl->prev=ln;
+            if(ln) nl->next=ln->next;
+            if(nl->prev) nl->prev->next=nl;
+            if(nl->next) nl->next->prev=nl;
+            nl->text=right;
+            ln=nl;
+            Free(text2);
+            goto loop;
+        }
+
+    if(!StrLen(text2)) ln->text=RopeAppendText(ln->text, "\n");
+    else if(text2[StrLen(text2)-1]!='\n') ln->text=RopeAppendText(ln->text, "\n");
+    DirtyLinesBelow(ed, GetLinum(ed,start_ln));
+    Free(text2);
+}
+U0 RenumberLines(CEditor *ed,CLine *l=NULL) {
+    I64 num=0;
+    if(!l) l=ed->lines;
+    else num=l->line;
+    while(l) {
+        l->line=num++;
+        l=l->next;
+    }
+}
+U0 EditorInsText(CEditor *ed,U8 *text,I64 at,Bool undo=FALSE) {
+    __EditorInsText(ed, text, at);
+    if(undo) {
+        CUndoInfo *prev;
+        if(!(prev=GetUndoInfo(ed))) {
+            ins1:
+            CUndoInfo info;
+            info.type=EDIT_INS_STR;
+            info.inserted_str=StrNew(text);
+            info.at=at;
+            InsUndoInfo(&info,ed);
+            goto ret;
+        } else if(prev->type==EDIT_INS_STR) {
+            if(prev->at+StrLen(prev->inserted_str)==at) {
+                U8 *new=MStrPrint("%s%s",prev->inserted_str,text);
+                Free(prev->inserted_str);
+                prev->inserted_str=new;
+            }
+        }
+        goto ins1;
+    }
+    ret:
+    RenumberLines(ed);
+}
+CEditor *EditorNew() {
+    noecho;
+    CEditor *r=MAlloc(sizeof(CEditor));
+    start_color;
+    init_pair(CP_KW,COLOR_MAGENTA,COLOR_WHITE);
+    init_pair(CP_WORD,COLOR_BLUE,COLOR_WHITE);
+    init_pair(CP_TOK,COLOR_GREEN,COLOR_WHITE);
+    init_pair(CP_NUM,COLOR_YELLOW,COLOR_WHITE);
+    init_pair(CP_STR,COLOR_RED,COLOR_WHITE);
+    init_pair(CP_WHITE,COLOR_BLACK,COLOR_WHITE);
+    init_pair(CP_LINUM,COLOR_WHITE,COLOR_BLUE);
+    init_pair(CP_COMMENT,COLOR_CYAN,COLOR_WHITE);
+    init_pair(CP_AC_SEL,COLOR_CYAN,COLOR_RED);
+    init_pair(CP_AC_UNSEL,COLOR_YELLOW,COLOR_BLUE);
+    init_pair(CP_MENU_SEL,COLOR_YELLOW,COLOR_RED);
+    init_pair(CP_MENU_UNSEL,COLOR_WHITE,COLOR_BLUE);
+    init_pair(CP_FUZZY_SEL_A,COLOR_BLACK,COLOR_YELLOW);
+    init_pair(CP_FUZZY_UNSEL_A,COLOR_BLACK,COLOR_WHITE);
+    init_pair(CP_FUZZY_SEL_B,COLOR_RED,COLOR_YELLOW);
+    init_pair(CP_FUZZY_UNSEL_B,COLOR_RED,COLOR_WHITE);
+    init_pair(CP_LINUM_ERR,COLOR_WHITE,COLOR_RED);
+    init_pair(CP_LINUM_WARN,COLOR_WHITE,COLOR_YELLOW);
+    r->w=getmaxx(stdscr);
+    r->window=newwin(getmaxy(stdscr),r->w,0,0);
+    wbkgdset(r->window,COLOR_PAIR(CP_WHITE));
+    r->vp_start_line=0;
+    r->line_cache=MAlloc(sizeof(CLine*));
+    r->line_cache_size=0;
+    EditorInsText(r,"",0);
+    return r;
+}
+U0 FreeLine(CLine *ln) {
+    //Update multiline comments
+    if(ln->flags&ED_LNF_COMMENTED_START) {
+        CLine *s=SearchForMLCommmentStart(ln->prev);
+        CLine* e=SearchForMLCommmentEnd(ln);
+adjust:
+        if(s) {
+            if(e) {
+                e->commentStart=s;
+            } else {
+                do {
+                    s->flags|=ED_LNF_COMMENTED_OUT;
+                    s=s->next;
+                } while(s);
+            }
+        } else if(e) {
+            e->commentStart=NULL;
+            do {
+                e->flags&=~ED_LNF_COMMENTED_OUT;
+                e=e->prev;
+            } while(e);
+        }
+    } else if(ln->flags&ED_LNF_COMMENTED_END) {
+        s=SearchForMLCommmentStart(ln);
+        e=SearchForMLCommmentEnd(ln->next);
+        goto adjust;
+    }
+    if(ln->prev) ln->prev->next=ln->next;
+    if(ln->next) ln->next->prev=ln->prev;
+    if(ln->text) RopeFree(ln->text);
+    Free(ln);
+}
+U0 __EditorDelText(CEditor *ed,I64 soff,I64 eoff) {
+    I64 ln_off=0;
+    CLine *ln=ed->lines,*prev=NULL;
+    Bool merge=TRUE;
+    CLine *end_ln;
+    while(ln) {
+        if(ln_off<=soff<ln_off+RopeLength(ln->text)) {
+            CLine *start_ln=ln;
+            DirtyLinesBelow(ed,GetLinum(ed, start_ln));
+            I64 en=MinI64(RopeLength(ln->text),eoff-ln_off);
+            ln->text=RopeDelText(ln->text,soff-ln_off,en);
+            eoff-=en-(soff-ln_off);
+            ln->text=RopeCondense(ln->text);
+            Highlight(ed, ln, TRUE);
+            ln_off+=RopeLength(ln->text);
+            if(ln_off+RopeLength(ln->text)>=eoff) {
+                DirtyLinesBelow(ed,GetLinum(ed, ln));
+                //End of deletion is on same line
+                //Merge with next line if doesnt contain an endline
+                U8 *txt=Rope2Str(ln->text);
+                if(!StrFirstOcc(txt,"\n")) {
+                    Free(txt);
+                    end_ln=ln->next;
+                    goto merge;
+                }
+                Free(txt);
+                return;
+            }
+            break;
+        }
+        ln_off+=RopeLength(ln->text);
+        prev=ln;
+        ln=ln->next;
+    }
+    if(!ln) return;
+    while(ln) {
+        if(ln_off<=eoff<ln_off+RopeLength(ln->text)) break;
+        ln_off+=RopeLength(ln->text);
+        prev=ln;
+        ln=ln->next;
+    }
+    end_ln=ln;
+merge:
+    //start_ln!=end_ln;
+    if(start_ln!=end_ln)
+        ln=start_ln->next;
+    DirtyLinesBelow(ed,GetLinum(ed, start_ln));
+    while(ln!=end_ln) {
+        CLine *nxt=ln->next;
+        if(ln==ed->lines) ed->lines=nxt;
+        ed->line_count--;
+        eoff-=RopeLength(ln->text);
+        FreeLine(ln);
+        ln=nxt;
+    }
+    if(merge&&end_ln) {
+        U8 *t=Rope2Str(end_ln->text);
+        start_ln->text=RopeAppendText(start_ln->text,t+eoff-GetLineOffset(ed,GetLinum(ed,end_ln)));
+        start_ln->text=RopeCondense(start_ln->text);
+        Highlight(ed, start_ln, TRUE);
+        Free(t);
+        FreeLine(end_ln);
+        ed->line_count--;
+    }
+}
+U8 *EdTextSlice(CEditor *ed,I64 soff,I64 eoff) {
+    U8 *ret=MAlloc(eoff-soff+1);
+    U8 *retptr=ret;
+    I64 off=0;
+    CLine *ln=ed->lines;
+    sloop:
+    if(off<=soff<off+RopeLength(ln->text)) {
+        U8 *text=Rope2Str(ln->text);
+        if(off<=eoff<off+RopeLength(ln->text)) {
+            StrNCpy(ret,text+soff-off,eoff-soff);
+            Free(text);
+            return ret;
+        } else {
+            StrCpy(ret,text+soff-off);
+            retptr+=StrLen(ret);
+            off+=RopeLength(ln->text);
+            ln=ln->next;
+        }
+    } else {
+        off+=RopeLength(ln->text);
+        ln=ln->next;
+        goto sloop;
+    }
+    eloop:
+    text=Rope2Str(ln->text);
+    if(off<=eoff<off+RopeLength(ln->text)) {
+        StrNCpy(retptr,text,eoff-off);
+        Free(text);
+        return ret;
+    } else {
+        off+=RopeLength(ln->text);
+        StrCpy(retptr,text);
+        retptr+=StrLen(retptr);
+        ln=ln->next;
+        Free(text);
+        goto eloop;
+    }
+    return ret;
+}
+U0 EditorDelText(CEditor *ed,I64 soff,I64 eoff,Bool undo=FALSE) {
+    if(undo)
+        U8 *slice=EdTextSlice(ed,soff,eoff);
+     __EditorDelText(ed, soff, eoff);
+    if(undo) {
+        CUndoInfo *prev=GetUndoInfo(ed);
+        if(!prev) {
+            ins1:
+            CUndoInfo del;
+            del.type=EDIT_DEL_STR;
+            del.removed_str=StrNew(slice);
+            del.at=soff;
+            InsUndoInfo(&del,ed);
+            goto ret;
+        } else if(prev->type==EDIT_DEL_STR&&prev->at==soff) {
+            U8 *new=MStrPrint("%s%s",slice,prev->removed_str);
+            Free(prev->removed_str);
+            prev->removed_str=new;
+            goto ret;
+        }
+        goto ins1;
+    }
+    ret:
+    if(undo) Free(slice);
+    RenumberLines(ed);
+}
+U0 EdJumpToChar(CEditor *ed,I64 chr) {
+  CLine *ln=ed->lines;
+  I64 off=0;
+  loop:
+  if(!ln) return;
+  I64 len;
+  if(off<=chr<off+(len=RopeLength(ln->text))) {
+    ed->cury=GetLinum(ed, ln);
+    ed->curx=ed->_curx=chr-off;
+    return;
+  }
+  off+=len;
+  ln=ln->next;
+  goto loop;
+}
+U0 Undo(CEditor *ed) {
+  if(ed->undo_info_cur-1<0) return;
+  ed->undo_info_cur--;
+  CUndoInfo *info=GetUndoInfo(ed);
+  switch(info->type) {
+    case EDIT_INS_STR:
+    EditorDelText(ed,info->at,info->at+StrLen(info->inserted_str));
+    EdJumpToChar(ed,info->at);
+    break;
+    case EDIT_DEL_STR:
+    EditorInsText(ed,info->removed_str,info->at);
+    EdJumpToChar(ed,info->at+StrLen(info->removed_str));
+    break;
+  }
+}
+U0 Redo(CEditor *ed) {
+  if(ed->undo_info_cur>=UndoBufSize(ed)) return;
+  CUndoInfo *info=GetUndoInfo(ed);
+  switch(info->type) {
+    case EDIT_DEL_STR:
+    EditorDelText(ed,info->at,info->at+StrLen(info->removed_str));
+    EdJumpToChar(ed,info->at);
+    break;
+    case EDIT_INS_STR:
+    EditorInsText(ed,info->inserted_str,info->at);
+    EdJumpToChar(ed,info->at+StrLen(info->inserted_str));
+    break;
+  }
+  ed->undo_info_cur++;
+}
+U0 DrawLinumWithPad(CEditor *ed,I64 num,I64 barwidth) {
+    U8 *lnumtxt=MStrPrint("%d: ",num);
+    I64 lnumlen=StrLen(lnumtxt);
+    wprint(ed->window,lnumtxt);
+    Free(lnumtxt);
+    while(barwidth>lnumlen++) waddch(ed->window,' ');
+}
+#define ED_DRAW_LINUMS 1
+#define ED_DRAW_SEARCH 2
+#define ED_DRAW_DIALOG 4
+#define ED_DRAW_MENUBAR 8
+#define ED_DRAW_DFT (ED_DRAW_LINUMS|ED_DRAW_MENUBAR)
+U0 AddMenuBar(CEditor *ed,I64 active=-1);
+I64 DrawEditor(CEditor *ed,I64 flags=0,U8 *dialogtxt=NULL,I64 mb_active=-1) {
+    curs_set(0);
+    CLine *diagln=NULL;
+    //If we are at a line with a diagnostic,be sure to make a bottom margin
+    if(flags&(ED_DRAW_DIALOG|ED_DRAW_SEARCH)) {
+    } else {
+        diagln=GetLine(ed,ed->cury);
+        if(diagln) {
+           if(!(diagln->flags&(ED_LNF_ERR|ED_LNF_WARN))) diagln=NULL;
+        }
+    }
+    if(flags&ED_DRAW_MENUBAR) {
+        if(AddMenuBar(ed,mb_active)==ED_RET_QUIT) return ED_RET_QUIT;
+        ed->margin_top=1;
+    }
+    if(flags&ED_DRAW_LINUMS) {
+        U8 *lnumtxt=MStrPrint("%d: ",ed->line_count);
+        I64 lnumlen=StrLen(lnumtxt);
+        Free(lnumtxt);
+    } else if(flags&ED_DRAW_SEARCH) {
+        wattron(ed->window,COLOR_PAIR(CP_LINUM));
+        lnumtxt=MStrPrint("Search: ");
+        lnumlen=StrLen(lnumtxt);
+        wmove(ed->window,0,0);
+        wprint(ed->window,lnumtxt);
+        Free(lnumtxt);
+    } else if(flags&ED_DRAW_DIALOG) {
+        wattron(ed->window,COLOR_PAIR(CP_LINUM));
+        lnumtxt=MStrPrint("%s: ",dialogtxt);
+        lnumlen=StrLen(lnumtxt);
+        wmove(ed->window,0,0);
+        wprint(ed->window,lnumtxt);
+        Free(lnumtxt);
+    } else
+        lnumlen=0;
+    FocusCursor(ed,lnumlen);
+    //if(ed->x_scroll) Debugger;
+    ed->w-=lnumlen;
+    CLine *ln=ed->lines;
+    while(ln) {
+        if(ln->line==ed->vp_start_line) break;
+        ln=ln->next;
+    }
+    I64 cnt=getmaxy(ed->window),line=ed->vp_start_line+1,screen_line=ed->margin_top;
+    cnt-=(ed->margin_top+ed->margin_bottom);
+    while(--cnt>=0&&ln) {
+        if(flags&ED_DRAW_LINUMS) {
+            wmove(ed->window,screen_line,0);
+            I64 cp=COLOR_PAIR(CP_LINUM);
+            if(ln->flags&ED_LNF_ERR) {
+                cp=COLOR_PAIR(CP_LINUM_ERR);
+            } else if(ln->flags&ED_LNF_WARN) {
+                cp=COLOR_PAIR(CP_LINUM_WARN);
+            }
+            wattron(ed->window,cp);
+            DrawLinumWithPad(ed,line++,lnumlen);
+        }
+        if(1) {
+            wmove(ed->window,screen_line,lnumlen);
+            Highlight(ed,ln);
+        }
+        ++screen_line;
+        ln=ln->next;
+    }
+    while(cnt>=0) {
+        wattron(ed->window,COLOR_PAIR(CP_LINUM));
+        wmove(ed->window,screen_line,0);
+        wprint(ed->window,"%*c",lnumlen,' ');
+        wattron(ed->window,COLOR_PAIR(CP_WHITE));
+        wmove(ed->window,screen_line++,lnumlen);
+        wclrtoeol(ed->window);
+        cnt--;
+    }
+    if(diagln) {
+        wmove(ed->window,getmaxy(ed->window)-1,0);
+        if(diagln->flags&ED_LNF_ERR) wattron(ed->window,COLOR_PAIR(CP_LINUM_ERR));
+        else if(diagln->flags&ED_LNF_WARN) wattron(ed->window,COLOR_PAIR(CP_LINUM_WARN));
+        else throw('InvDiag');
+        wprint(ed->window,"%s",diagln->diag->msg);
+        wclrtoeol(ed->window);
+    }
+    wmove(ed->window,ed->cury-ed->vp_start_line+ed->margin_top,lnumlen+ed->curx-ed->x_scroll);
+    curs_set(2);
+    wrefresh(ed->window);
+    ed->w=getmaxx(ed->window);
+    return ED_RET_OK;
+}
+U0 EdUp(CEditor *ed) {
+    if(ed->cury>0) {
+        --ed->cury;
+        if(ed->cury<ed->vp_start_line)
+            ed->vp_start_line=ed->cury;
+        if(ed->_curx>RopeLength(GetLine(ed, ed->cury)->text))
+            ed->curx=RopeLength(GetLine(ed, ed->cury)->text);
+        else
+            ed->curx=ed->_curx;
+    } else {
+        ed->_curx=ed->curx=0;
+    }
+}
+U0 EdDown(CEditor *ed) {
+    CLine *dnext=GetLine(ed,ed->cury);
+    if(dnext->next) {
+        ++ed->cury;
+        if(ed->_curx>RopeLength(GetLine(ed, ed->cury)->text))
+            ed->curx=RopeLength(GetLine(ed, ed->cury)->text);
+        else
+            ed->curx=ed->_curx;
+    } else {
+        ed->_curx=ed->curx=RopeLength(GetLine(ed, ed->cury)->text);
+    }
+}
+U0 EdRight(CEditor *ed) {
+    CLine *rline=GetLine(ed,ed->cury);
+    U8 *text=Rope2Str(rline->text);
+    I64 x=ed->curx,cnt=0;
+    I64 ox=x;
+    x++;
+    while((--x>=0)&&text[x]==' ') cnt++;
+    if(x==-1&&cnt) {
+      cnt++;
+      cnt/=4;
+      I64 cap=4*(cnt+1);
+      while(text[ed->curx]==' ') {
+        if(ed->curx>=cap) break;
+        ed->curx++;
+      }
+      if(ox==ed->curx) goto next;
+      ed->_curx=ed->curx;
+      Free(text);
+      return;
+    }
+    next:
+    Free(text);
+    if(ed->curx+1>=RopeLength(rline->text)) {
+        rline=rline->next;
+        if(rline) {
+            ed->_curx=ed->curx=0;
+            ed->cury++;
+        } else {
+            ed->_curx=ed->curx=RopeLength(GetLine(ed,ed->cury)->text);
+        }
+    } else ed->_curx=++ed->curx;
+}
+U0 EdLeft(CEditor *ed) {
+    CLine *lline=GetLine(ed,ed->cury);
+    U8 *text=Rope2Str(lline->text);
+    I64 x=ed->curx,cnt=1;
+    if(x) {
+      while(--x&&text[x]==' ') cnt++;
+      if(!x&&cnt) {
+        cnt/=4;
+        if(cnt)
+          ed->_curx=ed->curx=4*(cnt-1);
+        else
+          ed->_curx=ed->curx=0;
+        Free(text);
+        return;
+      }
+    }
+    Free(text);
+    if(ed->curx==0) {
+        lline=lline->prev;
+        if(lline) {
+            ed->_curx=ed->curx=RopeLength(lline->text);
+            ed->cury--;
+        } else {
+            ed->_curx=ed->curx=0;
+        }
+    } else ed->_curx=--ed->curx;
+}
+U0 EdWordLeft(CEditor *ed) {
+    CLine *lline=GetLine(ed,ed->cury);
+    U8 *text=Rope2Str(lline->text);
+    I64 idx=ed->curx;
+    Bool hit_word=FALSE;
+    if(idx!=0) idx--;
+    while(idx>0) {
+        if(Bt(char_bmp_alpha_numeric,text[idx])) {
+            hit_word=TRUE;
+        } else if(hit_word)
+            break;
+        idx--;
+    }
+    if(idx==0) {
+        lline=lline->prev;
+        if(!lline)
+            ed->_curx=ed->curx=0;
+        else
+            ed->_curx=ed->curx=RopeLength(lline->text)-1,ed->cury--; //-1 ignores newline
+    } else
+        ed->_curx=ed->curx=idx;
+    Free(text);
+}
+U0 EdWordRight(CEditor *ed) {
+    CLine *lline=GetLine(ed,ed->cury);
+    U8 *text=Rope2Str(lline->text);
+    I64 idx=ed->curx;
+    Bool hit_word=FALSE;
+    idx++;
+    I64 len=RopeLength(lline->text);
+    while(idx<len) {
+        if(!text[idx]) break;
+        if(Bt(char_bmp_alpha_numeric,text[idx])) {
+            hit_word=TRUE;
+        } else if(hit_word)
+            break;
+        idx++;
+    }
+    if(idx==len) {
+        lline=lline->next;
+        if(lline) {
+            ed->cury++;
+            ed->_curx=ed->curx=0;
+        }
+    } else
+        ed->_curx=ed->curx=idx;
+    Free(text);
+}
+U0 EdBackspace(CEditor *ed) {
+    CLine *bline=GetLine(ed,ed->cury);
+    I64 eoff=GetLineOffset(ed,ed->cury);
+    I64 ox=ed->curx,oy=ed->cury;
+    EdLeft(ed);
+    if(ox==0) {
+        //Kill Newline on previous line
+        if(bline->prev) {
+            I64 no=RopeLength(bline->prev->text)-1; //ignore newline
+            EditorDelText(ed, eoff-1, eoff,TRUE);
+            ed->_curx=ed->curx=no;
+            return;
+        } else {
+            //Do nothing
+        }
+    } else {
+        U8 *text=Rope2Str(bline->text);
+        I64 cnt=0,orig=ox;
+        while(--ox&&text[ox]==' ') cnt++;
+        if(!ox&&cnt) {
+            cnt/=4;
+            EditorDelText(ed,eoff,eoff+orig,TRUE);
+            Free(text);
+            ed->curx=ed->_curx=0;
+            //text=MStrPrint("%*c",cnt,'    ');
+            //EditorInsText(ed,text,eoff);
+            //ed->curx=ed->_curx=StrLen(text);
+        } else {
+            EditorDelText(ed, eoff+orig-1, eoff+orig,TRUE);
+        }
+        Free(text);
+    }
+}
+U0 EdPageDown(CEditor *ed) {
+    //Check if there is enough room for a page down
+    CLine *lline=GetLine(ed,ed->cury);
+    I64 cnt=getmaxy(ed->window),cnt2=0;
+    while(lline&&--cnt>=0) {
+        lline=lline->next;
+        cnt2++;
+    }
+    if(!lline) cnt2--;
+    ed->vp_start_line+=cnt2;
+    ed->cury+=cnt2;
+    lline=GetLine(ed,ed->cury);
+    if(RopeLength(lline->text)>=ed->_curx) ed->curx=RopeLength(lline->text);
+}
+U0 EdPageUp(CEditor *ed) {
+    ed->vp_start_line-=getmaxy(ed->window);
+    ed->vp_start_line=MaxI64(ed->vp_start_line,0);
+    CLine *lline=GetLine(ed,ed->vp_start_line);
+    ed->cury=ed->vp_start_line;
+    if(RopeLength(lline->text)>=ed->_curx) ed->curx=RopeLength(lline->text);
+}
+U0 FreeEditor(CEditor *ed);
+I64 EdSearch(CEditor *ed) {
+    static U8 prevs[1024];
+    CEditor *sed=EditorNew();
+    goto resize;
+loop:
+    I64 key=GetKey(sed->window);
+    switch(key) {
+    case ERR:
+        goto loop;
+    case ED_KEY_RESIZE:
+resize:
+        I64 h=getmaxy(stdscr);
+        I64 w=getmaxx(stdscr);
+        I64 x=getbegx(stdscr);
+        I64 y=getbegy(stdscr);
+        if(h>=1) {
+            wresize(sed->window,1,w);
+            mvwin(sed->window,y+h-1,x);
+        } else {
+            wresize(sed->window,h,w);
+            mvwin(sed->window,y,x);
+        }
+        redrawwin(sed->window);
+        goto mvsrncur;
+    case ED_KEY_CTRL_UP:
+    case ED_KEY_UP: //TODO
+        goto mvsrncur;
+    case ED_KEY_CTRL_DOWN:
+    case ED_KEY_DOWN: //TODO
+        goto mvsrncur;
+    case ED_KEY_RIGHT:
+        EdRight(sed);
+        goto mvsrncur;
+    case ED_KEY_LEFT:
+        EdLeft(sed);
+        goto mvsrncur;
+    case ED_KEY_CTRL_LEFT:
+left:
+        EdWordLeft(sed);
+        goto mvsrncur;
+    case ED_KEY_CTRL_RIGHT:
+        EdWordRight(sed);
+        goto mvsrncur;
+    case ED_KEY_BACKSPACE:
+        //Check for a tab
+        EdBackspace(sed);
+        goto mvsrncur;
+    case ED_KEY_INSERT: //TODO
+        goto mvsrncur;
+    case ED_KEY_DELETE: //TODO
+        goto mvsrncur;
+    default:
+        if(key=='\n') {
+            U8 *needle=Rope2Str(sed->lines->text); //Only one line
+            if(StrFirstOcc(needle,"\n")) *StrFirstOcc(needle,"\n")=0;
+            if(StrLen(needle))
+                StrCpy(prevs,needle);
+            else {
+                Free(needle);
+                needle=StrNew(prevs);
+            }
+            I64 origln=ed->cury;
+            I64 curln=origln;
+            CLine *ln=GetLine(ed, ed->cury);
+            I64 lnoff=ed->curx;
+            Bool wrapped_around=FALSE;
+loop2:
+            while(ln) {
+                U8 *txt=Rope2Str(ln->text);
+                U8 *find=StrIMatch(txt+lnoff,needle);
+                Free(txt);
+                if(find) {
+                    ed->cury=curln;
+                    ed->_curx=ed->curx=find-txt+StrLen(needle);
+                    Free(needle);
+                    goto en;
+                }
+                if(wrapped_around&&curln==origln) goto fail;
+                lnoff=0;
+                ln=ln->next;
+                curln++;
+            }
+            ln=ed->lines;
+            curln=0;
+            wrapped_around=TRUE;
+            goto loop2;
+fail:
+            Free(needle);
+            goto en;
+        }
+        I64 soff=GetLineOffset(sed, sed->cury)+sed->curx++;
+        U8 buffer[2]= {key,0};
+        EditorInsText(sed,buffer,soff,TRUE);
+    }
+mvsrncur:
+    DrawEditor(ed,ED_DRAW_DFT);
+    DrawEditor(sed,ED_DRAW_SEARCH);
+    goto loop;
+en:
+    redrawwin(ed->window);
+    FreeEditor(sed);
+}
+I64 Edit(CEditor *ed);
+//interactive tells us to enter the autcomplete
+Bool DrawAutocomplete(CEditor *parent,Bool interactive=FALSE) {
+    Bool ret=FALSE;
+    I64 wx1=getbegx(parent->window);
+    I64 wy1=getbegy(parent->window);
+    I64 sw=getmaxx(parent->window);
+    I64 sh=getmaxy(parent->window);
+    CLine *ln=GetLine(parent, parent->cury);
+    U8 *text=Rope2Str(ln->text);
+    I64 idx=parent->curx;
+    if(idx==0) goto fin;
+    --idx;
+loop0:
+    if(idx==0) goto begin;
+    switch(text[idx]) {
+    case 'a'...'z':
+    case 'A'...'Z':
+    case '0'...'9':
+    case '_':
+        idx--;
+        goto loop0;
+    default:
+        idx++;
+    }
+begin:
+    if(idx==parent->curx) goto fin;
+    I64 screenx=wx1+parent->curx-parent->x_scroll;
+    I64 screeny=wy1+parent->cury-parent->vp_start_line+parent->margin_top;
+    I64 len=parent->curx-idx;
+    U8 *sub=StrNCpy(MAlloc(len+1),text+idx,len);
+    if(StrLen(sub)) ret=TRUE;
+    I64 cnt;
+    I64 active=-1;
+loop:
+    CTrie **ents=FuzzyMatch(parent->tags, sub, &cnt);
+    if(!cnt) goto free;
+    I64 maxlen=StrLen(ents[cnt-1]->fullname); //Ents are sorted by length
+    if(screenx+1<sw&&screeny+1<sh) {
+        WINDOW *ac=newwin(MinI64(cnt,sh-screeny-wy1-1),MinI64(maxlen,sw-screenx-wx1),screeny+1,screenx);
+        I64 iter=0;
+        for(; iter<cnt; iter++) {
+            len=StrLen(ents[iter]->fullname);
+            I64 chr=0;
+            if(iter==active)
+                wattron(ac,COLOR_PAIR(CP_AC_SEL));
+            else
+                wattron(ac,COLOR_PAIR(CP_AC_UNSEL));
+            wmove(ac,iter,0);
+            I64 cap=getmaxx(ac);
+            WriteWithinWin(ac,ents[iter]->fullname);
+            while(len++<cap) {
+              waddch(ac,' ');
+            }
+        }
+        DrawEditor(parent, ED_DRAW_DFT);
+        wrefresh(ac);
+        delwin(ac);
+    }
+    if(interactive) {
+winput:
+        I64 key=GetKey(parent->window);
+        switch(key) {
+        case ERR:
+            goto winput;
+        case ED_KEY_UP:
+            active=MaxI64(0,--active);
+            goto loop;
+        case ED_KEY_DOWN:
+            active=MinI64(cnt-1,++active);
+            goto loop;
+        case '\n':
+            if(active==-1) active=0;
+            I64 off=GetLineOffset(parent,parent->cury);
+            EditorDelText(parent, off+idx,off+parent->curx,TRUE);
+            EditorInsText(parent, ents[active]->name, off+idx,TRUE);
+            parent->_curx=parent->curx=(idx+StrLen(ents[active]->name));
+            goto free;
+        default:
+            goto free;
+        }
+    }
+free:
+    Free(ents),Free(sub);
+fin:
+    Free(text);
+    redrawwin(parent->window);
+    return ret;
+}
+class CMenuEnt {
+    U8 *name;
+    U8 key;
+    I64(*callback)(CEditor *ed);
+};
+U8 *Editor2Str(CEditor *ed,I64 *cnt) {
+    CLine *lns=ed->lines;
+    I64 len=0;
+    while(lns) {
+        len+=RopeLength(lns->text);
+        lns=lns->next;
+    }
+    U8 *ret=MAlloc(len+1);
+    lns=ed->lines,len=0;
+    while(lns) {
+        U8 *tmp=Rope2Str(lns->text);
+        StrCpy(ret+len,tmp);
+        Free(tmp);
+        len+=RopeLength(lns->text);
+        lns=lns->next;
+    }
+    if(cnt) *cnt=len;
+    return ret;
+}
+U8 *FileDialog(CEditor *parent);
+I64 GotoSymbol(CEditor *ed);
+I64 SaveDocAs(CEditor *ed);
+/**
+ * This will color the lines based on diagnostitc
+ */
+U0 MarkLineColors(CEditor *ed) {
+    CLine *line=ed->lines;
+    while(line) {
+        line->flags&=~(ED_LNF_WARN|ED_LNF_ERR);
+        line=line->next;
+    }
+    CDiag *diag=ed->diags;
+    while(diag) {
+        if(0!=StrCmp(diag->fn,ed->fn)) goto next;
+        line=GetLine(ed,diag->ln-1); //Diag lines are 1 indexes
+        if(line) {
+            //Errors>warning
+            if(line->flags&ED_LNF_ERR) goto next;
+            if(diag->type==DIAG_ERR) {
+                line->flags&=~ED_LNF_WARN;
+                line->flags|=ED_LNF_ERR;
+                line->diag=diag;
+            } else {
+                line->flags|=ED_LNF_WARN;
+                line->diag=diag;
+            }
+        } else ;//???
+        next:
+        diag=diag->next;
+    }
+}
+I64 SaveDoc(CEditor *ed) {
+    if(!ed->fn) {
+        SaveDocAs(ed);
+    } else {
+        WINDOW *msgs=newwin(getmaxy(stdscr),getmaxx(stdscr),0,0);
+        wbkgdset(msgs,COLOR_PAIR(CP_WHITE));
+        wclear(msgs);
+        wprint(msgs,"SAVING FILE %s\n",ed->fn);
+        wrefresh(msgs);
+        U8 *etxt=Editor2Str(ed,&cnt);
+        FileWrite(ed->fn,etxt,cnt);
+        Free(etxt);
+        FreeTrie(ed->tags);
+        FreeDiags(ed->diags);
+        wprint(msgs,"Generating tags and diagnostics.\n");
+        wrefresh(msgs);
+        CreateTagsAndErrorFiles("TAGS","ERRS",ed->fn);
+        wprint(msgs,"Parsing Tags.\n");
+        wrefresh(msgs);
+        ed->tags=ReadTags("TAGS");
+        wprint(msgs,"Parsing diagnostics.\n");
+        wrefresh(msgs);
+        ed->diags=ParseDiags("ERRS");
+        delwin(msgs);
+        MarkLineColors(ed);
+        redrawwin(ed->window);
+        flushinp;
+    }
+    return ED_RET_OK;
+}
+
+I64 SaveDocAs(CEditor *ed) {
+    U8 *new=FileDialog(ed);
+    if(new) {
+      Free(ed->fn);
+      ed->fn=new;
+      SaveDoc(ed);
+    }
+    return ED_RET_OK;
+}
+I64 OpenDoc(CEditor *ed) {
+    U8 *new=FileDialog(ed);
+    if(new) {
+      I64 ret=OpenFile(new);
+      return ret;
+    }
+    return ED_RET_OK;
+}
+U0 DrawMenuDropdown(CMenuEnt *ent,I64 off,I64 active=-1) {
+    I64 x=getbegx(stdscr);
+    I64 he=getmaxy(stdscr);
+    I64 w=getmaxx(stdscr);
+    I64 mwidth=0;
+    I64 h=0;
+    while(ent[h].name) {
+        mwidth=MaxI64(mwidth,StrLen(ent[h].name));
+        h++;
+    }
+    if(!h) return;
+    WINDOW *win=newwin(MinI64(h, he-1),MinI64(mwidth,w),1,off);
+    I64 i;
+    for(i=0; i!=h; i++) {
+        if(active==i) wattron(win,COLOR_PAIR(CP_AC_SEL));
+        else wattron(win,COLOR_PAIR(CP_AC_UNSEL));
+        wmove(win,i,0);
+        wprint(win,ent[i].name);
+        I64 len=StrLen(ent[i].name);
+        while(len++<mwidth) waddch(win,' ');
+    }
+    wrefresh(win);
+    delwin(win);
+}
+I64 BufferSelect(CEditor *ed);
+//Draws at first line
+U0 AddMenuBar(CEditor *ed,I64 active=-1) {
+    I64 ret=ED_RET_OK;
+    ed->margin_top=1;
+    CMenuEnt File[]= {
+        {"[S]ave",'s',&SaveDoc},
+        {"Save [A]s",'a',&SaveDocAs},
+        {"[O]pen File",'o',&OpenDoc},
+        {"[B]uffer Select",'b',&BufferSelect},
+        {NULL,0,NULL},
+    };
+    CMenuEnt Code[]= {
+        {"[G]oto Symbol",'g',&GotoSymbol},
+        {"[C]ompile Check",'c',&ShowDiagsWindow},
+        {NULL,0,NULL},
+    };
+    I64 x=getbegx(stdscr);
+    I64 y=getbegy(stdscr);
+    I64 w=getmaxx(stdscr);
+    class {
+        CMenuEnt *spec;
+        U8 *name;
+        U8 key;
+    } cats[]= {
+        {&File,"[F]ile",'f'},
+        {&Code,"[C]ode",'c'},
+    };
+    I64 cnt=sizeof(cats)/sizeof(*cats),cur,active_sub=0;
+    goto draw;
+loop:
+    I64 key=GetKey(ed->window);
+    switch(key) {
+      case ERR: goto loop;
+    case ED_KEY_ESCAPE: goto en;
+    case ED_KEY_UP:
+        active_sub=MaxI64(0,--active_sub);
+        break;
+    case ED_KEY_DOWN:
+        if(cats[active].spec[++active_sub].name==NULL) --active_sub;
+        break;
+    case ED_KEY_LEFT:
+        active=MaxI64(0,--active),active_sub=0;
+        break;
+    case ED_KEY_RIGHT:
+        active=MinI64(cnt-1,++active),active_sub=0;
+        break;
+    case '\n':
+        if(cats[active].spec[active_sub].callback)
+            ret=(cats[active].spec[active_sub].callback[0])(ed);
+        goto en;
+    default:
+        I64 s=0;
+        if(active!=-1)
+        for(; cats[active].spec[s].name; s++) {
+            if(cats[active].spec[s].key==key) {
+                ret=(cats[active].spec[s].callback[0])(ed);
+                goto en;
+            }
+        }
+    }
+draw:
+    wmove(ed->window,0,0);
+    I64 off=0,sel_off=-1;
+    for(cur=0; cur!=cnt; cur++) {
+        if(cur==active) {
+            wattron(ed->window,COLOR_PAIR(CP_MENU_SEL));
+            sel_off=cur;
+        } else
+            wattron(ed->window,COLOR_PAIR(CP_MENU_UNSEL));
+        wprint(ed->window,cats[cur].name);
+        if(cur>=active)
+          ; //Do Nothing
+        else
+          off+=StrLen(cats[cur].name);
+    }
+    wclrtoeol(ed->window);
+    if(sel_off!=-1) {
+      redrawwin(ed->window);
+      DrawEditor(ed, ED_DRAW_DFT&(~ED_DRAW_MENUBAR));
+      if(DrawMenuDropdown(cats[active].spec, off,active_sub)==ED_RET_QUIT) return ED_RET_QUIT;
+    }
+    if(active!=-1)
+    goto loop;
+en:
+  return ret;
+}
+U0 FreeEditor(CEditor *ed) {
+    CLine *ln=ed->lines;
+    while(ln) {
+        CLine *n=ln->next;
+        FreeLine(ln);
+        ln=n;
+    }
+    delwin(ed->window);
+    Free(ed->dirty_screen_lines);
+    Free(ed->line_cache);
+    if(ed->tags) FreeTrie(ed->tags);
+    if(ed->diags) FreeDiags(ed->diags);
+    Free(ed);
+}
+U8 *RemoveNL(U8 *t) {
+  U8 *f;
+  if(f=StrFirstOcc(t,"\n")) *f=0;
+  return t;
+}
+U8 **FuzzySymbolSelect(CEditor *ed,U8 *str) {
+  I64 cnt;
+  CTrie **t=FuzzyMatch(ed->tags, str,&cnt);
+  U8 **ret=MAlloc((cnt+1)*sizeof(U8*));
+  while(--cnt>=0) {
+    ret[cnt]=StrNew(t[cnt]->fullname);
+  }
+  Free(t);
+  return ret;
+}
+U8 *FuzzySelectWindow(CEditor *parent,U8** (*match_cb)(CEditor *ed,U8 *str),U8 *init=NULL) {
+  CEditor *ed=EditorNew();
+  if(init) EditorInsText(ed,init,0);
+  I64 active=-1,idx;
+  if(!init)
+    U8 **matches=(*match_cb)(parent,"");
+  else
+    matches=(*match_cb)(parent,init);
+  goto draw;
+  loop:
+  I64 key=GetKey(ed->window);
+  switch(key) {
+    case ERR: goto loop;
+    case ED_KEY_ESCAPE:
+    for(idx=0;matches[idx];idx++)
+      Free(matches[idx]);
+    Free(matches);
+    return NULL;
+    case ED_KEY_UP:
+    active=MaxI64(0,--active);
+    goto draw;
+    case ED_KEY_DOWN:
+    if(active==-1) {active=0; goto draw;}
+    if(active>=getmaxy(ed->window)-1) goto loop;
+    if(!matches[active]) goto loop;
+    if(!matches[active+1]) goto loop;
+    active++;
+    goto draw;
+    case ED_KEY_CTRL_LEFT:
+    EdWordLeft(ed);
+    goto draw;
+    case ED_KEY_CTRL_RIGHT:
+    EdWordRight(ed);
+    goto draw;
+    case ED_KEY_LEFT:
+    left:
+    EdLeft(ed);
+    goto draw;
+    case ED_KEY_BACKSPACE:
+    EdBackspace(ed);
+    goto update;
+    case ED_KEY_RIGHT:
+    right:
+    EdRight(ed);
+    goto draw;
+    case '\n':
+    U8 *ret=NULL;
+   for(idx=0;matches[idx];idx++)
+      if(active!=idx) Free(matches[idx]);
+    if(active==-1) {
+      ret=RemoveNL(Rope2Str(ed->lines->text));
+    } else {
+      ret=matches[active];
+    }
+    Free(matches);
+    parent->margin_bottom=0;
+    redrawwin(parent->window);
+    return ret;
+    default:
+    U8 buffer[]={key,0};
+    EditorInsText(ed, buffer,ed->curx,TRUE);
+    update:
+    active=-1;
+    for(idx=0;matches[idx];idx++)
+      Free(matches[idx]);
+    Free(matches);
+    U8 *t=RemoveNL(Rope2Str(ed->lines->text));
+    matches=(*match_cb)(parent,t);
+    Free(t);
+    if(key!=ED_KEY_BACKSPACE)
+        goto right;
+  }
+  draw:
+  FocusCursor(ed);
+  if(active==-1)
+    wattron(ed->window,COLOR_PAIR(CP_FUZZY_SEL_A));
+  else
+    wattron(ed->window,COLOR_PAIR(CP_FUZZY_UNSEL_A));
+  t=RemoveNL(Rope2Str(ed->lines->text));
+  wmove(ed->window,0,0);
+  wclrtoeol(ed->window);
+  WriteWithinView(ed,t, 0);
+  idx=1;
+  for(;idx<getmaxy(ed->window);idx++) {
+    if(!matches[idx-1]) break;
+    U8 *mat=matches[idx-1];
+    U8 *tc=t;
+    I64 offset=0;
+    wmove(ed->window,idx,0);
+    hl:
+    if(active==idx-1)
+      wattron(ed->window,COLOR_PAIR(CP_FUZZY_SEL_A));
+    else
+      wattron(ed->window,COLOR_PAIR(CP_FUZZY_UNSEL_A));
+    U8 buffer2[]={*(tc++),0};
+    U8 *chr=StrFirstOcc(mat,buffer2);
+    if(!chr) {
+      WriteWithinView(ed,mat, offset);
+      mat+=StrLen(mat);
+    } else {
+      U8 *slice=StrNCpy(MAlloc(chr-mat+1),mat,chr-mat);
+      WriteWithinView(ed,slice, offset);
+      mat+=StrLen(slice);
+      offset+=StrLen(slice);
+      Free(slice);
+      if(active==idx-1)
+        wattron(ed->window,COLOR_PAIR(CP_FUZZY_SEL_B));
+      else
+        wattron(ed->window,COLOR_PAIR(CP_FUZZY_UNSEL_B));
+      WriteWithinView(ed,buffer2, offset++);
+      mat++;
+    }
+    if(*mat) goto hl;
+    wclrtoeol(ed->window);
+  }
+  for(;idx<getmaxy(ed->window);idx++) {
+    wmove(ed->window,idx,0);
+    wclrtoeol(ed->window);
+  }
+
+  wmove(ed->window,0,ed->curx-ed->x_scroll);
+  wrefresh(ed->window);
+  Free(t);
+  goto loop;
+}
+I64 OpenFile(U8 *name,I64 ln=0)  {
+  loop:
+  CDirEntry *find=FilesFind(name,FUF_SINGLE);
+  if(find) {
+    DirEntryFree(find);
+    name=FileNameAbs(name);
+  } else {
+    name=StrNew(name);
+    FileWrite(name,"",0);
+    goto loop;
+  }
+  CBuffer *buf;
+  if(buf=HashFind(name,buffers)) {
+    Free(name);
+    buf->ed->cury=MinI64(ln,GetLineCount(buf->ed));
+    return Edit(buf->ed);
+  }
+  I64 cnt;
+  U8 *text=FileRead(name,&cnt);
+  if(!text) return ED_RET_OK;
+  CEditor *new=EditorNew();
+  EditorInsText(new,text,0);
+  new->fn=StrNew(name);
+  new->cury=MinI64(ln,GetLineCount(new));
+  Free(text);
+  CreateTagsAndErrorFiles("TAGS","ERRS",name);
+  new->tags=ReadTags("TAGS");
+  new->diags=ParseDiags("ERRS");
+    MarkLineColors(new);
+  buf=MAlloc(sizeof(*buf));
+  buf->str=StrNew(name);
+  buf->ed=new;
+  HashAdd(buf,buffers);
+  Free(name);
+  return Edit(new);
+}
+U8 **FuzzyFile(CEditor *ed,U8 *pat) {
+  U8 *pat2=MStrPrint("%s*",pat);
+  CDirEntry *ents=FilesFind(pat2);
+  Free(pat2);
+  CDirEntry *orig=ents;
+  I64 cnt=0;
+  while(ents) {
+    ents=ents->next,cnt++;
+  }
+  U8 **ret=MAlloc(sizeof(U8*)*(++cnt));
+  ents=orig,cnt=0;
+  while(ents) {
+    ret[cnt++]=StrNew(ents->name);
+    ents=ents->next;
+  }
+  if(orig)
+    DirEntryFree(orig);
+  return ret;
+}
+I64 GotoSymbol(CEditor *ed) {
+  U8 *str=FuzzySelectWindow(ed,&FuzzySymbolSelect);
+  if(!str) return ED_RET_OK;
+  U8 *orig=str;
+  CTrie *tags=ed->tags;
+  while(*str&&tags) {
+    try {
+      tags=tags->ents[TrieChrIdx(*str++)];
+    } catch {
+      Fs->catch_except=1;
+      return ED_RET_OK;
+    }
+  }
+  Free(orig);
+  if(tags)
+    return OpenFile(tags->fn, tags->ln);
+  return ED_RET_OK;
+}
+U8 *FileDialog(CEditor *parent) {
+  U8 * fn=NULL;
+  loop:
+  fn=FuzzySelectWindow(parent, &FuzzyFile,fn);
+  if(!fn) return fn;
+  if(IsDir(fn)) {
+    U8 *dir;
+    #if IsWindows
+    dir=MStrPrint("%s\\",fn);
+    #else
+    dir=MStrPrint("%s/",fn);
+    #endif
+    Free(fn);
+    fn=dir;
+    goto loop;
+  }
+  return fn;
+}
+U8 **FuzzyBufferSel(CEditor *ed,U8 *pat) {
+  U8 **ret=NULL,*orig=pat;
+  loop:
+  I64 cnt=buffers->mask+1,cnt2=0;
+  while(--cnt>=0) {
+    CBuffer *bucket=buffers->body[cnt];
+    for(;bucket;bucket=bucket->next) {
+      U8 *str=bucket->str;
+      pat=orig;
+      next:
+      if(!*pat) {
+        if(ret)
+          ret[cnt2]=StrNew(bucket->str);
+        cnt2++;
+        goto cont;
+      }
+      U8 buffer[]={*pat++,0};
+      str=StrFirstOcc(str,buffer);
+      if(str) {
+        str++;
+        goto next;
+      }
+      cont:
+    }
+  }
+  if(!ret) {
+    ret=MAlloc(sizeof(U8*)*(1+cnt2));
+    goto loop;
+  }
+  return ret;
+}
+I64 BufferSelect(CEditor *ed) {
+  U8 *sel=FuzzySelectWindow(ed,&FuzzyBufferSel);
+  if(sel) {
+    CBuffer *buf=HashFind(sel,buffers);
+    I64 ret=Edit(buf->ed);
+    Free(sel);
+    return ret;
+  }
+  return ED_RET_OK;
+}
+I64 Edit(CEditor *ed) {
+  goto mvsrncur;
+loop:
+    I64 key=GetKey(ed->window),cnt,cnt2;
+    if(key==ERR) goto loop;
+    I64 eoff,soff;
+    switch(key) {
+    case 'e'&0x1f:
+    if(ed->diags)
+      if(ED_RET_QUIT==ShowDiagsWindow(ed)) return ED_RET_QUIT;
+    break;
+      /**
+       * [F]ile
+       * [C]ode
+       */
+    case ED_KEY_ESCAPE:
+    case ALT_KEY('f'):
+    if(DrawEditor(ed,ED_DRAW_DFT,,0)==ED_RET_QUIT) return ED_RET_QUIT; //First menu item
+    goto mvsrncur;
+    case ALT_KEY('c'):
+    if(DrawEditor(ed,ED_DRAW_DFT,,1)==ED_RET_QUIT) return ED_RET_QUIT; //First menu item
+    goto mvsrncur;
+
+    case ED_KEY_RESIZE:
+        I64 h=getmaxy(stdscr);
+        I64 w=getmaxx(stdscr);
+        I64 x=getbegx(stdscr);
+        I64 y=getbegy(stdscr);
+        mvwin(ed->window,0,0);
+        wresize(ed->window,h,w);
+        redrawwin(ed->window);
+        goto mvsrncur;
+    case ED_KEY_UP:
+        EdUp(ed);
+        goto mvsrncur;
+    case ED_KEY_DOWN:
+        EdDown(ed);
+        goto mvsrncur;
+    case ED_KEY_LEFT:
+left:
+        EdLeft(ed);
+        goto mvsrncur;
+    case ED_KEY_RIGHT:
+right:
+        EdRight(ed);
+        goto mvsrncur;
+    case ED_KEY_END:
+        ed->_curx=ed->curx=0;
+        goto mvsrncur;
+    case ED_KEY_HOME:
+        CLine *heline=GetLine(ed,ed->cury);
+        ed->_curx=ed->curx=RopeLength(heline->text);
+        goto mvsrncur;
+    case ED_KEY_CTRL_UP:
+        goto pageup;
+    case ED_KEY_CTRL_DOWN:
+        goto pagedown;
+    case ED_KEY_CTRL_LEFT:
+        EdWordLeft(ed);
+        goto mvsrncur;
+    case ED_KEY_CTRL_RIGHT:
+        EdWordRight(ed);
+        goto mvsrncur;
+    case ED_KEY_BACKSPACE:
+        EdBackspace(ed);
+        goto mvsrncur;
+    case ED_KEY_PAGEUP:
+pageup:
+        EdPageUp(ed);
+        goto mvsrncur;
+    case ED_KEY_PAGEDOWN:
+pagedown:
+        EdPageDown(ed);
+        goto mvsrncur;
+    case '\t':
+        if(!DrawAutocomplete(ed,TRUE)) {
+          EditorInsText(ed,"    ",GetLineOffset(ed,ed->cury)+ed->curx,TRUE);
+          ed->curx+=4;
+        }
+        goto mvsrncur;
+    case 'y'&0x1f:
+    Redo(ed);
+    goto mvsrncur;
+    case 'z'&0x1f:
+    Undo(ed);
+    goto mvsrncur;
+    case 'b'&0x1f:
+    BufferSelect(ed);
+    redrawwin(ed->window);
+    goto mvsrncur;
+    case 't'&0x1f:
+    GotoSymbol(ed);
+    redrawwin(ed->window);
+    goto mvsrncur;
+    case 'o'&0x1f:
+    OpenDoc(ed);
+    redrawwin(ed->window);
+    goto mvsrncur;
+    case 's'&0x1f:
+    SaveDoc(ed);
+    redrawwin(ed->window);
+    goto mvsrncur;
+    default:
+        if(key==('q'&0x1f)) {return ED_RET_QUIT;}
+        if(key==('f'&0x1f)) {
+            EdSearch(ed);
+            goto mvsrncur;
+        }
+        soff=GetLineOffset(ed, ed->cury)+ed->curx++;
+        U8 buffer[2]= {key,0};
+        EditorInsText(ed,buffer,soff,TRUE);
+        if(key=='\n') {
+            CLine *prev=GetLine(ed,ed->cury);
+            EdRight(ed);
+            U8 *margin=MStrPrint("%*c",IndentLevel(prev),'    ');
+            EditorInsText(ed,margin,soff+1,TRUE);
+            ed->_curx=ed->curx=4*IndentLevel(prev);
+        }
+        goto mvsrncur;
+    }
+mvsrncur:
+    //Move cursor left if at newline
+    CLine *lline=GetLine(ed,ed->cury);
+    if(ed->curx+1>RopeLength(lline->text)) ed->curx=RopeLength(lline->text)-1;
+    DrawEditor(ed,ED_DRAW_DFT);
+    goto loop;
+exit:
+  return ED_RET_OK;
+}
+/*
+EditorInsText(ed,"if(Potato)\nx{3.14 'abc\\'def\\\\'}\n",0);
+EditorInsText(ed,"Tom\nato\n",4);
+DrawEditor(ed);
+FreeEditor(ed);
+CEditor *ed=EditorNew();
+EditorInsText(ed,"012\n345\n678\n9ab",0);
+EditorDelText(ed,1,2);
+EditorDelText(ed,1,15-1);
+DrawEditor(ed);
+*/
+initscr;
+CEditor *ed=EditorNew();
+Edit(ed);
+endwin;
+
+
+
+
+
+
+
+
+
+
