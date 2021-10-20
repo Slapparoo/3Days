@@ -18,16 +18,13 @@ char* rl(char* prompt) {
   return r;
 }
 CCompletion* (*rlACGen)(const char *buffer,long srcoff,const char* text,long *length);
-static char **rlAttempted(const char *text,int start,int end) {
-  if(!rlACGen) return NULL;
-  char buffer[end-start+1];
-  strncpy(buffer,text+start,end-start);
-  buffer[end-start]=0;
-  long cnt;
-  CCompletion *comps=rlACGen(text,start,buffer,&cnt);
-  char **ret=calloc(sizeof(char*),cnt+1);
+static char *rlEntry(const char *text,int iter) {
+  long cnt,ocnt;;
+  CCompletion *comps=rlACGen(text,0,text,&cnt);
+  ocnt=cnt;
+  char *ret=NULL;
   while(--cnt>=0) {
-    ret[cnt]=strcpy(calloc(strlen(comps[cnt].completion)+1,1),comps[cnt].completion);
+    if(cnt==iter) return ret=strcpy(calloc(1,strlen(comps[cnt].completion)+1),comps[cnt].completion);
     TD_FREE(comps[cnt].displayText);
     TD_FREE(comps[cnt].completion);
   }
@@ -35,6 +32,10 @@ static char **rlAttempted(const char *text,int start,int end) {
   return ret;
 }
 void InitRL() {
-  //initialize_readline ();
-  rl_attempted_completion_function = &rlAttempted;
+  #ifndef TARGET_WIN32
+  rl_catch_signals=0;
+  rl_completion_append_character='\x00';
+  rl_initialize();
+  #endif
+  rl_completion_entry_function=&rlEntry;
 }

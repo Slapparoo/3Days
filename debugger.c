@@ -497,6 +497,7 @@ void SignalHandler(int s) {
     Backtrace();
     printf("\n");
     switch(s) {
+      case SIGINT:
     case SIGABRT:
         printf("User abort.type \"Exit(0);\" to exit.\n");
         break;

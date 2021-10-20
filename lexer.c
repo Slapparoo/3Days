@@ -279,7 +279,20 @@ void InitREPL() {
 }
 void WaitForInput() {
     if(Lexer.isFreeToFlush) FlushLexer();
+    #ifndef TARGET_WIN32
+    sigset_t oldset;
+    sigset_t newset;
+    sigfillset(&newset);
+    sigprocmask(SIG_UNBLOCK,&newset,&oldset);
+    void *oldhand=signal(SIGINT,SignalHandler);
     char *input=rl("HolyCC:>> ");
+    sigprocmask(SIG_SETMASK,&oldset,NULL);
+    signal(SIGINT,oldhand);
+    #else
+    void *oldhand=signal(SIGINT,SignalHandler);
+    char *input=rl("HolyCC:>> ");
+    signal(SIGINT, oldhand);
+    #endif
 set:
     ;
     //Add to REPL_SOURCE_NAME's file lines

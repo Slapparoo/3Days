@@ -1,6 +1,6 @@
 HEADERS := HolyC.tab.h 3d.h
 CC := gcc
-CFLAGS :=  -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC #-fsanitize=address
+CFLAGS :=  -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC `pkg-config --libs --cflags readline` #-fsanitize=address
 all: 3d_tests 3d
 	echo "Done"
 installer: 3d epm
