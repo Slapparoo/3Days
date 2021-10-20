@@ -28,7 +28,7 @@ char CompilerPath[1024];
 #define ENABLE_VIRTUAL_TERMINAL_INPUT 0x200
 static LONG WINAPI VectorHandler (struct _EXCEPTION_POINTERS *info) {
   switch(info->ExceptionRecord->ExceptionCode) {
-    #define FERR(code) case code: printf("Caught %s\n",#code); HCLongJmp(&SigPad);
+    #define FERR(code) case code: printf("Caught %s.\nType 'Exit(0);' to exit.\n",#code); HCLongJmp(&SigPad);
     FERR(EXCEPTION_ACCESS_VIOLATION);
     FERR(EXCEPTION_ARRAY_BOUNDS_EXCEEDED);
     FERR(EXCEPTION_DATATYPE_MISALIGNMENT);
@@ -141,6 +141,9 @@ int main(int argc,char **argv) {
     signal(SIGSEGV,SignalHandler);
     signal(SIGABRT,SignalHandler);
     #ifndef TARGET_WIN32
+    signal(SIGBUS,SignalHandler);
+    signal(SIGFPE,SignalHandler);
+    signal(SIGILL,SignalHandler);
     signal(SIGINT,SignalHandler);
     #endif
     Compiler.tagsFile=tagf;
@@ -170,6 +173,9 @@ set:
                 signal(SIGSEGV,SignalHandler);
                 signal(SIGABRT,SignalHandler);
                 #ifndef TARGET_WIN32
+                signal(SIGBUS,SignalHandler);
+                signal(SIGFPE,SignalHandler);
+                signal(SIGILL,SignalHandler);
                 signal(SIGINT,SignalHandler);
                 #endif
                 goto set;
