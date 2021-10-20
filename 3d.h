@@ -30,7 +30,7 @@ extern char CompilerPath[1024];
 #define BLOCK_SIGS \
 void *oldhand=signal(SIGINT,SIG_IGN);
 #define UNBLOCK_SIGS \
-signal(SIGINT,SIG_IGN);
+signal(SIGINT,oldhand);
 #else
 #include "linjmp.h"
 #define BLOCK_SIGS \

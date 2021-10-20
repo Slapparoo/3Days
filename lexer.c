@@ -289,9 +289,7 @@ void WaitForInput() {
     sigprocmask(SIG_SETMASK,&oldset,NULL);
     signal(SIGINT,oldhand);
     #else
-    void *oldhand=signal(SIGINT,SignalHandler);
     char *input=rl("HolyCC:>> ");
-    signal(SIGINT, oldhand);
     #endif
 set:
     ;

@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <libloaderapi.h>
 #include <fileapi.h>
+#include <winnt.h>
 #define HCRT_INSTALLTED_DIR "\\HCRT\\HCRT.HC"
 #endif
 static struct arg_lit *helpArg;
@@ -22,21 +23,45 @@ static struct arg_file *tagsArg;
 static struct arg_file *errsFile;
 ExceptBuf SigPad;
 char CompilerPath[1024];
+#ifdef TARGET_WIN32
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
-#define ENABLE_VIRTUAL_TERMINAL_INPUT 0x200 
+#define ENABLE_VIRTUAL_TERMINAL_INPUT 0x200
+static LONG WINAPI VectorHandler (struct _EXCEPTION_POINTERS *info) {
+  switch(info->ExceptionRecord->ExceptionCode) {
+    #define FERR(code) case code: printf("Caught %s\n",#code); HCLongJmp(&SigPad);
+    FERR(EXCEPTION_ACCESS_VIOLATION);
+    FERR(EXCEPTION_ARRAY_BOUNDS_EXCEEDED);
+    FERR(EXCEPTION_DATATYPE_MISALIGNMENT);
+    FERR(EXCEPTION_FLT_DENORMAL_OPERAND);
+    FERR(EXCEPTION_FLT_DIVIDE_BY_ZERO);
+    FERR(EXCEPTION_FLT_INEXACT_RESULT);
+    FERR(EXCEPTION_FLT_INVALID_OPERATION);
+    FERR(EXCEPTION_FLT_OVERFLOW);
+    FERR(EXCEPTION_FLT_STACK_CHECK);
+    FERR(EXCEPTION_FLT_UNDERFLOW);
+    FERR(EXCEPTION_ILLEGAL_INSTRUCTION);
+    FERR(EXCEPTION_IN_PAGE_ERROR);
+    FERR(EXCEPTION_INT_DIVIDE_BY_ZERO);
+    FERR(EXCEPTION_INVALID_DISPOSITION);
+    FERR(EXCEPTION_STACK_OVERFLOW);
+    default:;
+  }
+  //SignalHandler(0);
+  return EXCEPTION_CONTINUE_EXECUTION;
+}
+BOOL WINAPI CtrlCHandlerRoutine(DWORD c) {
+  printf("User Abort.\n");
+  return FALSE;
+}
+#endif
 int main(int argc,char **argv) {
     #ifndef TARGET_WIN32
     char *rp=realpath(argv[0],NULL);
     strcpy(CompilerPath,rp);
     free(rp);
     #else
+    SetConsoleCtrlHandler(CtrlCHandlerRoutine,TRUE);
     GetFullPathNameA(argv[0],sizeof(CompilerPath),CompilerPath,NULL);
-    DWORD imode, origImode;
-    GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &imode);
-    origImode = imode;
-    imode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT|ENABLE_PROCESSED_INPUT);
-    imode |= ENABLE_VIRTUAL_TERMINAL_INPUT ;
-    SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), imode);
     DWORD omode, origOmode;
     GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &omode);
     origOmode = omode;
@@ -115,6 +140,9 @@ int main(int argc,char **argv) {
     arg_freetable(argtable, sizeof(argtable)/sizeof(*argtable));
     signal(SIGSEGV,SignalHandler);
     signal(SIGABRT,SignalHandler);
+    #ifndef TARGET_WIN32
+    signal(SIGINT,SignalHandler);
+    #endif
     Compiler.tagsFile=tagf;
     if(Compiler.tagsFile) Lexer.replMode=0;
     if(run&&!errs) {
@@ -122,7 +150,14 @@ int main(int argc,char **argv) {
 set:
             ;
             int sig;
+            #ifdef TARGET_WIN32
+            HANDLE h=AddVectoredExceptionHandler(1,VectorHandler);
+            #endif
             if(sig=HCSetJmp(SigPad)) {
+              err:
+                #ifdef TARGET_WIN32
+                RemoveVectoredExceptionHandler(h);
+                #endif
                 vec_truncate(&Debugger.callStack,0);
                 printf("Recieved signal %d. Discarding input.\n",sig);
 #ifndef TARGET_WIN32
@@ -134,11 +169,17 @@ set:
                 FlushLexer();
                 signal(SIGSEGV,SignalHandler);
                 signal(SIGABRT,SignalHandler);
+                #ifndef TARGET_WIN32
+                signal(SIGINT,SignalHandler);
+                #endif
                 goto set;
             }
             Compiler.errorFlag=0;
             Compiler.inFunction=0;
             HC_parse();
+            #ifdef TARGET_WIN32
+            RemoveVectoredExceptionHandler(h);
+            #endif
             if(Compiler.tagsFile) {
               DumpTagsToFile(tagf);
               break;

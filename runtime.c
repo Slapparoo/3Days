@@ -353,6 +353,7 @@ void RegisterBuiltins() {
     CreateBuiltin(&IsDir, i64, "IsDir",0,u8p,NULL);
     CreateBuiltin(&FileWrite, i64, "FileWrite",0,u8p,u0p,i64,NULL);
     CreateBuiltin(&FileRead, u8p, "FileRead",0,u8p,i64p,NULL);
+    CreateBuiltin(&abort, u0, "abort",0,NULL);
     CreateBuiltin(&__Dir, u8pp, "__Dir",0,u8p,NULL);
     CreateBuiltin(&IsWindows, i64, "IsWindows",0,NULL);
     CreateBuiltin(&MStrPrint, u8p, "MStrPrint",1,u8p,NULL);

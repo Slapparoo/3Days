@@ -52,10 +52,12 @@ void DbgPrintVar(CType *type,void *ptr) {
         sigset_t empty;
         sigfillset(&empty);
         sigprocmask(SIG_UNBLOCK,&empty,NULL);
+#else
+        signal(SIGINT,SignalHandler);
 #endif
         signal(SIGSEGV,SignalHandler);
         signal(SIGABRT,SignalHandler);
-        signal(SIGINT,SignalHandler);
+
         if(code==SIGSEGV) {
             char *ts=TypeToString(type);
             if(type->type==TYPE_PTR)
@@ -415,10 +417,11 @@ help:
             sigset_t empty;
             sigfillset(&empty);
             sigprocmask(SIG_UNBLOCK,&empty,NULL);
+#else
+            signal(SIGINT,SignalHandler);
 #endif
             signal(SIGSEGV,SignalHandler);
             signal(SIGABRT,SignalHandler);
-            signal(SIGINT,SignalHandler);
         } else {
             s+=strlen(word);
             s=__SkipWhitespace(s);
@@ -508,5 +511,6 @@ void SignalHandler(int s) {
         printf("Strange signal %d.\n",s);
         break;
     }
+
     HCLongJmp(SigPad);
 }

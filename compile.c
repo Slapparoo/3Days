@@ -842,9 +842,13 @@ int64_t EvaluateInt(AST *exp) {
     Compiler.returnType=CreatePrimType(TYPE_I64);
     CFunction *f=CompileAST(&locals, ret, args);
     ReleaseType(Compiler.returnType);
+    #ifndef TARGET_WIN32
     signal(SIGINT,SignalHandler);
     int64_t ret2=((int64_t(*)())f->funcptr)();
     signal(SIGINT,SIG_IGN);
+    #else
+    int64_t ret2=((int64_t(*)())f->funcptr)();
+    #endif
     ReleaseFunction(f);
     RestoreCompilerState(old);
     return ret2;
@@ -1033,9 +1037,13 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
                     CFunction *stmt=CompileAST(NULL,ret,empty);
                     RestoreCompilerState(olds);
                     vec_deinit(&empty);
+                    #ifndef TARGET_WIN32
                     signal(SIGINT,SignalHandler);
                     stmt->funcptr(0);
                     signal(SIGINT,SIG_IGN);
+                    #else
+                    stmt->funcptr(0);
+                    #endif
                     ReleaseFunction(stmt);
                     vec_push(&r->func.dftArgs,vnode);
                 }
@@ -5621,9 +5629,13 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         jit_disable_optimization(curjit, JIT_OPT_ALL);
         jit_generate_code(curjit,func);
         func->funcptr=funcptr;
+        #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
         func->funcptr(0);
         signal(SIGINT,SIG_IGN);
+        #else
+        func->funcptr(0);
+        #endif
         t=AssignTypeToNode(exp);
         if(t->type==TYPE_ARRAY||t->type==TYPE_ARRAY_REF)
           DbgPrintVar(t, *(void**)buffer); //Arrays return pointer to self
@@ -6097,11 +6109,15 @@ void RunStatement(AST *s) {
     int oldflag=Compiler.errorFlag;
     CFunction *stmt=CompileAST(&locals,s,empty);
     if(stmt&&!Compiler.errorFlag&&!Compiler.tagsFile) {
-        signal(SIGINT,SignalHandler);
-        GC_Disable();
-        ((void(*)())stmt->funcptr)();
-        GC_Enable();
-        signal(SIGINT,SIG_IGN);
+      GC_Disable();
+      #ifndef TARGET_WIN32
+      signal(SIGINT,SignalHandler);
+      ((void(*)())stmt->funcptr)();
+      signal(SIGINT,SIG_IGN);
+      #else
+      ((void(*)())stmt->funcptr)();
+      #endif
+      GC_Enable();
     }
     Compiler.errorFlag=oldflag;
     ReleaseFunction(stmt);

@@ -10,10 +10,21 @@
 #include "gc.h"
 #include "alloc.h"
 #include <readline.h>
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
+#define ENABLE_VIRTUAL_TERMINAL_INPUT 0x200
+
 char* rl(char* prompt) {
   char *fn=readline(prompt);
   char *r=strdup(fn);
   free(fn);
+  #ifdef TARGET_WIN32
+  //Set terminal attributes to our wanted ones as readline chnages the attrs
+  DWORD omode, origOmode;
+  GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &omode);
+  origOmode = omode;
+  omode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+  SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), omode);
+  #endif
   if(strlen(r)) add_history(r);
   return r;
 }
