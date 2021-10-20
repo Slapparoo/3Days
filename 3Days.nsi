@@ -9,7 +9,7 @@
 !define VERSION "00.00.01.00"
 !define COPYRIGHT "None"
 !define DESCRIPTION "A HolyC Compiler"
-!define INSTALLER_NAME "C:\Users\fuffi\Documents\Nsisqssg\Output\3Days\setup.exe"
+!define INSTALLER_NAME "setup.exe"
 !define MAIN_APP_EXE "3d.exe"
 !define INSTALL_TYPE "SetShellVarContext current"
 !define REG_ROOT "HKCU"
