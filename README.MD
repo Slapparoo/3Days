@@ -7,7 +7,7 @@ This compiler is currently mostly a compiler,but it needs a better runtime. To g
 Start the compiler with `-d`(or `-b` for bounds checking) and call `Debugger;`
 
 # Building
-You will need yasm,gnu bison,gcc and make. Other than that all dependencies are included in `ext/`  A modified [Oregon trail port from TinkerOS ](https://github.com/tinkeros/OT1975) is provided in the source code. Do `make installer` to make an installer for linux via `ext/epm`. This will require fltk for a graphical installer. TODO make a NSIS installer for windows when the compiler gets more builtins.
+You will need yasm,gnu bison,gcc and make. Other than that all dependencies are included in `ext/`  A modified [Oregon trail port from TinkerOS ](https://github.com/tinkeros/OT1975) is provided in the source code. Do `make installer` to make an installer for linux via `ext/epm`. This will require fltk for a graphical installer.
 
 # Editor
 This comes with a barebones editor,you can run it using `#include "HolyEd/EDITOR.HC"` Press `alt+f` to access the file menu and `alt+c` to access the code menu(Which gives a fuzzy symbol select and compile check). If you are using windows terminal you may want to change the cursor shape to a block because the background is white
