@@ -935,7 +935,7 @@ U0 EditorInsText(CEditor *ed,U8 *text,I64 at,Bool undo=FALSE) {
     ret:
     RenumberLines(ed);
 }
-CEditor *EditorNew() {
+CEditor *EditorNew(Bool gen_rt_tags=FALSE) {
     noecho;
     CEditor *r=MAlloc(sizeof(CEditor));
     start_color;
@@ -964,6 +964,11 @@ CEditor *EditorNew() {
     r->line_cache=MAlloc(sizeof(CLine*));
     r->line_cache_size=0;
     EditorInsText(r,"",0);
+    if(gen_rt_tags) {
+        CreateTagsAndErrorFiles("TAGS","ERRS",NULL);
+        r->tags=ReadTags("TAGS");
+        r->diags=ParseDiags("ERRS");
+    }
     return r;
 }
 U0 FreeLine(CLine *ln) {
@@ -2293,16 +2298,7 @@ EditorDelText(ed,1,15-1);
 DrawEditor(ed);
 */
 initscr;
-CEditor *ed=EditorNew();
+CEditor *ed=EditorNew(TRUE);
 Edit(ed);
 endwin;
-
-
-
-
-
-
-
-
-
 

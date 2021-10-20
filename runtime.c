@@ -273,10 +273,17 @@ WINDOW *StdScr() {
     return stdscr;
 }
 void CreateTagsAndErrorFiles(char *dest,char *errs,char *root) {
-  char buffer[2048];
-  sprintf(buffer,"%s -s -t %s -e %s %s",CompilerPath,dest,errs,root);
-  //printf("%s\n",buffer);
-  system(buffer);
+  if(!root) {
+    char buffer[2048];
+    sprintf(buffer,"%s -s -t %s -e %s",CompilerPath,dest,errs);
+    //printf("%s\n",buffer);
+    system(buffer);
+  } else {
+    char buffer[2048];
+    sprintf(buffer,"%s -s -t %s -e %s %s",CompilerPath,dest,errs,root);
+    //printf("%s\n",buffer);
+    system(buffer);
+  }
 }
 static void Test(int64_t a,int64_t b,int64_t c,int64_t d,int64_t e,int64_t f,int64_t  g) {
   printf("%lld,%lld,%lld,%lld,%lld,%lld,%lld\n",a,b,c,d,e,f,g);
