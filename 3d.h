@@ -158,6 +158,9 @@ struct CType;
 typedef struct AST {
     int refCnt;
     enum {
+        AST_ASM_OPCODE,
+        AST_ASM_REG,
+        AST_ASM_ADDR,
         //
         AST_LINKAGE,
         //
@@ -284,6 +287,22 @@ typedef struct AST {
         AST_LASTCLASS,
     } type;
     union {
+        /**
+         * This points to a CReg* from ASM.HC
+         */
+        void *asmReg;
+        struct {
+            struct AST *segment;
+            struct AST *scale;
+            struct AST *index;
+            struct AST *base;
+            struct AST *disp;
+            int64_t width;
+        } asmAddr;
+        struct {
+          struct AST *name;
+          vec_AST_t operands;
+        } asmOpcode;
         vec_AST_t arrayLiteral;
         struct AST *sizeofExp;
         struct {
@@ -582,6 +601,8 @@ typedef struct {
     int debugMode:1;
     int boundsCheckMode:1;
     int silentMode:1;
+    //addrofFrameoffsetMode will make addr-ofs return the frame offset
+    int addrofFrameoffsetMode:1;
     char *tagsFile;
     FILE *errorsFile;
     struct jit *JIT;
@@ -771,9 +792,15 @@ COldFuncState CreateCompilerState();
 void RestoreCompilerState(COldFuncState old);
 int DebugIsTrue(void *frameptr,CFuncInfo *info,char *text);
 void DebugEvalExpr(void *frameptr,CFuncInfo *info,char *text);
-void WhineOnOutOfBounds(void *ptr);
+void WhineOnOutOfBounds(void *ptr,int64_t size);
 void SignalHandler(int s);
 void StreamPrint(const char *fmt,int64_t argc,int64_t *argv);
 void Backtrace();
 void DumpTagsToFile(char *fn);
 CType *FinalizeClass(CType *class);
+double EvaluateF64(AST *exp);
+int IsOpcode(char *name);
+vec_AST_t CommaToVec(AST* comma);
+int IsRegister(char *name);
+AST *AppendToSIB(AST *sib,AST *scale,AST *reg,AST *offset);
+void AssembleOpcode(char *name,vec_AST_t operands);

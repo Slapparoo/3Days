@@ -183,93 +183,6 @@ memberchk:
         vec_push(&ret, comp);
         TD_FREE(type);
     }
-    //Check for file path
-    char *fpos=start+srcoff;
-#ifndef TARGET_WIN32
-    char *fpstart=strdup("./");
-    char delim='/';
-#else
-    char *fpstart=strdup(".\\");
-    char delim='\\';
-#endif
-    if(srcoff)
-        if(fpos[-1]==delim) {
-#ifdef TARGET_WIN32
-        if(srcoff>=1)
-          if(fpos[-2]==delim)
-            fpos--;
-#endif
-            fpos--;
-            while(fpos>start) {
-                if(*fpos==delim) {
-                    fpos--;
-                    continue;
-                } else if(*fpos=='_'||isalnum(*fpos)||*fpos=='.') {
-                    fpos--;
-                    continue;
-                }
-#ifdef TARGET_WIN32
-                if(*fpos==':') {
-                    fpos--;
-                    while(fpos>start)
-                        if(isalnum(*fpos)) {
-                            fpos--;
-                        } else {
-                            fpos++;
-                            break;
-                        }
-                    break;
-                }
-#endif
-                fpos++;
-                break;
-            }
-        }
-    if(fpos!=start+srcoff) {
-        TD_FREE(fpstart);
-        long len=(start+srcoff)-fpos;
-        fpstart=TD_MALLOC(len+1);
-        strncpy(fpstart,fpos,len);
-        //Condense
-        #ifdef TARGET_WIN32
-        char *d;
-        mergeloop:
-        if(d=strstr(fpstart,"\\\\")) {
-          memmove(d,d+1,1+strlen(d+1));
-          goto mergeloop;
-        }
-        #endif
-    }
-#ifndef TARGET_WIN32
-    DIR *d=opendir(fpstart);
-    if(d) {
-        struct dirent *de;
-        while(de=readdir(d)) {
-            if(0==strncmp(text,de->d_name,strlen(text))) {
-                sprintf(buffer,"File:%s%s",fpstart,de->d_name);
-                CCompletion comp= {strdup(buffer),strdup(de->d_name)};
-                vec_push(&ret, comp);
-            }
-        }
-        closedir(d);
-    }
-#else
-    strcpy(buffer,fpstart);
-    strcat(buffer,"*");
-    WIN32_FIND_DATA dummy;
-    HANDLE d=FindFirstFileA(buffer,&dummy);
-    if(d) {
-        while(FindNextFileA(d,&dummy)) {
-            if(0==strncmp(text,dummy.cFileName,strlen(text))) {
-              sprintf(buffer,"File:%s%s",fpstart,dummy.cFileName);
-              CCompletion comp= {strdup(buffer),strdup(dummy.cFileName)};
-              vec_push(&ret, comp);
-            }
-        }
-        FindClose(d);
-    }
-#endif
-    TD_FREE(fpstart);
     *length=ret.length;
     return ret.data;
 }
@@ -572,6 +485,8 @@ AST *LexString() {
     return NULL;
 }
 void SkipWhitespace(int flags) {
+  int old=Lexer.isFreeToFlush;
+  Lexer.isFreeToFlush=0;
 loop:
     if(!LEXER_PEEK()&&Lexer.replMode) {
         WaitForInput();
@@ -598,14 +513,18 @@ loop:
             }
         } else {
             Lexer.cursor_pos=orig_pos;
+            Lexer.isFreeToFlush=old;
             return;
         }
     } else if(Lexer.stopAtNewline&&LEXER_PEEK()=='\n') {
+        Lexer.isFreeToFlush=old;
         return;
     } else if(isblank(LEXER_PEEK())||LEXER_PEEK()=='\n'||LEXER_PEEK()=='\r') {
         LEXER_NEXT();
-    } else
+    } else {
+        Lexer.isFreeToFlush=old;
         return;
+    }
     goto loop;
 }
 char *WordAtPoint(int expandMacro) {
@@ -667,7 +586,6 @@ void RestoreLexerFileState(CLexerFileState backup) {
     Lexer.fpos=backup.fpos;
     Lexer.physical_fpos_start=backup.physical_fpos_start;
     Lexer.curFileEnd=backup.fileEnd;
-    Lexer.isFreeToFlush=backup.isFreeToFlush;
 }
 void HandleLexerIf(int success) {
     CPreprocIfState state= {.success=success,.hasElse=0};
@@ -1140,6 +1058,20 @@ AST *LexMatchBase16() {
 AST *LexName() {
     char *word=WordAtPoint(EXPAND_MACROS);
     if(!word) return NULL;
+    if(IsOpcode(word)) {
+      AST *r=TD_CALLOC(1,sizeof(AST));
+      r->refCnt=1;
+      r->type=HC_OPCODE;
+      r->name=word;
+      return r;
+    }
+    if(IsOpcode(word)) {
+      AST *r=TD_CALLOC(1,sizeof(AST));
+      r->refCnt=1;
+      r->type=HC_REGISTER;
+      r->name=word;
+      return r;
+    }
     if(map_get(&Lexer.keywords, word)) {
         AST *r=TD_CALLOC(1,sizeof(AST));
         r->refCnt=1;

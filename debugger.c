@@ -20,8 +20,8 @@ void Backtrace() {
             fprintf(stderr,"  [%i] ?:?<%s>\n",iter,bt->func->name);
     }
 }
-void WhineOnOutOfBounds(void *ptr) {
-    if(!InBounds(ptr)) {
+void WhineOnOutOfBounds(void *ptr,int64_t sz) {
+    if(!InBounds(ptr+sz)) {
         Backtrace();
     }
 }

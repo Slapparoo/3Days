@@ -178,15 +178,9 @@ static void prepare_registers_for_call(struct jit_reg_allocator * al, jit_op * o
 			sync_reg(op, hreg, r);
 		}
 	}
-skip:
+skip:;
 
 #endif
-	// synchronizes fp-register which can be used to return the value
-	if (al->fpret_reg) {
-		hreg = rmap_is_associated(op->regmap, al->fpret_reg->id, 1, &r);
-		if (hreg) sync_reg(op, hreg, r);
-	}
-
 	// spills registers which are used to pass the arguments
 	// FIXME: duplicities
 	int args = MIN(op->arg[0], al->gp_arg_reg_cnt);
@@ -205,18 +199,6 @@ skip:
 			rmap_unassoc(op->regmap, reg);
 		}
 	}
-}
-
-/**
- * If the hw. register which is used to return values is unused (i.e., it's
- * in the register pool) it associates this register with the given virtual register
- * and returns 1.
- * Tacitly assumes, that return register has been unassociated before function call.
- */
-static int assign_ret_reg(jit_op * op, jit_hw_reg * ret_reg)
-{
-	rmap_assoc(op->regmap, op->arg[0], ret_reg);
-	return 1;
 }
 
 static int assign_getarg(jit_op * op, struct jit_reg_allocator * al)
@@ -246,15 +228,6 @@ static int assign_getarg(jit_op * op, struct jit_reg_allocator * al)
 	return 0;
 }
 
-static void spill_ret_retreg(jit_op * op, jit_hw_reg * ret_reg)
-{
-	jit_value r;
-	if (ret_reg) {
-		jit_hw_reg * hreg = rmap_is_associated(op->regmap, ret_reg->id, ret_reg->fp, &r);
-		if (hreg) rmap_unassoc(op->regmap, r);
-	}
-}
-
 /**
  * Spills registers that are in use before JMPR is performed
  */
@@ -276,8 +249,6 @@ static int assign_jmp(jit_op * op, struct jit_reg_allocator * al)
 
 static int assign_call(jit_op * op, struct jit_reg_allocator * al)
 {
-	spill_ret_retreg(op, al->ret_reg);
-	spill_ret_retreg(op, al->fpret_reg);
 #ifdef JIT_ARCH_SPARC
 	jit_value reg;
 	// unloads all FP registers
@@ -292,6 +263,14 @@ static int assign_call(jit_op * op, struct jit_reg_allocator * al)
 #ifdef JIT_ARCH_AMD64
 	// since the CALLR may use the given register also to pass an argument,
 	// code genarator has to take care of the register value itself
+
+	//XMM0 is used as an acculator and it is the first argument passed to functions; unload it to avoid wierdness
+	jit_value reg;
+	jit_hw_reg * hreg = rmap_is_associated(op->regmap, al->fp_regs[0].id, 1, &reg);
+	if (hreg) {
+		unload_reg(op, hreg, reg);
+		rmap_unassoc(op->regmap, reg);
+	}
 	return 1;
 #else
 	return 0;
@@ -391,13 +370,6 @@ static void assign_regs(struct jit * jit, struct jit_op * op)
 		// PUTARG have to take care of the register allocation by itself
 		case JIT_PUTARG: skip = 1; break;
 		case JIT_FPUTARG: skip = 1; break;
-
-#ifdef JIT_ARCH_COMMON86
-		case JIT_RETVAL: skip = assign_ret_reg(op, al->ret_reg); break;
-#endif
-#ifdef JIT_ARCH_SPARC
-		case JIT_FRETVAL: skip = assign_ret_reg(op, al->fpret_reg); break;
-#endif
 		case JIT_GETARG: skip = assign_getarg(op, al); break;
 		case JIT_CALL: skip = assign_call(op, al); break;
 		case JIT_JMP: skip = assign_jmp(op, al); break;

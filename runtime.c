@@ -41,6 +41,11 @@ static void PopTryFrame() {
     TD_FREE(curframe);
     curframe=par;
 }
+static void GCollect() {
+  GC_Enable();
+  GC_Collect();
+  GC_Disable();
+}
 static void throw(uint64_t val) {
     assert(curframe); //TODO
     Fs.except_ch=val;
@@ -316,6 +321,7 @@ void RegisterBuiltins() {
     CType *cfileptr =CreatePtrType(cfile);
     CType *wind =CreateClassForwardDecl(NULL, CreateDummyName("WINDOW"));
     CType *windp =CreatePtrType(wind);
+    CreateBuiltin(&GCollect,u0,"GC_Collect",0,NULL);
     CreateBuiltin(&CreateTagsAndErrorFiles,u0,"CreateTagsAndErrorFiles",0,u8p,u8p,u8p,NULL);
     CreateBuiltin(&MSize, i64, "MSize",0, u0p,NULL);
     CreateBuiltin(&BFFS, i64, "Bsf",0, i64,NULL);

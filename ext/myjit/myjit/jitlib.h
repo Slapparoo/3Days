@@ -268,6 +268,8 @@ typedef enum {
 	JIT_CODE_ALIGN	= (0xb3 << 3),
 	JIT_REF_CODE	= (0xb4 << 3),
 	JIT_REF_DATA	= (0xb5 << 3),
+    /* (label,offset,none)*/
+    JIT_DATA_CODE_OFFSET =(0xb6<<3),
 
 	JIT_MSG		= (0xf0 << 3),
 	JIT_COMMENT	= (0xf1 << 3),
@@ -610,6 +612,7 @@ int jit_allocai(struct jit * jit, int size);
 #define jit_data_ptr(jit, a)  do { void * _x = (void *)(a); jit_data_bytes(jit, sizeof(void *), (unsigned char*) &_x); } while(0)
 #define jit_data_ref_code(jit, a)	jit_add_op(jit, JIT_DATA_REF_CODE | IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_data_ref_data(jit, a)	jit_add_op(jit, JIT_DATA_REF_DATA | IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
+#define jit_data_code_offset(jit,a,b)  jit_add_op(jit, JIT_DATA_CODE_OFFSET, SPEC(IMM, IMM, NO), a, (jit_value)(b), 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 
 #define jit_data_emptyarea(jit, count) \
 	do {  \

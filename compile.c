@@ -66,7 +66,6 @@ static int IsCompositeType(CType *_t) {
 static void PutXBytes(long srcreg,long ptrreg,long size);
 static jit_value MoveValueToIntRegIfNeeded(CValue v,int r);
 static jit_value MoveValueToFltRegIfNeeded(CValue v,int r);
-static vec_AST_t CommaToVec(AST* comma) ;
 static double F64And(double a,double b) {
     return (*(uint64_t*)&a)&(*(uint64_t*)&b);
 }
@@ -572,7 +571,7 @@ AST *AppendToMetaData(AST *first,AST *name,AST * value) {
     vec_push(&first->metaData,meta);
     return first;
 }
-static vec_AST_t CommaToVec(AST* comma) {
+vec_AST_t CommaToVec(AST* comma) {
     vec_AST_t ret;
     vec_init(&ret);
     if(!comma) return ret;
@@ -830,6 +829,28 @@ int IsModifyAssign(AST *node) {
         return 1;
     }
     return 0;
+}
+double EvaluateF64(AST *exp) {
+    AST *ret =CreateReturn(exp);
+    COldFuncState old=CreateCompilerState();
+    //Dissable breakpoints
+    map_CVariable_t locals;
+    vec_CVariable_t args;
+    vec_init(&args);
+    map_init(&locals);
+    Compiler.returnType=CreatePrimType(TYPE_F64);
+    CFunction *f=CompileAST(&locals, ret, args);
+    ReleaseType(Compiler.returnType);
+    #ifndef TARGET_WIN32
+    signal(SIGINT,SignalHandler);
+    double ret2=((double(*)())f->funcptr)();
+    signal(SIGINT,SIG_IGN);
+    #else
+    double ret2=((double(*)())f->funcptr)();
+    #endif
+    ReleaseFunction(f);
+    RestoreCompilerState(old);
+    return ret2;
 }
 int64_t EvaluateInt(AST *exp) {
     AST *ret =CreateReturn(exp);
@@ -3496,6 +3517,11 @@ lcloop:
         }
         break;
     }
+    case AST_ASM_REG: {
+      AssembleOpcode(exp->asmOpcode.name->name,exp->asmOpcode.operands);
+      vec_push(&Compiler.valueStack, VALUE_INT(0));
+      break;
+    }
     case AST_PRINT_STRING: {
         jit_prepare(Compiler.JIT);
         jit_putargi(Compiler.JIT, (jit_value)RegisterString(exp->string));
@@ -4370,6 +4396,7 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
         if(Compiler.boundsCheckMode) {
             jit_prepare(Compiler.JIT);
             jit_putargr(Compiler.JIT, R(ret->reg));
+            jit_putargi(Compiler.JIT, TypeSize(DerrefedType(t)));
             jit_call(Compiler.JIT, WhineOnOutOfBounds);
         }
         CValue ret2 = {.type=VALUE_INDIR_VAR,.var=CloneVariable(ret)}; //Returned so dont TD_FREE
@@ -4381,6 +4408,13 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
         //Avoid implicit function calls
         if(exp->unopArg->type==AST_NAME) {
           CVariable *var AF_VAR= GetVariable(exp->unopArg->name);
+          if(Compiler.addrofFrameoffsetMode) {
+            if(var->isGlobal) {
+              //Continue as normal
+            } else {
+              vec_push(&Compiler.valueStack, VALUE_INT(var->frameOffset));
+            }
+          }
           if(!var) {
             __CompileAST(exp->unopArg);
           } else {
@@ -5477,6 +5511,7 @@ noreg:
     //Load function arguments
     CVariable *var;
     int argc;
+    jit_value forarg[args.length];
     vec_foreach(&args,var,argc) {
         if(IsF64(var->type)) {
             jit_declare_arg(Compiler.JIT, JIT_FLOAT_NUM, 8);
@@ -5494,25 +5529,48 @@ noreg:
             if(IsVarRegCanidate(var))
                 jit_getarg(Compiler.JIT, FR(var->reg), argc);
             else {
-                jit_getarg(Compiler.JIT, FR(freg++), argc);
-                CVariable *var2 AF_VAR=CreateTmpRegVar(freg-1, var->type);
-                CValue v1 AF_VALUE=VALUE_VAR(var), v2 AF_VALUE=VALUE_VAR(var2);
-                CompileAssign(v1, v2);
+                forarg[argc]=freg++;
+                jit_getarg(Compiler.JIT, FR(forarg[argc]), argc);
+                //Will load into frame later
             }
         } else if(IsIntegerType(var->type)) {
             if(IsVarRegCanidate(var))
                 jit_getarg(Compiler.JIT, R(var->reg), argc);
             else {
-                jit_getarg(Compiler.JIT, R(ireg++), argc);
-                CVariable *var2 AF_VAR=CreateTmpRegVar(ireg-1, var->type);
-                CValue v1 AF_VALUE=VALUE_VAR(var), v2 AF_VALUE=VALUE_VAR(var2);
-                CompileAssign(v1, v2);
+                forarg[argc]=ireg++;
+                jit_getarg(Compiler.JIT, R(forarg[argc]), argc);
+                //Will load into frame later
             }
         } else {
             //TODO
             abort();
         }
     }
+    vec_foreach(&args,var,argc) {
+      if(IsF64(var->type)) {
+          if(IsVarRegCanidate(var))
+              ;
+          else {
+              jit_value freg=forarg[argc];
+              CVariable *var2 AF_VAR=CreateTmpRegVar(freg, var->type);
+              CValue v1 AF_VALUE=VALUE_VAR(var), v2 AF_VALUE=VALUE_VAR(var2);
+              CompileAssign(v1, v2);
+          }
+      } else if(IsIntegerType(var->type)) {
+          if(IsVarRegCanidate(var))
+              ;
+          else {
+              jit_value ireg=forarg[argc];
+              CVariable *var2 AF_VAR=CreateTmpRegVar(ireg, var->type);
+              CValue v1 AF_VALUE=VALUE_VAR(var), v2 AF_VALUE=VALUE_VAR(var2);
+              CompileAssign(v1, v2);
+          }
+      } else {
+          //TODO
+          abort();
+      }
+    }
+
     //Call enter function
     if(Compiler.debugMode) {
         jit_addi(Compiler.JIT,R(0),R_FP,Compiler.frameOffset);
@@ -6154,6 +6212,19 @@ void ScanAST(AST *t,void(*func)(AST *,void *),void *data) {
     case AST_ARRAY_LITERAL: {
         SCANVEC(t->arrayLiteral);
         break;
+    }
+    case AST_ASM_OPCODE: {
+      ScanAST(t->asmOpcode.name,func,data);
+      SCANVEC(t->asmOpcode.operands);
+      break;
+    }
+    case AST_ASM_ADDR: {
+      ScanAST(t->asmAddr.base,func,data);
+      ScanAST(t->asmAddr.disp,func,data);
+      ScanAST(t->asmAddr.index,func,data);
+      ScanAST(t->asmAddr.scale,func,data);
+      ScanAST(t->asmAddr.segment,func,data);
+      break;
     }
     case __AST_DECL_TAILS: {
         int iter;

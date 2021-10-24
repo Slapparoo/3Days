@@ -236,7 +236,7 @@ static int jit_op_is_data_op(jit_op *op)
 	if (!op) return 0;
 
 	jit_opcode code = GET_OP(op);
-	return ((code == JIT_DATA_BYTE) || (code == JIT_DATA_REF_CODE) || (code == JIT_DATA_REF_DATA));
+	return ((code == JIT_DATA_BYTE) || (code == JIT_DATA_REF_CODE) || (code == JIT_DATA_REF_DATA)||(code==JIT_DATA_CODE_OFFSET));
 }
 
 static int check_data_alignment(jit_op *op, char *msg_buf)
@@ -267,7 +267,7 @@ static int check_data_references(jit_op *op, char *msg_buf)
 
 static int check_code_references(jit_op *op, char *msg_buf)
 {
-	if (((GET_OP(op) == JIT_REF_CODE) || (GET_OP(op) == JIT_DATA_REF_CODE)) && jit_op_is_data_op(op->jmp_addr)) {
+	if (((GET_OP(op) == JIT_REF_CODE) || (GET_OP(op) == JIT_DATA_REF_CODE)||(GET_OP(op)==JIT_DATA_CODE_OFFSET)) && jit_op_is_data_op(op->jmp_addr)) {
 		append_msg(msg_buf, "invalid code reference");
 		return JIT_WARN_INVALID_CODE_REFERENCE;
 	}

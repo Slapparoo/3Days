@@ -1736,6 +1736,9 @@ I64 SaveDoc(CEditor *ed) {
         wrefresh(msgs);
         ed->diags=ParseDiags("ERRS");
         delwin(msgs);
+        wprint(msgs,"Garbage collecting.\n");
+        wrefresh(msgs);
+        GC_Collect();
         MarkLineColors(ed);
         redrawwin(ed->window);
         flushinp;

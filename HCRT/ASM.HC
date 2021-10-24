@@ -588,7 +588,10 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
     } else {
         SIB=TRUE;
         mdrmrm=HashFind("RSP",regs)(CReg*).code;
+        "HERE:%p\n",index;
         sibi=index->code;
+        "GERE1.5\n";
+
         sibs=scale;
         if(base) sibb=base->code; else sibb=0;
         if(!base) {
@@ -601,6 +604,7 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
                 mdrmcode=X64ModRMIndir8;
             }
         }
+        "GERE2\n";
     }
     I64 tmp=__X64RegIsIntExt(sibb);
     if(!SIB) tmp=__X64RegIsIntExt(mdrmrm);
@@ -714,6 +718,7 @@ U0 SibTests() {
     }
 }
 SibTests;
+GetI64("WAIT");
 U0 X64ModeFree(X64Mode *m) {
     Free(m);
 }

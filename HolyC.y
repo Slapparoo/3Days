@@ -25,7 +25,7 @@ static void (*RunPtr)(CFuncInfo *info,AST *exp,void *framePtr);
 %token  LOR
 %token  ASSIGN EQ_SHL EQ_SHR EQ_MUL EQ_DIV EQ_MOD EQ_BAND EQ_BXOR EQ_BOR EQ_ADD EQ_SUB
 %token  COMMA
-%token  OTHER TRY CATCH LASTCLASS U0 LEFT_PAREN RIGHT_PAREN INC DEC NAME LEFT_SQAURE RIGHT_SQAURE SEMI IF ELSE DO WHILE FOR LEFT_CURLY RIGHT_CURLY CASE COLON DOT_DOT_DOT
+%token  TRY CATCH LASTCLASS U0 LEFT_PAREN RIGHT_PAREN INC DEC NAME LEFT_SQAURE RIGHT_SQAURE SEMI IF ELSE DO WHILE FOR LEFT_CURLY RIGHT_CURLY CASE COLON DOT_DOT_DOT
 %token  EXTERN2 LOCK EXTERN IMPORT IMPORT2 STATIC PUBLIC CLASS UNION INTERN START END DEFAULT BREAK RET GOTO BOOL U8 I8 U16 I16 U32 I32 U64 I64 F64  SWITCH
 /**
  * These tokens is used by forking the lexer  and parsing a scope/expression
@@ -54,8 +54,67 @@ static void (*RunPtr)(CFuncInfo *info,AST *exp,void *framePtr);
 %nonassoc IF ELSE DO WHILE FOR
 %nonassoc TRY CATCH LASTCLASS U0 LEFT_PAREN RIGHT_PAREN INC DEC NAME LEFT_SQAURE RIGHT_SQAURE SEMI  LEFT_CURLY RIGHT_CURLY CASE COLON DOT_DOT_DOT
 %nonassoc EXTERN2 LOCK EXTERN IMPORT IMPORT2 STATIC PUBLIC CLASS UNION INTERN START END DEFAULT BREAK GOTO BOOL U8 I8 U16 I16 U32 I32 U64 I64 F64 SWITCH TYPENAME
+%nonassoc OPCODE REGISTER
 %%
 body: stmts;
+//Asm section
+sib_ib[r]: REGISTER {$r=AppendToSIB(NULL,NULL,$1,NULL);};
+sib_ib[r]: sib_ib[i] ADD[a] REGISTER[re] {
+  $r=AppendToSIB($i,NULL,$re,NULL);
+  ReleaseAST($a);
+};
+sib_ib[r]: sib_ib[i] ADD[a] INT[s] MUL[m] REGISTER[idx] {
+  $r=AppendToSIB($i,$s,$idx,NULL);
+  ReleaseAST($a),ReleaseAST($m);
+};
+sib_ib[r]: sib_ib[i] ADD[a] REGISTER[idx] MUL[m] INT[s]  {
+  $r=AppendToSIB($i,$s,$idx,NULL);
+  ReleaseAST($a),ReleaseAST($m);
+};
+sib_d[r]: sib_ib[s];
+sib_d[r]: sib_ib[s] ADD[a] expr[e] {
+  $r=AppendToSIB($s,NULL,NULL,$e);
+  ReleaseAST($a);
+};
+sib_d[r]: sib_ib[s] SUB[sb] expr[e] {
+  $r=AppendToSIB($s,NULL,NULL,$e);
+  ReleaseAST($sb);
+};
+sib[r]: LEFT_SQAURE[lb] sib_d[sib2] RIGHT_SQAURE[rb] {
+  ReleaseAST($lb),ReleaseAST($rb);
+  $r=$sib2;
+};
+opc_operand: sib;
+opc_operand: REGISTER;
+opc_operand: TYPENAME[tn] sib[s] {
+  $$=$s;
+}
+opc_operand: TYPENAME[tn] REGISTER[seg] COLON sib[s] {
+  CType *t=*map_get(&Compiler.types,$tn->name);
+  $s->asmAddr.width=TypeSize(t);
+  $s->asmAddr.segment=$seg;
+  $$=$s;
+}
+opc_operand: opc_operand[r] COLON[c] sib[s] {
+  if($r->type!=AST_ASM_REG) RaiseError($c,"Expected register");
+  else {
+    $s->asmAddr.segment=$r;
+  }
+  $$=$s;
+};
+opc_operands[r]: opc_operand[o] {$r=$o;};
+opc_operands[r]: opc_operands[seq] COMMA opc_operands[o] {
+  $r=CreateBinop($seq,$o,AST_COMMA);
+};
+asm_stmt[r]: OPCODE[n] opc_operands[o] {
+  AST *r=TD_MALLOC(sizeof(AST));
+  r->refCnt=1;
+  r->type=AST_ASM_OPCODE;
+  r->asmOpcode.name=$n;
+  r->asmOpcode.operands=CommaToVec($o);
+  $r=r;
+};
+//
 expr0[r]: FLOAT {$r=SLE($1);};
 expr0[r]: INT {$r=SLE($1);};
 expr0[r]: CHAR {$r=SLE($1);};
@@ -981,6 +1040,7 @@ swit[r]: SWITCH[p] LEFT_PAREN[un1] expr_comma[cond] RIGHT_PAREN[un2] LEFT_CURLY[
   ReleaseAST($un4);
 }
 simple_stmt: tryblock;
+simple_stmt: asm_stmt;
 simple_stmt[r]: multi_decl[d] SEMI[un] {
   $r=$d;
   ReleaseAST($un);

@@ -434,7 +434,7 @@ Copyright (C) 2012 Free Software Foundation, Inc.
 This config.status script is free software; the Free Software Foundation
 gives unlimited permission to copy, distribute and modify it."
 
-ac_pwd='/home/clayton/Documents/GitHub/3Days/ext/epm-5.0.0'
+ac_pwd='/home/clayton/Documents/3Days/ext/epm-5.0.0'
 srcdir='.'
 INSTALL='/usr/bin/install -c'
 test -n "$AWK" || AWK=awk

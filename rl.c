@@ -9,7 +9,15 @@
 #include <stdio.h>
 #include "gc.h"
 #include "alloc.h"
+#ifdef BSD
+#include <readline/readline.h>
+#include <readline/history.h>
+#else
 #include <readline.h>
+#ifndef TARGET_WIN32
+#include <history.h>
+#endif
+#endif
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
 #define ENABLE_VIRTUAL_TERMINAL_INPUT 0x200
 
@@ -30,15 +38,20 @@ char* rl(char* prompt) {
 }
 CCompletion* (*rlACGen)(const char *buffer,long srcoff,const char* text,long *length);
 static char *rlEntry(const char *text,int iter) {
-  long cnt,ocnt;;
+  long cnt,ocnt;
   CCompletion *comps=rlACGen(text,0,text,&cnt);
   ocnt=cnt;
   char *ret=NULL;
   while(--cnt>=0) {
-    if(cnt==iter) return ret=strcpy(calloc(1,strlen(comps[cnt].completion)+1),comps[cnt].completion);
+    if(cnt==iter)
+      ret=strcpy(calloc(1,strlen(comps[cnt].completion)+1),comps[cnt].completion);
     TD_FREE(comps[cnt].displayText);
     TD_FREE(comps[cnt].completion);
   }
+  if(!ret) {
+    ret=rl_filename_completion_function(text,iter-ocnt);
+  }
+  end:
   TD_FREE(comps);
   return ret;
 }

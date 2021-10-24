@@ -6,5 +6,5 @@
 %vendor nrootconauto@gmail.com
 %version 0.0.1
 
-f 755 root sys /usr/local/bin/3d 3d
-f 644 root sys /usr/local/include/HolyC/ HCRT/*
+f 755 root sys //usr/local/bin/3d 3d
+f 644 root sys //usr/local/include/HolyC/ HCRT/*

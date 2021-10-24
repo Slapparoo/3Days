@@ -153,6 +153,7 @@ static void jit_correct_int64_t_imms(struct jit * jit)
 		if (GET_OP(op) == JIT_COMMENT) continue;
 		if (GET_OP(op) == JIT_PROLOG) continue;
 		if (GET_OP(op) == JIT_DATA_REF_CODE) continue;
+        if (GET_OP(op) == JIT_DATA_CODE_OFFSET) continue;
 		if (GET_OP(op) == JIT_DATA_REF_DATA) continue;
 		if (GET_OP(op) == JIT_REF_DATA) continue;
 		if (GET_OP(op) == JIT_REF_CODE) continue;
@@ -328,7 +329,7 @@ static inline void jit_prepare_arguments(struct jit * jit)
 static inline void jit_prepare_spills_on_jmpr_targets(struct jit *jit)
 {
 	for (jit_op * op = jit_op_first(jit->ops); op != NULL; op = op->next)
-		if ((GET_OP(op) == JIT_REF_CODE) || (GET_OP(op) == JIT_DATA_REF_CODE))  {
+		if ((GET_OP(op) == JIT_REF_CODE) || (GET_OP(op) == JIT_DATA_REF_CODE)|| (GET_OP(op) == JIT_DATA_CODE_OFFSET))  {
 			jit_op * newop = jit_op_new(JIT_FULL_SPILL | IMM, SPEC(NO, NO, NO), 0, 0, 0, 0);
 			jit_op_prepend(op->jmp_addr, newop);
 		}
@@ -394,6 +395,7 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 			case JIT_DATA_BYTE: *(jit->ip)++ = (unsigned char) op->arg[0]; break;
 			case JIT_DATA_REF_CODE:
 			case JIT_DATA_REF_DATA:
+            case JIT_DATA_CODE_OFFSET:
 				op->patch_addr = JIT_BUFFER_OFFSET(jit);
 				for (int i = 0; i < sizeof(void *); i++) {
 					*jit->ip = 0;

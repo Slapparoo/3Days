@@ -460,23 +460,24 @@ void jit_patch_external_calls(struct jit * jit)
 struct jit_reg_allocator * jit_reg_allocator_create()
 {
 	struct jit_reg_allocator * a = JIT_MALLOC(sizeof(struct jit_reg_allocator));
-	a->gp_reg_cnt = 13;
+	a->gp_reg_cnt = 12;
 
-	a->gp_regs = JIT_MALLOC(sizeof(jit_hw_reg) * a->gp_reg_cnt);
+	a->gp_regs = JIT_MALLOC(sizeof(jit_hw_reg) * (2+a->gp_reg_cnt));
+	a->gp_regs[0] = (jit_hw_reg) { AMD64_RBX, "rbx", AMD64_IS_CALLEE_SAVED_REG(AMD64_RBX), 0, 8 };
+	a->gp_regs[1] = (jit_hw_reg) { AMD64_RCX, "rcx", AMD64_IS_CALLEE_SAVED_REG(AMD64_RCX), 0, 4 };
+	a->gp_regs[2] = (jit_hw_reg) { AMD64_RDX, "rdx", AMD64_IS_CALLEE_SAVED_REG(AMD64_RDX), 0, 3 };
+	a->gp_regs[3] = (jit_hw_reg) { AMD64_RSI, "rsi", AMD64_IS_CALLEE_SAVED_REG(AMD64_RSI), 0, 2 };
+	a->gp_regs[4] = (jit_hw_reg) { AMD64_RDI, "rdi", AMD64_IS_CALLEE_SAVED_REG(AMD64_RDI), 0, 1 };
+	a->gp_regs[5] = (jit_hw_reg) { AMD64_R8,  "r8", AMD64_IS_CALLEE_SAVED_REG(AMD64_R8), 0, 5 };
+	a->gp_regs[6] = (jit_hw_reg) { AMD64_R9,  "r9", AMD64_IS_CALLEE_SAVED_REG(AMD64_R9), 0, 6 };
+	a->gp_regs[7] = (jit_hw_reg) { AMD64_R10, "r10", AMD64_IS_CALLEE_SAVED_REG(AMD64_R10), 0, 9 };
+	a->gp_regs[8] = (jit_hw_reg) { AMD64_R11, "r11", AMD64_IS_CALLEE_SAVED_REG(AMD64_R11), 0, 10 };
+	a->gp_regs[9] = (jit_hw_reg) { AMD64_R12, "r12", AMD64_IS_CALLEE_SAVED_REG(AMD64_R12), 0, 11 };
+	a->gp_regs[10] = (jit_hw_reg) { AMD64_R14, "r14", AMD64_IS_CALLEE_SAVED_REG(AMD64_R14), 0, 13 };
+	a->gp_regs[11] = (jit_hw_reg) { AMD64_R15, "r15", AMD64_IS_CALLEE_SAVED_REG(AMD64_R15), 0, 14 };
+	//RAX is a accumulator
+	a->gp_regs[12] = (jit_hw_reg) { AMD64_RAX, "rax", AMD64_IS_CALLEE_SAVED_REG(AMD64_RAX), 0, 7 };
 
-	a->gp_regs[0] = (jit_hw_reg) { AMD64_RAX, "rax", AMD64_IS_CALLEE_SAVED_REG(AMD64_RAX), 0, 7 };
-	a->gp_regs[1] = (jit_hw_reg) { AMD64_RBX, "rbx", AMD64_IS_CALLEE_SAVED_REG(AMD64_RBX), 0, 8 };
-	a->gp_regs[2] = (jit_hw_reg) { AMD64_RCX, "rcx", AMD64_IS_CALLEE_SAVED_REG(AMD64_RCX), 0, 4 };
-	a->gp_regs[3] = (jit_hw_reg) { AMD64_RDX, "rdx", AMD64_IS_CALLEE_SAVED_REG(AMD64_RDX), 0, 3 };
-	a->gp_regs[4] = (jit_hw_reg) { AMD64_RSI, "rsi", AMD64_IS_CALLEE_SAVED_REG(AMD64_RSI), 0, 2 };
-	a->gp_regs[5] = (jit_hw_reg) { AMD64_RDI, "rdi", AMD64_IS_CALLEE_SAVED_REG(AMD64_RDI), 0, 1 };
-	a->gp_regs[6] = (jit_hw_reg) { AMD64_R8,  "r8", AMD64_IS_CALLEE_SAVED_REG(AMD64_R8), 0, 5 };
-	a->gp_regs[7] = (jit_hw_reg) { AMD64_R9,  "r9", AMD64_IS_CALLEE_SAVED_REG(AMD64_R9), 0, 6 };
-	a->gp_regs[8] = (jit_hw_reg) { AMD64_R10, "r10", AMD64_IS_CALLEE_SAVED_REG(AMD64_R10), 0, 9 };
-	a->gp_regs[9] = (jit_hw_reg) { AMD64_R11, "r11", AMD64_IS_CALLEE_SAVED_REG(AMD64_R11), 0, 10 };
-	a->gp_regs[10] = (jit_hw_reg) { AMD64_R12, "r12", AMD64_IS_CALLEE_SAVED_REG(AMD64_R12), 0, 11 };
-	a->gp_regs[11] = (jit_hw_reg) { AMD64_R14, "r14", AMD64_IS_CALLEE_SAVED_REG(AMD64_R14), 0, 13 };
-	a->gp_regs[12] = (jit_hw_reg) { AMD64_R15, "r15", AMD64_IS_CALLEE_SAVED_REG(AMD64_R15), 0, 14 };
 	// R13 has some addressing limitations, therefore it is not used as GPR
 	// since it may lead to unexpected behavior
 //	a->gp_regs[13] = (jit_hw_reg) { AMD64_R13, 0, "r13", 1, 0, 12 };
@@ -485,14 +486,13 @@ struct jit_reg_allocator * jit_reg_allocator_create()
 	a->gp_arg_reg_cnt = 6;
 
 	a->fp_reg = AMD64_RBP;
-	a->ret_reg = &(a->gp_regs[0]);
+	a->ret_reg = &(a->gp_regs[12]);
 
-	a->fp_reg_cnt = 10;
+	a->fp_reg_cnt = 9;
 
 	int reg = 0;
-	a->fp_regs = JIT_MALLOC(sizeof(jit_hw_reg) * a->fp_reg_cnt);
+	a->fp_regs = JIT_MALLOC(sizeof(jit_hw_reg) * (1+a->fp_reg_cnt));
 
-	a->fp_regs[reg++] = (jit_hw_reg) { AMD64_XMM0, "xmm0", 0, 1, 99 };
 	a->fp_regs[reg++] = (jit_hw_reg) { AMD64_XMM1, "xmm1", 0, 1, 98 };
 	a->fp_regs[reg++] = (jit_hw_reg) { AMD64_XMM2, "xmm2", 0, 1, 97 };
 	a->fp_regs[reg++] = (jit_hw_reg) { AMD64_XMM3, "xmm3", 0, 1, 96 };
@@ -513,6 +513,8 @@ struct jit_reg_allocator * jit_reg_allocator_create()
 	a->fp_regs[reg++] = (jit_hw_reg) { AMD64_XMM13, "xmm13", 0, 1, 1 };
 	a->fp_regs[reg++] = (jit_hw_reg) { AMD64_XMM12, "xmm12", 0, 1, 2 };
 	#endif
+	//XMM0 is used as an accumulator
+	a->fp_regs[reg++] = (jit_hw_reg) { AMD64_XMM0, "xmm0", 0, 1, 99 };
 	/*
 #ifndef JIT_REGISTER_TEST
 	a->fp_regs[reg++] = (jit_hw_reg) { X86_XMM4, "xmm4", 0, 1, 5 };
@@ -522,33 +524,35 @@ struct jit_reg_allocator * jit_reg_allocator_create()
 #endif
 */
 
-	a->fpret_reg = &(a->fp_regs[0]);
+	a->fpret_reg = &(a->fp_regs[reg-1]);
 
 	#ifndef TARGET_WIN32
 	a->gp_arg_reg_cnt = 6;
 	a->gp_arg_regs = JIT_MALLOC(sizeof(jit_hw_reg *) * 6);
-	a->gp_arg_regs[0] = &(a->gp_regs[5]);
-	a->gp_arg_regs[1] = &(a->gp_regs[4]);
-	a->gp_arg_regs[2] = &(a->gp_regs[3]);
-	a->gp_arg_regs[3] = &(a->gp_regs[2]);
-	a->gp_arg_regs[4] = &(a->gp_regs[6]);
-	a->gp_arg_regs[5] = &(a->gp_regs[7]);
+	a->gp_arg_regs[0] = &(a->gp_regs[5-1]);
+	a->gp_arg_regs[1] = &(a->gp_regs[4-1]);
+	a->gp_arg_regs[2] = &(a->gp_regs[3-1]);
+	a->gp_arg_regs[3] = &(a->gp_regs[2-1]);
+	a->gp_arg_regs[4] = &(a->gp_regs[6-1]);
+	a->gp_arg_regs[5] = &(a->gp_regs[7-1]);
 
 	a->fp_arg_reg_cnt = 8;
 	a->fp_arg_regs = JIT_MALLOC(sizeof(jit_hw_reg *) * 8);
-	for (int i = 0; i < 8; i++)
-		a->fp_arg_regs[i] = &(a->fp_regs[i]);
+	for (int i = 1; i < 8; i++)
+		a->fp_arg_regs[i] = &(a->fp_regs[i-1]);
+	a->fp_arg_regs[0]=&a->fp_regs[reg-1]; //Last is accumalator
 	#else
 	a->gp_arg_reg_cnt = 4;
 	a->gp_arg_regs = JIT_MALLOC(sizeof(jit_hw_reg *) * 4);
-	a->gp_arg_regs[0]=&(a->gp_regs[2]); //RCX
-	a->gp_arg_regs[1]=&(a->gp_regs[3]); //RDX
-	a->gp_arg_regs[2]=&(a->gp_regs[6]); //R8
-	a->gp_arg_regs[3]=&(a->gp_regs[7]); //R9
+	a->gp_arg_regs[0]=&(a->gp_regs[2-1]); //RCX
+	a->gp_arg_regs[1]=&(a->gp_regs[3-1]); //RDX
+	a->gp_arg_regs[2]=&(a->gp_regs[6-1]); //R8
+	a->gp_arg_regs[3]=&(a->gp_regs[7-1]); //R9
 	a->fp_arg_reg_cnt = 4;
 	a->fp_arg_regs = JIT_MALLOC(sizeof(jit_hw_reg *) * 4);
-	for (int i = 0; i < 4; i++)
-		a->fp_arg_regs[i] = &(a->fp_regs[i]);
+	for (int i = 1; i < 4; i++)
+		a->fp_arg_regs[i] = &(a->fp_regs[i-1]);
+	a->fp_arg_regs[0]=&a->fp_regs[reg-1]; //Last is accumalator
 	#endif
 
 	return a;

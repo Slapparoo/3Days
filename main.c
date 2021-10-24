@@ -181,7 +181,9 @@ set:
                 goto set;
             }
             Compiler.errorFlag=0;
+            Compiler.addrofFrameoffsetMode=0;
             Compiler.inFunction=0;
+            Lexer.isFreeToFlush=1;
             HC_parse();
             #ifdef TARGET_WIN32
             RemoveVectoredExceptionHandler(h);

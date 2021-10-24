@@ -1,22 +1,22 @@
 HEADERS := HolyC.tab.h 3d.h
 CC := gcc
-CFLAGS :=  -g3 -O0 -Wformat=0 -Wreturn-type -DUSEGC `pkg-config --libs --cflags readline` #-fsanitize=address
+CFLAGS :=  -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC -DBSD #-fsanitize=address 
+OBJS := tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o at3.o exceptLin.o
 all: 3d_tests 3d
 	echo "Done"
-installer: 3d epm
-	./epm --setup-image logo.gif 3Days HolyCC.list
+installer: 3d
+	epm -fbsd 3Days HolyCC.list
+
 main.o: main.c
 	$(CC) $(CFLAGS) -c  main.c -o $@
-3d: tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o main.o at3.o exceptLin.o asm.o
-	gcc $(CFLAGS) $^ -lm -lncurses -ltinfo -lpthread -lreadline -o $@
-3d_tests: tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tests.c tosprn.o gc.o debugger.o rope.o exceptLin.o asm.o
-	gcc $(CFLAGS) $^ -lm -lncurses -ltinfo -lpthread -lreadline -o $@
-epm:
-	cd ext/epm-5.0.0 && sh ./configure  --enable-fltk  && make && cp epm ../..
+3d: $(OBJS) main.o
+	gcc $(CFLAGS) $(OBJS) main.o -lm -lncurses -ltinfo -lpthread -lreadline -o $@
+3d_tests: $(OBJS) tests.c
+	gcc $(CFLAGS) $(OBJS) tests.c -lm -lncurses -ltinfo -lpthread -lreadline -o $@
 HolyC.o: HolyC.tab.c $(HEADERS)
 	$(CC) $(CFLAGS) -g -c HolyC.tab.c -o $@
 HolyC.tab.c HolyC.tab.h: HolyC.y
-	bison -Wother -v -d -b HolyC HolyC.y
+	bison -Wnone -v -d -b HolyC HolyC.y
 vec.o: ext/vec/src/vec.c $(HEADERS)
 	$(CC) $(CFLAGS) -c ext/vec/src/vec.c  -o $@
 map.o: ext/map/src/map.c $(HEADERS)
@@ -41,8 +41,6 @@ rt.o: runtime.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c runtime.c -o $@
 gc.o: gc.c gc.h  $(HEADERS)
 	$(CC) $(CFLAGS) -c gc.c -o gc.o
-asm.o: asm.c $(HEADERS)
-	$(CC) $(CFLAGS) -c asm.c -o asm.o
 debugger.o: debugger.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c debugger.c -o $@
 clean:

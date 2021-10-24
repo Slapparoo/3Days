@@ -5,9 +5,9 @@ all: 3d_tests.exe 3d.exe
 	echo "Done"
 main.obj: main.c
 	$(CC) $(CFLAGS) -c  main.c -o $@
-3d.exe:  vec.obj rt.obj exceptWin.obj jitlib-core.obj map.obj compile.obj lexer.obj HolyC.obj unesc.obj tosprn.obj gc.obj debugger.obj rope.obj main.obj at3.obj rl.obj  tags.obj pdcurses.a
+3d.exe:  vec.obj rt.obj exceptWin.obj jitlib-core.obj map.obj compile.obj lexer.obj HolyC.obj unesc.obj tosprn.obj gc.obj debugger.obj rope.obj main.obj at3.obj rl.obj  tags.obj pdcurses.a asm.obj
 	$(CC) $(CFLAGS)   $^  -lm ext/wineditline-2.206/lib64/libedit_static.a -o $@
-3d_tests.exe: vec.obj exceptWin.obj rt.obj jitlib-core.obj map.obj compile.obj lexer.obj unesc.obj tests.c HolyC.obj tosprn.obj gc.obj debugger.obj rope.obj  rl.obj  tags.obj pdcurses.a
+3d_tests.exe: vec.obj exceptWin.obj rt.obj jitlib-core.obj map.obj compile.obj lexer.obj unesc.obj tests.c HolyC.obj tosprn.obj gc.obj debugger.obj rope.obj  rl.obj  tags.obj pdcurses.a asm.obj
 	$(CC) $(CFLAGS)   $^  -lm  ext/wineditline-2.206/lib64/libedit_static.a -o $@
 pdcurses.a:
 	cd ext/PDCurses-3.9/wincon && make && copy pdcurses.a ..\..\..
@@ -41,6 +41,8 @@ gc.obj: gc.c gc.h
 	$(CC) $(CFLAGS) -c gc.c -o gc.obj
 debugger.obj: debugger.c
 	$(CC) $(CFLAGS) -c debugger.c -o $@
+asm.obj: asm.c
+	$(CC) $(CFLAGS) -c asm.c -o asm.obj
 exceptWin.obj: exceptWin.yasm
 	yasm -f win64 exceptWin.yasm -o $@
 tags.obj: tags.c
