@@ -28,14 +28,14 @@ typedef struct ExceptFrame {
     long callStackSize;
 } ExceptFrame;
 static __thread ExceptFrame *curframe;
-static ExceptFrame *EnterTry() {
+ExceptFrame *EnterTry() {
     ExceptFrame *new=TD_MALLOC(sizeof(ExceptFrame));
     new->parent=curframe;
     curframe=new;
     new->callStackSize=Debugger.callStack.length;
     return new;
 }
-static void PopTryFrame() {
+void PopTryFrame() {
     ExceptFrame *c=curframe;
     ExceptFrame *par=curframe->parent;
     TD_FREE(curframe);
@@ -307,13 +307,33 @@ static void MVWCHGAT(WINDOW *w,int64_t y,int64_t x,int64_t n,int64_t a,int64_t c
   mvwchgat(w,y,x,n,a,c,opts);
 }
 void RegisterBuiltins() {
-    CType *u8 =CreatePrimType(TYPE_U8);
+    //Primitive types
+  CType *u0 =CreatePrimType(TYPE_U0);
+  map_set(&Compiler.types, "U0", u0);
+  CType *bl=CreatePrimType(TYPE_BOOL);
+  map_set(&Compiler.types, "Bool", bl);
+  CType *i8 =CreatePrimType(TYPE_I8);
+  map_set(&Compiler.types, "I8i", i8);
+  CType *u8 =CreatePrimType(TYPE_U8);
+  map_set(&Compiler.types, "U8i", u8);
+  CType *i16 =CreatePrimType(TYPE_I16);
+  map_set(&Compiler.types, "I16i", i16);
+  CType *u16 =CreatePrimType(TYPE_U16);
+  map_set(&Compiler.types, "U16i", u16);
+  CType *i32 =CreatePrimType(TYPE_I32);
+  map_set(&Compiler.types, "I32i", i32);
+  CType *u32 =CreatePrimType(TYPE_U32);
+  map_set(&Compiler.types, "U32i", u32);
+  CType *i64 =CreatePrimType(TYPE_I64);
+  map_set(&Compiler.types, "I64i", i64);
+  CType *u64 =CreatePrimType(TYPE_U64);
+  map_set(&Compiler.types, "U64i", u64);
+  CType *f64=CreatePrimType(TYPE_F64);
+  map_set(&Compiler.types, "F64", f64);
+    //
     CType *u8p =CreatePtrType(u8);
     CType *u8pp =CreatePtrType(u8p);
-    CType *u0 =CreatePrimType(TYPE_U0);
     CType *u0p =CreatePtrType(u0);
-    CType *i64 =CreatePrimType(TYPE_I64);
-    CType *f64 =CreatePrimType(TYPE_F64);
     CType *i64p =CreatePtrType(i64);
     CType *cfs =CreateClassForwardDecl(NULL, CreateDummyName("CFs"));
     CType *cfsptr =CreatePtrType(cfs);

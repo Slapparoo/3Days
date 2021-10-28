@@ -232,7 +232,7 @@ U0 ParseOpcodes(U8 *text) {
                 opc.args[argument++].type=OPCA_RM64,Free(name2);
                 goto attrloop;
             } else if(!StrCmp("IB",name2)) {
-                opc.flags=OPC_F_IB,Free(name2);
+                opc.flags|=OPC_F_IB,Free(name2);
                 goto attrloop;
             } else if(!StrCmp("IW",name2)) {
                 opc.flags|=OPC_F_IW,Free(name2);
@@ -396,7 +396,7 @@ U0 ParseOpcodes(U8 *text) {
             COpcodeAlias *alias=MAlloc(sizeof(COpcodeAlias));
             alias->str=StrNCpy(MAlloc(off+1),text-off,off);
             alias->type=HASH_TYPE_OPCODE_ALIAS;
-            alias->opcode=opc;
+            alias->opcode=prev;
             HashAdd(alias,opcodes);
             goto aloop;
         }
@@ -410,7 +410,9 @@ U0 ParseOpcodes(U8 *text) {
 }
 I64 cnt;
 U8 *ops=FileRead("../Opcodes.DD",&cnt);
+"PARSING OPCODES\n";
 ParseOpcodes(ops);
+"DONE\n";
 Free(ops);
 
 // See ext/x64.h
@@ -461,12 +463,19 @@ class X64Mode {
 CReg *Str2Reg(U8 *str) {
     return HashFind(str,regs);
 }
+X64Mode *X64ModeLabel(U0 *lab) {
+    X64Mode *ret=MAlloc(sizeof(X64Mode));
+    ret->type=X64O_LABEL;
+    ret->jit_label=lab;
+    return ret;
+}
 X64Mode *X64ModeReg(CReg *reg) {
     X64Mode *ret=MAlloc(sizeof(X64Mode));
     ret->type=X64O_REG;
     ret->reg=reg;
     return ret;
 }
+U8 *AsmError=NULL;
 X64Mode *X64ModeMem(I64 scale,CReg *index,CReg *base,I64 disp,I64 width=8) {
     X64Mode *ret=MAlloc(sizeof(X64Mode));
     ret->type=X64O_MEM;
@@ -493,23 +502,21 @@ U8 X64SIB(I64 s,I64 i,I64 b) {
         case 2: s=1; break;
         case 4: s=2; break;
         case 8: s=3; break;
+	  AsmError="Invalid SIB scale";
         default: throw('asm');
     }
     return (s<<6)|((i&7)<<3)|(b&7);
 }
-Bool IsJmpOpcode(U8 *name) {
-    COpcode *opc;
-    if(!(opc=HashFind(name,opcodes))) return FALSE;
-    return 0!=(opc->flags&OPC_F_COND);
-}
 Bool IsOpcode(U8 *name) {
   return !!HashFind(name,opcodes);
 }
-Bool IsRegister(U8 *name) {
-  return !!HashFind(name,regs);
+CReg *GetRegister(U8 *name) {
+  return HashFind(name,regs);
 }
-U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,CReg *index,CReg *base,I64 disp) {
-    I64 mdrmcode=-1;
+U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,CReg *index,CReg *base,I64 disp,I64 *sibooff=NULL) {
+  U8 *orig_it=it;
+  if(sibooff) *sibooff=-1;
+  I64 mdrmcode=-1;
     if(reg)
         I64 mdrmreg=reg->code;
     else
@@ -535,7 +542,10 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
         mdrmcode=X64ModRMIndir32;
     }
     if(base==HashFind("RIP",regs)) {
-        if(scale||index) throw('asm');
+      if(scale||index) {
+	AsmError="RIP addressing must not have a scale.";
+	throw('asm');
+      }
         mdrmcode=X64ModRMIndir;
         mdrmrm=HashFind("RBP",regs)(CReg*)->code;
         disps=4;
@@ -588,10 +598,7 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
     } else {
         SIB=TRUE;
         mdrmrm=HashFind("RSP",regs)(CReg*).code;
-        "HERE:%p\n",index;
         sibi=index->code;
-        "GERE1.5\n";
-
         sibs=scale;
         if(base) sibb=base->code; else sibb=0;
         if(!base) {
@@ -604,13 +611,14 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
                 mdrmcode=X64ModRMIndir8;
             }
         }
-        "GERE2\n";
     }
     I64 tmp=__X64RegIsIntExt(sibb);
     if(!SIB) tmp=__X64RegIsIntExt(mdrmrm);
+    I64 treg=0;
+    if(reg) treg=reg->code;
     rex=X64Rex(
         size==8,
-        __X64RegIsIntExt(reg->code),
+        __X64RegIsIntExt(treg),
         SIB&&__X64RegIsIntExt(sibi),
         tmp
     );
@@ -620,6 +628,7 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
     *it++=X64ModRM(mdrmcode,mdrmreg,mdrmrm);
     if(SIB) *it++=X64SIB(sibs,sibi,sibb);
     insdisp:
+    if(sibooff&&disps==4) *sibooff=it-orig_it;
     switch(disps) {
         case 0: break;
         case 1:
@@ -633,21 +642,12 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
         it(U32*)[0]=disp;
         it+=4;
         break;
+	AsmError="Displacement is too big.";
         default: throw('asm');
     }
     return it;
 }
 U8 buffer[16];
-U8 *bend=X86ModRMSIBDisp(buffer,4,"AA",2,
-    HashFind("RAX",regs),
-    4,
-    HashFind("RDI",regs),
-    HashFind("RDX",regs),
-    0xff);
-U8 *bstart=buffer;
-for(;bstart!=bend;bstart++) {
-    "%p\n",*bstart;
-}
 U0 SibTests() {
     U8 *RegArr[]={
         "RAX",
@@ -717,24 +717,30 @@ U0 SibTests() {
         next2:
     }
 }
-SibTests;
-GetI64("WAIT");
 U0 X64ModeFree(X64Mode *m) {
     Free(m);
 }
 /**
  * Jumps are not encoded here
  */
-U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
-    U8 buffer[16];
+U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
+  if(sibooff) *sibooff=-1;
+  if(immoff) *immoff=-1;
+  U8 *origip=ip;
+    if(is_jmp) *is_jmp=FALSE;
+    U8 buffer[32];
     Bool ret_after_encode=FALSE;
     X64Mode **modes=argv(U0*);
     COpcode *opc=HashFind(name,opcodes);
+    if(opc->type==HASH_TYPE_OPCODE_ALIAS)
+        opc=opc(COpcodeAlias*)->opcode;
     if(!opc) throw('InvOpc');
     I64 opc_cnt=0;
     while(opc)
         opc_cnt++,opc=opc->next_op;
     opc=HashFind(name,opcodes);
+    if(opc->type==HASH_TYPE_OPCODE_ALIAS)
+        opc=opc(COpcodeAlias*)->opcode;
     I64 *sizes=MAlloc(sizeof(I64)*opc_cnt);
     I64 item=0;
     loop:
@@ -810,12 +816,12 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
             goto fail;
             case OPCA_IMM32:
             if(modes[arg]->type==X64O_IMM)
-                if(X64ImmSize(modes[arg]->imm))
+                if(X64ImmSize(modes[arg]->imm)<=4)
                     goto pass;
             goto fail;
             case OPCA_IMM64:
             if(modes[arg]->type=X64O_IMM)
-                if(X64ImmSize(modes[arg]->imm))
+                if(X64ImmSize(modes[arg]->imm)<=8)
                     goto pass;
             goto fail;
             case OPCA_UIMM8:
@@ -868,8 +874,13 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
             //
             goto fail;
             case OPCA_REL32:
-            if(opc->flags&OPC_F_COND)
-                goto pass;
+	    mem=modes[arg];
+	    if(mem->type==X64O_LABEL)
+		if(opc->flags&OPC_F_COND)
+			goto pass;
+	    if(mem->type==X64O_IMM)
+	      	if(opc->flags&OPC_F_COND)
+			goto pass;
             goto fail;
             case OPCA_M8:
             mem=modes[arg];
@@ -913,6 +924,11 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
     U8 *endptr=buffer;
     encode:
     I64 op_sz=0;
+    //Check for REL32
+    if(is_jmp)
+    for(arg=0;arg!=argc;arg++) {
+      if(opc->args[arg].type==OPCA_REL32) *is_jmp=TRUE;
+    }
     mem=NULL;
     for(arg=0;arg!=argc;arg++) {
         switch(opc->args[arg].type) {
@@ -921,7 +937,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
             case OPCA_M8:
             op_sz=1;
             break;
-            case OPCA_RM16:
+	    case OPCA_RM16:
             case OPCA_M16:
             op_sz=2;
             break;
@@ -931,6 +947,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
             break;
             case OPCA_RM64:
             case OPCA_M64:
+	      rexw=TRUE;
             op_sz=8;
             end:
             mem=modes[arg];
@@ -961,7 +978,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
                 case OPCA_R8:op_sz=1;break;
                 case OPCA_R16:op_sz=2;break;
                 case OPCA_R32:op_sz=4;break;
-                case OPCA_R64:op_sz=8;break;
+	    case OPCA_R64:op_sz=8;rexw=TRUE; break;
                 end:
                 mdrmR=modes[arg].reg;
                 break;
@@ -976,7 +993,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
                 case OPCA_R8:op_sz=1;break;
                 case OPCA_R16:op_sz=2;break;
                 case OPCA_R32:op_sz=4;break;
-                case OPCA_R64:op_sz=8;break;
+	    case OPCA_R64:op_sz=8; rexw=TRUE;break;
                 end:
                 add=modes[arg]->reg->code&7;
                 if(modes[arg]->reg->code&~7)
@@ -1052,7 +1069,8 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
         mdrmR=HashFind("EDI",regs);
     }
     if(opc->flags&OPC_F_32bit) {
-        throw('asm32');
+      AsmError="Instruction is 32bit only.";
+      throw('asm');
     }
     if(opc->flags&OPC_F_48REX) {
         rex48=TRUE;
@@ -1067,6 +1085,9 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
         }
     }
     */
+    U8 opcadd[16];
+    MemNCpy(opcadd,opc->bytes,opc->bcnt);
+    opcadd[opc->bcnt-1]+=add;
     //Operand size
     if(opc->flags&OPC_F_16) *endptr++=0x66;
     //Address size
@@ -1074,9 +1095,21 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
     if(rex48) {
         *endptr++=0x48;
     } else if(rexb||rexw&&!(mem||mdrmR)) {
-        *endptr++=X64Rex(rexw,0,0,rexb);
+      *endptr++=X64Rex(rexw,0,0,rexb);
     }
     if(mem||mdrmR) {
+      if(mem->type==X64O_REG) {
+	rexb=0!=mem->reg->code&0b1000;
+	rexw=mem->reg->type==GP_64;
+	Bool rexr=FALSE;
+	if(mdrmR) rexr=0!=mdrmR->code&0b1000; 
+	if(X64Rex(rexw,rexr,0,rexb)) *endptr++=X64Rex(rexw,rexr,0,rexb);
+	I64 rmasked=0;
+	if(mdrmR) rmasked=mdrmR->code&7;
+	MemNCpy(endptr,opcadd,opc->bcnt);
+	endptr+=opc->bcnt;
+	*endptr++=X64ModRM(0b11, rmasked,mem->reg->code&7);
+      } else {
         I64 sibs=0;
         if(mem) sibs=mem->mem.scale;
         CReg *sibi=NULL,*sibb=NULL;
@@ -1084,22 +1117,28 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
         if(mem) sibb=mem->mem.base;
         I64 sibo=0;
         if(mem) sibo=mem->mem.disp;
+	U8 *origendptr=endptr;
+	I64 _sibooff;
         endptr=X86ModRMSIBDisp(
-            endptr,
-            op_sz,
-            opc->bytes,
-            opc->bcnt,
-            mdrmR,
-            sibs,
-            sibi,
-            sibb,
-            sibo
+			       endptr,
+			       op_sz,
+			       opcadd,
+			       opc->bcnt,
+			       mdrmR,
+			       sibs,
+			       sibi,
+			       sibb,
+			       sibo,
+			       &_sibooff
         );
+	if(sibooff&&_sibooff!=-1) *sibooff=origendptr-origip;
+      }
     } else {
-        MemNCpy(endptr,opc->bytes,opc->bcnt);
+        MemNCpy(endptr,opcadd,opc->bcnt);
         endptr+=opc->bcnt;
     }
     if(immsz) {
+        if(ret_after_encode) if(immoff&&immsz==4) *immoff=endptr-origip;
         switch(immsz) {
             case 1:
             *endptr++=imm;
@@ -1119,9 +1158,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
         }
     }
     if(ret_after_encode) {
-        U8 *ptr=ip;
-        while(ptr!=endptr) "%p\n",*ptr++;
-        return endptr;
+	return endptr;
     }
     sizes[item]=endptr-buffer;
     nextop:
@@ -1132,6 +1169,8 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
     }
     item++;
     opc=HashFind(name,opcodes);
+    if(opc->type==HASH_TYPE_OPCODE_ALIAS)
+        opc=opc(COpcodeAlias*)->opcode;
     COpcode *finalop=NULL;
     I64 iter=0,min=-1;
     for(;iter!=item;iter++,opc=opc->next_op) {
@@ -1144,7 +1183,10 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
             }
         }
     }
-    if(min==-1) throw('asm');
+    if(min==-1) {
+      AsmError="Invalid opcode usage.";
+      throw('asm');
+    }
     Free(sizes);
     if(ip) {
         opc=finalop;
@@ -1154,13 +1196,12 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,...) {
     }
     return NULL;
 }
+/*
 "MOV RAX,0xf00ba4\n";
 X64Mode *rax=X64ModeReg(HashFind("RAX",regs));
 X64Mode *imm=X64ModeImm(0xf00ba4);
-Debugger;
 EncodeOpcode(buffer,"MOV",rax,imm);
 //PUSH
-Debugger;
 "PUSH CS\n";
 X64Mode *cs=X64ModeReg(HashFind("CS",regs));
 EncodeOpcode(buffer,"PUSH",cs);
@@ -1200,10 +1241,11 @@ EncodeOpcode(buffer,"ADD",al,imm8);
 X64Mode *rm8=X64ModeMem(0,NULL,HashFind("R10",regs),0x7f,1);
 EncodeOpcode(buffer,"ADD",rm8,imm8);
 X64Mode *r8=X64ModeReg(HashFind("R9u8",regs));
-Debugger;
 "ADD R8 RM8\n";
 EncodeOpcode(buffer,"ADD",r8,rm8);
 "ADD RM8n R8\n";
 EncodeOpcode(buffer,"ADD",rm8,r8);
 "MOVSX R64,RM8\n";
 EncodeOpcode(buffer,"MOVSX",r64,rm8);
+*/
+

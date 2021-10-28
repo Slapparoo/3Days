@@ -1,7 +1,7 @@
 HEADERS := HolyC.tab.h 3d.h
 CC := gcc
-CFLAGS :=  -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC -DBSD #-fsanitize=address 
-OBJS := tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o at3.o exceptLin.o
+CFLAGS :=  -g3 -O0 -Wformat=0 -Wreturn-type -DUSEGC -DBSD #-fsanitize=address 
+OBJS := tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o at3.o exceptLin.o asm.o
 all: 3d_tests 3d
 	echo "Done"
 installer: 3d
@@ -16,7 +16,7 @@ main.o: main.c
 HolyC.o: HolyC.tab.c $(HEADERS)
 	$(CC) $(CFLAGS) -g -c HolyC.tab.c -o $@
 HolyC.tab.c HolyC.tab.h: HolyC.y
-	bison -Wnone -v -d -b HolyC HolyC.y
+	bison -v -d -b HolyC HolyC.y
 vec.o: ext/vec/src/vec.c $(HEADERS)
 	$(CC) $(CFLAGS) -c ext/vec/src/vec.c  -o $@
 map.o: ext/map/src/map.c $(HEADERS)
@@ -49,5 +49,7 @@ exceptLin.o: exceptLin.yasm
 	yasm -f elf64 exceptLin.yasm -o $@
 tags.o: tags.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c tags.c -o $@
+asm.o: asm.c $(HEADERS)
+	$(CC) $(CFLAGS) -c asm.c -o asm.o
 sexy:
 	astyle *.c *.h

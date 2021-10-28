@@ -235,6 +235,7 @@ static void jit_dead_code_analysis(struct jit *jit, int remove_dead_code)
 		if (GET_OP(op) == JIT_DATA_REF_CODE) op->in_use = 1;
 		if (GET_OP(op) == JIT_DATA_REF_DATA) op->in_use = 1;
 		if (GET_OP(op) == JIT_DATA_CODE_OFFSET) op->in_use = 1;
+		if (GET_OP(op) == JIT_DUMP_PTR) op->in_use=1;
         if (GET_OP(op) == JIT_CODE_ALIGN) op->in_use = 1;
 		if (GET_OP(op) == JIT_LABEL) op->in_use = 1;
 		if (GET_OP(op) == JIT_PATCH) op->in_use = 1;

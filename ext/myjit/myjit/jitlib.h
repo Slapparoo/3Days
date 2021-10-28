@@ -268,8 +268,11 @@ typedef enum {
 	JIT_CODE_ALIGN	= (0xb3 << 3),
 	JIT_REF_CODE	= (0xb4 << 3),
 	JIT_REF_DATA	= (0xb5 << 3),
-    /* (label,offset,none)*/
-    JIT_DATA_CODE_OFFSET =(0xb6<<3),
+	/* (label,offset,none)*/
+	JIT_DATA_CODE_OFFSET =(0xb6<<3),
+	JIT_CODE_ALIGN_FILL= (0xb7<<3),
+	/* This dumps the ptr at arg[0] to the location in code*/
+	JIT_DUMP_PTR =(0xb8<<3),
 
 	JIT_MSG		= (0xf0 << 3),
 	JIT_COMMENT	= (0xf1 << 3),
@@ -602,6 +605,7 @@ int jit_allocai(struct jit * jit, int size);
 #define jit_ref_data(jit, a, b) jit_add_op(jit, JIT_REF_DATA, SPEC(TREG, IMM, NO), a, (jit_value)(b), 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 
 #define jit_code_align(jit, a) jit_add_op(jit, JIT_CODE_ALIGN| IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
+#define jit_align_fill(jit, a,fill) jit_add_op(jit, JIT_CODE_ALIGN_FILL| IMM, SPEC(IMM, IMM, NO), (jit_value)(a), (jit_value)fill, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_data_byte(jit, a)  jit_add_op(jit, JIT_DATA_BYTE | IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_data_str(jit, a)   jit_data_bytes(jit, strlen(a) + 1, ((unsigned char *)a))
 
@@ -613,6 +617,7 @@ int jit_allocai(struct jit * jit, int size);
 #define jit_data_ref_code(jit, a)	jit_add_op(jit, JIT_DATA_REF_CODE | IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_data_ref_data(jit, a)	jit_add_op(jit, JIT_DATA_REF_DATA | IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_data_code_offset(jit,a,b)  jit_add_op(jit, JIT_DATA_CODE_OFFSET, SPEC(IMM, IMM, NO), a, (jit_value)(b), 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
+#define jit_dump_ptr(jit,a)  jit_add_op(jit, JIT_DUMP_PTR, SPEC(IMM, IMM, NO), (jit_value)a ,0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 
 #define jit_data_emptyarea(jit, count) \
 	do {  \
@@ -631,4 +636,5 @@ do {\
  */
 #define jit_force_spill(jit, a) jit_add_fop(jit, JIT_FORCE_SPILL, SPEC(REG, NO, NO), a, 0, 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_force_assoc(jit, a, b, c) jit_add_fop(jit, JIT_FORCE_ASSOC, SPEC(REG, IMM, NO), a, b, c, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
+void jit_free_ir(struct jit * jit);
 #endif

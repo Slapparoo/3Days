@@ -5,10 +5,11 @@
 #include <math.h>
 #include <setjmp.h>
 #ifdef TARGET_WIN32
-#include "memoryapi.h"
+#include <memoryapi.h>
 #endif
 COldFuncState CreateCompilerState() {
     COldFuncState old;
+    old.asmPatches=Compiler.asmPatches;
     old.locals=Compiler.locals;
     old.returnType=Compiler.returnType;
     old.inFunction=Compiler.inFunction;
@@ -22,6 +23,7 @@ COldFuncState CreateCompilerState() {
     old.breakops=Compiler.breakops;
     old.labels=Compiler.labels;
     old.labelRefs=Compiler.labelRefs;
+    old.labelPtrs=Compiler.labelPtrs;
     return old;
 }
 void RestoreCompilerState(COldFuncState old) {
@@ -38,6 +40,9 @@ void RestoreCompilerState(COldFuncState old) {
     Compiler.breakops=old.breakops;
     Compiler.labels=old.labels;
     Compiler.labelRefs=old.labelRefs;
+    Compiler.labelPtrs=old.labelPtrs;
+    Compiler.asmPatches=old.asmPatches;
+    
 }
 static int IsControlNode(AST *node) {
     switch(node->type) {
@@ -503,11 +508,22 @@ AST *CreateFor(AST *init,AST *cond,AST *next,AST*body) {
     r->forStmt.next=next;
     return r;
 }
+char *GetLabelReadableName(AST *t) {
+  if(t->type==AST_LOCAL_LABEL) {
+    long discard;
+    char name[1024];
+    sscanf(t->name,LOCAL_LAB_FMT, &discard,name);
+    return strdup(name);
+  }
+  return strdup(t->name);
+}
 AST *CreateLabel(AST *name) {
     AST *r=TD_CALLOC(1,sizeof(AST));
     r->refCnt=1;
     r->type=AST_LABEL;
     r->labelNode=name;
+    Compiler.lastLabel=r;
+    Compiler.globalLabelCount++;
     return r;
 }
 AST *CreateTry(AST *try,AST *catch)  {
@@ -538,7 +554,7 @@ CType *CreateArrayType(CType * base,AST *dim) {
     r->refCnt=1;
     r->array.base=base;
     if(dim)
-        r->array.dim=EvaluateInt(dim);
+      r->array.dim=EvaluateInt(dim,0);
     else
         r->array.dim=-1;
     r->type=TYPE_ARRAY;
@@ -841,6 +857,7 @@ double EvaluateF64(AST *exp) {
     Compiler.returnType=CreatePrimType(TYPE_F64);
     CFunction *f=CompileAST(&locals, ret, args);
     ReleaseType(Compiler.returnType);
+    GC_Disable();
     #ifndef TARGET_WIN32
     signal(SIGINT,SignalHandler);
     double ret2=((double(*)())f->funcptr)();
@@ -848,21 +865,27 @@ double EvaluateF64(AST *exp) {
     #else
     double ret2=((double(*)())f->funcptr)();
     #endif
+    GC_Enable();
     ReleaseFunction(f);
     RestoreCompilerState(old);
     return ret2;
 }
-int64_t EvaluateInt(AST *exp) {
+int64_t EvaluateInt(AST *exp,int flags) {
     AST *ret =CreateReturn(exp);
+    map_CVariable_t oldlocs=Compiler.locals;
     COldFuncState old=CreateCompilerState();
     //Dissable breakpoints
     map_CVariable_t locals;
     vec_CVariable_t args;
     vec_init(&args);
     map_init(&locals);
+    if(flags&EVAL_INT_F_PRESERVE_LOCALS&&!Compiler.inFunction)
+      locals=oldlocs;
     Compiler.returnType=CreatePrimType(TYPE_I64);
     CFunction *f=CompileAST(&locals, ret, args);
     ReleaseType(Compiler.returnType);
+    map_deinit(&locals),vec_deinit(&args);
+    GC_Disable();
     #ifndef TARGET_WIN32
     signal(SIGINT,SignalHandler);
     int64_t ret2=((int64_t(*)())f->funcptr)();
@@ -870,6 +893,7 @@ int64_t EvaluateInt(AST *exp) {
     #else
     int64_t ret2=((int64_t(*)())f->funcptr)();
     #endif
+    GC_Enable();
     ReleaseFunction(f);
     RestoreCompilerState(old);
     return ret2;
@@ -886,11 +910,11 @@ AST *CreateCase(AST *low,AST *high) {
     r->type=AST_CASE;
     r->cs.isUndef=!low;
     if(low)
-        r->cs.low=EvaluateInt(low);
+      r->cs.low=EvaluateInt(low,0);
     else
         r->cs.low=1;
     if(high)
-        r->cs.high=EvaluateInt(high);
+      r->cs.high=EvaluateInt(high,0);
     else
         r->cs.high=r->cs.low;
     return r;
@@ -1058,14 +1082,16 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
                     CFunction *stmt=CompileAST(NULL,ret,empty);
                     RestoreCompilerState(olds);
                     vec_deinit(&empty);
+		    GC_Disable();
                     #ifndef TARGET_WIN32
                     signal(SIGINT,SignalHandler);
                     stmt->funcptr(0);
                     signal(SIGINT,SIG_IGN);
                     #else
                     stmt->funcptr(0);
-                    #endif
-                    ReleaseFunction(stmt);
+                    #endif 
+		    GC_Enable();
+		    ReleaseFunction(stmt);
                     vec_push(&r->func.dftArgs,vnode);
                 }
             } else
@@ -1961,6 +1987,38 @@ indir:
         abort();
     }
 }
+void *GetGlobalPtr(CVariable *var) {
+    switch(var->linkage.type) {
+    case LINK_NORMAL:
+        if(var->isFunc)
+	  return var->func->funcptr;
+        else
+	  return var->linkage.globalPtr;
+        break;
+    case LINK__EXTERN:
+    case LINK_EXTERN:
+      return GetGlobalPtr(var->linkage.externVar);
+        break;
+    case LINK_IMPORT:
+    case LINK__IMPORT:
+        ;
+        CVariable **g=map_get(&Compiler.globals,var->linkage.importLink);
+        if(!g) {
+indir:
+            return var->linkage.dummyPtr;
+        } else {
+            /**
+             * A forward declaration pointing to self will be resolved when it is defined,so dont infinitey recur here looking for a definition
+             */
+	  if(0!=strcmp(var->linkage.importLink,var->name))
+                return GetGlobalPtr(*g);
+            goto indir;
+        }
+        break;
+    default:
+        abort();
+    }
+}
 void __CompileAssignInt2V(CVariable *var,uint64_t i) {
     CType *bt =BaseType(var->type);
     int tsz=TypeSize(bt);
@@ -2631,7 +2689,11 @@ foundmem:
     } else if(node->type==AST_RANGE) {
         return CreatePrimType(TYPE_BOOL);
     } else if(node->type==AST_NAME) {
-        CVariable *var;
+      //If assmbler is active,check for imports
+      if(Assembler.active)
+	if(map_get(&Assembler.imports,node->name))
+	  return CreatePtrType(CreatePrimType(TYPE_U0));
+      CVariable *var;
         if(var=GetVariable(node->name)) {
             if(var->type->type==TYPE_FUNC)
                 return var->type->func.ret;
@@ -3399,6 +3461,97 @@ incompatptr:
 }
 static void ___CompileAST(AST *exp) {
     switch (exp->type) {
+    case AST_ASM_BLK: {
+      Assembler.active=1;
+      AST *s;int iter;
+      vec_foreach(&exp->stmts,s,iter) {
+	__CompileAST(s);
+	ReleaseValue(&vec_pop(&Compiler.valueStack));
+      }
+      vec_push(&Compiler.valueStack,VALUE_INT(0));
+      Assembler.active=0;
+      break;
+    }
+    case AST_ASM_OPCODE: {
+      AssembleOpcode(exp,exp->asmOpcode.name->name,exp->asmOpcode.operands);
+      vec_push(&Compiler.valueStack,VALUE_INT(0));
+      break;
+    }
+    case AST_ASM_ALIGN: {
+      int64_t al=EvaluateInt(exp->asmAlign.align,0);
+      int64_t f=EvaluateInt(exp->asmAlign.align,0);
+        jit_align_fill(Compiler.JIT,al,f);
+        vec_push(&Compiler.valueStack,VALUE_INT(0));
+        break;
+    }
+    case AST_ASM_BINFILE: {
+        assert(exp->asmBinfile->type==AST_STRING);
+        FILE *f=fopen(exp->asmBinfile->string,"rb");
+        if(f) {
+	  fseek(f,0,SEEK_END);
+            long end=ftell(f);
+            fseek(f,0,SEEK_SET);
+            long start=ftell(f);
+            char buffer[end-start];
+            fread(buffer,end-start,1,f);
+            fclose(f);
+            jit_data_bytes(Compiler.JIT,end-start,buffer);
+        } else {
+            RaiseError(exp->asmBinfile,"Can't open file \"%s\" for reading.",exp->asmBinfile->string);
+        }
+        vec_push(&Compiler.valueStack,VALUE_INT(0));
+        break;
+    }
+    case AST_ASM_DU16: {
+        AST *d;int iter;
+        vec_foreach(&exp->duData,d,iter) {
+	  int64_t v=(int64_t)EvalLabelExpr(d);
+	  jit_data_word(Compiler.JIT,v);
+        }
+        vec_push(&Compiler.valueStack,VALUE_INT(0));
+        break;
+    }
+    case AST_ASM_DU32: {
+        AST *d;int iter;
+        vec_foreach(&exp->duData,d,iter) {
+	  int64_t v=(int64_t)EvalLabelExpr(d);
+	  jit_data_dword(Compiler.JIT,v);
+        }
+        vec_push(&Compiler.valueStack,VALUE_INT(0));
+        break;
+    }
+    case AST_ASM_DU64: {
+        AST *d;int iter;
+        vec_foreach(&exp->duData,d,iter) {
+	  int64_t v=(int64_t)EvalLabelExpr(d);
+	  jit_data_qword(Compiler.JIT,v);
+        }
+        vec_push(&Compiler.valueStack,VALUE_INT(0));
+        break;
+    }
+    case AST_ASM_DU8: {
+      AST *d;int iter;
+      vec_foreach(&exp->duData, d, iter) {
+	int64_t v=(int64_t)EvalLabelExpr(d);
+	jit_data_qword(Compiler.JIT,v);
+      }
+      vec_push(&Compiler.valueStack,VALUE_INT(0));
+      break;
+    }
+    case AST_ASM_IMPORT: {
+        AST *name;
+        int iter;
+        vec_foreach(&exp->asmImports,name,iter) {
+            CVariable **var=map_get(&Compiler.globals,name->name);
+            if(var) {
+                map_set(&Assembler.imports,name->name,*var);
+            } else {
+	      RaiseError(name,"Couldn't import global symbol %s.",name->name);
+            }
+        }
+        vec_push(&Compiler.valueStack,VALUE_INT(0));
+        break;
+    }
     case AST_LASTCLASS: {
         if(!Compiler.lastclass) {
             RaiseError(exp,"Unexpected lastclass.");
@@ -3429,6 +3582,14 @@ static void ___CompileAST(AST *exp) {
         break;
     case AST_NAME: {
         CVariable *var;
+	//If assembler is active,check for import
+	if(Assembler.active) {
+	  CVariable **var;
+	  if(var=map_get(&Assembler.imports,exp->name)) {
+	    vec_push(&Compiler.valueStack,VALUE_INT((int64_t)GetGlobalPtr(*var)));
+	    break;
+	  }
+	}
         if(var=GetVariable(exp->name)) {
             //Account for implicit func calls
             CType *fbt =BaseType(var->type);
@@ -3518,7 +3679,6 @@ lcloop:
         break;
     }
     case AST_ASM_REG: {
-      AssembleOpcode(exp->asmOpcode.name->name,exp->asmOpcode.operands);
       vec_push(&Compiler.valueStack, VALUE_INT(0));
       break;
     }
@@ -5257,12 +5417,15 @@ reglabrefs:
         vec_push(&Compiler.valueStack, VALUE_INT(0));
         break;
     }
+    case AST_LOCAL_LABEL:
     case AST_LABEL: {
         char *lab=exp->labelNode->name;
         if(!Compiler.inFunction) {
             RaiseError(exp,"No labels in global scope.");
         } else if(map_get(&Compiler.labels,lab)) {
-            RaiseError(exp,"Repeat label \"%s\".",lab);
+	  char *readable=GetLabelReadableName(exp->labelNode);
+	  RaiseError(exp,"Repeat label \"%s\".",readable);
+	  TD_FREE(readable);
         } else if(!map_get(&Compiler.labels,lab)) {
             vec_CLabelRef_t *ops=map_get(&Compiler.labelRefs,lab);
             if(ops) {
@@ -5274,10 +5437,48 @@ reglabrefs:
                 map_remove(&Compiler.labelRefs, lab);
             }
             map_set(&Compiler.labels,lab,jit_get_label(Compiler.JIT));
+	    map_set(&Compiler.labelPtrs,lab,NULL);
+	    jit_dump_ptr(Compiler.JIT,map_get(&Compiler.labelPtrs,lab));
         }
+
         //All nodes return a value on the stack
         vec_push(&Compiler.valueStack, VALUE_INT(0));
         break;
+    } 
+    case AST_EXPORT_LABEL: {
+         char *lab=exp->labelNode->name;
+	 if(Compiler.inFunction&&!map_get(&Compiler.labels,lab)) {
+	   vec_CLabelRef_t *ops=map_get(&Compiler.labelRefs,lab);
+	   if(ops) {
+	     int iter;
+	     CLabelRef ref;
+	     vec_foreach(ops, ref, iter)
+                jit_patch(Compiler.JIT,ref.op);
+	     vec_deinit(ops);
+	     map_remove(&Compiler.labelRefs, lab);
+	   }
+	   map_set(&Compiler.labels,lab,jit_get_label(Compiler.JIT));
+	   map_set(&Compiler.labelPtrs,lab,NULL);
+	   jit_dump_ptr(Compiler.JIT,map_get(&Compiler.labelPtrs,lab));
+	 }
+	 //Create a U0* that will point to the label
+	 CVariable *exp2=TD_MALLOC(sizeof(CVariable));
+	 exp2->isGlobal=1;
+	 exp2->name=strdup(lab);
+	 exp2->type=CreatePtrType(CreatePrimType(TYPE_U0));
+	 exp2->linkage.type=LINK_NORMAL;
+	 //POINTER to POINTER
+	 exp2->linkage.globalPtr=TD_MALLOC(sizeof(void*));
+	 jit_dump_ptr(Compiler.JIT,&exp2->linkage.globalPtr);
+	 exp2->fn=strdup(exp->fn);
+	 exp2->line=exp->ln;
+	 CVariable **exist;
+	 if(exist=map_get(&Compiler.globals,lab))
+	   ReleaseVariable(*exist);
+	 map_set(&Compiler.globals,lab,exp2);
+	 //Resolve
+      vec_push(&Compiler.valueStack,VALUE_INT(0));
+      return;
     }
     default:
         abort();
@@ -5316,9 +5517,7 @@ add:
 }
 void ReleaseFunction(CFunction*func) {
     CFunction *f=func;
-    //if(f->JIT)
-    //    jit_free(f->JIT);
-    TD_FREE(f);
+    jit_free(f->JIT);
 }
 AST* CreateReturn(AST *exp) {
     AST *r=TD_CALLOC(1,sizeof(AST));
@@ -5436,13 +5635,6 @@ static void __ScanForAddrofs(AST *node,void *data) {
 }
 static void Blank() {
     fprintf(stderr,"<Called nil function>\n");
-}
-static void ReleaseFuncCode(void *ptr) {
-#ifndef TARGET_WIN32
-    free(ptr);
-#else
-    VirtualFree(ptr,0,MEM_RELEASE);
-#endif
 }
 /**
  * Expression,function args(CVariable *) are put in ...(terminated with NULL)
@@ -5601,7 +5793,9 @@ noreg:
         CLabelRef ref;
         int iter;
         vec_foreach(refs, ref, iter) {
-          RaiseError(ref.at,"Unresolved label %s.",ref.at->labelNode->name);
+	  char *readable=GetLabelReadableName(ref.at->labelNode);
+          RaiseError(ref.at,"Unresolved label %s.",readable);
+	  TD_FREE(readable);
         }
       }
     }
@@ -5630,10 +5824,6 @@ noreg:
 
     Compiler.JIT=oldjit;
     Compiler.errorFlag=oldflag;
-#ifdef USEGC
-    if(func->funcptr!=Blank)
-        GCCreateExtPtr(func->funcptr, ReleaseFuncCode);
-#endif
     return func;
 }
 void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
@@ -5687,6 +5877,7 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         jit_disable_optimization(curjit, JIT_OPT_ALL);
         jit_generate_code(curjit,func);
         func->funcptr=funcptr;
+	GC_Disable();
         #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
         func->funcptr(0);
@@ -5694,7 +5885,8 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         #else
         func->funcptr(0);
         #endif
-        t=AssignTypeToNode(exp);
+	GC_Enable();
+	t=AssignTypeToNode(exp);
         if(t->type==TYPE_ARRAY||t->type==TYPE_ARRAY_REF)
           DbgPrintVar(t, *(void**)buffer); //Arrays return pointer to self
         else
@@ -6003,7 +6195,7 @@ AST *CreateExternLinkage(AST *_name) {
     AST *r=TD_MALLOC(sizeof(AST));
     r->refCnt=1;
     r->type=AST_LINKAGE;
-    r->linkage.type=(_name)?LINK_EXTERN:LINK_EXTERN;
+    r->linkage.type=(_name)?LINK__EXTERN:LINK_EXTERN;
     if(_name)
       r->linkage.importLink=strdup(_name->name);
     return r;
@@ -6086,14 +6278,22 @@ CVariable *Import(CType *type,AST *name,char *importname) {
     return ret;
 }
 COldFuncState EnterFunction(CType *returnType,AST *_args) {
+    Compiler.globalLabelCount=0;
     Compiler.returnType=returnType;
     COldFuncState old=CreateCompilerState();
     Compiler.inFunction=1;
+    vec_init(&Compiler.asmPatches);
     return old;
 }
 void LeaveFunction(COldFuncState old) {
     Compiler.inFunction=0;
     Compiler.returnType=NULL;
+    int iter;
+    CAsmPatch *pat;
+    vec_foreach(&Compiler.asmPatches, pat, iter)
+      TD_FREE(pat);
+    vec_deinit(&Compiler.asmPatches);
+    
     RestoreCompilerState(old);
 }
 void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int hasvargs) {
@@ -6145,9 +6345,13 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
         vec_push(&args2, argv);
     }
     CFunction *f=CompileAST(&Compiler.locals, body, args2);
+    Assembler.active=1;
+    ApplyPatches();
+    Assembler.active=0;
     if(name)
         f->name=strdup(name->name);
     LeaveFunction(oldstate);
+    GC_SetDestroy(f,ReleaseFunction);;
     __AddFunctionVar(name,ftype,f);
     vec_deinit(&args2);
     CVariable *fv=*map_get(&Compiler.globals,name->name);
@@ -6178,7 +6382,6 @@ void RunStatement(AST *s) {
       GC_Enable();
     }
     Compiler.errorFlag=oldflag;
-    ReleaseFunction(stmt);
     vec_deinit(&empty);
     map_deinit(&locals);
     RestoreCompilerState(old);

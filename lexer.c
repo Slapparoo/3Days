@@ -192,7 +192,7 @@ void InitREPL() {
 }
 void WaitForInput() {
     if(Lexer.isFreeToFlush) FlushLexer();
-    #ifndef TARGET_WIN32
+#ifndef TARGET_WIN32
     sigset_t oldset;
     sigset_t newset;
     sigfillset(&newset);
@@ -204,6 +204,8 @@ void WaitForInput() {
     #else
     char *input=rl("HolyCC:>> ");
     #endif
+    //Will re-enter in main
+    Lexer.replMode=0;
 set:
     ;
     //Add to REPL_SOURCE_NAME's file lines
@@ -485,8 +487,6 @@ AST *LexString() {
     return NULL;
 }
 void SkipWhitespace(int flags) {
-  int old=Lexer.isFreeToFlush;
-  Lexer.isFreeToFlush=0;
 loop:
     if(!LEXER_PEEK()&&Lexer.replMode) {
         WaitForInput();
@@ -513,16 +513,13 @@ loop:
             }
         } else {
             Lexer.cursor_pos=orig_pos;
-            Lexer.isFreeToFlush=old;
             return;
         }
     } else if(Lexer.stopAtNewline&&LEXER_PEEK()=='\n') {
-        Lexer.isFreeToFlush=old;
         return;
     } else if(isblank(LEXER_PEEK())||LEXER_PEEK()=='\n'||LEXER_PEEK()=='\r') {
         LEXER_NEXT();
     } else {
-        Lexer.isFreeToFlush=old;
         return;
     }
     goto loop;
@@ -841,17 +838,14 @@ void CreateLexer(int whichparser) {
         {"_import",HC_IMPORT2},
         {"lastclass",HC_LASTCLASS},
         {"static",HC_STATIC},
-        {"U0",HC_U0},
-        {"U8i",HC_U8},
-        {"I8i",HC_I8},
-        {"U16i",HC_U16},
-        {"I16i",HC_I16},
-        {"U32i",HC_U32,},
-        {"I32i",HC_I32},
-        {"U64i",HC_U64,},
-        {"I64i",HC_I64,},
-        {"F64",HC_F64,},
-        {"Bool",HC_BOOL,},
+        {"DU8",HC_DU8},
+        {"DU16",HC_DU16},
+        {"DU32",HC_DU32},
+        {"DU64",HC_DU64},
+        {"ALIGN",HC_ALIGN},
+        {"BINFILE",HC_BINFILE},
+        {"asm",HC_ASM},
+	{"IMPORT",HC_ASM_IMPORT},
     };
     memset(&Lexer,0,sizeof(Lexer));
     Lexer.source=TD_MALLOC(sizeof(mrope_t));
@@ -1058,18 +1052,11 @@ AST *LexMatchBase16() {
 AST *LexName() {
     char *word=WordAtPoint(EXPAND_MACROS);
     if(!word) return NULL;
-    if(IsOpcode(word)) {
+    if(GetRegister(word)) {
       AST *r=TD_CALLOC(1,sizeof(AST));
       r->refCnt=1;
-      r->type=HC_OPCODE;
-      r->name=word;
-      return r;
-    }
-    if(IsOpcode(word)) {
-      AST *r=TD_CALLOC(1,sizeof(AST));
-      r->refCnt=1;
-      r->type=HC_REGISTER;
-      r->name=word;
+      r->type=AST_ASM_REG;
+      r->asmReg=GetRegister(word);
       return r;
     }
     if(map_get(&Lexer.keywords, word)) {
@@ -1144,6 +1131,8 @@ AST *LexToken() {
         {"}",HC_RIGHT_CURLY},
         {":",HC_COLON},
         {"...",HC_DOT_DOT_DOT},
+        {"::",HC_DOUBLE_COLON},
+        {"@@",HC_DOUBLE_AT},
     };
     int cnt=sizeof(tpairs)/sizeof(*tpairs),ret=-1;
     long origpos=Lexer.cursor_pos;
@@ -1187,8 +1176,10 @@ int ASTToToken(AST *t) {
         if(t->type==AST_FLOAT) return HC_FLOAT;
         if(t->type==AST_NAME) {
             if(map_get(&Compiler.types, t->name)) return HC_TYPENAME;
+	    if(IsOpcode(t->name)) return HC_OPCODE;
             return HC_NAME;
         }
+	if(t->type==AST_ASM_REG) return HC_REGISTER;
     }
     if(t->type==AST_KEYWORD) return t->keyword;
     if(t->type==AST_TOKEN) return t->tokenAtom;

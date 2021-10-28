@@ -741,9 +741,9 @@ void jit_patch_local_addrs(struct jit *jit)
 
         if(GET_OP(op)==JIT_DATA_CODE_OFFSET)  {
             unsigned char *buf = jit->buf + (int64_t) op->patch_addr;
-			jit_value addr = jit_is_label(jit, (void *)op->arg[0]) ? ((jit_label *)op->arg[0])->pos : op->arg[0];
+	    jit_value addr = jit_is_label(jit, (void *)op->arg[0]) ? ((jit_label *)op->arg[0])->pos : op->arg[0];
             addr+=(int64_t)op->arg[1];
-            *((jit_value *)buf) = (jit_value) (jit->buf + addr-op->patch_addr);
+            *((int32_t*)buf) = (jit_value) (addr-op->patch_addr);
         }
 	}
 }
@@ -874,13 +874,16 @@ void jit_gen_op(struct jit * jit, struct jit_op * op)
 		break;
 		case JIT_LABEL: ((jit_label *)a1)->pos = JIT_BUFFER_OFFSET(jit); break;
 
-		case JIT_CODE_ALIGN:
+	case JIT_CODE_ALIGN_FILL:
+	  while (((int64_t) jit->ip) % op->arg[0])
+	    *jit->ip++=op->arg[1];
+	  break;
+	case JIT_CODE_ALIGN:
 				while (((int64_t) jit->ip) % op->arg[0])
 					common86_nop(jit->ip);
 				break;
 
 		case JIT_REF_CODE:
-        case JIT_DATA_CODE_OFFSET:
 		case JIT_REF_DATA:
 			op->patch_addr = JIT_BUFFER_OFFSET(jit);
 			common86_mov_reg_imm_size(jit->ip, a1, 0xdeadbeefcafebabe, sizeof(void *));

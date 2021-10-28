@@ -161,6 +161,16 @@ typedef struct AST {
         AST_ASM_OPCODE,
         AST_ASM_REG,
         AST_ASM_ADDR,
+        AST_EXPORT_LABEL,
+        AST_LOCAL_LABEL,
+        AST_ASM_DU8,
+        AST_ASM_DU16,
+        AST_ASM_DU32,
+        AST_ASM_DU64,
+        AST_ASM_IMPORT,
+        AST_ASM_ALIGN,
+        AST_ASM_BINFILE,
+	AST_ASM_BLK, //like AST_STMT_GROUP
         //
         AST_LINKAGE,
         //
@@ -287,6 +297,14 @@ typedef struct AST {
         AST_LASTCLASS,
     } type;
     union {
+        //For use with DUxx is asm blocks
+        vec_AST_t duData;
+        vec_AST_t asmImports;
+        struct AST *asmBinfile;
+        struct {
+          struct AST *align;
+          struct AST *fill;
+        } asmAlign;
         /**
          * This points to a CReg* from ASM.HC
          */
@@ -384,6 +402,7 @@ typedef struct AST {
         CLinkage linkage;
         vec_AST_t stmts;
         vec_CDeclTail_t declTail;
+        //Local labels use LOCAL_LAB_FMT as the name,so be careful,see GetLabelReadableName(AST *t)
         char *name;
     };
     int issynChecked:1;
@@ -394,6 +413,7 @@ typedef struct AST {
     char *fn;
     int ln,col;
 } AST;
+char *GetLabelReadableName(struct AST *t);
 int IsBinop(AST *node);
 AST *CreatePrint(char *prn);
 int IsUnop(AST *node);
@@ -588,7 +608,16 @@ typedef struct CLabelRef {
 typedef vec_t(CLabelRef) vec_CLabelRef_t;
 typedef map_t(vec_CLabelRef_t) map_vec_CLabelRef_t;
 typedef struct {
-    vec_CVariable_t unlinkedImportVars;
+  unsigned int isRel:1;
+  void *ptr;
+  AST *exp;
+  long width,rel_offset;
+} CAsmPatch;
+typedef vec_t(CAsmPatch *) vec_CAsmPatchP_t;
+
+typedef struct {
+  vec_CAsmPatchP_t asmPatches;
+  vec_CVariable_t unlinkedImportVars;
     vec_CVariable_t unlinkedExternVars;
     vec_CType_t unlinkedImportTypes;
     vec_CType_t unlinkedExternTypes;
@@ -612,8 +641,9 @@ typedef struct {
     vec_CValue_t valueStack;
     vec_jit_op_t breakops;
     map_jit_label_t labels;
-    map_str_t strings;
-    map_vec_CLabelRef_t labelRefs;
+  map_void_t labelPtrs;
+  map_str_t strings;
+  map_vec_CLabelRef_t labelRefs;
     map_CBreakpoint_t breakpoints;
     /**
      * Used for debug print-expresions.
@@ -621,7 +651,11 @@ typedef struct {
      */
     void *debugFramePtr;
     CType *lastclass;
+    struct AST *lastLabel;
+    //Used for seperating local labels between globals,see LOCAL_LAB_FMT
+    long globalLabelCount;
 } CCompiler;
+#define LOCAL_LAB_FMT "@@(%l)[%s]"
 extern CCompiler Compiler;
 
 typedef struct CLiveInfo {
@@ -690,7 +724,8 @@ AST *CreateForStmt(AST *i,AST *c,AST *n,AST *body);
 AST *CreateWhileStmt(AST *cond,AST *body);
 AST *CreateLabel(AST *name);
 AST *CreateGoto(AST *name);
-int64_t EvaluateInt(AST *exp);
+#define EVAL_INT_F_PRESERVE_LOCALS 1
+int64_t EvaluateInt(AST *exp,int flags);
 AST *CreateBreak();
 char *MStrPrint(const char *fmt,int64_t argc,int64_t *argv);
 void TOSPrint(const char *fmt,int64_t argc,int64_t *argv);
@@ -773,6 +808,7 @@ AST *CreateStaticLinkage();
 char *TypeToString(CType *t);
 void FlushLexer();
 typedef struct COldFuncState {
+  vec_CAsmPatchP_t asmPatches;
     map_CVariable_t locals;
     CType *returnType;
     int inFunction:1;
@@ -785,10 +821,16 @@ typedef struct COldFuncState {
     vec_CValue_t valueStack;
     vec_jit_op_t breakops;
     map_jit_label_t labels;
+  map_void_t labelPtrs;
     map_vec_CLabelRef_t labelRefs;
 } COldFuncState;
 COldFuncState EnterFunction(CType *returnType,AST *_args);
 COldFuncState CreateCompilerState();
+typedef struct {
+  unsigned int active:1;
+  map_CVariable_t imports;
+} CAssembler;
+extern CAssembler Assembler;
 void RestoreCompilerState(COldFuncState old);
 int DebugIsTrue(void *frameptr,CFuncInfo *info,char *text);
 void DebugEvalExpr(void *frameptr,CFuncInfo *info,char *text);
@@ -801,6 +843,22 @@ CType *FinalizeClass(CType *class);
 double EvaluateF64(AST *exp);
 int IsOpcode(char *name);
 vec_AST_t CommaToVec(AST* comma);
-int IsRegister(char *name);
+void * GetRegister(char *name);
 AST *AppendToSIB(AST *sib,AST *scale,AST *reg,AST *offset);
-void AssembleOpcode(char *name,vec_AST_t operands);
+void AssembleOpcode(AST *at,char *name,vec_AST_t operands);
+AST *CreateExportedLabel(AST *name);
+AST *CreateLocalLabel(AST *name);
+AST *CreateDU64(AST *comma);
+AST *CreateDU32(AST *comma);
+AST *CreateDU16(AST *comma);
+AST *CreateDU8(AST *comma);
+AST *CreateAsmImport(AST *comma);
+AST *CreateAsmAlign(AST *a,AST *fill);
+void LeaveAssembler();
+void EnterAssembler();
+void *GetGlobalPtr(CVariable *var);
+void *EvalLabelExpr(AST *a);
+struct ExceptFrame;
+struct ExceptFrame *EnterTry();
+void PopTryFrame();
+void ApplyPatches();

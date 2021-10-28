@@ -26,7 +26,7 @@ static void (*RunPtr)(CFuncInfo *info,AST *exp,void *framePtr);
 %token  ASSIGN EQ_SHL EQ_SHR EQ_MUL EQ_DIV EQ_MOD EQ_BAND EQ_BXOR EQ_BOR EQ_ADD EQ_SUB
 %token  COMMA
 %token  TRY CATCH LASTCLASS U0 LEFT_PAREN RIGHT_PAREN INC DEC NAME LEFT_SQAURE RIGHT_SQAURE SEMI IF ELSE DO WHILE FOR LEFT_CURLY RIGHT_CURLY CASE COLON DOT_DOT_DOT
-%token  EXTERN2 LOCK EXTERN IMPORT IMPORT2 STATIC PUBLIC CLASS UNION INTERN START END DEFAULT BREAK RET GOTO BOOL U8 I8 U16 I16 U32 I32 U64 I64 F64  SWITCH
+%token  EXTERN2 LOCK EXTERN IMPORT IMPORT2 ASM_IMPORT STATIC PUBLIC CLASS UNION INTERN START END DEFAULT BREAK RET GOTO SWITCH
 /**
  * These tokens is used by forking the lexer  and parsing a scope/expression
  */
@@ -53,8 +53,8 @@ static void (*RunPtr)(CFuncInfo *info,AST *exp,void *framePtr);
 %left COMMA
 %nonassoc IF ELSE DO WHILE FOR
 %nonassoc TRY CATCH LASTCLASS U0 LEFT_PAREN RIGHT_PAREN INC DEC NAME LEFT_SQAURE RIGHT_SQAURE SEMI  LEFT_CURLY RIGHT_CURLY CASE COLON DOT_DOT_DOT
-%nonassoc EXTERN2 LOCK EXTERN IMPORT IMPORT2 STATIC PUBLIC CLASS UNION INTERN START END DEFAULT BREAK GOTO BOOL U8 I8 U16 I16 U32 I32 U64 I64 F64 SWITCH TYPENAME
-%nonassoc OPCODE REGISTER
+%nonassoc EXTERN2 LOCK EXTERN IMPORT IMPORT2 STATIC PUBLIC CLASS UNION INTERN START END DEFAULT BREAK GOTO SWITCH TYPENAME
+%nonassoc OPCODE REGISTER DOUBLE_COLON DOUBLE_AT DU8 DU16 DU32 DU64 ALIGN BINFILE ASM
 %%
 body: stmts;
 //Asm section
@@ -71,6 +71,9 @@ sib_ib[r]: sib_ib[i] ADD[a] REGISTER[idx] MUL[m] INT[s]  {
   $r=AppendToSIB($i,$s,$idx,NULL);
   ReleaseAST($a),ReleaseAST($m);
 };
+sib_ib[r]: INT[i] {
+  $r=AppendToSIB(NULL,NULL,NULL,$i);
+ };
 sib_d[r]: sib_ib[s];
 sib_d[r]: sib_ib[s] ADD[a] expr[e] {
   $r=AppendToSIB($s,NULL,NULL,$e);
@@ -86,8 +89,11 @@ sib[r]: LEFT_SQAURE[lb] sib_d[sib2] RIGHT_SQAURE[rb] {
 };
 opc_operand: sib;
 opc_operand: REGISTER;
+opc_operand: expr;
 opc_operand: TYPENAME[tn] sib[s] {
   $$=$s;
+  CType *t=*map_get(&Compiler.types,$tn->name);
+  $$->asmAddr.width=TypeSize(t);
 }
 opc_operand: TYPENAME[tn] REGISTER[seg] COLON sib[s] {
   CType *t=*map_get(&Compiler.types,$tn->name);
@@ -101,18 +107,86 @@ opc_operand: opc_operand[r] COLON[c] sib[s] {
     $s->asmAddr.segment=$r;
   }
   $$=$s;
+  ReleaseAST($c);
 };
 opc_operands[r]: opc_operand[o] {$r=$o;};
-opc_operands[r]: opc_operands[seq] COMMA opc_operands[o] {
+opc_operands[r]: opc_operands[seq] COMMA[u1] opc_operand[o] {
   $r=CreateBinop($seq,$o,AST_COMMA);
+  ReleaseAST($u1);
 };
-asm_stmt[r]: OPCODE[n] opc_operands[o] {
+opc_operands[r]: {$r=NULL;};
+opcode[r]: OPCODE[n] opc_operands[o] {
   AST *r=TD_MALLOC(sizeof(AST));
   r->refCnt=1;
   r->type=AST_ASM_OPCODE;
   r->asmOpcode.name=$n;
   r->asmOpcode.operands=CommaToVec($o);
-  $r=r;
+  $r=SOT(r,$n);
+};
+asm_blk_stmt[r]: NAME[n] DOUBLE_COLON[c] {
+  $r=SOT(CreateExportedLabel($n),$n);
+  ReleaseAST($c);
+}
+asm_blk_stmt[r]: NAME[n] COLON[c] {
+  $r=SOT(CreateLabel($n),$n);
+  ReleaseAST($c);
+ }
+asm_blk_stmt[r]: DOUBLE_AT[aa] NAME[n] DOUBLE_COLON[c] {
+  $r=SOT(CreateLocalLabel($n),$aa);
+  ReleaseAST($c),ReleaseAST($aa);
+}
+//asm_blk can only apear is asm blocks "asm {}"
+data_exprs[r]: expr;
+data_exprs[r]: data_exprs[a] COMMA[com] expr[b] {
+  $r=CreateBinop($a,$b,AST_COMMA);
+  ReleaseAST($com);
+};
+asm_blk_stmt[r]: DU8[u1] data_exprs[d] SEMI[u2] {
+  $r=SOT(CreateDU8($d),$u1);
+  ReleaseAST($u1),ReleaseAST($u2);
+};
+asm_blk_stmt[r]: DU16[u1] data_exprs[d] SEMI[u2] {
+  $r=SOT(CreateDU16($d),$u1);
+  ReleaseAST($u1),ReleaseAST($u2);
+};
+asm_blk_stmt[r]: DU32[u1] data_exprs[d] SEMI[u2] {
+  $r=SOT(CreateDU32($d),$u1);
+  ReleaseAST($u1),ReleaseAST($u2);
+};
+asm_blk_stmt[r]: DU64[u1] data_exprs[d] SEMI[u2] {
+  $r=SOT(CreateDU64($d),$u1);
+  ReleaseAST($u1),ReleaseAST($u2);
+};
+asm_blk_stmt: opcode;
+name_list: NAME;
+name_list[r]: name_list[a] COMMA[u1] NAME[b] {
+  $r=SOT(CreateBinop($a,$b,AST_COMMA),$a);
+  ReleaseAST($u1);
+};
+asm_blk_stmt[r]: ASM_IMPORT[u1] name_list[nl] SEMI[u2] {
+  $r=SOT(CreateAsmImport($nl),$u1);
+  ReleaseAST($u1),ReleaseAST($u2);
+};
+asm_blk_stmt[r]: SEMI[u1] {
+  $r=SOT(CreateNop(),$u1);
+  ReleaseAST($u1);
+ };
+asm_blk_stmt[r]: ALIGN[u1] INT[align] COMMA[u12] INT[fill] {
+  $r=SOT(CreateAsmAlign($align,$fill),$u1);
+  ReleaseAST($u1),ReleaseAST($u1);
+};
+asm_blk[r]: ASM[u1] LEFT_CURLY[u2] RIGHT_CURLY[u3] {
+  $r=SOT(CreateNop(),$u1);
+  ReleaseAST($u1),ReleaseAST($u2),ReleaseAST($u3);
+};
+asm_blk_stmts: asm_blk_stmt;
+asm_blk_stmts[r]: asm_blk_stmts[a] asm_blk_stmt[b] {
+  $r=AppendToStmts($a,$b);
+}
+asm_blk[r]: ASM[u1] LEFT_CURLY[u2] asm_blk_stmts[s] RIGHT_CURLY[u3] {
+  $r=$s;
+  $r->type=AST_ASM_BLK;
+  ReleaseAST($u1),ReleaseAST($u2),ReleaseAST($u3);
 };
 //
 expr0[r]: FLOAT {$r=SLE($1);};
@@ -405,17 +479,6 @@ expr_comma: expr;
 /**
  * Types
  */
-primtype0: BOOL[un1] {CType *prim =CreatePrimType(TYPE_BOOL);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
-primtype0: U0[un1] {CType *prim =CreatePrimType(TYPE_U0);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
-primtype0: U8[un1] {CType *prim =CreatePrimType(TYPE_U8);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
-primtype0: I8[un1] {CType *prim =CreatePrimType(TYPE_I8);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
-primtype0: U16[un1] {CType *prim =CreatePrimType(TYPE_U16);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
-primtype0: I16[un1] {CType *prim =CreatePrimType(TYPE_I16);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
-primtype0: U32[un1] {CType *prim =CreatePrimType(TYPE_U32);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
-primtype0: I32[un1] {CType *prim =CreatePrimType(TYPE_I32);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
-primtype0: U64[un1] {CType *prim =CreatePrimType(TYPE_U64);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
-primtype0: I64[un1] {CType *prim =CreatePrimType(TYPE_I64);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
-primtype0: F64[un1] {CType *prim =CreatePrimType(TYPE_F64);$$=SLE(CreateTypeNode(prim));ReleaseAST($un1);};
 primtype0[r]: TYPENAME[n] {
   CType **cls=map_get(&Compiler.types,$n->name);
   CType *t ;
@@ -1040,7 +1103,8 @@ swit[r]: SWITCH[p] LEFT_PAREN[un1] expr_comma[cond] RIGHT_PAREN[un2] LEFT_CURLY[
   ReleaseAST($un4);
 }
 simple_stmt: tryblock;
-simple_stmt: asm_stmt;
+simple_stmt: opcode;
+simple_stmt: asm_blk;
 simple_stmt[r]: multi_decl[d] SEMI[un] {
   $r=$d;
   ReleaseAST($un);

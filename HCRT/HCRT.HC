@@ -59,4 +59,4 @@ I64i union I64
 #include "FILE.HC"
 #include "HASH.HC"
 #include "QSORT.HC"
-//#include "ASM.HC"
+#include "ASM.HC"

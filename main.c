@@ -182,8 +182,10 @@ set:
             }
             Compiler.errorFlag=0;
             Compiler.addrofFrameoffsetMode=0;
+	    Assembler.active=0;
             Compiler.inFunction=0;
             Lexer.isFreeToFlush=1;
+	    if(!Compiler.tagsFile) Lexer.replMode=1;
             HC_parse();
             #ifdef TARGET_WIN32
             RemoveVectoredExceptionHandler(h);

@@ -395,14 +395,23 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 			case JIT_DATA_BYTE: *(jit->ip)++ = (unsigned char) op->arg[0]; break;
 			case JIT_DATA_REF_CODE:
 			case JIT_DATA_REF_DATA:
-            case JIT_DATA_CODE_OFFSET:
 				op->patch_addr = JIT_BUFFER_OFFSET(jit);
 				for (int i = 0; i < sizeof(void *); i++) {
 					*jit->ip = 0;
 					jit->ip++;
 				}
 				break;
-			case JIT_FORCE_SPILL:
+			case JIT_DATA_CODE_OFFSET:
+			  op->patch_addr = JIT_BUFFER_OFFSET(jit);
+			  for (int i = 0; i < sizeof(int32_t); i++) {
+			    *jit->ip = 0;
+			    jit->ip++;
+			  }
+			  break;
+		case JIT_DUMP_PTR:
+		  op->arg[1]=(jit_value)(jit->ip-jit->buf);
+		  break;
+		case JIT_FORCE_SPILL:
 			case JIT_FORCE_ASSOC:
 			case JIT_COMMENT:
 				break;
@@ -418,13 +427,18 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 	int code_size = jit->ip - jit->buf;
 	void * mem;
 	#ifndef TARGET_WIN32
-	posix_memalign(&mem, sysconf(_SC_PAGE_SIZE), code_size);
-	mprotect(mem, code_size, PROT_READ | PROT_EXEC | PROT_WRITE);
-	#else
+	mem=mmap(NULL,code_size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_32BIT|MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+        #else
 	mem=VirtualAlloc(NULL,code_size,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
 	#endif
 	memcpy(mem, jit->buf, code_size);
 	JIT_FREE(jit->buf);
+	
+	for (struct jit_op * op = jit->ops; op != NULL; op = op->next) {
+	  if(GET_OP(op)==JIT_DUMP_PTR) {
+	    *((void**)op->arg[0])=mem+op->arg[1];
+	  }
+	}	
 
 	// FIXME: duplicitni vypocet?
 	int64_t pos = jit->ip - jit->buf;
@@ -476,12 +490,15 @@ void jit_disable_optimization(struct jit * jit, int opt)
 {
 	jit->optimizations &= ~opt;
 }
-
 void jit_free(struct jit * jit)
 {
-	jit_reg_allocator_free(jit->reg_al);
+    	jit_reg_allocator_free(jit->reg_al);
 	free_ops(jit_op_first(jit->ops));
 	free_labels(jit->labels);
-	if (jit->buf) JIT_FREE(jit->buf);
+#ifndef TARGET_WIN32
+	munmap(jit->buf,jit->ip-jit->buf);
+#else
+	VirtualFree(jit->buf,0,MEM_RELEASE);
+#endif
 	JIT_FREE(jit);
 }

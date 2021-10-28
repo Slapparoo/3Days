@@ -178,14 +178,16 @@ static void ReduceRegisterCount(struct jit *jit,struct CFunction *f) {
   CVariable *flocals[info->fp_reg_count+16];
   map_iter_t liter=map_iter(&f->locals);
   const char *key;
-  int iter;
-  while(key=map_next(&f->locals, &liter)) {
-    CVariable *v=*map_get(&f->locals,key);
-    if(!v->isReg) continue;
-    if(IsF64(v->type))
-      flocals[v->reg]=v;
-    else
-      ilocals[v->reg]=v;
+  if(f) {
+    int iter;
+    while(key=map_next(&f->locals, &liter)) {
+      CVariable *v=*map_get(&f->locals,key);
+      if(!v->isReg) continue;
+      if(IsF64(v->type))
+	flocals[v->reg]=v;
+      else
+	ilocals[v->reg]=v;
+    }
   }
 
   struct jit_op *op=jit_op_first(jit->ops);

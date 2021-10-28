@@ -506,6 +506,8 @@ void GC_Disable() {
 }
 void GC_Enable() {
     gc.enabled=1;
+    if(gc.sinceLastCollect>30000000)
+      GC_Collect();
 }
 void *GCCreateExtPtr(void *ext,void(* destroy)(void*)) {
     CPtrInfo *inf=calloc(sizeof(CPtrInfo),1);
