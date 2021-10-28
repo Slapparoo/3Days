@@ -54,3 +54,4 @@ dkms.conf
 3d_tests
 epm
 *.bsd~
+*~

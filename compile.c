@@ -850,12 +850,10 @@ double EvaluateF64(AST *exp) {
     AST *ret =CreateReturn(exp);
     COldFuncState old=CreateCompilerState();
     //Dissable breakpoints
-    map_CVariable_t locals;
     vec_CVariable_t args;
     vec_init(&args);
-    map_init(&locals);
     Compiler.returnType=CreatePrimType(TYPE_F64);
-    CFunction *f=CompileAST(&locals, ret, args);
+    CFunction *f=CompileAST(NULL, ret, args);
     ReleaseType(Compiler.returnType);
     GC_Disable();
     #ifndef TARGET_WIN32
@@ -875,16 +873,15 @@ int64_t EvaluateInt(AST *exp,int flags) {
     map_CVariable_t oldlocs=Compiler.locals;
     COldFuncState old=CreateCompilerState();
     //Dissable breakpoints
-    map_CVariable_t locals;
+    map_CVariable_t *locals=NULL;
     vec_CVariable_t args;
     vec_init(&args);
-    map_init(&locals);
-    if(flags&EVAL_INT_F_PRESERVE_LOCALS&&!Compiler.inFunction)
-      locals=oldlocs;
+    if(flags&EVAL_INT_F_PRESERVE_LOCALS)
+      locals=&Compiler.locals;
     Compiler.returnType=CreatePrimType(TYPE_I64);
-    CFunction *f=CompileAST(&locals, ret, args);
+    CFunction *f=CompileAST(locals, ret, args);
     ReleaseType(Compiler.returnType);
-    map_deinit(&locals),vec_deinit(&args);
+    vec_deinit(&args);
     GC_Disable();
     #ifndef TARGET_WIN32
     signal(SIGINT,SignalHandler);
@@ -2635,6 +2632,10 @@ uncallable:
         vec_AST_t args=CommaToVec(node->funcCall.args);
         vec_deinit(&args);
     } else if(node->type==AST_MEMBER_ACCESS) {
+      //THis will cause class.member to return an offset
+      if(Compiler.addrofFrameoffsetMode) {
+	return CreatePrimType(TYPE_I64);
+      }
         CType *_a =AssignTypeToNode(node->memberAccess.a);
         CType *a =ResolveType(_a);
         vec_CMember_t *members=NULL;
@@ -3728,6 +3729,64 @@ lcloop:
         break;
     }
     case AST_MEMBER_ACCESS: {
+      if(Compiler.addrofFrameoffsetMode) {
+	//Get class containing anaoymus member
+	vec_str_t members;
+	vec_init(&members);
+	AST *top=exp;
+	while(top->type==AST_MEMBER_ACCESS) {
+	  vec_push(&members, top->memberAccess.member);
+	  top=top->memberAccess.a;
+	}
+	if(top->type==AST_NAME) {
+	  CType **t;
+	  if(t=map_get(&Compiler.types, top->name)) {
+	    int64_t offset=0;
+	    CType *T=ResolveType(*t);
+	    int iter;
+	    char *name;
+	    vec_foreach_rev(&members, name, iter) {
+	      CMember *mem=NULL;
+	      if(T->type==TYPE_CLASS){
+		int iter;
+		CMember *mem2;
+		vec_foreach_ptr(&T->cls.members, mem2, iter) {
+		  if(!strcmp(mem2->name,name)) {
+		    mem=mem2;
+		    break;
+		  }
+		}
+		if(!mem) goto mnf;
+		offset+=mem->offset;
+		T=mem->type;
+	      } else if(T->type==TYPE_UNION) {
+		int iter;
+		CMember *mem2;
+		vec_foreach_ptr(&T->un.members, mem2, iter) {
+		  if(!strcmp(mem2->name,name)) {
+		    mem=mem2;
+		    break;
+		  }
+		}
+		if(!mem) goto mnf;
+		offset+=mem->offset;
+		T=mem->type;
+	      } else {
+		mnf:
+		vec_deinit(&members);
+		RaiseError(exp , "Couldn't find member %s.",name);
+		vec_push(&Compiler.valueStack, VALUE_INT(0));
+		return;
+	      }
+	    }
+	    vec_deinit(&members);
+	    vec_push(&Compiler.valueStack, VALUE_INT(offset));
+	    return;
+	  }
+	}
+	vec_deinit(&members);
+	
+      }
         AST *conv =ConvertMembersToPtrs(exp);
         __CompileAST(conv);
         return;
@@ -4572,7 +4631,8 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
             if(var->isGlobal) {
               //Continue as normal
             } else {
-              vec_push(&Compiler.valueStack, VALUE_INT(var->frameOffset));
+              vec_push(&Compiler.valueStack, VALUE_INT(Compiler.frameOffset+var->frameOffset));
+	      return;
             }
           }
           if(!var) {
@@ -5652,16 +5712,24 @@ CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args) {
     vec_init(&Compiler.breakops); //Freed
     map_init(&Compiler.labels); //Freed
     map_init(&Compiler.labelRefs); //Freed
+    if(locals!=&Compiler.locals)
     map_init(&Compiler.locals); //Freed
-    vec_foreach(&args, arg, iter) {
-        map_set(locals,arg->name,CloneVariable(arg));
-    }
+    int assign_offs=0;
     //Find noregs
-    ScanAST(exp,__ScanForAddrofs,locals);
+    if(!locals) { 
+      locals=&Compiler.locals;
+      vec_foreach(&args, arg, iter) {
+        map_set(locals,arg->name,CloneVariable(arg));
+      }
+      ScanAST(exp,__ScanForAddrofs,&Compiler.locals);
+      assign_offs=1;
+    } else {
+      Compiler.locals=*locals;
+    }
     map_CVariable_t dbgNoregs;
     if(Compiler.debugMode)
         map_init(&dbgNoregs);
-    if(locals) {
+    if(assign_offs) {
         //Compute frame layout
         map_iter_t liter=map_iter(locals);
         const char *_var;
@@ -5699,7 +5767,8 @@ noreg:
     jit_prolog(Compiler.JIT, &funcptr);
     Compiler.tmpFltRegStart=freg;
     Compiler.tmpIntRegStart=ireg;
-    Compiler.frameOffset=jit_allocai(Compiler.JIT, frameSize);
+    if(assign_offs)
+      Compiler.frameOffset=jit_allocai(Compiler.JIT, frameSize);
     //Load function arguments
     CVariable *var;
     int argc;
@@ -6344,7 +6413,7 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
         argv->type=CreatePtrType(argc->type);
         vec_push(&args2, argv);
     }
-    CFunction *f=CompileAST(&Compiler.locals, body, args2);
+    CFunction *f=CompileAST(NULL, body, args2);
     Assembler.active=1;
     ApplyPatches();
     Assembler.active=0;
@@ -6369,7 +6438,7 @@ void RunStatement(AST *s) {
     AST *tnode =CreateTypeNode(t);
     Compiler.returnType=t;
     int oldflag=Compiler.errorFlag;
-    CFunction *stmt=CompileAST(&locals,s,empty);
+    CFunction *stmt=CompileAST(NULL,s,empty);
     if(stmt&&!Compiler.errorFlag&&!Compiler.tagsFile) {
       GC_Disable();
       #ifndef TARGET_WIN32

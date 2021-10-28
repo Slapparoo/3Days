@@ -250,12 +250,12 @@ s:
   if (offset) {
     if (sib->asmAddr.disp) {
       Compiler.addrofFrameoffsetMode = 1;
-      sib->asmAddr.disp += EvaluateInt(offset, EVAL_INT_F_PRESERVE_LOCALS);
+      sib->asmAddr.disp = offset;
       Compiler.addrofFrameoffsetMode = 0;
       ReleaseAST(offset);
     } else {
       Compiler.addrofFrameoffsetMode = 1;
-      sib->asmAddr.disp = CreateI64(EvaluateInt(offset, EVAL_INT_F_PRESERVE_LOCALS));
+      sib->asmAddr.disp = offset;
       Compiler.addrofFrameoffsetMode = 0;
     }
   }
