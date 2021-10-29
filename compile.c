@@ -3469,6 +3469,11 @@ static void ___CompileAST(AST *exp) {
     switch (exp->type) {
     case AST_ASM_BLK: {
       Assembler.active=1;
+      //If in global scope,jump past assembly code
+      struct jit_op *jmp=NULL;
+      if(!Compiler.inFunction) {
+	jmp=jit_jmpi(Compiler.JIT, (jit_value)NULL);
+      }
       AST *s;int iter;
       vec_foreach(&exp->stmts,s,iter) {
 	__CompileAST(s);
@@ -3476,6 +3481,8 @@ static void ___CompileAST(AST *exp) {
       }
       vec_push(&Compiler.valueStack,VALUE_INT(0));
       Assembler.active=0;
+      
+      if(jmp) jit_patch(Compiler.JIT, jmp);
       break;
     }
     case AST_ASM_OPCODE: {
