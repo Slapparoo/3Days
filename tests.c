@@ -150,7 +150,7 @@ static void GenerateBinopTest(int64_t r,int64_t a,int64_t b,int type,CType *rtyp
                 vec_CVariable_t unused;
                 vec_init(&unused);
                 Compiler.returnType=rtype;
-                CFunction *f=CompileAST(&locals, stmts, unused);
+                CFunction *f=CompileAST(&locals, stmts, unused,C_AST_FRAME_OFF_DFT);
                 if(IsI64(rtype)) {
                     assert(((int64_t(*)())f->funcptr)(0)==r);
                 } else if(IsF64(rtype)) {
@@ -168,7 +168,7 @@ static void GenerateBinopTest(int64_t r,int64_t a,int64_t b,int type,CType *rtyp
         vec_CVariable_t unused;
         vec_init(&unused);
         Compiler.returnType=CreatePrimType(TYPE_I64);
-        CFunction *f=CompileAST(&locals, CreateReturn(CreateBinop(CreateI64(a), CreateI64(b), type)), unused);
+        CFunction *f=CompileAST(&locals, CreateReturn(CreateBinop(CreateI64(a), CreateI64(b), type)), unused,C_AST_FRAME_OFF_DFT);
         assert(((int64_t(*)())f->funcptr)(0)==r);
         switch(type) {
         case AST_ADD:
@@ -176,7 +176,7 @@ static void GenerateBinopTest(int64_t r,int64_t a,int64_t b,int type,CType *rtyp
         case AST_DIV:
         case AST_MUL:
             Compiler.returnType=CreatePrimType(TYPE_F64);
-            f=CompileAST(&locals, CreateReturn(CreateBinop(CreateF64(a), CreateF64(b), type)), unused);
+            f=CompileAST(&locals, CreateReturn(CreateBinop(CreateF64(a), CreateF64(b), type)), unused,C_AST_FRAME_OFF_DFT);
             double ret=((double(*)())f->funcptr)(0);
             assert(r+.3>ret&&ret>r-.3);
         }
@@ -224,7 +224,7 @@ static void GenerateUnopAssignTest(int64_t pre_r,int64_t post_r,int64_t a,int ty
         vec_CVariable_t unused;
         vec_init(&unused);
         Compiler.returnType=t;
-        CFunction *f=CompileAST(&locals, stmts, unused);
+        CFunction *f=CompileAST(&locals, stmts, unused,C_AST_FRAME_OFF_DFT);
         if(IsI64(t)) {
             assert(((int64_t(*)())f->funcptr)(0)==pre_r);
             assert(globalptri==post_r);
@@ -272,7 +272,7 @@ static void GenerateUnopTest(int64_t r,int64_t a,int type,CType *rtype,CType *at
             vec_CVariable_t unused;
             vec_init(&unused);
             Compiler.returnType=rtype;
-            CFunction *f=CompileAST(&locals, stmts, unused);
+            CFunction *f=CompileAST(&locals, stmts, unused,C_AST_FRAME_OFF_DFT);
             if(IsI64(rtype)) {
                 assert(((int64_t(*)())f->funcptr)(0)==r);
 
@@ -320,7 +320,7 @@ static void GenerateRangeTests(CType *atype,CType *btype,CType *ctype) {
     map_init(&locs); \
     vec_CVariable_t unused; \
     vec_init(&unused); \
-    CFunction *f=CompileAST(&locs,stmts,unused); \
+    CFunction *f=CompileAST(&locs,stmts,unused,C_AST_FRAME_OFF_DFT); \
     assert(((uint64_t(*)())f->funcptr)()==res); \
   }
     TEST(1,1,2,3);
@@ -352,7 +352,7 @@ void AssignModifyTests(int64_t r,int64_t a,int64_t b,int type,CType *rtype,CType
             vec_CVariable_t unused;
             vec_init(&unused);
             Compiler.returnType=rtype;
-            CFunction *f=CompileAST(&locals,stmts,unused);
+            CFunction *f=CompileAST(&locals,stmts,unused,C_AST_FRAME_OFF_DFT);
             if(IsI64(rtype)) {
                 assert(((int64_t(*)())f->funcptr)(0)==r);
             } else if(IsF64(rtype)) {

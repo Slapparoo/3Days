@@ -654,6 +654,7 @@ typedef struct {
     struct AST *lastLabel;
     //Used for seperating local labels between globals,see LOCAL_LAB_FMT
     long globalLabelCount;
+  vec_AST_t __addedGlobalLabels;
 } CCompiler;
 #define LOCAL_LAB_FMT "@@(%l)[%s]"
 extern CCompiler Compiler;
@@ -712,7 +713,11 @@ void ReleaseValue(CValue *v);
 AST *CreateImplicitTypecast(AST *a,AST *to_type);
 AST *CreateExplicitTypecast(AST *a,AST *to_type);
 AST *CreateReturn(AST *exp);
-CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args);
+#define C_AST_FRAME_OFF_DFT -1
+/**
+ * Use C_AST_FRAME_OFF_DFT to compute the frame offset for you
+ */
+CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long frameOffset);
 CValue CloneValue(CValue v) ;
 AST *SetPosFromLex(AST *t);
 AST *SetPosFromOther(AST *dst,AST *src);
@@ -823,6 +828,7 @@ typedef struct COldFuncState {
     map_jit_label_t labels;
   map_void_t labelPtrs;
     map_vec_CLabelRef_t labelRefs;
+  vec_AST_t __addedGlobalLabels;
 } COldFuncState;
 COldFuncState EnterFunction(CType *returnType,AST *_args);
 COldFuncState CreateCompilerState();

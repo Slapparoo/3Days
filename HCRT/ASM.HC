@@ -447,6 +447,7 @@ class X64Mode {
     union {
         CReg *reg;
         class {
+	    CReg *segment;
             CReg *base;
             CReg *index;
             I64 scale;
@@ -476,7 +477,7 @@ X64Mode *X64ModeReg(CReg *reg) {
     return ret;
 }
 U8 *AsmError=NULL;
-X64Mode *X64ModeMem(I64 scale,CReg *index,CReg *base,I64 disp,I64 width=8) {
+X64Mode *X64ModeMem(CReg *segment,I64 scale,CReg *index,CReg *base,I64 disp,I64 width=8) {
     X64Mode *ret=MAlloc(sizeof(X64Mode));
     ret->type=X64O_MEM;
     ret->mem.base=base;
@@ -484,6 +485,7 @@ X64Mode *X64ModeMem(I64 scale,CReg *index,CReg *base,I64 disp,I64 width=8) {
     ret->mem.scale=scale;
     ret->mem.disp=disp;
     ret->mem.width=width;
+    ret->mem.segment=segment;
     return ret;
 }
 X64Mode *X64ModeImm(U64 imm) {
@@ -742,6 +744,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
     if(opc->type==HASH_TYPE_OPCODE_ALIAS)
         opc=opc(COpcodeAlias*)->opcode;
     I64 *sizes=MAlloc(sizeof(I64)*opc_cnt);
+    I64 *operand_sizes=MAlloc(sizeof(I64)*opc_cnt);
     I64 item=0;
     loop:
     X64Mode *mem=NULL;
@@ -783,25 +786,25 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
             case OPCA_RM8:
             mem=modes[arg];
             if(modes[arg]->type==X64O_MEM)
-                if(modes[arg]->mem.width==1)
+                if(modes[arg]->mem.width==1||!modes[arg]->mem.width)
                     goto pass;
             goto r8;
             case OPCA_RM16:
             mem=modes[arg];
             if(modes[arg]->type==X64O_MEM)
-                if(modes[arg]->mem.width==2)
+                if(modes[arg]->mem.width==2||!modes[arg]->mem.width)
                     goto pass;
             goto r16;
             case OPCA_RM32:
             mem=modes[arg];
             if(modes[arg]->type==X64O_MEM)
-                if(modes[arg]->mem.width==4)
+                if(modes[arg]->mem.width==4||!modes[arg]->mem.width)
                     goto pass;
             goto r32;
             case OPCA_RM64:
             mem=modes[arg];
             if(modes[arg]->type==X64O_MEM)
-                if(modes[arg]->mem.width==8)
+                if(modes[arg]->mem.width==8||!modes[arg]->mem.width)
                     goto pass;
             goto r64;
             case OPCA_IMM8:
@@ -820,7 +823,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
                     goto pass;
             goto fail;
             case OPCA_IMM64:
-            if(modes[arg]->type=X64O_IMM)
+            if(modes[arg]->type==X64O_IMM)
                 if(X64ImmSize(modes[arg]->imm)<=8)
                     goto pass;
             goto fail;
@@ -885,25 +888,25 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
             case OPCA_M8:
             mem=modes[arg];
             if(modes[arg]->type==X64O_MEM)
-                if(modes[arg]->mem.width==1)
+                if(modes[arg]->mem.width==1||!modes[arg]->mem.width)
                     goto pass;
             goto fail;
             case OPCA_M16:
             mem=modes[arg];
             if(modes[arg]->type==X64O_MEM)
-                if(modes[arg]->mem.width==2)
+                if(modes[arg]->mem.width==2||!modes[arg]->mem.width)
                     goto pass;
             goto fail;
             case OPCA_M32:
             mem=modes[arg];
             if(modes[arg]->type==X64O_MEM)
-                if(modes[arg]->mem.width==4)
+                if(modes[arg]->mem.width==4||!modes[arg]->mem.width)
                     goto pass;
             goto fail;
             case OPCA_M64:
             mem=modes[arg];
             if(modes[arg]->type==X64O_MEM)
-                if(modes[arg]->mem.width==8)
+                if(modes[arg]->mem.width==8||!modes[arg]->mem.width)
                     goto pass;
             goto fail;
             case OPCA_STI:
@@ -1088,6 +1091,23 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
     U8 opcadd[16];
     MemNCpy(opcadd,opc->bytes,opc->bcnt);
     opcadd[opc->bcnt-1]+=add;
+    //Segment overide
+    if(mem) {
+      if(mem->type==X64O_MEM&&mem->mem.segment){
+	Debugger;
+	if(mem->mem.segment==GetRegister("CS")) *endptr++=0x2e;
+	else if(mem->mem.segment==GetRegister("SS")) *endptr++=0x36;
+	else if(mem->mem.segment==GetRegister("DS")) *endptr++=0x3e;
+	else if(mem->mem.segment==GetRegister("ES")) *endptr++=0x26;
+	else if(mem->mem.segment==GetRegister("FS")) *endptr++=0x64;
+	else if(mem->mem.segment==GetRegister("GS")) *endptr++=0x65;
+	else {
+	  AsmError="Invalid segment register.";
+	  throw('segment');
+	}
+      }
+    }
+    
     //Operand size
     if(opc->flags&OPC_F_16) *endptr++=0x66;
     //Address size
@@ -1160,6 +1180,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
     if(ret_after_encode) {
 	return endptr;
     }
+    operand_sizes[item]=op_sz;
     sizes[item]=endptr-buffer;
     nextop:
     opc=opc->next_op;
@@ -1171,9 +1192,17 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
     opc=HashFind(name,opcodes);
     if(opc->type==HASH_TYPE_OPCODE_ALIAS)
         opc=opc(COpcodeAlias*)->opcode;
+    I64 iter=0,min=-1,max=0;
+    for(iter=0;iter!=item;iter++,opc=opc->next_op) {
+      max=MaxI64(operand_sizes[iter],max);
+    }
+    opc=HashFind(name,opcodes);
+    if(opc->type==HASH_TYPE_OPCODE_ALIAS)
+        opc=opc(COpcodeAlias*)->opcode;
     COpcode *finalop=NULL;
-    I64 iter=0,min=-1;
-    for(;iter!=item;iter++,opc=opc->next_op) {
+    for(iter=0;iter!=item;iter++,opc=opc->next_op) {
+      //Eliminate out canidates that are below the maximum operand size
+      if(operand_sizes[iter]<max) sizes[iter]=-1;
         if(sizes[iter]!=-1) {
             if(min==-1) goto accept;
             if(sizes[iter]<sizes[min]) {
@@ -1183,11 +1212,11 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
             }
         }
     }
+    Free(sizes),Free(operand_sizes);
     if(min==-1) {
       AsmError="Invalid opcode usage.";
       throw('asm');
     }
-    Free(sizes);
     if(ip) {
         opc=finalop;
         endptr=ip;

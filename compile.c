@@ -24,6 +24,7 @@ COldFuncState CreateCompilerState() {
     old.labels=Compiler.labels;
     old.labelRefs=Compiler.labelRefs;
     old.labelPtrs=Compiler.labelPtrs;
+    old.__addedGlobalLabels=Compiler.__addedGlobalLabels;
     return old;
 }
 void RestoreCompilerState(COldFuncState old) {
@@ -42,7 +43,7 @@ void RestoreCompilerState(COldFuncState old) {
     Compiler.labelRefs=old.labelRefs;
     Compiler.labelPtrs=old.labelPtrs;
     Compiler.asmPatches=old.asmPatches;
-    
+    Compiler.__addedGlobalLabels=old.__addedGlobalLabels;
 }
 static int IsControlNode(AST *node) {
     switch(node->type) {
@@ -853,7 +854,7 @@ double EvaluateF64(AST *exp) {
     vec_CVariable_t args;
     vec_init(&args);
     Compiler.returnType=CreatePrimType(TYPE_F64);
-    CFunction *f=CompileAST(NULL, ret, args);
+    CFunction *f=CompileAST(NULL, ret, args,C_AST_FRAME_OFF_DFT);
     ReleaseType(Compiler.returnType);
     GC_Disable();
     #ifndef TARGET_WIN32
@@ -879,7 +880,7 @@ int64_t EvaluateInt(AST *exp,int flags) {
     if(flags&EVAL_INT_F_PRESERVE_LOCALS)
       locals=&Compiler.locals;
     Compiler.returnType=CreatePrimType(TYPE_I64);
-    CFunction *f=CompileAST(locals, ret, args);
+    CFunction *f=CompileAST(locals, ret, args,Compiler.frameOffset);
     ReleaseType(Compiler.returnType);
     vec_deinit(&args);
     GC_Disable();
@@ -1076,7 +1077,7 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
                     vec_init(&empty);
                     COldFuncState olds=CreateCompilerState();
                     Compiler.returnType=decl.finalType;
-                    CFunction *stmt=CompileAST(NULL,ret,empty);
+                    CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT);
                     RestoreCompilerState(olds);
                     vec_deinit(&empty);
 		    GC_Disable();
@@ -2551,9 +2552,13 @@ CType *__AssignTypeToNode(AST *node) {
             ret=CreatePrimType(TYPE_BOOL);
         } else if(node->type==AST_ADDROF) {
             if(node->unopArg->type==AST_NAME) {
-              //AVOID IMPLCIT FUNCTION CALL
-              CVariable *var =GetVariable(node->unopArg->name);
+	      CVariable *var =GetVariable(node->unopArg->name);
               if(!var) return CreatePrimType(TYPE_I64);
+	      //IF in get-frame-address mode for assembler,return an I64 instead of a pointer
+	      if(Compiler.addrofFrameoffsetMode) {
+		if(!var->isGlobal) return CreatePrimType(TYPE_I64);
+	      }
+              //AVOID IMPLCIT FUNCTION CALL
               return CreatePtrType(var->type);
             }
             CType *t =AssignTypeToNode(node->unopArg);
@@ -5538,6 +5543,7 @@ reglabrefs:
 	 map_set(&Compiler.globals,lab,exp2);
 	 //Resolve
       vec_push(&Compiler.valueStack,VALUE_INT(0));
+      vec_push(&Compiler.__addedGlobalLabels, exp);
       return;
     }
     default:
@@ -5699,7 +5705,7 @@ static void Blank() {
 /**
  * Expression,function args(CVariable *) are put in ...(terminated with NULL)
  */
-CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args) {
+CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long frameOffset) {
     /**
      * R(0)==accmulator
      * R(1)==Dest ptr
@@ -5767,8 +5773,10 @@ noreg:
     jit_prolog(Compiler.JIT, &funcptr);
     Compiler.tmpFltRegStart=freg;
     Compiler.tmpIntRegStart=ireg;
-    if(assign_offs)
+    if(C_AST_FRAME_OFF_DFT==frameOffset)
       Compiler.frameOffset=jit_allocai(Compiler.JIT, frameSize);
+    else
+      Compiler.frameOffset=frameOffset;
     //Load function arguments
     CVariable *var;
     int argc;
@@ -6413,10 +6421,19 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
         argv->type=CreatePtrType(argc->type);
         vec_push(&args2, argv);
     }
-    CFunction *f=CompileAST(NULL, body, args2);
+    CFunction *f=CompileAST(NULL, body, args2,C_AST_FRAME_OFF_DFT);
     Assembler.active=1;
-    ApplyPatches();
+    if(!Compiler.errorFlag) ApplyPatches();
     Assembler.active=0;
+    {
+      //Assign func to exported labels to make sure the garbage collector doesnt free the function(usefull for global unnamed "functions" aka global statements)
+      int iter;
+      AST *lab;
+      vec_foreach(&Compiler.__addedGlobalLabels, lab, iter) {
+	map_get(&Compiler.globals, lab->labelNode->name)[0]->func=f;
+      }
+      vec_deinit(&Compiler.__addedGlobalLabels);
+    }
     if(name)
         f->name=strdup(name->name);
     LeaveFunction(oldstate);
@@ -6438,7 +6455,19 @@ void RunStatement(AST *s) {
     AST *tnode =CreateTypeNode(t);
     Compiler.returnType=t;
     int oldflag=Compiler.errorFlag;
-    CFunction *stmt=CompileAST(NULL,s,empty);
+    CFunction *stmt=CompileAST(NULL,s,empty,C_AST_FRAME_OFF_DFT);
+    int oldaa=Assembler.active;
+    Assembler.active=1;
+    {
+      //Assign func to exported labels to make sure the garbage collector doesnt free the function(usefull for global unnamed "functions" aka global statements)
+      int iter;
+      AST *lab;
+      vec_foreach(&Compiler.__addedGlobalLabels, lab, iter) {
+	map_get(&Compiler.globals, lab->labelNode->name)[0]->func=stmt;
+      }
+      vec_deinit(&Compiler.__addedGlobalLabels);
+    }
+    Assembler.active=oldaa;
     if(stmt&&!Compiler.errorFlag&&!Compiler.tagsFile) {
       GC_Disable();
       #ifndef TARGET_WIN32

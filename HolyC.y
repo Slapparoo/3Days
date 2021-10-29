@@ -83,13 +83,17 @@ sib_d[r]: sib_ib[s] SUB[sb] expr[e] {
   $r=AppendToSIB($s,NULL,NULL,$e);
   ReleaseAST($sb);
 };
-sib[r]: LEFT_SQAURE[lb] sib_d[sib2] RIGHT_SQAURE[rb] {
+_sib[r]: LEFT_SQAURE[lb] sib_d[sib2] RIGHT_SQAURE[rb] {
   ReleaseAST($lb),ReleaseAST($rb);
   $r=$sib2;
 };
+sib:_sib;
+sib[r]: _expr[disp] _sib[s] {
+  $r=AppendToSIB($s,NULL,NULL,$disp);
+ };
 opc_operand: sib;
 opc_operand: REGISTER;
-opc_operand: expr;
+opc_operand: _expr;
 opc_operand: TYPENAME[tn] sib[s] {
   $$=$s;
   CType *t=*map_get(&Compiler.types,$tn->name);
@@ -102,7 +106,7 @@ opc_operand: TYPENAME[tn] REGISTER[seg] COLON sib[s] {
   $$=$s;
 }
 opc_operand: opc_operand[r] COLON[c] sib[s] {
-  if($r->type!=AST_ASM_REG) RaiseError($c,"Expected register");
+  if($r->type!=AST_ASM_REG) RaiseError($c,"Expected register.");
   else {
     $s->asmAddr.segment=$r;
   }
@@ -212,6 +216,17 @@ expr1[r]: LEFT_PAREN[un1] expr_comma[e] RIGHT_PAREN[un2] {
 }
 
 expr2[r]: expr1;
+/**
+ * Special,in assmebler you can access class offsets with tpyename.member
+ */
+expr2[r]: TYPENAME[e] DOT[p] NAME[n] {
+  $r=SOT(CreateMemberAccess($e,$n),$p);
+  ReleaseAST($p);
+};
+expr2[r]: TYPENAME[e] ARROW[p] NAME[n] {
+  $r=SOT(CreateMemberAccess($e,$n),$p);
+  ReleaseAST($p);
+};
 expr2[r]: expr2[e] DOT[p] NAME[n] {
   $r=SOT(CreateMemberAccess($e,$n),$p);
   ReleaseAST($p);
@@ -1204,6 +1219,263 @@ global_stmt[r]: DBG expr_comma[s] {
   YYACCEPT;
   $r=NULL;
 };
+
+/**
+ * This section is for expressions without array index,usefull for I64 disp[addr]
+ */
+_expr0[r]: FLOAT {$r=SLE($1);};
+_expr0[r]: INT {$r=SLE($1);};
+_expr0[r]: CHAR {$r=SLE($1);};
+_expr0[r]: STRING {$r=SLE($1);};
+_expr0[r]: LASTCLASS {
+  $r=SLE($1);
+};
+_expr0[r]: NAME {
+  $r=SLE($1);
+};
+_expr1: _expr0;
+_expr1[r]: LEFT_PAREN[un1] expr_comma[e] RIGHT_PAREN[un2] {
+  $r=$e;
+  ReleaseAST($un1),ReleaseAST($un2);
+}
+_expr2: _expr1;
+_expr2[r]:TYPENAME[e] DOT[p] NAME[n] {
+  $r=SOT(CreateMemberAccess($e,$n),$p);
+  ReleaseAST($p);
+};
+_expr2[r]: TYPENAME[e] ARROW[p] NAME[n] {
+  $r=SOT(CreateMemberAccess($e,$n),$p);
+  ReleaseAST($p);
+};
+_expr2[r]: _expr2[e] DOT[p] NAME[n] {
+  $r=SOT(CreateMemberAccess($e,$n),$p);
+  ReleaseAST($p);
+};
+_expr2[r]: _expr2[e] ARROW[p] NAME[n] {
+  $r=SOT(CreateMemberAccess($e,$n),$p);
+  ReleaseAST($p);
+};
+_expr2[r]: _expr2[e] DEC[p] {
+  $r=SOT(CreateUnop($e,AST_POST_DEC),$p);
+  ReleaseAST($p);
+};
+_expr2[r]: _expr2[e] INC[p] {
+  $r=SOT(CreateUnop($e,AST_POST_INC),$p);
+  ReleaseAST($p);
+};
+_expr2[r]: _expr2[f] LEFT_PAREN[un1] callargs[e] RIGHT_PAREN[un2] {
+  $r=SOT(CreateFuncCall($f,$e),$f);
+  ReleaseAST($un1),ReleaseAST($un2);
+};
+_expr2[r]: _expr2[f] LEFT_PAREN[un1] primtype0[t] RIGHT_PAREN[un2] {
+  $r=CreateExplicitTypecast($f,$t);
+  ReleaseAST($un1),ReleaseAST($un2);
+};
+_expr3: _expr2;
+_expr3[r]: SIZEOF[p] NAME[e] {
+  $r=SOT(CreateSizeof($e),$p);
+  ReleaseAST($p);
+};
+_expr3[r]: SIZEOF[p] sizeof_type[n] {
+  $r=SOT(CreateSizeof($n),$p);
+  ReleaseAST($p);
+};
+_expr3[r]: SIZEOF[p] LEFT_PAREN[un1] expr_comma[e] RIGHT_PAREN[un2]  {
+  $r=SOT(CreateSizeof($e),$p);
+  ReleaseAST($p);
+  ReleaseAST($un1);
+  ReleaseAST($un2);
+};
+_expr3[r]: SIZEOF[p] LEFT_PAREN[un1] sizeof_type[e] RIGHT_PAREN[un2]  {
+  $r=SOT(CreateSizeof($e),$p);
+  ReleaseAST($p);
+  ReleaseAST($un1);
+  ReleaseAST($un2);
+};
+_expr3[r]: BAND[p] _expr3[e] {
+  $r=SOT(CreateUnop($e,AST_ADDROF),$p);
+  ReleaseAST($p);
+};
+_expr3[r]: MUL[p] _expr3[e] {
+  $r=SOT(CreateUnop($e,AST_DERREF),$p);
+  ReleaseAST($p);
+};
+//_expr3: _expr2 LEFT_PAREN type RIGHT_PAREN;
+_expr3[r]: DEC[p] _expr3[e] {
+  $r=SOT(CreateUnop($e,AST_PRE_DEC),$p);
+  ReleaseAST($p);
+};
+_expr3[r]: INC[p] _expr3[e] {
+  $r=SOT(CreateUnop($e,AST_PRE_INC),$p);
+  ReleaseAST($p);
+};
+_expr3[r]: ADD[p] _expr3[e] {
+  $r=SOT(CreateUnop($e,AST_POS),$p);
+  ReleaseAST($p);
+};
+_expr3[r]: SUB[p] _expr3[e] {
+  $r=SOT(CreateUnop($e,AST_NEG),$p);
+  ReleaseAST($p);
+};
+_expr3[r]: LNOT[p] _expr3[e] {
+  $r=SOT(CreateUnop($e,AST_LNOT),$p);
+  ReleaseAST($p);
+};
+_expr3[r]: BNOT[p] _expr3[e] {
+  $r=SOT(CreateUnop($e,AST_BNOT),$p);
+  ReleaseAST($p);
+};
+
+//
+_expr4[r]: _expr3;
+_expr4[r]: _expr4[a] POW[p] _expr4[b] {
+  $r=SOT(CreateBinop($a,$b,AST_POW),$p);
+  ReleaseAST($p);
+};
+_expr4[r]: _expr4[a] SHL[p] _expr4[b] {
+  $r=SOT(CreateBinop($a,$b,AST_SHL),$p);
+  ReleaseAST($p);
+};
+_expr4[r]: _expr4[a] SHR[p] _expr4[b] {
+  $r=SOT(CreateBinop($a,$b,AST_SHR),$p);
+  ReleaseAST($p);
+};
+
+_expr4_5[r]: _expr4;
+_expr4_5[r]: _expr4_5[a] MUL[p] _expr4_5[b] {
+  $r=SOT(CreateBinop($a,$b,AST_MUL),$p);
+  ReleaseAST($p);
+};
+_expr4_5[r]: _expr4_5[a] DIV[p] _expr4_5[b] {
+  $r=SOT(CreateBinop($a,$b,AST_DIV),$p);
+  ReleaseAST($p);
+};
+_expr4_5[r]: _expr4_5[a] MOD[p] _expr4_5[b] {
+  $r=SOT(CreateBinop($a,$b,AST_MOD),$p);
+  ReleaseAST($p);
+};
+
+_expr5[r]: _expr4_5;
+_expr5[r]: _expr5[a] BAND[p] _expr5[b] {
+  $r=SOT(CreateBinop($a,$b,AST_BAND),$p);
+  ReleaseAST($p);
+};
+
+_expr6[r]: _expr5;
+_expr6[r]: _expr6[a] BXOR[p] _expr6[b] {
+  $r=SOT(CreateBinop($a,$b,AST_BXOR),$p);
+  ReleaseAST($p);
+};
+
+_expr7[r]: _expr6;
+_expr7[r]: _expr7[a] BOR[p] _expr7[b] {
+  $r=SOT(CreateBinop($a,$b,AST_BOR),$p);
+  ReleaseAST($p);
+};
+
+_expr8[r]: _expr7;
+_expr8[r]: _expr8[a] ADD[p] _expr8[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ADD),$p);
+  ReleaseAST($p);
+};
+_expr8[r]: _expr8[a] SUB[p] _expr8[b] {
+  $r=SOT(CreateBinop($a,$b,AST_SUB),$p);
+  ReleaseAST($p);
+};
+
+_expr9[r]: _expr8;
+_expr9[r]: _expr9[a] LT[p] _expr9[b] {
+  $r=SOT(AppendToRange($a,$b,AST_LT),$p);
+  ReleaseAST($p);
+};
+_expr9[r]: _expr9[a] GT[p] _expr9[b] {
+  $r=SOT(AppendToRange($a,$b,AST_GT),$p);
+  ReleaseAST($p);
+};
+_expr9[r]: _expr9[a] LE[p] _expr9[b] {
+  $r=SOT(AppendToRange($a,$b,AST_LE),$p);
+  ReleaseAST($p);
+};
+_expr9[r]: _expr9[a] GE[p] _expr9[b] {
+  $r=SOT(AppendToRange($a,$b,AST_GE),$p);
+  ReleaseAST($p);
+};
+
+_expr10: _expr9;
+_expr10[r]: _expr10[a] EQ[p] _expr10[b] {
+  $r=SOT(CreateBinop($a,$b,AST_EQ),$p);
+  ReleaseAST($p);
+};
+_expr10[r]: _expr10[a] NE[p] _expr10[b] {
+  $r=SOT(CreateBinop($a,$b,AST_NE),$p);
+  ReleaseAST($p);
+};
+
+_expr11: _expr10;
+_expr11[r]: _expr11[a] LAND[p] _expr11[b] {
+  $r=SOT(CreateBinop($a,$b,AST_LAND),$p);
+  ReleaseAST($p);
+};
+
+_expr12: _expr11;
+_expr12[r]: _expr12[a] LXOR[p] _expr12[b] {
+  $r=SOT(CreateBinop($a,$b,AST_LXOR),$p);
+  ReleaseAST($p);
+};
+
+_expr13: _expr12;
+_expr13[r]: _expr13[a] LOR[p] _expr13[b] {
+  $r=SOT(CreateBinop($a,$b,AST_LOR),$p);
+  ReleaseAST($p);
+};
+
+_expr14: _expr13;
+_expr14[r]: _expr14[a] ASSIGN[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN),$p);
+  ReleaseAST($p);
+};
+_expr14[r]: _expr14[a] EQ_SHL[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN_SHL),$p);
+  ReleaseAST($p);
+};
+_expr14[r]: _expr14[a] EQ_SHR[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN_SHR),$p);
+  ReleaseAST($p);
+};
+_expr14[r]: _expr14[a] EQ_MUL[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN_MUL),$p);
+  ReleaseAST($p);
+};
+_expr14[r]: _expr14[a] EQ_DIV[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN_DIV),$p);
+  ReleaseAST($p);
+};
+_expr14[r]: _expr14[a] EQ_MOD[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN_MOD),$p);
+  ReleaseAST($p);
+};
+_expr14[r]: _expr14[a] EQ_BAND[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN_BAND),$p);
+  ReleaseAST($p);
+};
+_expr14[r]: _expr14[a] EQ_BXOR[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN_BXOR),$p);
+  ReleaseAST($p);
+};
+_expr14[r]: _expr14[a] EQ_BOR[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN_BOR),$p);
+  ReleaseAST($p);
+};
+_expr14[r]: _expr14[a] EQ_ADD[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN_ADD),$p);
+  ReleaseAST($p);
+};
+_expr14[r]: _expr14[a] EQ_SUB[p] _expr14[b] {
+  $r=SOT(CreateBinop($a,$b,AST_ASSIGN_SUB),$p);
+  ReleaseAST($p);
+};
+_expr:_expr14;
+
 %%
 static int code;
 int yylex() {
@@ -1227,7 +1499,7 @@ static void __IsTrue(CFuncInfo *dummy1,AST *node,void *fp) {
   vec_init(&args);
   Compiler.returnType=rtype;
   AST *retn =CreateReturn(node);
-  CFunction *f=CompileAST(NULL,retn,args);
+  CFunction *f=CompileAST(NULL,retn,args,C_AST_FRAME_OFF_DFT);
   int ret;
   if(IsF64(rtype)) {
     ret=0!=((double(*)())f->funcptr)();

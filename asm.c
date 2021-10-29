@@ -15,7 +15,16 @@ static int ExprRefsLabel(AST* a) {
 }
 void* EvalLabelExpr(AST* a) {
   COldFuncState old = CreateCompilerState();
+  map_CVariable_t oldlocals=Compiler.locals;
   map_init(&Compiler.locals);
+  {
+    //Prepare old local variables 
+    const char* key;
+    map_iter_t iter = map_iter(&oldlocals);
+    while (key = map_next(&oldlocals, &iter)) {
+      map_set(&Compiler.locals, key, *map_get(&oldlocals, key));
+    }
+  }
   CType* u8p = CreatePtrType(CreatePrimType(TYPE_U8));
   Compiler.returnType = u8p;
   //Prepare local labels
@@ -35,10 +44,12 @@ void* EvalLabelExpr(AST* a) {
   Compiler.JIT = jit_init();
   void* (*fptr)() = NULL;
   jit_prolog(Compiler.JIT, &fptr);
-  int olda = Assembler.active;
+  int olda = Assembler.active,oldf=Compiler.addrofFrameoffsetMode;
   //Compile will recognize assembler imports if active
   Assembler.active = 1;
+  Compiler.addrofFrameoffsetMode=1;
   __CompileAST(CreateReturn(a));
+  Compiler.addrofFrameoffsetMode=oldf;
   Assembler.active = olda;
   jit_generate_code(Compiler.JIT,  NULL);
   iter = map_iter(&Compiler.labelPtrs);
@@ -80,10 +91,16 @@ void* AST2X64Mode(AST* a, int64_t* lab_offset) {
     int64_t disp = 0;
     Compiler.addrofFrameoffsetMode = 1;
 
-    if (a->asmAddr.disp) disp = EvaluateInt(a->asmAddr.disp, EVAL_INT_F_PRESERVE_LOCALS);
+    if (a->asmAddr.disp) disp = INT32_MAX; //will be computed later
 
     Compiler.addrofFrameoffsetMode = 0;
-    return ((void* (*)(int64_t, void*, void*, int64_t, int64_t))toreg->func->funcptr)(scale, index, base, disp, a->asmAddr.width);
+
+    void *segment=NULL;
+    if(a->asmAddr.segment) {
+      segment=a->asmAddr.segment->asmReg;
+    }
+    //Segment scale,index,base,offset,width
+    return ((void* (*)(void*,int64_t, void*, void*, int64_t, int64_t))toreg->func->funcptr)(segment,scale, index, base, disp, a->asmAddr.width);
   } else if (a->type == AST_INT) {
     CVariable* toimm = *map_get(&Compiler.globals, "X64ModeImm");
     return ((void* (*)(int64_t))toimm->func->funcptr)(a->integer);
@@ -186,8 +203,10 @@ void AssembleOpcode(AST* at, char* name, vec_AST_t operands) {
       pat->isRel = 0;
       vec_foreach(&operands, a, iter)
 
-      if (a->type == AST_ASM_ADDR)
-        pat->exp = a;
+	if (a->type == AST_ASM_ADDR) {
+	  pat->exp = a->asmAddr.disp;
+	  if(!pat->exp) pat->exp=CreateI64(0);
+	}
 
       jit_dump_ptr(Compiler.JIT, &pat->ptr);
       jit_data_dword(Compiler.JIT, 0);
@@ -250,9 +269,8 @@ s:
   if (offset) {
     if (sib->asmAddr.disp) {
       Compiler.addrofFrameoffsetMode = 1;
-      sib->asmAddr.disp = offset;
+      sib->asmAddr.disp = CreateBinop(sib->asmAddr.disp, offset, AST_ADD);
       Compiler.addrofFrameoffsetMode = 0;
-      ReleaseAST(offset);
     } else {
       Compiler.addrofFrameoffsetMode = 1;
       sib->asmAddr.disp = offset;
