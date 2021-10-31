@@ -22,6 +22,7 @@ void TaintLabelsInExpr(AST* a) {
   ScanAST(a, __TaintLabels, NULL);
 }
 void* EvalLabelExpr(AST* a,LabelContext labContext) {
+  int err=0;
   COldFuncState old = CreateCompilerState();
   map_CVariable_t oldlocals=Compiler.locals;
   map_init(&Compiler.locals);
@@ -33,8 +34,8 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
       map_set(&Compiler.locals, key, *map_get(&oldlocals, key));
     }
   }
-  CType* u8p = CreatePtrType(CreatePrimType(TYPE_U8));
-  Compiler.returnType = u8p;
+  CType* i64 = CreatePrimType(TYPE_I64);
+  Compiler.returnType = i64;
   //Prepare local labels
   const char* key;
   map_iter_t iter = map_iter(&Compiler.labelPtrs);
@@ -43,7 +44,7 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
     long ul;
     if(!sscanf(key, LOCAL_LAB_FMT,&ul,buffer)) {
       CVariable* v = TD_MALLOC(sizeof(CVariable));
-      v->type = u8p;
+      v->type = i64;
       v->name = strdup(key);
       v->isGlobal = 1;
       v->linkage.type = LINK_NORMAL;
@@ -57,13 +58,15 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
     LabelContext ul;
     if(2==sscanf(key, LOCAL_LAB_FMT,&ul,buffer)) {
       if(ul!=labContext) continue;
+      char buffer2[258];
+      sprintf(buffer2, "@@%s", buffer);
       CVariable* v = TD_MALLOC(sizeof(CVariable));
-      v->type = u8p;
-      v->name = strdup(buffer);
+      v->type = i64;
+      v->name = strdup(buffer2);
       v->isGlobal = 1;
       v->linkage.type = LINK_NORMAL;
       v->linkage.globalPtr = map_get(&Compiler.labelPtrs, key);
-      map_set(&Compiler.locals, buffer, v);
+      map_set(&Compiler.locals, buffer2, v);
     }
   }
   
@@ -77,7 +80,10 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
   __CompileAST(CreateReturn(a));
   Compiler.addrofFrameoffsetMode=oldf;
   Assembler.active = olda;
-  if(Compiler.errorFlag) goto end;
+  if(Compiler.errorFlag) {
+    err=1;
+    goto end;
+  }
   jit_generate_code(Compiler.JIT,  NULL);
   iter = map_iter(&Compiler.labelPtrs);
 
@@ -92,6 +98,7 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
   jit_free(Compiler.JIT);
  end:
   RestoreCompilerState(old);
+  Compiler.errorFlag|=err;
   return ptr;
 }
 void* AST2X64Mode(AST* a, int64_t* lab_offset) {

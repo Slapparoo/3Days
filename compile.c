@@ -2712,7 +2712,7 @@ foundmem:
       //If assmbler is active,check for imports
       if(Assembler.active)
 	if(map_get(&Assembler.imports,node->name))
-	  return CreatePtrType(CreatePrimType(TYPE_U0));
+	  return CreatePrimType(TYPE_I64);
       CVariable *var;
         if(var=GetVariable(node->name)) {
             if(var->type->type==TYPE_FUNC)
@@ -5529,6 +5529,7 @@ reglabrefs:
             }
 	FUFFIL_LABEL_REFS();
 	    CLabel lab;
+	    lab.inAsmBlk=exp->inAsmBlk;
 	    lab.label=jit_get_label(Compiler.JIT);
 	    lab.context=Compiler.labelContext;
 	    map_set(&Compiler.labels,fmted,lab);
@@ -5552,6 +5553,7 @@ reglabrefs:
         } else if(!map_get(&Compiler.labels,fmted)) {
 	  FUFFIL_LABEL_REFS();
 	    CLabel lab2;
+	    lab2.inAsmBlk=exp->inAsmBlk;
 	    lab2.context=NextLabelContext();
 	    lab2.label=jit_get_label(Compiler.JIT);
             map_set(&Compiler.labels,fmted,lab2);
@@ -5569,6 +5571,7 @@ reglabrefs:
 	 if(Compiler.inFunction&&!map_get(&Compiler.labels,fmted)) {
 	   FUFFIL_LABEL_REFS(fmted);
 	   CLabel lab;
+	   lab.inAsmBlk=exp->inAsmBlk;
 	   lab.context=NextLabelContext();
 	   lab.label=jit_get_label(Compiler.JIT);
 	   map_set(&Compiler.labels,fmted,lab);
@@ -5933,8 +5936,10 @@ noreg:
       map_iter_t iter=map_iter(&Compiler.asmTainedLabels);
       while(key=map_next(&Compiler.asmTaintedLabels,&iter)) {
 	CLabel *lab;
-	if(lab=map_get(&Compiler.labels, key))
-	  jit_taint_label(Compiler.JIT, (jit_value)lab->label);
+	if(lab=map_get(&Compiler.labels, key)) {
+	  if(!lab->inAsmBlk)
+	    jit_taint_label(Compiler.JIT, (jit_value)lab->label);
+	}
       }
         jit_disable_optimization(curjit, JIT_OPT_JOIN_ADDMUL); //Seems to mess things up
         jit_generate_code(curjit,func);
@@ -6482,6 +6487,11 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
     }
     CFunction *f=CompileAST(NULL, body, args2,C_AST_FRAME_OFF_DFT);
     ApplyAsmPatchesAndFreeThem(f);
+    if(Compiler.errorFlag) {
+      ReleaseFunction(f);
+      LeaveFunction(oldstate);
+      return;
+    }
     if(name)
         f->name=strdup(name->name);
     LeaveFunction(oldstate);

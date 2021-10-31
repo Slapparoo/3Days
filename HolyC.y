@@ -130,14 +130,17 @@ opcode[r]: OPCODE[n] opc_operands[o] {
 };
 asm_blk_stmt[r]: NAME[n] DOUBLE_COLON[c] {
   $r=SOT(CreateExportedLabel($n),$n);
+  $r->inAsmBlk=1;
   ReleaseAST($c);
 }
 asm_blk_stmt[r]: NAME[n] COLON[c] {
   $r=SOT(CreateLabel($n),$n);
+  $r->inAsmBlk=1;
   ReleaseAST($c);
  }
 asm_blk_stmt[r]: DOUBLE_AT[aa] NAME[n] COLON[c] {
   $r=SOT(CreateLocalLabel($n),$aa);
+  $r->inAsmBlk=1;
   ReleaseAST($c),ReleaseAST($aa);
 }
 //asm_blk can only apear is asm blocks "asm {}"
@@ -194,6 +197,14 @@ asm_blk[r]: ASM[u1] LEFT_CURLY[u2] asm_blk_stmts[s] RIGHT_CURLY[u3] {
   ReleaseAST($u1),ReleaseAST($u2),ReleaseAST($u3);
 };
 //
+expr0[r]: DOUBLE_AT[d] NAME {
+  $r=SOT($2,$d);
+  char buffer[256];
+  sprintf(buffer,"@@%s",$r->name);
+  TD_FREE($r->name);
+  $r->name=strdup(buffer);
+  ReleaseAST($d);
+};
 expr0[r]: FLOAT {$r=SLE($1);};
 expr0[r]: INT {$r=SLE($1);};
 expr0[r]: CHAR {$r=SLE($1);};
@@ -1224,6 +1235,14 @@ global_stmt[r]: DBG expr_comma[s] {
 /**
  * This section is for expressions without array index,usefull for I64 disp[addr]
  */
+_expr0[r]: DOUBLE_AT[d] NAME {
+  $r=SOT($2,$d);
+  char buffer[256];
+  sprintf(buffer,"@@%s",$r->name);
+  TD_FREE($r->name);
+  $r->name=strdup(buffer);
+  ReleaseAST($d);
+};
 _expr0[r]: FLOAT {$r=SLE($1);};
 _expr0[r]: INT {$r=SLE($1);};
 _expr0[r]: CHAR {$r=SLE($1);};

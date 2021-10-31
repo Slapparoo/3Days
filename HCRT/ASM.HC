@@ -1093,8 +1093,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
     opcadd[opc->bcnt-1]+=add;
     //Segment overide
     if(mem) {
-      if(mem->type==X64O_MEM&&mem->mem.segment){
-	Debugger;
+      if(mem->type==X64O_MEM&&mem->mem.segment) {
 	if(mem->mem.segment==GetRegister("CS")) *endptr++=0x2e;
 	else if(mem->mem.segment==GetRegister("SS")) *endptr++=0x36;
 	else if(mem->mem.segment==GetRegister("DS")) *endptr++=0x3e;

@@ -405,8 +405,9 @@ typedef struct AST {
         //Local labels use LOCAL_LAB_FMT as the name,so be careful,see GetLabelReadableName(AST *t)
         char *name;
     };
-    long issynChecked:1;
-  long labelContext:31;
+  long issynChecked:1;
+  long inAsmBlk:1;
+  long labelContext:30;
     CType *type2;
     /**
      * From Lexer.filenames
@@ -620,6 +621,7 @@ typedef vec_t(CAsmPatch *) vec_CAsmPatchP_t;
 typedef struct {
   struct jit_label *label;
   LabelContext context;
+  unsigned long inAsmBlk:1; 
 } CLabel;
 typedef map_t(CLabel) map_CLabel_t;
 typedef struct {
