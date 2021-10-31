@@ -405,7 +405,8 @@ typedef struct AST {
         //Local labels use LOCAL_LAB_FMT as the name,so be careful,see GetLabelReadableName(AST *t)
         char *name;
     };
-    int issynChecked:1;
+    long issynChecked:1;
+  long labelContext:31;
     CType *type2;
     /**
      * From Lexer.filenames
@@ -607,14 +608,20 @@ typedef struct CLabelRef {
 } CLabelRef;
 typedef vec_t(CLabelRef) vec_CLabelRef_t;
 typedef map_t(vec_CLabelRef_t) map_vec_CLabelRef_t;
+typedef long LabelContext;
 typedef struct {
   unsigned int isRel:1;
   void *ptr;
   AST *exp;
   long width,rel_offset;
+  LabelContext context;
 } CAsmPatch;
 typedef vec_t(CAsmPatch *) vec_CAsmPatchP_t;
-
+typedef struct {
+  struct jit_label *label;
+  LabelContext context;
+} CLabel;
+typedef map_t(CLabel) map_CLabel_t;
 typedef struct {
   vec_CAsmPatchP_t asmPatches;
   vec_CVariable_t unlinkedImportVars;
@@ -640,7 +647,7 @@ typedef struct {
     int tmpFltRegStart;
     vec_CValue_t valueStack;
     vec_jit_op_t breakops;
-    map_jit_label_t labels;
+    map_CLabel_t labels;
   map_void_t labelPtrs;
   map_str_t strings;
   map_vec_CLabelRef_t labelRefs;
@@ -652,11 +659,12 @@ typedef struct {
     void *debugFramePtr;
     CType *lastclass;
     struct AST *lastLabel;
-    //Used for seperating local labels between globals,see LOCAL_LAB_FMT
-    long globalLabelCount;
   vec_AST_t __addedGlobalLabels;
+  //Will be filled with NULL if not defined yet 
+  map_jit_label_t asmTaintedLabels;
+  LabelContext labelContext;
 } CCompiler;
-#define LOCAL_LAB_FMT "@@(%l)[%s]"
+#define LOCAL_LAB_FMT "@@(%li):%s"
 extern CCompiler Compiler;
 
 typedef struct CLiveInfo {
@@ -825,10 +833,11 @@ typedef struct COldFuncState {
     int tmpFltRegStart;
     vec_CValue_t valueStack;
     vec_jit_op_t breakops;
-    map_jit_label_t labels;
+    map_CLabel_t labels;
   map_void_t labelPtrs;
     map_vec_CLabelRef_t labelRefs;
   vec_AST_t __addedGlobalLabels;
+  LabelContext labelContext;
 } COldFuncState;
 COldFuncState EnterFunction(CType *returnType,AST *_args);
 COldFuncState CreateCompilerState();
@@ -863,8 +872,15 @@ AST *CreateAsmAlign(AST *a,AST *fill);
 void LeaveAssembler();
 void EnterAssembler();
 void *GetGlobalPtr(CVariable *var);
-void *EvalLabelExpr(AST *a);
+void *EvalLabelExpr(AST *a,LabelContext context);
 struct ExceptFrame;
 struct ExceptFrame *EnterTry();
 void PopTryFrame();
 void ApplyPatches();
+void LeaveFunction(COldFuncState old);
+char *HashLabel(char *name,LabelContext context,int is_local);
+/** 
+ * This accounts for local labels
+ */
+char *ResolveLabelByName(char *label,LabelContext context);
+LabelContext NextLabelContext();

@@ -143,11 +143,11 @@ static inline int flw_analyze_op(struct jit * jit, jit_op * op, struct jit_func_
 		goto skip;
 	}
 
-	if (op->code == (JIT_JMP | REG)) { //YES
+	if (op->code == (JIT_JMP | REG)||(GET_OP(op)==JIT_END_ASM_BLK)) { //YES
 		jit_op *xop = func_info->first_op->next;
 		op->live_out = jit_set_new();
 		while (xop && (GET_OP(xop) != JIT_PROLOG)) {
-			if ((GET_OP(xop) == JIT_REF_CODE) || (GET_OP(xop) == JIT_DATA_REF_CODE)||(GET_OP(xop)==JIT_DATA_CODE_OFFSET)) {
+		  if ((GET_OP(xop) == JIT_TAINT_LABEL)||(GET_OP(xop) == JIT_REF_CODE) || (GET_OP(xop) == JIT_DATA_REF_CODE)||(GET_OP(xop)==JIT_DATA_CODE_OFFSET)) {
 				jit_set_addall(op->live_out, xop->jmp_addr->live_in);
 			}
 			xop = xop->next;
@@ -158,7 +158,7 @@ static inline int flw_analyze_op(struct jit * jit, jit_op * op, struct jit_func_
 	if (op->next) op->live_out = jit_set_clone(op->next->live_in); //YES
 	else op->live_out = jit_set_new();
 
-	if (op->jmp_addr && (GET_OP(op) != JIT_REF_CODE) && (GET_OP(op) != JIT_DATA_REF_CODE)&&(GET_OP(op)!=JIT_DATA_CODE_OFFSET)) //YES
+	if (op->jmp_addr && (GET_OP(op) != JIT_REF_CODE) && (GET_OP(op) != JIT_DATA_REF_CODE)&&(GET_OP(op)!=JIT_DATA_CODE_OFFSET)&&(GET_OP(op) != JIT_TAINT_LABEL)) //YES
 		jit_set_addall(op->live_out, op->jmp_addr->live_in);
 skip:
 

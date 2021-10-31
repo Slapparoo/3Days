@@ -7,6 +7,23 @@
 #ifdef TARGET_WIN32
 #include <memoryapi.h>
 #endif
+void ApplyAsmPatchesAndFreeThem(CFunction *func ) {
+  int oldaa=Assembler.active;int oldada=Compiler.addrofFrameoffsetMode;
+  Assembler.active=1;
+  Compiler.addrofFrameoffsetMode=1;
+  if(!Compiler.errorFlag) ApplyPatches();
+  {
+    //Assign func to exported labels to make sure the garbage collector doesnt free the function(usefull for global unnamed "functions" aka global statements)
+    int iter;
+    AST *lab;
+    vec_foreach(&Compiler.__addedGlobalLabels, lab, iter) {
+      map_get(&Compiler.globals, lab->labelNode->name)[0]->func=func;
+    }
+    vec_deinit(&Compiler.__addedGlobalLabels);
+  }
+  Compiler.addrofFrameoffsetMode=oldada;
+  Assembler.active=oldaa;
+}
 COldFuncState CreateCompilerState() {
     COldFuncState old;
     old.asmPatches=Compiler.asmPatches;
@@ -25,6 +42,7 @@ COldFuncState CreateCompilerState() {
     old.labelRefs=Compiler.labelRefs;
     old.labelPtrs=Compiler.labelPtrs;
     old.__addedGlobalLabels=Compiler.__addedGlobalLabels;
+    old.labelContext=Compiler.labelContext;
     return old;
 }
 void RestoreCompilerState(COldFuncState old) {
@@ -44,6 +62,7 @@ void RestoreCompilerState(COldFuncState old) {
     Compiler.labelPtrs=old.labelPtrs;
     Compiler.asmPatches=old.asmPatches;
     Compiler.__addedGlobalLabels=old.__addedGlobalLabels;
+    Compiler.labelContext=old.labelContext;
 }
 static int IsControlNode(AST *node) {
     switch(node->type) {
@@ -510,13 +529,7 @@ AST *CreateFor(AST *init,AST *cond,AST *next,AST*body) {
     return r;
 }
 char *GetLabelReadableName(AST *t) {
-  if(t->type==AST_LOCAL_LABEL) {
-    long discard;
-    char name[1024];
-    sscanf(t->name,LOCAL_LAB_FMT, &discard,name);
-    return strdup(name);
-  }
-  return strdup(t->name);
+  return strdup(t->labelNode->name);
 }
 AST *CreateLabel(AST *name) {
     AST *r=TD_CALLOC(1,sizeof(AST));
@@ -524,7 +537,7 @@ AST *CreateLabel(AST *name) {
     r->type=AST_LABEL;
     r->labelNode=name;
     Compiler.lastLabel=r;
-    Compiler.globalLabelCount++;
+    r->labelContext=NextLabelContext();
     return r;
 }
 AST *CreateTry(AST *try,AST *catch)  {
@@ -540,6 +553,7 @@ AST *CreateGoto(AST *name) {
     r->refCnt=1;
     r->type=AST_GOTO;
     r->labelNode=name;
+    r->labelContext=Compiler.labelContext;
     return r;
 }
 AST *CreateDo(AST *cond,AST *body) {
@@ -3474,6 +3488,9 @@ static void ___CompileAST(AST *exp) {
       if(!Compiler.inFunction) {
 	jmp=jit_jmpi(Compiler.JIT, (jit_value)NULL);
       }
+      //Taint the entry point to spill all registes
+      struct jit_label *lab=jit_get_label(Compiler.JIT);
+      jit_taint_label(Compiler.JIT, (jit_value)lab);
       AST *s;int iter;
       vec_foreach(&exp->stmts,s,iter) {
 	__CompileAST(s);
@@ -3481,6 +3498,7 @@ static void ___CompileAST(AST *exp) {
       }
       vec_push(&Compiler.valueStack,VALUE_INT(0));
       Assembler.active=0;
+      jit_end_asm_blk(Compiler.JIT);
       
       if(jmp) jit_patch(Compiler.JIT, jmp);
       break;
@@ -3518,7 +3536,7 @@ static void ___CompileAST(AST *exp) {
     case AST_ASM_DU16: {
         AST *d;int iter;
         vec_foreach(&exp->duData,d,iter) {
-	  int64_t v=(int64_t)EvalLabelExpr(d);
+	  int64_t v=(int64_t)EvalLabelExpr(d,exp->labelContext);
 	  jit_data_word(Compiler.JIT,v);
         }
         vec_push(&Compiler.valueStack,VALUE_INT(0));
@@ -3527,7 +3545,7 @@ static void ___CompileAST(AST *exp) {
     case AST_ASM_DU32: {
         AST *d;int iter;
         vec_foreach(&exp->duData,d,iter) {
-	  int64_t v=(int64_t)EvalLabelExpr(d);
+	  int64_t v=(int64_t)EvalLabelExpr(d,exp->labelContext);
 	  jit_data_dword(Compiler.JIT,v);
         }
         vec_push(&Compiler.valueStack,VALUE_INT(0));
@@ -3536,7 +3554,7 @@ static void ___CompileAST(AST *exp) {
     case AST_ASM_DU64: {
         AST *d;int iter;
         vec_foreach(&exp->duData,d,iter) {
-	  int64_t v=(int64_t)EvalLabelExpr(d);
+	  int64_t v=(int64_t)EvalLabelExpr(d,exp->labelContext);
 	  jit_data_qword(Compiler.JIT,v);
         }
         vec_push(&Compiler.valueStack,VALUE_INT(0));
@@ -3545,7 +3563,7 @@ static void ___CompileAST(AST *exp) {
     case AST_ASM_DU8: {
       AST *d;int iter;
       vec_foreach(&exp->duData, d, iter) {
-	int64_t v=(int64_t)EvalLabelExpr(d);
+	int64_t v=(int64_t)EvalLabelExpr(d,exp->labelContext);
 	jit_data_qword(Compiler.JIT,v);
       }
       vec_push(&Compiler.valueStack,VALUE_INT(0));
@@ -5466,6 +5484,7 @@ consec_loop:
     }
     case AST_GOTO: {
         char *lab=exp->labelNode->name;
+	lab=ResolveLabelByName(lab,exp->labelContext);
         if(!Compiler.inFunction) {
             RaiseError(exp,"No goto's in global scope.");
         } else if(!map_get(&Compiler.labels,lab)) {
@@ -5483,60 +5502,83 @@ reglabrefs:
                 goto reglabrefs;
             }
         } else if(map_get(&Compiler.labels,lab)) {
-            jit_jmpi(Compiler.JIT, (jit_value)*map_get(&Compiler.labels,lab));
+            jit_jmpi(Compiler.JIT, map_get(&Compiler.labels,lab)->label);
         }
+	TD_FREE(lab);
         //All nodes return a value on the stack
         vec_push(&Compiler.valueStack, VALUE_INT(0));
         break;
     }
-    case AST_LOCAL_LABEL:
-    case AST_LABEL: {
-        char *lab=exp->labelNode->name;
-        if(!Compiler.inFunction) {
+    case AST_LOCAL_LABEL: {
+      AST *name=exp->labelNode;
+      char *fmted=HashLabel(name->name,exp->labelContext, 1);
+      if(!Compiler.inFunction) {
             RaiseError(exp,"No labels in global scope.");
-        } else if(map_get(&Compiler.labels,lab)) {
+        } else if(map_get(&Compiler.labels,fmted)) {
+	  RaiseError(exp,"Repeat label \"%s\".",name->name);
+        } else if(!map_get(&Compiler.labels,fmted)) {
+#define FUFFIL_LABEL_REFS(fmted) \
+	vec_CLabelRef_t *ops=map_get(&Compiler.labelRefs,exp->labelNode->name); "Use raw name instead of formated name"; \
+            if(ops) { \
+                int iter; \
+                CLabelRef ref; \
+                vec_foreach(ops, ref, iter) \
+                jit_patch(Compiler.JIT,ref.op); \
+                vec_deinit(ops);\
+                map_remove(&Compiler.labelRefs, exp->labelNode->name); "Ditto";	\
+            }
+	FUFFIL_LABEL_REFS();
+	    CLabel lab;
+	    lab.label=jit_get_label(Compiler.JIT);
+	    lab.context=Compiler.labelContext;
+	    map_set(&Compiler.labels,fmted,lab);
+	    map_set(&Compiler.labelPtrs,fmted,NULL);
+	    jit_dump_ptr(Compiler.JIT,map_get(&Compiler.labelPtrs,fmted));
+        }
+      TD_FREE(fmted);
+      //All nodes return a value on the stack
+      vec_push(&Compiler.valueStack, VALUE_INT(0));
+      TD_FREE(fmted);
+      break;
+    }
+    case AST_LABEL: {
+      char *fmted=HashLabel(exp->labelNode->name,exp->labelContext,0);
+	if(!Compiler.inFunction) {
+	  RaiseError(exp,"No labels in global scope.");
+        } else if(map_get(&Compiler.labels,fmted)) {
 	  char *readable=GetLabelReadableName(exp->labelNode);
 	  RaiseError(exp,"Repeat label \"%s\".",readable);
 	  TD_FREE(readable);
-        } else if(!map_get(&Compiler.labels,lab)) {
-            vec_CLabelRef_t *ops=map_get(&Compiler.labelRefs,lab);
-            if(ops) {
-                int iter;
-                CLabelRef ref;
-                vec_foreach(ops, ref, iter)
-                jit_patch(Compiler.JIT,ref.op);
-                vec_deinit(ops);
-                map_remove(&Compiler.labelRefs, lab);
-            }
-            map_set(&Compiler.labels,lab,jit_get_label(Compiler.JIT));
-	    map_set(&Compiler.labelPtrs,lab,NULL);
-	    jit_dump_ptr(Compiler.JIT,map_get(&Compiler.labelPtrs,lab));
+        } else if(!map_get(&Compiler.labels,fmted)) {
+	  FUFFIL_LABEL_REFS();
+	    CLabel lab2;
+	    lab2.context=NextLabelContext();
+	    lab2.label=jit_get_label(Compiler.JIT);
+            map_set(&Compiler.labels,fmted,lab2);
+	    map_set(&Compiler.labelPtrs,fmted,NULL);
+	    jit_dump_ptr(Compiler.JIT,map_get(&Compiler.labelPtrs,fmted));
         }
 
         //All nodes return a value on the stack
         vec_push(&Compiler.valueStack, VALUE_INT(0));
-        break;
+	TD_FREE(fmted);
+	break;
     } 
     case AST_EXPORT_LABEL: {
-         char *lab=exp->labelNode->name;
-	 if(Compiler.inFunction&&!map_get(&Compiler.labels,lab)) {
-	   vec_CLabelRef_t *ops=map_get(&Compiler.labelRefs,lab);
-	   if(ops) {
-	     int iter;
-	     CLabelRef ref;
-	     vec_foreach(ops, ref, iter)
-                jit_patch(Compiler.JIT,ref.op);
-	     vec_deinit(ops);
-	     map_remove(&Compiler.labelRefs, lab);
-	   }
-	   map_set(&Compiler.labels,lab,jit_get_label(Compiler.JIT));
-	   map_set(&Compiler.labelPtrs,lab,NULL);
-	   jit_dump_ptr(Compiler.JIT,map_get(&Compiler.labelPtrs,lab));
+         char *fmted=HashLabel(exp->labelNode->name,exp->labelContext, 0);
+	 if(Compiler.inFunction&&!map_get(&Compiler.labels,fmted)) {
+	   FUFFIL_LABEL_REFS(fmted);
+	   CLabel lab;
+	   lab.context=NextLabelContext();
+	   lab.label=jit_get_label(Compiler.JIT);
+	   map_set(&Compiler.labels,fmted,lab);
+	   map_set(&Compiler.labelPtrs,fmted,NULL);
+	   jit_dump_ptr(Compiler.JIT,map_get(&Compiler.labelPtrs,fmted));
 	 }
 	 //Create a U0* that will point to the label
 	 CVariable *exp2=TD_MALLOC(sizeof(CVariable));
 	 exp2->isGlobal=1;
-	 exp2->name=strdup(lab);
+	 exp2->name=strdup(exp->labelNode->name);
 	 exp2->type=CreatePtrType(CreatePrimType(TYPE_U0));
 	 exp2->linkage.type=LINK_NORMAL;
 	 //POINTER to POINTER
@@ -5545,12 +5587,13 @@ reglabrefs:
 	 exp2->fn=strdup(exp->fn);
 	 exp2->line=exp->ln;
 	 CVariable **exist;
-	 if(exist=map_get(&Compiler.globals,lab))
+	 if(exist=map_get(&Compiler.globals,fmted))
 	   ReleaseVariable(*exist);
-	 map_set(&Compiler.globals,lab,exp2);
+	 map_set(&Compiler.globals,fmted,exp2);
 	 //Resolve
       vec_push(&Compiler.valueStack,VALUE_INT(0));
       vec_push(&Compiler.__addedGlobalLabels, exp);
+      TD_FREE(fmted);
       return;
     }
     default:
@@ -5728,6 +5771,7 @@ CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long
     if(locals!=&Compiler.locals)
     map_init(&Compiler.locals); //Freed
     int assign_offs=0;
+    int force_noregs=0;
     //Find noregs
     if(!locals) { 
       locals=&Compiler.locals;
@@ -5748,7 +5792,7 @@ CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long
         const char *_var;
         while((_var=map_next(locals,&liter))) {
             CVariable *var=*map_get(locals,_var);
-            if(var->isNoreg||Compiler.debugMode) {
+            if(var->isNoreg||Compiler.debugMode||force_noregs) {
 noreg:
                 if(Compiler.debugMode)
                     map_set(&dbgNoregs,var->name,CloneVariable(var));
@@ -5884,6 +5928,14 @@ noreg:
       }
     }
     if(!Compiler.errorFlag) {
+      //Taint labels
+      const char *key;
+      map_iter_t iter=map_iter(&Compiler.asmTainedLabels);
+      while(key=map_next(&Compiler.asmTaintedLabels,&iter)) {
+	CLabel *lab;
+	if(lab=map_get(&Compiler.labels, key))
+	  jit_taint_label(Compiler.JIT, (jit_value)lab->label);
+      }
         jit_disable_optimization(curjit, JIT_OPT_JOIN_ADDMUL); //Seems to mess things up
         jit_generate_code(curjit,func);
     }
@@ -5893,7 +5945,6 @@ noreg:
         funcptr=(void(*)(int64_t,...))Blank;
     }
     func->funcptr=funcptr;
-
     vec_deinit(&Compiler.valueStack);
     map_iter_t miter=map_iter(&Compiler.locals);
     const char *key;
@@ -6362,8 +6413,8 @@ CVariable *Import(CType *type,AST *name,char *importname) {
     return ret;
 }
 COldFuncState EnterFunction(CType *returnType,AST *_args) {
-    Compiler.globalLabelCount=0;
-    Compiler.returnType=returnType;
+  Compiler.labelContext=0;
+  Compiler.returnType=returnType;
     COldFuncState old=CreateCompilerState();
     Compiler.inFunction=1;
     vec_init(&Compiler.asmPatches);
@@ -6377,6 +6428,7 @@ void LeaveFunction(COldFuncState old) {
     vec_foreach(&Compiler.asmPatches, pat, iter)
       TD_FREE(pat);
     vec_deinit(&Compiler.asmPatches);
+    memset(&Compiler.asmPatches,0,sizeof(Compiler.asmPatches));
     
     RestoreCompilerState(old);
 }
@@ -6429,18 +6481,7 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
         vec_push(&args2, argv);
     }
     CFunction *f=CompileAST(NULL, body, args2,C_AST_FRAME_OFF_DFT);
-    Assembler.active=1;
-    if(!Compiler.errorFlag) ApplyPatches();
-    Assembler.active=0;
-    {
-      //Assign func to exported labels to make sure the garbage collector doesnt free the function(usefull for global unnamed "functions" aka global statements)
-      int iter;
-      AST *lab;
-      vec_foreach(&Compiler.__addedGlobalLabels, lab, iter) {
-	map_get(&Compiler.globals, lab->labelNode->name)[0]->func=f;
-      }
-      vec_deinit(&Compiler.__addedGlobalLabels);
-    }
+    ApplyAsmPatchesAndFreeThem(f);
     if(name)
         f->name=strdup(name->name);
     LeaveFunction(oldstate);
@@ -6463,18 +6504,7 @@ void RunStatement(AST *s) {
     Compiler.returnType=t;
     int oldflag=Compiler.errorFlag;
     CFunction *stmt=CompileAST(NULL,s,empty,C_AST_FRAME_OFF_DFT);
-    int oldaa=Assembler.active;
-    Assembler.active=1;
-    {
-      //Assign func to exported labels to make sure the garbage collector doesnt free the function(usefull for global unnamed "functions" aka global statements)
-      int iter;
-      AST *lab;
-      vec_foreach(&Compiler.__addedGlobalLabels, lab, iter) {
-	map_get(&Compiler.globals, lab->labelNode->name)[0]->func=stmt;
-      }
-      vec_deinit(&Compiler.__addedGlobalLabels);
-    }
-    Assembler.active=oldaa;
+    ApplyAsmPatchesAndFreeThem(stmt);
     if(stmt&&!Compiler.errorFlag&&!Compiler.tagsFile) {
       GC_Disable();
       #ifndef TARGET_WIN32
@@ -6521,9 +6551,33 @@ void ScanAST(AST *t,void(*func)(AST *,void *),void *data) {
         SCANVEC(t->arrayLiteral);
         break;
     }
+    case AST_ASM_BLK: {
+      SCANVEC(t->stmts);
+      break;
+    }
+    case AST_ASM_DU8:
+    case AST_ASM_DU16:
+    case AST_ASM_DU32:
+    case AST_ASM_DU64: {
+      SCANVEC(t->duData);
+      break;
+    }
     case AST_ASM_OPCODE: {
       ScanAST(t->asmOpcode.name,func,data);
       SCANVEC(t->asmOpcode.operands);
+      break;
+    }
+    case AST_ASM_IMPORT: {
+      SCANVEC(t->asmImports);
+      break;
+    }
+    case AST_ASM_ALIGN: {
+      ScanAST(t->asmAlign.align,func,data);
+      ScanAST(t->asmAlign.fill,func,data);
+      break;
+    }
+    case AST_ASM_BINFILE: {
+      ScanAST(t->asmBinfile,func,data);
       break;
     }
     case AST_ASM_ADDR: {
@@ -6768,4 +6822,27 @@ binop:
     case AST_PRINT_STRING:
         break;
     }
+}
+char *HashLabel(char *name,LabelContext context,int is_local) {
+  char buffer[1024];
+  if(is_local) {
+    sprintf(buffer, LOCAL_LAB_FMT, context,name);
+    return strdup(buffer);
+  } else {
+    return strdup(name);
+  }
+}
+/** 
+ * This accounts for local labels
+ */
+char *ResolveLabelByName(char *label,LabelContext context) {
+  char buffer[1024];
+  sprintf(buffer, LOCAL_LAB_FMT, context,label);
+  if(map_get(&Compiler.labels,  buffer)) {
+    return strdup(buffer);
+  }
+  return strdup(label);
+}
+LabelContext NextLabelContext() {
+  return ++Compiler.labelContext;
 }

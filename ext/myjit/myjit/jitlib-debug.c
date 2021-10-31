@@ -218,7 +218,12 @@ char * jit_get_op_name(struct jit_op * op)
 		case JIT_DATA_BYTE:	return ".byte";
 		case JIT_DATA_REF_CODE:	return ".ref_code";
 		case JIT_DATA_REF_DATA:	return ".ref_data";
-		case JIT_REF_CODE:	return "ref_code";
+	case JIT_DATA_CODE_OFFSET: return "code_offset";
+	case JIT_CODE_ALIGN_FILL: return "align_fill";
+	case JIT_DUMP_PTR: return "dump_ptr";
+	case JIT_TAINT_LABEL:return "taint_label";
+	case JIT_END_ASM_BLK:return "end_asm_blk";
+	        case JIT_REF_CODE:	return "ref_code";
 		case JIT_REF_DATA:	return "ref_data";
 		case JIT_FULL_SPILL:	return ".full_spill";
 		case JIT_FORCE_SPILL:	return "force_spill";
@@ -295,7 +300,7 @@ static void print_reg_liveness_callback(jit_tree_key key, jit_tree_value value, 
 
 static inline int jit_op_is_cflow(jit_op * op)
 {
-	if (((GET_OP(op) == JIT_CALL) || (GET_OP(op) == JIT_JMP)) && (IS_IMM(op))) return 1;
+  if (((GET_OP(op) == JIT_CALL) || (GET_OP(op) == JIT_JMP)||GET_OP(op)==JIT_TAINT_LABEL) && (IS_IMM(op))) return 1;
 	if (is_cond_branch_op(op)) return 1;
 
 	return 0;

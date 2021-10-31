@@ -125,6 +125,7 @@ opcode[r]: OPCODE[n] opc_operands[o] {
   r->type=AST_ASM_OPCODE;
   r->asmOpcode.name=$n;
   r->asmOpcode.operands=CommaToVec($o);
+  r->labelContext=Compiler.labelContext;
   $r=SOT(r,$n);
 };
 asm_blk_stmt[r]: NAME[n] DOUBLE_COLON[c] {
@@ -135,7 +136,7 @@ asm_blk_stmt[r]: NAME[n] COLON[c] {
   $r=SOT(CreateLabel($n),$n);
   ReleaseAST($c);
  }
-asm_blk_stmt[r]: DOUBLE_AT[aa] NAME[n] DOUBLE_COLON[c] {
+asm_blk_stmt[r]: DOUBLE_AT[aa] NAME[n] COLON[c] {
   $r=SOT(CreateLocalLabel($n),$aa);
   ReleaseAST($c),ReleaseAST($aa);
 }

@@ -325,11 +325,17 @@ static inline void jit_prepare_arguments(struct jit * jit)
 	}
 
 }
-
+static inline void jit_prepare_unloads_at_tainted(struct jit *jit) {
+  for (jit_op * op = jit_op_first(jit->ops); op != NULL; op = op->next)
+    if(GET_OP(op) == JIT_TAINT_LABEL)  {
+      jit_op * newop = jit_op_new(JIT_FORCE_UNLOAD_ALL | IMM, SPEC(NO, NO, NO), 0, 0, 0, 0);
+      jit_op_prepend(op->jmp_addr, newop);
+    }
+}
 static inline void jit_prepare_spills_on_jmpr_targets(struct jit *jit)
 {
 	for (jit_op * op = jit_op_first(jit->ops); op != NULL; op = op->next)
-		if ((GET_OP(op) == JIT_REF_CODE) || (GET_OP(op) == JIT_DATA_REF_CODE)|| (GET_OP(op) == JIT_DATA_CODE_OFFSET))  {
+	  if ((GET_OP(op) == JIT_REF_CODE) || (GET_OP(op) == JIT_DATA_REF_CODE)|| (GET_OP(op) == JIT_DATA_CODE_OFFSET))  {
 			jit_op * newop = jit_op_new(JIT_FULL_SPILL | IMM, SPEC(NO, NO, NO), 0, 0, 0, 0);
 			jit_op_prepend(op->jmp_addr, newop);
 		}
@@ -353,10 +359,12 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 #endif
 	jit_correct_float_imms(jit);
 	jit_prepare_reg_counts(jit);
+	
+	jit_prepare_spills_on_jmpr_targets(jit);
+	jit_prepare_unloads_at_tainted(jit);
 	ReduceRegisterCount(jit,func);
 
 	jit_prepare_arguments(jit);
-	jit_prepare_spills_on_jmpr_targets(jit);
 
 	//jit_dead_code_analysis(jit, 1);
 	//jit_flw_analysis(jit);
@@ -411,7 +419,10 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 		case JIT_DUMP_PTR:
 		  op->arg[1]=(jit_value)(jit->ip-jit->buf);
 		  break;
+		case JIT_TAINT_LABEL: break;
+		case JIT_END_ASM_BLK: break; 
 		case JIT_FORCE_SPILL:
+		case JIT_FORCE_UNLOAD_ALL:
 			case JIT_FORCE_ASSOC:
 			case JIT_COMMENT:
 				break;

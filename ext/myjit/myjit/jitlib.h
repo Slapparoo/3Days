@@ -273,6 +273,8 @@ typedef enum {
 	JIT_CODE_ALIGN_FILL= (0xb7<<3),
 	/* This dumps the ptr at arg[0] to the location in code*/
 	JIT_DUMP_PTR =(0xb8<<3),
+	JIT_TAINT_LABEL =(0xb9<<3), //Marks for fullspill
+	JIT_END_ASM_BLK =(0xba<<3), //Says to the allocator we can jump anywhere
 
 	JIT_MSG		= (0xf0 << 3),
 	JIT_COMMENT	= (0xf1 << 3),
@@ -285,7 +287,8 @@ typedef enum {
 
 	// opcodes for testing and debugging purposes only
 	JIT_FORCE_SPILL	= (0x0200 << 3),
-	JIT_FORCE_ASSOC = (0x0201 << 3)
+	JIT_FORCE_ASSOC = (0x0201 << 3),
+	JIT_FORCE_UNLOAD_ALL=(0x0202<<3),
 } jit_opcode;
 
 enum jit_inp_type {
@@ -603,7 +606,8 @@ int jit_allocai(struct jit * jit, int size);
 
 #define jit_ref_code(jit, a, b) jit_add_op(jit, JIT_REF_CODE, SPEC(TREG, IMM, NO), a, (jit_value)(b), 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_ref_data(jit, a, b) jit_add_op(jit, JIT_REF_DATA, SPEC(TREG, IMM, NO), a, (jit_value)(b), 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
-
+#define jit_taint_label(jit, a) jit_add_op(jit, JIT_TAINT_LABEL, SPEC(IMM, NO, NO), a, 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
+#define jit_end_asm_blk(jit) jit_add_op(jit, JIT_END_ASM_BLK, SPEC(NO, NO, NO), 0, 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_code_align(jit, a) jit_add_op(jit, JIT_CODE_ALIGN| IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_align_fill(jit, a,fill) jit_add_op(jit, JIT_CODE_ALIGN_FILL| IMM, SPEC(IMM, IMM, NO), (jit_value)(a), (jit_value)fill, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_data_byte(jit, a)  jit_add_op(jit, JIT_DATA_BYTE | IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
