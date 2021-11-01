@@ -6,7 +6,7 @@
 
 !define APP_NAME "3Days"
 !define COMP_NAME "nrootconauto@gmail.com"
-!define VERSION "00.00.01.00"
+!define VERSION "00.00.03.00"
 !define COPYRIGHT "None"
 !define DESCRIPTION "A HolyC Compiler"
 !define INSTALLER_NAME "C:\Users\fuffi\Documents\Nsisqssg\Output\3Days\setup.exe"
@@ -94,6 +94,8 @@ File "HCRT\HASH.HC"
 File "HCRT\HCRT.HC"
 File "HCRT\MATH.HC"
 File "HCRT\QSORT.HC"
+File "HCRT\ASM.HC"
+File "HCRT\OPCODES.DD"
 SectionEnd
 
 ######################################################################
@@ -155,7 +157,8 @@ Delete "$INSTDIR\HCRT\HASH.HC"
 Delete "$INSTDIR\HCRT\HCRT.HC"
 Delete "$INSTDIR\HCRT\MATH.HC"
 Delete "$INSTDIR\HCRT\QSORT.HC"
- 
+Delete "$INSTDIR\HCRT\ASM.HC"
+Delete "$INSTDIR\HCRT\OPCODES.DD" 
 RmDir "$INSTDIR\HCRT"
  
 Delete "$INSTDIR\uninstall.exe"
