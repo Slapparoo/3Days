@@ -410,9 +410,7 @@ U0 ParseOpcodes(U8 *text) {
 }
 I64 cnt;
 U8 *ops=FileRead("../Opcodes.DD",&cnt);
-"PARSING OPCODES\n";
 ParseOpcodes(ops);
-"DONE\n";
 Free(ops);
 
 // See ext/x64.h

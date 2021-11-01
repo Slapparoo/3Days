@@ -784,11 +784,12 @@ expfn:
             fseek(f,0,SEEK_SET);
             size-=ftell(f);
             //
-            Lexer.curFileEnd=size;
+            Lexer.curFileEnd=size+1; //Make room for extra newline
             Lexer.fpos=0;
             //
-            char *ftext=TD_CALLOC(1,size+1);
+            char *ftext=TD_CALLOC(1,size+1+1); //Make room for extra n
             fread(ftext, 1, size, f);
+	    ftext[size]='\n';
             fclose(f);
             Lexer.cursor_pos=orig_pos;
             //Make room for exp

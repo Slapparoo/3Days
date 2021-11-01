@@ -862,6 +862,7 @@ int IsModifyAssign(AST *node) {
     return 0;
 }
 double EvaluateF64(AST *exp) {
+  if(Compiler.tagsFile) return 0;
     AST *ret =CreateReturn(exp);
     COldFuncState old=CreateCompilerState();
     //Dissable breakpoints
@@ -884,6 +885,7 @@ double EvaluateF64(AST *exp) {
     return ret2;
 }
 int64_t EvaluateInt(AST *exp,int flags) {
+    if(Compiler.tagsFile) return 0;
     AST *ret =CreateReturn(exp);
     map_CVariable_t oldlocs=Compiler.locals;
     COldFuncState old=CreateCompilerState();
@@ -1089,21 +1091,23 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
                     AST *ret =CreateReturn(asn);
                     vec_CVariable_t empty;
                     vec_init(&empty);
-                    COldFuncState olds=CreateCompilerState();
                     Compiler.returnType=decl.finalType;
-                    CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT);
-                    RestoreCompilerState(olds);
-                    vec_deinit(&empty);
-		    GC_Disable();
-                    #ifndef TARGET_WIN32
-                    signal(SIGINT,SignalHandler);
-                    stmt->funcptr(0);
-                    signal(SIGINT,SIG_IGN);
-                    #else
-                    stmt->funcptr(0);
-                    #endif 
-		    GC_Enable();
-		    ReleaseFunction(stmt);
+		    if(!Compiler.tagsFile) {
+		      COldFuncState olds=CreateCompilerState();
+		      CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT);
+		      RestoreCompilerState(olds);
+		      vec_deinit(&empty);
+		      GC_Disable();
+#ifndef TARGET_WIN32
+		      signal(SIGINT,SignalHandler);
+		      stmt->funcptr(0);
+		      signal(SIGINT,SIG_IGN);
+#else
+		      stmt->funcptr(0);
+#endif 
+		      GC_Enable();
+		      ReleaseFunction(stmt);
+		    }
                     vec_push(&r->func.dftArgs,vnode);
                 }
             } else
@@ -6457,6 +6461,8 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
         map_remove(&Compiler.globals, name->name);
     }
     CreateFuncForwardDecl(NULL,rtype,name,args,hasvargs);
+    if(Compiler.tagsFile) return;
+    
     COldFuncState oldstate=EnterFunction(rtype,args);
     CType *ftype=CreateFuncType(rtype, args,hasvargs);
     ftype->func.hasvargs=hasvargs;
@@ -6503,6 +6509,7 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
     fv->func=f;
 }
 void RunStatement(AST *s) {
+  if(Compiler.tagsFile) return;
     if(s->type==AST_NOP) return;
     COldFuncState old=CreateCompilerState();
     vec_CVariable_t empty;

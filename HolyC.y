@@ -143,6 +143,17 @@ asm_blk_stmt[r]: DOUBLE_AT[aa] NAME[n] COLON[c] {
   $r->inAsmBlk=1;
   ReleaseAST($c),ReleaseAST($aa);
 }
+asm_blk_stmt[r]: DOUBLE_AT[aa] INT[n] COLON[c] {
+  //Make a name token out of $n
+  char buffer[256];
+  sprintf("%ld",$n->integer);
+  AST *n=TD_MALLOC(sizeof(AST));
+  n->type=AST_NAME;
+  n->name=strdup(buffer);
+  $r=SOT(CreateLocalLabel(SOT(n,$n)),$aa);
+  $r->inAsmBlk=1;
+  ReleaseAST($c),ReleaseAST($aa);
+}
 //asm_blk can only apear is asm blocks "asm {}"
 data_exprs[r]: expr;
 data_exprs[r]: data_exprs[a] COMMA[com] expr[b] {
@@ -205,6 +216,15 @@ expr0[r]: DOUBLE_AT[d] NAME {
   $r->name=strdup(buffer);
   ReleaseAST($d);
 };
+expr0[r]: DOUBLE_AT[d] INT[n] {
+//Make a name token out of $n
+  char buffer[256];
+  sprintf("%ld",$n->integer);
+  AST *n=TD_MALLOC(sizeof(AST));
+  n->type=AST_NAME,n->name=strdup(buffer);
+  $r=n;
+  ReleaseAST($d);
+}
 expr0[r]: FLOAT {$r=SLE($1);};
 expr0[r]: INT {$r=SLE($1);};
 expr0[r]: CHAR {$r=SLE($1);};
@@ -1243,6 +1263,15 @@ _expr0[r]: DOUBLE_AT[d] NAME {
   $r->name=strdup(buffer);
   ReleaseAST($d);
 };
+_expr0[r]: DOUBLE_AT[d] INT[n] {
+ //Make a name token out of $n
+  char buffer[256];
+  sprintf("%ld",$n->integer);
+  AST *n=TD_MALLOC(sizeof(AST));
+  n->type=AST_NAME,n->name=strdup(buffer);
+  $r=n;
+  ReleaseAST($d);
+}
 _expr0[r]: FLOAT {$r=SLE($1);};
 _expr0[r]: INT {$r=SLE($1);};
 _expr0[r]: CHAR {$r=SLE($1);};
@@ -1513,6 +1542,10 @@ void AttachParserToLexer() {
 }
 static int __IsTruePassed;
 static void __IsTrue(CFuncInfo *dummy1,AST *node,void *fp) {
+  if(Compiler.tagsFile) {
+    __IsTruePassed=1;
+    return ;
+  } 
   CType *rtype =AssignTypeToNode(node);
   COldFuncState old=CreateCompilerState();
   vec_CVariable_t args;

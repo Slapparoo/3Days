@@ -689,7 +689,7 @@ CLine *SearchForMLCommmentEnd(CLine *s) {
     }
     return NULL;
 }
-U0 Highlight(CEditor *ed,CLine *ln,Bool dryRun=FALSE) {
+U0 Highlight(CEditor *ed,CLine *ln,Bool dryRun=FALSE,Bool recur=TRUE) {
     U8 *text=Rope2Str(ln->text);
     U8 *buf=MAlloc(StrLen(text)+1);
     I64 idx=0,ns=0;
@@ -701,8 +701,8 @@ U0 Highlight(CEditor *ed,CLine *ln,Bool dryRun=FALSE) {
                 ln->flags|=ED_LNF_COMMENTED_OUT;
     }
     I64 isCommentedOut1=(ln->flags&ED_LNF_COMMENTED_OUT)||(ln->flags&ED_LNF_COMMENTED_START);
+    I64 isMlEnd1=ln->flags&ED_LNF_COMMENTED_END,isMlStart1=ln->flags&ED_LNF_COMMENTED_START;
     ln->flags&=~ED_LNF_COMMENTED_START;
-    I64 isMlEnd1=ln->flags&ED_LNF_COMMENTED_END;
     if((ln->flags&ED_LNF_COMMENTED_END)||(ln->flags&ED_LNF_COMMENTED_OUT)) {
         while(text[idx]) {
             if(0==StrNCmp(text+idx,"*/",2)) {
@@ -769,7 +769,7 @@ loop:
             ln->flags|=ED_LNF_COMMENTED_START;
             //Dry run hgihlight until we find a line end
             CLine *nxtln=ln->next;
-            for(; nxtln;) {
+            if(!recur) for(; nxtln;) {
                 Highlight(ed, nxtln, TRUE); //Will set ED_LNF_COMMENTED_OUT;
                 if(nxtln->flags&ED_LNF_COMMENTED_END) break;
                 nxtln=nxtln->next;
@@ -836,11 +836,26 @@ sloop:
     idx++;
     goto loop;
 en:
-    I64 isMlEnd2=ln->flags&ED_LNF_COMMENTED_END;
+    I64 isMlEnd2=ln->flags&ED_LNF_COMMENTED_END,isMlStart2=ln->flags&ED_LNF_COMMENTED_START;
     I64 isCommentedOut2=(ln->flags&ED_LNF_COMMENTED_OUT)||(ln->flags&ED_LNF_COMMENTED_START);
-    if(isMlEnd1!=isMlEnd2||(isCommentedOut1!=isCommentedOut2)) {
-        if(ln->next)
-            Highlight(ed, ln->next, TRUE); //Is recursive
+    if(recur&&(isMlEnd1!=isMlEnd2||isMlStart1!=isMlStart2)) {
+        nxtln=ln->next;
+        for(;nxtln;nxtln=nxtln->next) {
+            Bool comm_end=nxtln->flags&ED_LNF_COMMENTED_END;
+            Highlight(ed, nxtln, TRUE);
+            if(isMlEnd2) { //Added '*/',quit at next '*/'
+                if(comm_end) break;
+            } else { //Removed '*/',quit at next '*/'
+                if(comm_end) break;
+            }
+        }
+    }
+    if(recur&&isCommentedOut2!=isCommentedOut1) {
+        nxtln=ln->next;
+        for(;nxtln;nxtln=nxtln->next) {
+            Highlight(ed,nxtln,TRUE);
+            if((nxtln->flags&ED_LNF_COMMENTED_OUT)!=isCommentedOut2) break;
+        }
     }
     wattron(ed->window,COLOR_PAIR(CP_WHITE));
     wclrtoeol(ed->window);
@@ -965,7 +980,7 @@ CEditor *EditorNew(Bool gen_rt_tags=FALSE) {
     r->line_cache_size=0;
     EditorInsText(r,"",0);
     if(gen_rt_tags) {
-        CreateTagsAndErrorFiles("TAGS","ERRS",NULL);
+        CreateTagsFile("TAGS",NULL);
         r->tags=ReadTags("TAGS");
         r->diags=ParseDiags("ERRS");
     }
@@ -1250,7 +1265,7 @@ I64 DrawEditor(CEditor *ed,I64 flags=0,U8 *dialogtxt=NULL,I64 mb_active=-1) {
         }
         if(1) {
             wmove(ed->window,screen_line,lnumlen);
-            Highlight(ed,ln);
+            Highlight(ed,ln,,TRUE);
         }
         ++screen_line;
         ln=ln->next;
@@ -1728,18 +1743,15 @@ I64 SaveDoc(CEditor *ed) {
         FreeDiags(ed->diags);
         wprint(msgs,"Generating tags and diagnostics.\n");
         wrefresh(msgs);
-        CreateTagsAndErrorFiles("TAGS","ERRS",ed->fn);
+        CreateTagsFile("TAGS",ed->fn);
         wprint(msgs,"Parsing Tags.\n");
         wrefresh(msgs);
         ed->tags=ReadTags("TAGS");
-        wprint(msgs,"Parsing diagnostics.\n");
-        wrefresh(msgs);
-        ed->diags=ParseDiags("ERRS");
-        delwin(msgs);
+        //ed->diags=ParseDiags("ERRS");
         wprint(msgs,"Garbage collecting.\n");
         wrefresh(msgs);
         GC_Collect();
-        MarkLineColors(ed);
+        //MarkLineColors(ed);
         redrawwin(ed->window);
         flushinp;
     }
@@ -2053,10 +2065,10 @@ I64 OpenFile(U8 *name,I64 ln=0)  {
   new->fn=StrNew(name);
   new->cury=MinI64(ln,GetLineCount(new));
   Free(text);
-  CreateTagsAndErrorFiles("TAGS","ERRS",name);
+  CreateTagsFile("TAGS",name);
   new->tags=ReadTags("TAGS");
-  new->diags=ParseDiags("ERRS");
-    MarkLineColors(new);
+  //new->diags=ParseDiags("ERRS");
+  //MarkLineColors(new);
   buf=MAlloc(sizeof(*buf));
   buf->str=StrNew(name);
   buf->ed=new;
@@ -2304,4 +2316,9 @@ initscr;
 CEditor *ed=EditorNew(TRUE);
 Edit(ed);
 endwin;
+
+
+
+
+
 

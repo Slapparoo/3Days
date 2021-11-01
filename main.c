@@ -105,7 +105,7 @@ int main(int argc,char **argv) {
     RegisterBuiltins();
     char *tagf=NULL;
     if(tagsArg->count) {
-      tagf=strdup(tagsArg->filename[0]);
+      Compiler.tagsFile=tagf=strdup(tagsArg->filename[0]);
     }
     long iter;
     char buffer[2048];
@@ -132,12 +132,6 @@ int main(int argc,char **argv) {
     mrope_append_text(Lexer.source, strdup(buffer));
   }
 #endif
-    for(iter=0; iter!=includeArg->count; iter++) {
-        unescapeString(includeArg->filename[iter],buffer2);
-        sprintf(buffer, "#include \"%s\"", buffer2);
-        mrope_append_text(Lexer.source, strdup(buffer));
-    }
-    arg_freetable(argtable, sizeof(argtable)/sizeof(*argtable));
     signal(SIGSEGV,SignalHandler);
     signal(SIGABRT,SignalHandler);
     #ifndef TARGET_WIN32
@@ -146,10 +140,15 @@ int main(int argc,char **argv) {
     signal(SIGILL,SignalHandler);
     signal(SIGINT,SignalHandler);
     #endif
-    Compiler.tagsFile=tagf;
+    for(iter=0;iter!=includeArg->count;iter++) {
+      unescapeString(includeArg->filename[iter],buffer2);
+      sprintf(buffer, "#include \"%s\"", buffer2);
+      mrope_append_text(Lexer.source, strdup(buffer));
+    }
     if(Compiler.tagsFile) Lexer.replMode=0;
+    long extraFileIndex=0;
     if(run&&!errs) {
-        for(;;) {
+      for(;;) {
 set:
             ;
             int sig;
@@ -186,16 +185,22 @@ set:
             Compiler.inFunction=0;
             Lexer.isFreeToFlush=1;
 	    if(!Compiler.tagsFile) Lexer.replMode=1;
+	    else Lexer.replMode=0;
             HC_parse();
             #ifdef TARGET_WIN32
             RemoveVectoredExceptionHandler(h);
             #endif
             if(Compiler.tagsFile) {
-              DumpTagsToFile(tagf);
               break;
             }
         }
     }
+    arg_freetable(argtable, sizeof(argtable)/sizeof(*argtable));
+    if(!Compiler.tagsFile)
+      if(map_get(&Lexer.macros,"HCRT_LOADED"))
+	Compiler.tagsFile=tagf;
+    if(Compiler.tagsFile)
+      DumpTagsToFile(tagf);
     TD_FREE(tagf);
     if(Compiler.errorsFile) fclose(Compiler.errorsFile);
     return (errs)?EXIT_SUCCESS:EXIT_FAILURE;
