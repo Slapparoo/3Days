@@ -1091,9 +1091,9 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
                     AST *ret =CreateReturn(asn);
                     vec_CVariable_t empty;
                     vec_init(&empty);
-                    Compiler.returnType=decl.finalType;
-		    if(!Compiler.tagsFile) {
+                    if(!Compiler.tagsFile) {
 		      COldFuncState olds=CreateCompilerState();
+		      Compiler.returnType=decl.finalType;
 		      CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT);
 		      RestoreCompilerState(olds);
 		      vec_deinit(&empty);
