@@ -10,7 +10,7 @@ main.obj: main.c
 3d_tests.exe: vec.obj exceptWin.obj rt.obj jitlib-core.obj map.obj compile.obj lexer.obj unesc.obj tests.c HolyC.obj tosprn.obj gc.obj debugger.obj rope.obj  rl.obj  tags.obj pdcurses.a asm.obj
 	$(CC) $(CFLAGS)   $^  -lm  ext/wineditline-2.206/lib64/libedit_static.a -o $@
 pdcurses.a:
-	cd ext/PDCurses-3.9/wincon && make && copy pdcurses.a ..\..\..
+	cd ext/PDCurses-3.9/wincon && make CC=$(CC) && copy pdcurses.a ..\..\..
 HolyC.obj: HolyC.tab.c $(HEADERS)
 	$(CC) $(CFLAGS) -g -c HolyC.tab.c -o $@
 HolyC.tab.c HolyC.tab.h: HolyC.y

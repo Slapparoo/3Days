@@ -193,6 +193,7 @@ class CDiag {
     U8 *fn,*msg;
 };
 CDiag *ParseDiags(U8 *file) {
+  return NULL;
     I64 cnt,len;
     U8 *text=FileRead(file,&cnt);
     U8 *ptr=text;
@@ -982,7 +983,6 @@ CEditor *EditorNew(Bool gen_rt_tags=FALSE) {
     if(gen_rt_tags) {
         CreateTagsFile("TAGS",NULL);
         r->tags=ReadTags("TAGS");
-        r->diags=ParseDiags("ERRS");
     }
     return r;
 }
