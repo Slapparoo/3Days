@@ -409,7 +409,7 @@ U0 ParseOpcodes(U8 *text) {
     en:
 }
 I64 cnt;
-U8 *ops=FileRead("../Opcodes.DD",&cnt);
+U8 *ops=FileRead("Opcodes.DD",&cnt);
 ParseOpcodes(ops);
 Free(ops);
 

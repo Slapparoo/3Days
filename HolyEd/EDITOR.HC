@@ -645,10 +645,12 @@ U0 WriteWithinWin(WINDOW *win,U8 *text,I64 x_scroll=0) {
     I64 s=x_scroll;
     while(s!=l) {
         if(getmaxx(win)>=s>=0) {
-          if(text[s-x_scroll]=='\t')
+           U8 chr=text[s-x_scroll];
+           if(chr=='\t')
             waddch(win,' ');
-           else
-            waddch(win,text[s-x_scroll]);
+           else if(chr!='\r'){
+            waddch(win,chr);
+           }
         }
         s++;
     }
@@ -661,7 +663,7 @@ U0 WriteWithinView(CEditor *ed,U8 *text,I64 off) {
         if(ed->x_scroll+ed->w>=s>=ed->x_scroll) {
           if(text[s-off]=='\t')
             waddch(ed->window,' ');
-          else
+          else if(text[s-off]!='\r')
             waddch(ed->window,text[s-off]);
         }
         s++;
