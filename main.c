@@ -57,6 +57,8 @@ BOOL WINAPI CtrlCHandlerRoutine(DWORD c) {
 int main(int argc,char **argv) {
     #ifndef TARGET_WIN32
     char *rp=realpath(argv[0],NULL);
+    if(rp==NULL)
+      rp=strcpy(calloc(strlen(argv[0])+1,1),argv[0]);
     strcpy(CompilerPath,rp);
     free(rp);
     #else

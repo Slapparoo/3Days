@@ -5596,6 +5596,8 @@ reglabrefs:
 	 jit_dump_ptr(Compiler.JIT,&exp2->linkage.globalPtr);
 	 exp2->fn=strdup(exp->fn);
 	 exp2->line=exp->ln;
+	 exp2->func=TD_MALLOC(sizeof(CFunction));
+	 exp2->func->JIT=Compiler.JIT;
 
 	 map_set(&Compiler.exportedLabels,exp->labelNode->name,exp2);
 	 
