@@ -64,29 +64,39 @@ U0 Pile() {
     DEC R12;
     CMP R12,0;
     JNE loop;
+    MOV RAX, I64 GS:[RAX];
   };
 }
 */
+class ABC{I64 a,b,c;};
+U0 Dummy2() {
+  ABC x={0,0,0};
+  asm {
+    LEA RAX,I64 &x[RBP+ABC.b];
+    MOV I64 [RAX],10;
+  };
+  "%d\n",x.b;
+}
 U0 Dummy() {
+  I64 x=10;
 asm {
   C_HELLO::
     IMPORT Hello;
   PUSH R12;
-  MOV R12,10
- Loop:
+  MOV R12,10;
+ @@Loop:
   MOV RAX,Hello;
   CALL RAX;
-  MOV RAX,Loop-10
   DEC R12;
   CMP R12,0;
-  JNE Loop;
+  JNE @@Loop;
  en:
+  JMP @@Loop;
+  @@Loop: //useless
   POP R12;
   RET;
- indir:
-  DU64 Loop-10;
-  
 };
+ x+=10;
 }
 U0 Foo() {
 	asm {
@@ -99,3 +109,4 @@ U0 Foo() {
 }
 _import C_HELLO U0 Hi();
 Hi;
+Dummy2;

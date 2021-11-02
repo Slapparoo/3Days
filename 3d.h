@@ -665,6 +665,7 @@ typedef struct {
   //Will be filled with NULL if not defined yet 
   map_jit_label_t asmTaintedLabels;
   LabelContext labelContext;
+  map_CVariable_t exportedLabels;
 } CCompiler;
 #define LOCAL_LAB_FMT "@@(%li):%s"
 extern CCompiler Compiler;

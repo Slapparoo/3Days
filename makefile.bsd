@@ -1,6 +1,6 @@
 HEADERS := HolyC.tab.h 3d.h
 CC := gcc
-CFLAGS :=  -g3 -O0 -Wformat=0 -Wreturn-type -DUSEGC -DBSD #-fsanitize=address 
+CFLAGS :=  -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC -DBSD #-fsanitize=address 
 OBJS := tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o at3.o exceptLin.o asm.o
 all: 3d_tests 3d
 	echo "Done"

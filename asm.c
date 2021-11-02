@@ -36,9 +36,20 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
   }
   CType* i64 = CreatePrimType(TYPE_I64);
   Compiler.returnType = i64;
+  const char *key;
+  map_iter_t iter=map_iter(&Compiler.exportedLabels);
+  while(key=map_next(&Compiler.exportedLabels, &iter)) {
+    CVariable* v = TD_MALLOC(sizeof(CVariable));
+    v->type = i64;
+    v->name = strdup(key);
+    v->isGlobal = 1;
+    v->linkage.type = LINK_NORMAL;
+    v->linkage.globalPtr = TD_MALLOC(sizeof(void*));
+    *(void**)v->linkage.globalPtr=GetGlobalPtr(*map_get(&Compiler.exportedLabels, key));
+    map_set(&Compiler.locals, key, v);
+  }
   //Prepare local labels
-  const char* key;
-  map_iter_t iter = map_iter(&Compiler.labelPtrs);
+  iter = map_iter(&Compiler.labelPtrs);
   char buffer[256];
   while (key = map_next(&Compiler.labelPtrs, &iter)) {
     long ul;

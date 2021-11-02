@@ -184,6 +184,9 @@ set:
 	    Assembler.active=0;
             Compiler.inFunction=0;
             Lexer.isFreeToFlush=1;
+	    vec_truncate(&Compiler.asmPatches, 0);
+	    vec_truncate(&Compiler.__addedGlobalLabels, 0);
+	    map_init(&Assembler.imports);
 	    if(!Compiler.tagsFile) Lexer.replMode=1;
 	    else Lexer.replMode=0;
             HC_parse();

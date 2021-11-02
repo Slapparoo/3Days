@@ -204,8 +204,6 @@ void WaitForInput() {
     #else
     char *input=rl("HolyCC:>> ");
     #endif
-    //Will re-enter in main
-    Lexer.replMode=0;
 set:
     ;
     //Add to REPL_SOURCE_NAME's file lines

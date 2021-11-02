@@ -146,13 +146,13 @@ asm_blk_stmt[r]: DOUBLE_AT[aa] NAME[n] COLON[c] {
 asm_blk_stmt[r]: DOUBLE_AT[aa] INT[n] COLON[c] {
   //Make a name token out of $n
   char buffer[256];
-  sprintf("%ld",$n->integer);
+  sprintf(buffer,"%li",$n->integer);
   AST *n=TD_MALLOC(sizeof(AST));
   n->type=AST_NAME;
   n->name=strdup(buffer);
   $r=SOT(CreateLocalLabel(SOT(n,$n)),$aa);
   $r->inAsmBlk=1;
-  ReleaseAST($c),ReleaseAST($aa);
+  ReleaseAST($c),ReleaseAST($aa),ReleaseAST($n);
 }
 //asm_blk can only apear is asm blocks "asm {}"
 data_exprs[r]: expr;
@@ -219,7 +219,7 @@ expr0[r]: DOUBLE_AT[d] NAME {
 expr0[r]: DOUBLE_AT[d] INT[n] {
 //Make a name token out of $n
   char buffer[256];
-  sprintf("%ld",$n->integer);
+  sprintf(buffer,"@@%li",$n->integer);
   AST *n=TD_MALLOC(sizeof(AST));
   n->type=AST_NAME,n->name=strdup(buffer);
   $r=n;
@@ -1150,7 +1150,20 @@ swit[r]: SWITCH[p] LEFT_PAREN[un1] expr_comma[cond] RIGHT_PAREN[un2] LEFT_CURLY[
   ReleaseAST($un4);
 }
 simple_stmt: tryblock;
-simple_stmt: opcode;
+opcodes: opcode[o] SEMI[ul] {
+  AST *r=TD_MALLOC(sizeof(AST));
+  r->type=AST_ASM_BLK;
+  vec_init(&r->stmts);
+  vec_push(&r->stmts,$o);
+  $$=r;
+  ReleaseAST($ul);
+};
+opcodes[r]: opcodes[b] opcode[o] SEMI[ul] {
+  vec_push(&$b->stmts,$o);
+  $r=$b;
+  ReleaseAST($ul);
+}
+simple_stmt: opcodes;
 simple_stmt: asm_blk;
 simple_stmt[r]: multi_decl[d] SEMI[un] {
   $r=$d;
@@ -1266,7 +1279,7 @@ _expr0[r]: DOUBLE_AT[d] NAME {
 _expr0[r]: DOUBLE_AT[d] INT[n] {
  //Make a name token out of $n
   char buffer[256];
-  sprintf("%ld",$n->integer);
+  sprintf(buffer,"@@%li",$n->integer);
   AST *n=TD_MALLOC(sizeof(AST));
   n->type=AST_NAME,n->name=strdup(buffer);
   $r=n;

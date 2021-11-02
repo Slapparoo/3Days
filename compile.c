@@ -7,11 +7,15 @@
 #ifdef TARGET_WIN32
 #include <memoryapi.h>
 #endif
+static void Blank();
 void ApplyAsmPatchesAndFreeThem(CFunction *func ) {
   int oldaa=Assembler.active;int oldada=Compiler.addrofFrameoffsetMode;
   Assembler.active=1;
   Compiler.addrofFrameoffsetMode=1;
   if(!Compiler.errorFlag) ApplyPatches();
+  if(Compiler.errorFlag) {
+    func->funcptr=Blank;
+  }
   {
     //Assign func to exported labels to make sure the garbage collector doesnt free the function(usefull for global unnamed "functions" aka global statements)
     int iter;
@@ -5564,7 +5568,6 @@ reglabrefs:
 	    map_set(&Compiler.labelPtrs,fmted,NULL);
 	    jit_dump_ptr(Compiler.JIT,map_get(&Compiler.labelPtrs,fmted));
         }
-
         //All nodes return a value on the stack
         vec_push(&Compiler.valueStack, VALUE_INT(0));
 	TD_FREE(fmted);
@@ -5593,6 +5596,9 @@ reglabrefs:
 	 jit_dump_ptr(Compiler.JIT,&exp2->linkage.globalPtr);
 	 exp2->fn=strdup(exp->fn);
 	 exp2->line=exp->ln;
+
+	 map_set(&Compiler.exportedLabels,exp->labelNode->name,exp2);
+	 
 	 CVariable **exist;
 	 if(exist=map_get(&Compiler.globals,fmted))
 	   ReleaseVariable(*exist);
@@ -5817,8 +5823,6 @@ noreg:
             } else goto noreg;
         }
     }
-    struct jit *oldjit=Compiler.JIT;
-    int oldflag=Compiler.errorFlag;
     struct jit *curjit=Compiler.JIT=jit_init();
     void(*funcptr)(int64_t,...);
     CFunction *func=TD_CALLOC(1,sizeof(CFunction));
@@ -5965,9 +5969,6 @@ noreg:
         vec_deinit(map_get(&Compiler.labelRefs,key));
     map_deinit(&Compiler.labelRefs);
     map_deinit(&Compiler.labels);
-
-    Compiler.JIT=oldjit;
-    Compiler.errorFlag=oldflag;
     return func;
 }
 void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
@@ -5990,8 +5991,6 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         map_set(&Compiler.locals,key,g);
     }
 
-    struct jit *oldjit=Compiler.JIT;
-    int oldflag=Compiler.errorFlag;
     struct jit *curjit=Compiler.JIT=jit_init();
     void(*funcptr)(int64_t,...);
     CFunction *func=TD_CALLOC(1,sizeof(CFunction));
@@ -6040,8 +6039,6 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         funcptr=(void(*)(int64_t,...))Blank;
 
     vec_deinit(&Compiler.valueStack);
-    Compiler.JIT=oldjit;
-    Compiler.errorFlag=oldflag;
     //
     liter=map_iter(&Compiler.locals);
     while(key=map_next(&Compiler.locals,&liter))
