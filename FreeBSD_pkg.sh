@@ -1,6 +1,6 @@
 #/bin/tcsh 
 set STAGEDIR = `pwd`/stagedir
-cp +MANIFEST ${STAGEDIR}/
+cp "+MANIFEST" ${STAGEDIR}/
 mkdir -p ${STAGEDIR}
 mkdir -p ${STAGEDIR}/usr
 mkdir -p ${STAGEDIR}/usr/local
