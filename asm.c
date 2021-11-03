@@ -139,7 +139,7 @@ void* AST2X64Mode(AST* a, int64_t* lab_offset) {
 
     if (a->asmAddr.disp) {
       disp = INT32_MAX; //will be computed later
-      ScanAST(a->asmAddr.disp, TaintLabelsInExpr, NULL);
+      TaintLabelsInExpr(a->asmAddr.disp);
     }
 
     Compiler.addrofFrameoffsetMode = 0;
@@ -264,6 +264,7 @@ void AssembleOpcode(AST* at, char* name, vec_AST_t operands) {
 
       jit_dump_ptr(Compiler.JIT, &pat->ptr);
       jit_data_dword(Compiler.JIT, 0);
+      TaintLabelsInExpr(pat->exp);
       pat->width = 4;
       vec_push(&Compiler.asmPatches, pat);
     }
@@ -278,6 +279,7 @@ void AssembleOpcode(AST* at, char* name, vec_AST_t operands) {
           pat->exp = a;
       }
       pat->width = 4;
+      TaintLabelsInExpr(pat->exp);
       jit_dump_ptr(Compiler.JIT, &pat->ptr);
       jit_data_dword(Compiler.JIT, 0);
       vec_push(&Compiler.asmPatches, pat);
@@ -292,6 +294,7 @@ jmp:
     jit_dump_ptr(Compiler.JIT, &pat->ptr);
     jit_data_dword(Compiler.JIT, 0);
     pat->exp = operands.data[0];
+    TaintLabelsInExpr(pat->exp);
     pat->rel_offset = -offset - 4;
     pat->width = 4;
     vec_push(&Compiler.asmPatches, pat);

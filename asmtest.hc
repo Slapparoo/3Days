@@ -85,8 +85,7 @@ asm {
   PUSH R12;
   MOV R12,10;
  @@Loop:
-  MOV RAX,Hello;
-  CALL RAX;
+  CALL Hello;
   DEC R12;
   CMP R12,0;
   JNE @@Loop;
