@@ -69,7 +69,7 @@ struct jit_op * jit_add_fop(struct jit * jit, unsigned short code, unsigned char
 
 struct jit_debug_info *jit_debug_info_new(const char *filename, const char *function, int lineno)
 {
-	struct jit_debug_info *r = JIT_MALLOC(sizeof(struct jit_debug_info));
+    struct jit_debug_info *r = JIT_MALLOC(sizeof(struct jit_debug_info));
 	r->filename = filename;
 	r->function = function;
 	r->lineno = lineno;
@@ -95,6 +95,7 @@ struct jit * jit_init()
 
 jit_op *jit_add_prolog(struct jit * jit, void * func, struct jit_debug_info *debug_info)
 {
+        if(!jit) return NULL;
         jit_op * op = jit_add_op(jit, JIT_PROLOG , SPEC(IMM, NO, NO), (jit_value)func, 0, 0, 0, NULL);
         struct jit_func_info * info = JIT_MALLOC(sizeof(struct jit_func_info));
         op->arg[1] = (jit_value)info;
@@ -352,14 +353,14 @@ static inline void jit_buf_expand(struct jit * jit)
 #include "graphcoloring.h"
 void jit_generate_code(struct jit * jit,struct CFunction *func)
 {
-
+    if(!jit) return;
 	jit_expand_patches_and_labels(jit);
 #if JIT_IMM_BITS > 0
 	jit_correct_int64_t_imms(jit);
 #endif
 	jit_correct_float_imms(jit);
 	jit_prepare_reg_counts(jit);
-	
+
 	jit_prepare_spills_on_jmpr_targets(jit);
 	jit_prepare_unloads_at_tainted(jit);
 	ReduceRegisterCount(jit,func);
@@ -420,7 +421,7 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 		  op->arg[1]=(jit_value)(jit->ip-jit->buf);
 		  break;
 		case JIT_TAINT_LABEL: break;
-		case JIT_END_ASM_BLK: break; 
+		case JIT_END_ASM_BLK: break;
 		case JIT_FORCE_SPILL:
 		case JIT_FORCE_UNLOAD_ALL:
 			case JIT_FORCE_ASSOC:
@@ -444,12 +445,12 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 	#endif
 	memcpy(mem, jit->buf, code_size);
 	JIT_FREE(jit->buf);
-	
+
 	for (struct jit_op * op = jit->ops; op != NULL; op = op->next) {
 	  if(GET_OP(op)==JIT_DUMP_PTR) {
 	    *((void**)op->arg[0])=mem+op->arg[1];
 	  }
-	}	
+	}
 
 	// FIXME: duplicitni vypocet?
 	int64_t pos = jit->ip - jit->buf;
@@ -494,11 +495,13 @@ static int is_cond_branch_op(jit_op *op)
 
 void jit_enable_optimization(struct jit * jit, int opt)
 {
+    if(!jit) return;
 	jit->optimizations |= opt;
 }
 
 void jit_disable_optimization(struct jit * jit, int opt)
 {
+    if(!jit) return;
 	jit->optimizations &= ~opt;
 }
 void jit_free(struct jit * jit)

@@ -27,7 +27,7 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
   map_CVariable_t oldlocals=Compiler.locals;
   map_init(&Compiler.locals);
   {
-    //Prepare old local variables 
+    //Prepare old local variables
     const char* key;
     map_iter_t iter = map_iter(&oldlocals);
     while (key = map_next(&oldlocals, &iter)) {
@@ -80,7 +80,7 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
       map_set(&Compiler.locals, buffer2, v);
     }
   }
-  
+
   Compiler.JIT = jit_init();
   void* (*fptr)() = NULL;
   jit_prolog(Compiler.JIT, &fptr);
@@ -189,7 +189,7 @@ void* AST2X64Mode(AST* a, int64_t* lab_offset) {
 }
 void* GetRegister(char* name) {
   if(Compiler.tagsFile) return NULL;
-  
+
   CVariable** enc = map_get(&Compiler.globals, "GetRegister");
 
   if (!enc) return NULL;
@@ -198,7 +198,7 @@ void* GetRegister(char* name) {
 }
 int IsOpcode(char* name) {
   if(Compiler.tagsFile) return 0;
-  
+
   CVariable** enc = map_get(&Compiler.globals, "IsOpcode");
 
   if (!enc) return 0;

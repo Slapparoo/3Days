@@ -8,6 +8,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_video.h>
+#include <SDL2/SDL_render.h>
+#include <SDL2/SDL_rect.h>
+#include <SDL2/SDL_clipboard.h>
+#include <SDL2/SDL_events.h>
+#include <stddef.h>
+#include <stdalign.h>
 #ifdef TARGET_WIN32
 #include <windows.h>
 #include <fileapi.h>
@@ -306,6 +314,58 @@ static void MVWCHGAT(WINDOW *w,int64_t y,int64_t x,int64_t n,int64_t a,int64_t c
   fclose(f);
   mvwchgat(w,y,x,n,a,c,opts);
 }
+void AddMemberToClass(CType *cls,CType *t,char* name,long offset) {
+    CMember mem;
+    memset(&mem,0,sizeof(mem));
+    mem.name=strdup(name);
+    mem.offset=offset;
+    mem.type=t;
+    vec_push(&cls->cls.members,mem);
+}
+void AddMemberToClassBySize(CType *cls,long size,char* name,long offset) {
+    CMember mem;
+    memset(&mem,0,sizeof(mem));
+    mem.name=strdup(name);
+    mem.offset=offset;
+    switch(size) {
+    case 1: mem.type=CreatePrimType(TYPE_I8); break;
+    case 2: mem.type=CreatePrimType(TYPE_I16); break;
+    case 4: mem.type=CreatePrimType(TYPE_I32); break;
+    case 8: mem.type=CreatePrimType(TYPE_I64); break;
+    }
+    vec_push(&cls->cls.members,mem);
+}
+void UAddMemberToClassBySize(CType *cls,long size,char* name,long offset) {
+    CMember mem;
+    memset(&mem,0,sizeof(mem));
+    mem.name=strdup(name);
+    mem.offset=offset;
+    switch(size) {
+    case 1: mem.type=CreatePrimType(TYPE_U8); break;
+    case 2: mem.type=CreatePrimType(TYPE_U16); break;
+    case 4: mem.type=CreatePrimType(TYPE_U32); break;
+    case 8: mem.type=CreatePrimType(TYPE_U64); break;
+    }
+    vec_push(&cls->cls.members,mem);
+}
+static CType *CreateEmptyClass(char *name,long size,long align) {
+    CType *t=TD_MALLOC(sizeof(CType));
+    t->type=TYPE_CLASS;
+    t->cls.name=strdup(name);
+    t->cls.size=size;
+    t->cls.align=align;
+    return t;
+}
+#define ADD_TYPED_MEMBER(hc,hct,t,mem) AddMemberToClass(hc,hct,#mem,offsetof(t,mem));
+#define ADD_PRIM_MEMBER(hc,t,mem) AddMemberToClassBySize(hc,sizeof(((t*)NULL)->mem),#mem,offsetof(t,mem));
+#define ADD_UPRIM_MEMBER(hc,t,mem) UAddMemberToClassBySize(hc,sizeof(((t*)NULL)->mem),#mem,offsetof(t,mem));
+#define IMPORT_CLASS_WO_MEMBERS(type) CreateEmptyClass(#type,sizeof(type),alignof(type))
+static char *hc_SDL_GetWindowTitle(SDL_Window *win) {
+    return strdup(SDL_GetWindowTitle(win));
+}
+static char *hc_SDL_GetClipboardText() {
+    return strdup(SDL_GetClipboardText());
+}
 void RegisterBuiltins() {
     //Primitive types
   CType *u0 =CreatePrimType(TYPE_U0);
@@ -334,6 +394,7 @@ void RegisterBuiltins() {
     CType *u8p =CreatePtrType(u8);
     CType *u8pp =CreatePtrType(u8p);
     CType *u0p =CreatePtrType(u0);
+    CType *i32p =CreatePtrType(i32);
     CType *i64p =CreatePtrType(i64);
     CType *cfs =CreateClassForwardDecl(NULL, CreateDummyName("CFs"));
     CType *cfsptr =CreatePtrType(cfs);
@@ -510,4 +571,191 @@ CreateMacroInt("ALT_Z",ALT_Z);
     CreateBuiltin(&getbegx,i64,"getbegx",0,windp,NULL);
     CreateBuiltin(&getbegy,i64,"getbegy",0,windp,NULL);
     CreateBuiltin(&StdScr,windp,"stdscr",0,NULL);
+    //SDL2 bindings
+    CType *sdlr_t=IMPORT_CLASS_WO_MEMBERS(SDL_Rect);
+    ADD_PRIM_MEMBER(sdlr_t,SDL_Rect,x);
+    ADD_PRIM_MEMBER(sdlr_t,SDL_Rect,y);
+    ADD_PRIM_MEMBER(sdlr_t,SDL_Rect,w);
+    ADD_PRIM_MEMBER(sdlr_t,SDL_Rect,h);
+    CType *sdlp_t=IMPORT_CLASS_WO_MEMBERS(SDL_Point);
+    ADD_PRIM_MEMBER(sdlp_t,SDL_Point,x);
+    ADD_PRIM_MEMBER(sdlp_t,SDL_Point,y);
+    //Init section
+    CreateMacroInt("SDL_INIT_TIMER",SDL_INIT_TIMER);
+    CreateMacroInt("SDL_INIT_AUDIO",SDL_INIT_AUDIO);
+    CreateMacroInt("SDL_INIT_VIDEO",SDL_INIT_VIDEO);
+    CreateMacroInt("SDL_INIT_EVENTS",SDL_INIT_EVENTS);
+    CreateMacroInt("SDL_INIT_EVERYTHING",SDL_INIT_EVERYTHING);
+    CreateBuiltin(&SDL_Init,i64,"SDL_Init",0,i64,NULL);
+    CreateBuiltin(&SDL_WasInit,i64,"SDL_WasInit",0,i64,NULL);
+    //Video section
+    CreateMacroInt("SDL_BLENDMODE_NONE",SDL_BLENDMODE_NONE);
+    CreateMacroInt("SDL_BLENDMODE_BLEND",SDL_BLENDMODE_BLEND);
+    CreateMacroInt("SDL_BLENDMODE_ADD",SDL_BLENDMODE_ADD);
+    CreateMacroInt("SDL_BLENDMODE_MOD",SDL_BLENDMODE_MOD);
+    CType *sdlwindp_t=CreatePtrType(CreateClassForwardDecl(NULL,CreateDummyName("SDL_Window")));
+    CType *sdlrendp_t=CreatePtrType(CreateClassForwardDecl(NULL,CreateDummyName("SDL_Renderer")));
+    CType *sdltextp_t=CreatePtrType(CreateClassForwardDecl(NULL,CreateDummyName("SDL_Texture")));
+    CreateMacroInt("SDL_WINDOWPOS_UNDEFINED",SDL_WINDOWPOS_UNDEFINED);
+    CreateMacroInt("SDL_WINDOWPOS_CENTERED",SDL_WINDOWPOS_CENTERED);
+    CreateMacroInt("SDL_WINDOW_FULLSCREEN",SDL_WINDOW_FULLSCREEN);
+    CreateMacroInt("SDL_WINDOW_FULLSCREEN_DESKTOP",SDL_WINDOW_FULLSCREEN_DESKTOP);
+    CreateMacroInt("SDL_WINDOW_RESIZABLE",SDL_WINDOW_RESIZABLE);
+    CreateMacroInt("SDL_WINDOW_MINIMIZED",SDL_WINDOW_MINIMIZED);
+    CreateMacroInt("SDL_WINDOW_MAXIMIZED",SDL_WINDOW_MAXIMIZED);
+    CreateBuiltin(&SDL_CreateWindow,sdlwindp_t,"SDL_CreateWindow",0,u8p,i64,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&SDL_CreateWindowAndRenderer,sdlrendp_t,"SDL_CreateWindowAndRenderer",0,i64,i64,i64,CreatePtrType(sdlwindp_t),CreatePtrType(sdlrendp_t),NULL);
+    CreateBuiltin(&SDL_DestroyWindow,u0,"SDL_DestroyWindow",0,sdlwindp_t,NULL);
+    CreateBuiltin(&SDL_DestroyRenderer,u0,"SDL_DestroyRenderer",0,sdlrendp_t,NULL);
+    CreateBuiltin(&SDL_DisableScreenSaver,u0,"SDL_DisableScreenSaver",0,NULL);
+    CreateBuiltin(&SDL_GetGrabbedWindow,sdlwindp_t,"SDL_GetGrabbedWindow",0,NULL);
+    CreateBuiltin(&SDL_GetWindowPosition,u0,"SDL_GetWindowPosition",0,sdlwindp_t,i64p,i64p,NULL);
+    CreateBuiltin(&SDL_GetWindowMinimumSize,u0,"SDL_GetWindowMinimumSize",0,sdlwindp_t,i64p,i64p,NULL);
+    CreateBuiltin(&SDL_GetWindowMaximumSize,u0,"SDL_GetWindowMaximumSize",0,sdlwindp_t,i64p,i64p,NULL);
+    CreateBuiltin(&SDL_GetWindowSize,u0,"SDL_GetWindowSize",0,sdlwindp_t,i64p,i64p,NULL);
+    CreateBuiltin(&hc_SDL_GetWindowTitle,u8p,"SDL_GetWindowTitle",0,sdlwindp_t,NULL);
+    CreateBuiltin(&SDL_HideWindow,u0,"SDL_HideWindow",0,sdlwindp_t,NULL);
+    CreateBuiltin(&SDL_MaximizeWindow,u0,"SDL_MaximizeWindow",0,sdlwindp_t,NULL);
+    CreateBuiltin(&SDL_MinimizeWindow,u0,"SDL_MinimizeWindow",0,sdlwindp_t,NULL);
+    CreateBuiltin(&SDL_SetWindowBordered,u0,"SDL_SetWindowBordered",0,sdlwindp_t,i64,NULL);
+    CreateBuiltin(&SDL_SetWindowFullscreen,u0,"SDL_SetWindowFullscreen",0,sdlwindp_t,i64,NULL);
+    CreateBuiltin(&SDL_SetWindowMaximumSize,u0,"SDL_SetWindowMaximumSize",0,sdlwindp_t,i64,i64,NULL);
+    CreateBuiltin(&SDL_SetWindowMinimumSize,u0,"SDL_SetWindowMinimumSize",0,sdlwindp_t,i64,i64,NULL);
+    CreateBuiltin(&SDL_SetWindowResizable,u0,"SDL_SetWindowResizable",0,sdlwindp_t,i64,NULL);
+    CreateBuiltin(&SDL_SetWindowSize,u0,"SDL_SetWindowSize",0,sdlwindp_t,i64,i64,NULL);
+    CreateBuiltin(&SDL_SetWindowTitle,u0,"SDL_SetWindowTitle",0,sdlwindp_t,u8p,NULL);
+    CreateBuiltin(&SDL_ShowWindow,u0,"SDL_ShowWindow",0,sdlwindp_t,NULL);
+    CreateMacroInt("SDL_RENDERER_SOFTWARE",SDL_RENDERER_SOFTWARE);
+    CreateMacroInt("SDL_RENDERER_ACCELERATED",SDL_RENDERER_ACCELERATED);
+    CreateMacroInt("SDL_RENDERER_PRESENTVSYNC",SDL_RENDERER_PRESENTVSYNC);
+    CreateMacroInt("SDL_RENDERER_TARGETTEXTURE",SDL_RENDERER_TARGETTEXTURE);
+    CreateBuiltin(&SDL_CreateRenderer,sdlrendp_t,"SDL_CreateRenderer",0,sdlwindp_t,i64,i64,0);
+    CreateMacroInt("SDL_TEXTUREACCESS_TARGET",SDL_TEXTUREACCESS_TARGET);
+    CreateMacroInt("SDL_TEXTUREACCESS_STREAMING",SDL_TEXTUREACCESS_STREAMING);
+    CreateMacroInt("SDL_TEXTUREACCESS_STATIC",SDL_TEXTUREACCESS_STATIC);
+    CreateBuiltin(&SDL_CreateTexture,sdltextp_t,"SDL_CreateTexture",0,sdlrendp_t,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&SDL_DestroyRenderer,sdlrendp_t,"SDL_DestroyRenderer",0,sdlrendp_t,NULL);
+    CreateBuiltin(&SDL_GetRenderDrawColor,i64,"SDL_GetRenderDrawColor",0,sdlrendp_t,u8p,u8p,u8p,u8p,NULL);
+    CreateBuiltin(&SDL_GetRenderer,sdlrendp_t,"SDL_GetRenderer",0,sdlwindp_t,NULL);
+    CreateBuiltin(&SDL_GetRendererOutputSize,i64,"SDL_GetRendererOutputSize",0,sdlrendp_t,i32p,i32p,NULL);
+    CreateBuiltin(&SDL_GetRenderTarget,sdltextp_t,"SDL_GetRenderTarget",0,sdlrendp_t,NULL);
+    CreateBuiltin(&SDL_GetTextureAlphaMod,i64,"SDL_GetTextureAlphaMod",0,sdltextp_t,u8p,NULL);
+    CreateBuiltin(&SDL_GetTextureColorMod,i64,"SDL_GetTextureColorMod",0,sdltextp_t,u8p,u8p,u8p,NULL);
+    CreateBuiltin(&SDL_RenderClear,i64,"SDL_RenderClear",0,sdlrendp_t,NULL);
+    CType *sdlrp_t=CreatePtrType(sdlr_t);
+    CType *sdlpp_t=CreatePtrType(sdlp_t);
+    CreateBuiltin(&SDL_RenderCopy,i64,"SDL_RenderCopy",0,sdlrendp_t,sdlrendp_t,sdlrp_t,sdlrp_t,NULL);
+    CreateBuiltin(&SDL_RenderDrawLine,i64,"SDL_RenderDrawLine",0,sdlrendp_t,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&SDL_RenderDrawLines,i64,"SDL_RenderDrawLines",0,sdlrendp_t,sdlp_t,i64,NULL);
+    CreateBuiltin(&SDL_RenderDrawPoint,i64,"SDL_RenderDrawPoint",0,sdlrendp_t,i64,i64,NULL);
+    CreateBuiltin(&SDL_RenderDrawPoints,i64,"SDL_RenderDrawPoints",0,sdlrendp_t,sdlpp_t,i64,NULL);
+    CreateBuiltin(&SDL_RenderDrawRect,i64,"SDL_RenderDrawRect",0,sdlrendp_t,sdlrp_t,NULL);
+    CreateBuiltin(&SDL_RenderDrawRects,i64,"SDL_RenderDrawRects",0,sdlrendp_t,sdlrp_t,i64,NULL);
+    CreateBuiltin(&SDL_RenderFillRect,i64,"SDL_RenderFillRect",0,sdlrendp_t,sdlrp_t,NULL);
+    CreateBuiltin(&SDL_RenderFillRects,i64,"SDL_RenderFillRects",0,sdlrendp_t,sdlrp_t,i64,NULL);
+    CreateBuiltin(&SDL_RenderGetClipRect,i64,"SDL_RenderGetClipRect",0,sdlrendp_t,sdlrp_t,NULL);
+    CreateBuiltin(&SDL_RenderPresent,i64,"SDL_RenderPresent",0,sdlrendp_t,NULL);
+    CreateBuiltin(&SDL_RenderSetClipRect,i64,"SDL_RenderSetClipRect",0,sdlrendp_t,sdlrp_t,NULL);
+    CreateBuiltin(&SDL_SetRenderDrawColor,i64,"SDL_SetRenderDrawColor",0,sdlrendp_t,u8,u8,u8,u8,NULL);
+    CreateBuiltin(&SDL_SetRenderTarget,i64,"SDL_SetRenderTarget",0,sdlrendp_t,sdltextp_t,NULL);
+    CreateBuiltin(&SDL_SetTextureAlphaMod,i64,"SDL_SetTextureAlphaMod",0,sdlrendp_t,u8,NULL);
+    CreateBuiltin(&SDL_SetTextureColorMod,i64,"SDL_SetTextureColorMod",0,sdlrendp_t,u8,u8,u8,NULL);
+    CreateBuiltin(&SDL_UpdateTexture,i64,"SDL_UpdateTexture",0,sdltextp_t,sdlrp_t,u0p,i64,NULL);
+    CreateBuiltin(&SDL_QueryTexture,i64,"SDL_QueryTexture",0,sdltextp_t,i32p,i32p,i32p,i32p,NULL);
+    //Clipboard
+    CreateBuiltin(&hc_SDL_GetClipboardText,u8p,"SDL_GetClipboardText",0,NULL);
+    CreateBuiltin(&SDL_SetClipboardText,u0,"SDL_SetClipboardText",0,u8p,NULL);
+    //Events
+    CType *sdlevent_t=IMPORT_CLASS_WO_MEMBERS(SDL_Event);
+    {
+        ADD_PRIM_MEMBER(sdlevent_t,SDL_Event,type);
+        {
+            CType *sdlevent_wind_t=IMPORT_CLASS_WO_MEMBERS(SDL_WindowEvent);
+            ADD_UPRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,type);
+            ADD_UPRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,timestamp);
+            ADD_UPRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,event);
+            ADD_PRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,data1);
+            ADD_PRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,data2);
+            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_wind_t,SDL_Event,window);
+        }
+        {
+            CType *sdlevent_key_t=IMPORT_CLASS_WO_MEMBERS(SDL_KeyboardEvent);
+            ADD_UPRIM_MEMBER(sdlevent_key_t,SDL_KeyboardEvent,type);
+            ADD_UPRIM_MEMBER(sdlevent_key_t,SDL_KeyboardEvent,timestamp);
+            ADD_UPRIM_MEMBER(sdlevent_key_t,SDL_KeyboardEvent,state);
+            ADD_UPRIM_MEMBER(sdlevent_key_t,SDL_KeyboardEvent,repeat);
+            //
+            CType *sdlkeysym_t=IMPORT_CLASS_WO_MEMBERS(SDL_Keysym);
+            ADD_UPRIM_MEMBER(sdlkeysym_t,SDL_Keysym,scancode);
+            ADD_UPRIM_MEMBER(sdlkeysym_t,SDL_Keysym,sym);
+            ADD_UPRIM_MEMBER(sdlkeysym_t,SDL_Keysym,mod);
+            //
+            ADD_TYPED_MEMBER(sdlevent_key_t,sdlkeysym_t,SDL_KeyboardEvent,keysym);
+            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_key_t,SDL_Event,key);
+        }
+        {
+            CType *sdlevent_edit_t=IMPORT_CLASS_WO_MEMBERS(SDL_TextEditingEvent);
+            ADD_UPRIM_MEMBER(sdlevent_edit_t,SDL_TextEditingEvent,type);
+            ADD_UPRIM_MEMBER(sdlevent_edit_t,SDL_TextEditingEvent,timestamp);
+            ADD_TYPED_MEMBER(sdlevent_edit_t,CreateArrayType(u8,CreateI64(32)),SDL_TextEditingEvent,text);
+            ADD_PRIM_MEMBER(sdlevent_edit_t,SDL_TextEditingEvent,start);
+            ADD_PRIM_MEMBER(sdlevent_edit_t,SDL_TextEditingEvent,length);
+            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_edit_t,SDL_Event,edit);
+        }
+        {
+            CType *sdlevent_text_t=IMPORT_CLASS_WO_MEMBERS(SDL_TextInputEvent);
+            ADD_UPRIM_MEMBER(sdlevent_text_t,SDL_TextInputEvent,type);
+            ADD_UPRIM_MEMBER(sdlevent_text_t,SDL_TextInputEvent,timestamp);
+            ADD_TYPED_MEMBER(sdlevent_text_t,CreateArrayType(u8,CreateI64(32)),SDL_TextInputEvent,text);
+            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_text_t,SDL_Event,text);
+        }
+        {
+            CreateMacroInt("SDL_BUTTON_LMASK",SDL_BUTTON_LMASK);
+            CreateMacroInt("SDL_BUTTON_RMASK",SDL_BUTTON_RMASK);
+            CreateMacroInt("SDL_BUTTON_MMASK",SDL_BUTTON_MMASK);
+            CType *sdlevent_mousemot_t=IMPORT_CLASS_WO_MEMBERS(SDL_MouseMotionEvent);
+            ADD_UPRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,type);
+            ADD_UPRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,timestamp);
+            ADD_UPRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,which);
+            ADD_UPRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,state);
+            ADD_PRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,x);
+            ADD_PRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,y);
+            ADD_PRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,xrel);
+            ADD_PRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,yrel);
+            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_mousemot_t,SDL_Event,motion);
+        }
+        {
+            CType *sdlevent_mouse_t=IMPORT_CLASS_WO_MEMBERS(SDL_MouseButtonEvent);
+            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,type);
+            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,timestamp);
+            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,which);
+            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,button);
+            CreateMacroInt("SDL_PRESSED",SDL_PRESSED);
+            CreateMacroInt("SDL_RELEASED",SDL_RELEASED);
+            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,state);
+            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,clicks);
+            ADD_PRIM_MEMBER(sdlevent_mouse_t,SDL_MouseMotionEvent,x);
+            ADD_PRIM_MEMBER(sdlevent_mouse_t,SDL_MouseMotionEvent,y);
+            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_mouse_t,SDL_Event,button);
+        }
+        {
+            CType *sdlevent_wheel_t=IMPORT_CLASS_WO_MEMBERS(SDL_MouseMotionEvent);
+            ADD_UPRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,type);
+            ADD_UPRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,timestamp);
+            ADD_UPRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,which);
+            ADD_PRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,x);
+            ADD_PRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,y);
+            ADD_UPRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,direction);
+            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_wheel_t,SDL_Event,wheel);
+        }
+        {
+            CType *sdlevent_quit_t=IMPORT_CLASS_WO_MEMBERS(SDL_QuitEvent);
+            ADD_UPRIM_MEMBER(sdlevent_quit_t,SDL_QuitEvent,type);
+            ADD_UPRIM_MEMBER(sdlevent_quit_t,SDL_QuitEvent,timestamp);
+            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_quit_t,SDL_Event,quit);
+        }
+    }
+    CType *sdleventp_t=CreatePtrType(sdlevent_t);
+    CreateBuiltin(&SDL_SetClipboardText,i64,"SDL_PollEvent",0,sdleventp_t,NULL);
+    CreateBuiltin(&SDL_WaitEvent,i64,"SDL_WaitEvent",0,sdleventp_t,NULL);
 }
