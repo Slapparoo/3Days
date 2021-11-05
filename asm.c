@@ -206,6 +206,7 @@ int IsOpcode(char* name) {
   return ((int(*)(char*))enc[0]->func->funcptr)(name);
 }
 void AssembleOpcode(AST* at, char* name, vec_AST_t operands) {
+  if(Compiler.tagsFile) return;
   int8_t isjmp = 0;
   CVariable* f = *map_get(&Compiler.globals, "X64ModeFree");
   Compiler.addrofFrameoffsetMode = 1;

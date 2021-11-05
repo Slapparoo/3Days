@@ -3322,7 +3322,8 @@ void __CompileCompoundLiteral(CType *type,int ptrreg,AST *comp,int adjust_off) {
     CType *pt =CreatePtrType(type);
     if(bt->type==TYPE_ARRAY) {
         if(bt->array.dim!=-1) {
-            if(bt->array.dim<comp->arrayLiteral.length) {
+            //Dont compute if tags file mode as array dims are not computed.
+            if(bt->array.dim<comp->arrayLiteral.length&&!Compiler.tagsFile) {
                 RaiseWarning(comp, "Array literal dim(%ld) excedes array dim(%ld).",bt->array.dim,comp->arrayLiteral.length);
             }
             int min=(bt->array.dim<comp->arrayLiteral.length)?bt->array.dim:comp->arrayLiteral.length;

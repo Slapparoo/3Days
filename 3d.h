@@ -521,6 +521,13 @@ typedef struct CLexer {
     vec_CPreprocIfState_t ifStates;
     FILE *replSource;
     mrope_t *currentExeStream;
+    /**
+     * Dont use this,The assembler is written in HolyC and the lexer will call IsOpcode(which calls HCRT/ASM.HC)
+     * This is used in tags generation if Compiler.tagsFile is set.
+     */
+    map_void_t __opcodes;
+    //Same
+    map_void_t __registers;
 } CLexer;
 extern CLexer Lexer;
 #define LTF_EXPANSION 1
@@ -621,7 +628,7 @@ typedef vec_t(CAsmPatch *) vec_CAsmPatchP_t;
 typedef struct {
   struct jit_label *label;
   LabelContext context;
-  unsigned long inAsmBlk:1; 
+  unsigned long inAsmBlk:1;
 } CLabel;
 typedef map_t(CLabel) map_CLabel_t;
 typedef struct {
@@ -662,7 +669,7 @@ typedef struct {
     CType *lastclass;
     struct AST *lastLabel;
   vec_AST_t __addedGlobalLabels;
-  //Will be filled with NULL if not defined yet 
+  //Will be filled with NULL if not defined yet
   map_jit_label_t asmTaintedLabels;
   LabelContext labelContext;
   map_CVariable_t exportedLabels;
@@ -882,7 +889,7 @@ void PopTryFrame();
 void ApplyPatches();
 void LeaveFunction(COldFuncState old);
 char *HashLabel(char *name,LabelContext context,int is_local);
-/** 
+/**
  * This accounts for local labels
  */
 char *ResolveLabelByName(char *label,LabelContext context);

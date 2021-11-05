@@ -2934,7 +2934,7 @@ yyreduce:
   case 139: /* arrlit: LEFT_CURLY _arrlit RIGHT_CURLY  */
 #line 552 "HolyC.y"
                                                        {
-  yyval=yyvsp[-1];
+  yyval=SOT(yyvsp[-1],yyvsp[-2]);
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
@@ -2944,7 +2944,7 @@ yyreduce:
   case 140: /* arrlit: LEFT_CURLY _arrlit COMMA RIGHT_CURLY  */
 #line 557 "HolyC.y"
                                                                  {
-  yyval=yyvsp[-2];
+  yyval=SOT(yyvsp[-2],yyvsp[-3]);
   ReleaseAST(yyvsp[-3]);
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
@@ -4963,7 +4963,7 @@ static void __IsTrue(CFuncInfo *dummy1,AST *node,void *fp) {
   if(Compiler.tagsFile) {
     __IsTruePassed=1;
     return ;
-  } 
+  }
   CType *rtype =AssignTypeToNode(node);
   COldFuncState old=CreateCompilerState();
   vec_CVariable_t args;
