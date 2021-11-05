@@ -866,7 +866,6 @@ int IsModifyAssign(AST *node) {
     return 0;
 }
 double EvaluateF64(AST *exp) {
-  if(Compiler.tagsFile) return 0;
     AST *ret =CreateReturn(exp);
     COldFuncState old=CreateCompilerState();
     //Dissable breakpoints
@@ -875,21 +874,23 @@ double EvaluateF64(AST *exp) {
     Compiler.returnType=CreatePrimType(TYPE_F64);
     CFunction *f=CompileAST(NULL, ret, args,C_AST_FRAME_OFF_DFT);
     ReleaseType(Compiler.returnType);
-    GC_Disable();
-    #ifndef TARGET_WIN32
-    signal(SIGINT,SignalHandler);
-    double ret2=((double(*)())f->funcptr)();
-    signal(SIGINT,SIG_IGN);
-    #else
-    double ret2=((double(*)())f->funcptr)();
-    #endif
+    double ret2=0;
+    if(f&&!Compiler.tagsFile) {
+        GC_Disable();
+        #ifndef TARGET_WIN32
+        signal(SIGINT,SignalHandler);
+        ret2=((double(*)())f->funcptr)();
+        signal(SIGINT,SIG_IGN);
+        #else
+        double ret2=((double(*)())f->funcptr)();
+        #endif
+    }
     GC_Enable();
     ReleaseFunction(f);
     RestoreCompilerState(old);
     return ret2;
 }
 int64_t EvaluateInt(AST *exp,int flags) {
-    if(Compiler.tagsFile) return 0;
     AST *ret =CreateReturn(exp);
     map_CVariable_t oldlocs=Compiler.locals;
     COldFuncState old=CreateCompilerState();
@@ -903,15 +904,18 @@ int64_t EvaluateInt(AST *exp,int flags) {
     CFunction *f=CompileAST(locals, ret, args,Compiler.frameOffset);
     ReleaseType(Compiler.returnType);
     vec_deinit(&args);
-    GC_Disable();
-    #ifndef TARGET_WIN32
-    signal(SIGINT,SignalHandler);
-    int64_t ret2=((int64_t(*)())f->funcptr)();
-    signal(SIGINT,SIG_IGN);
-    #else
-    int64_t ret2=((int64_t(*)())f->funcptr)();
-    #endif
-    GC_Enable();
+    int64_t ret2=0;
+    if(f&&!Compiler.tagsFile) {
+        GC_Disable();
+        #ifndef TARGET_WIN32
+        signal(SIGINT,SignalHandler);
+        ret2=((int64_t(*)())f->funcptr)();
+        signal(SIGINT,SIG_IGN);
+        #else
+        int64_t ret2=((int64_t(*)())f->funcptr)();
+        #endif
+        GC_Enable();
+    }
     ReleaseFunction(f);
     RestoreCompilerState(old);
     return ret2;
@@ -1108,9 +1112,16 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
 		      signal(SIGINT,SIG_IGN);
 #else
 		      stmt->funcptr(0);
-#endif 
+#endif
 		      GC_Enable();
 		      ReleaseFunction(stmt);
+		    } else {
+                COldFuncState olds=CreateCompilerState();
+		      Compiler.returnType=decl.finalType;
+		      CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT);
+		      RestoreCompilerState(olds);
+		      vec_deinit(&empty);
+
 		    }
                     vec_push(&r->func.dftArgs,vnode);
                 }
@@ -3507,7 +3518,7 @@ static void ___CompileAST(AST *exp) {
       vec_push(&Compiler.valueStack,VALUE_INT(0));
       Assembler.active=0;
       jit_end_asm_blk(Compiler.JIT);
-      
+
       if(jmp) jit_patch(Compiler.JIT, jmp);
       break;
     }
@@ -3823,7 +3834,7 @@ lcloop:
 	  }
 	}
 	vec_deinit(&members);
-	
+
       }
         AST *conv =ConvertMembersToPtrs(exp);
         __CompileAST(conv);
@@ -5384,6 +5395,8 @@ alwaysfalse:
             int iter2;
             vec_foreach(&cases, cs2, iter2) {
                 if(iter==iter2) continue;
+                //Array labels are created JIT but in tags mode they are not computed.
+                if(Compiler.tagsFile) continue;
                 //https://stackoverflow.com/questions/3269434/whats-the-most-efficient-way-to-test-two-integer-ranges-for-overlap
                 if(!(cs->cs.low<=cs2->cs.high&&cs->cs.high>=cs2->cs.low)) {
                     //ok
@@ -5572,7 +5585,7 @@ reglabrefs:
         vec_push(&Compiler.valueStack, VALUE_INT(0));
 	TD_FREE(fmted);
 	break;
-    } 
+    }
     case AST_EXPORT_LABEL: {
          char *fmted=HashLabel(exp->labelNode->name,exp->labelContext, 0);
 	 if(Compiler.inFunction&&!map_get(&Compiler.labels,fmted)) {
@@ -5600,7 +5613,7 @@ reglabrefs:
 	 exp2->func->JIT=Compiler.JIT;
 
 	 map_set(&Compiler.exportedLabels,exp->labelNode->name,exp2);
-	 
+
 	 CVariable **exist;
 	 if(exist=map_get(&Compiler.globals,fmted))
 	   ReleaseVariable(*exist);
@@ -5788,7 +5801,7 @@ CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long
     int assign_offs=0;
     int force_noregs=0;
     //Find noregs
-    if(!locals) { 
+    if(!locals) {
       locals=&Compiler.locals;
       vec_foreach(&args, arg, iter) {
         map_set(locals,arg->name,CloneVariable(arg));
@@ -5825,7 +5838,10 @@ noreg:
             } else goto noreg;
         }
     }
-    struct jit *curjit=Compiler.JIT=jit_init();
+    struct jit *curjit=Compiler.JIT=NULL;
+    if(!Compiler.tagsFile) {
+            curjit=Compiler.JIT=jit_init();
+    }
     void(*funcptr)(int64_t,...);
     CFunction *func=TD_CALLOC(1,sizeof(CFunction));
     func->JIT=curjit;
@@ -5993,7 +6009,10 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         map_set(&Compiler.locals,key,g);
     }
 
-    struct jit *curjit=Compiler.JIT=jit_init();
+    struct jit *curjit=Compiler.JIT=NULL;
+    if(!Compiler.tagsFile) {
+            curjit=Compiler.JIT=jit_init();
+    }
     void(*funcptr)(int64_t,...);
     CFunction *func=TD_CALLOC(1,sizeof(CFunction));
     func->JIT=curjit;
@@ -6389,6 +6408,8 @@ CVariable *Extern(CType *type,AST *name,char *importname) {
       map_remove(&Compiler.globals, name->name);
     CType *bt2 =BaseType(type);
     CVariable *ret=TD_MALLOC(sizeof(CVariable));
+    ret->fn=strdup(name->fn);
+    ret->line=name->ln;
     ret->type=type;
     ret->refCount=1;
     ret->isFunc=bt2->type==TYPE_FUNC;
@@ -6408,6 +6429,8 @@ CVariable *Import(CType *type,AST *name,char *importname) {
       map_remove(&Compiler.globals, name->name);
     CType *bt2 =BaseType(type);
     CVariable *ret=TD_MALLOC(sizeof(CVariable));
+    ret->fn=strdup(name->fn);
+    ret->line=name->ln;
     ret->type=type;
     ret->isFunc=bt2->type==TYPE_FUNC;
     ret->refCount=1;
@@ -6437,7 +6460,7 @@ void LeaveFunction(COldFuncState old) {
       TD_FREE(pat);
     vec_deinit(&Compiler.asmPatches);
     memset(&Compiler.asmPatches,0,sizeof(Compiler.asmPatches));
-    
+
     RestoreCompilerState(old);
 }
 void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int hasvargs) {
@@ -6460,8 +6483,7 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
         map_remove(&Compiler.globals, name->name);
     }
     CreateFuncForwardDecl(NULL,rtype,name,args,hasvargs);
-    if(Compiler.tagsFile) return;
-    
+
     COldFuncState oldstate=EnterFunction(rtype,args);
     CType *ftype=CreateFuncType(rtype, args,hasvargs);
     ftype->func.hasvargs=hasvargs;
@@ -6508,7 +6530,6 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
     fv->func=f;
 }
 void RunStatement(AST *s) {
-  if(Compiler.tagsFile) return;
     if(s->type==AST_NOP) return;
     COldFuncState old=CreateCompilerState();
     vec_CVariable_t empty;
@@ -6848,7 +6869,7 @@ char *HashLabel(char *name,LabelContext context,int is_local) {
     return strdup(name);
   }
 }
-/** 
+/**
  * This accounts for local labels
  */
 char *ResolveLabelByName(char *label,LabelContext context) {

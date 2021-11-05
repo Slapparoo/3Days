@@ -506,6 +506,7 @@ void jit_disable_optimization(struct jit * jit, int opt)
 }
 void jit_free(struct jit * jit)
 {
+    if(!jit) return;
 #ifndef TARGET_WIN32
 	munmap(jit->buf,jit->ip-jit->buf);
 #else

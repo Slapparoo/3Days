@@ -550,12 +550,12 @@ _arrlit[r]: _arrlit[a] COMMA[un1] arrlit[b] {$r=AppendToArrLiteral($a,$b);Releas
 _arrlit: expr {$$=AppendToArrLiteral(NULL,$1);};
 _arrlit: arrlit {$$=AppendToArrLiteral(NULL,$1);};
 arrlit[r]: LEFT_CURLY[un1] _arrlit[b] RIGHT_CURLY[un2] {
-  $r=$b;
+  $r=SOT($b,$un1);
   ReleaseAST($un1);
   ReleaseAST($un2);
 };
 arrlit[r]:LEFT_CURLY[un1] _arrlit[b] COMMA[un2] RIGHT_CURLY[un3] {
-  $r=$b;
+  $r=SOT($b,$un1);
   ReleaseAST($un1);
   ReleaseAST($un2);
   ReleaseAST($un3);
@@ -1558,7 +1558,7 @@ static void __IsTrue(CFuncInfo *dummy1,AST *node,void *fp) {
   if(Compiler.tagsFile) {
     __IsTruePassed=1;
     return ;
-  } 
+  }
   CType *rtype =AssignTypeToNode(node);
   COldFuncState old=CreateCompilerState();
   vec_CVariable_t args;

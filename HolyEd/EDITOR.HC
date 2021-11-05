@@ -193,7 +193,6 @@ class CDiag {
     U8 *fn,*msg;
 };
 CDiag *ParseDiags(U8 *file) {
-  return NULL;
     I64 cnt,len;
     U8 *text=FileRead(file,&cnt);
     U8 *ptr=text;
@@ -414,6 +413,7 @@ class CEditor {
     U8 *fn;
     I64 margin_top,margin_bottom;
 };
+U0 MarkLineColors(CEditor *ed);
 U0 WriteWithinWin(WINDOW *win,U8 *text,I64 x_scroll=0);
 I64 OpenFile(U8 *name,I64 ln=0);
 I64 ShowDiagsWindow(CEditor *parent) {
@@ -983,8 +983,10 @@ CEditor *EditorNew(Bool gen_rt_tags=FALSE) {
     r->line_cache_size=0;
     EditorInsText(r,"",0);
     if(gen_rt_tags) {
-        CreateTagsFile("TAGS",NULL);
+        CreateTagsAndErrorsFiles("TAGS","ERRS",r->fn);
         r->tags=ReadTags("TAGS");
+        r->diags=ParseDiags("ERRS");
+        MarkLineColors(r);
     }
     return r;
 }
@@ -1704,6 +1706,7 @@ I64 SaveDocAs(CEditor *ed);
  * This will color the lines based on diagnostitc
  */
 U0 MarkLineColors(CEditor *ed) {
+    if(!ed->fn) return;
     CLine *line=ed->lines;
     while(line) {
         line->flags&=~(ED_LNF_WARN|ED_LNF_ERR);
@@ -1745,15 +1748,15 @@ I64 SaveDoc(CEditor *ed) {
         FreeDiags(ed->diags);
         wprint(msgs,"Generating tags and diagnostics.\n");
         wrefresh(msgs);
-        CreateTagsFile("TAGS",ed->fn);
+        CreateTagsAndErrorsFiles("TAGS","ERRS",ed->fn);
         wprint(msgs,"Parsing Tags.\n");
         wrefresh(msgs);
         ed->tags=ReadTags("TAGS");
-        //ed->diags=ParseDiags("ERRS");
+        ed->diags=ParseDiags("ERRS");
         wprint(msgs,"Garbage collecting.\n");
         wrefresh(msgs);
         GC_Collect();
-        //MarkLineColors(ed);
+        MarkLineColors(ed);
         redrawwin(ed->window);
         flushinp;
     }
@@ -2067,10 +2070,10 @@ I64 OpenFile(U8 *name,I64 ln=0)  {
   new->fn=StrNew(name);
   new->cury=MinI64(ln,GetLineCount(new));
   Free(text);
-  CreateTagsFile("TAGS",name);
+  CreateTagsAndErrorsFiles("TAGS","ERRS",new->fn);
   new->tags=ReadTags("TAGS");
-  //new->diags=ParseDiags("ERRS");
-  //MarkLineColors(new);
+  new->diags=ParseDiags("ERRS");
+  MarkLineColors(new);
   buf=MAlloc(sizeof(*buf));
   buf->str=StrNew(name);
   buf->ed=new;
@@ -2318,6 +2321,7 @@ initscr;
 CEditor *ed=EditorNew(TRUE);
 Edit(ed);
 endwin;
+
 
 
 

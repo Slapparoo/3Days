@@ -285,18 +285,20 @@ void GetParYX(WINDOW *w,int64_t *y,int64_t *x) {
 WINDOW *StdScr() {
     return stdscr;
 }
-void CreateTagsFile(char *dest,char *root) {
-  if(!root) {
-    char buffer[2048];
-    sprintf(buffer,"%s -s -t %s",CompilerPath,dest);
-    //printf("%s\n",buffer);
-    system(buffer);
-  } else {
-    char buffer[2048];
-    sprintf(buffer,"%s -s -t %s %s",CompilerPath,dest,root);
-    //printf("%s\n",buffer);
-    system(buffer);
+void CreateTagsAndErrorsFiles(char *tags,char *errs,char *root) {
+  char buffer[2048];
+  strcpy(buffer,CompilerPath);
+  strcat(buffer," -s ");
+  if(tags) {
+        sprintf(buffer+strlen(buffer)," -t %s ",tags);
   }
+  if(errs) {
+        sprintf(buffer+strlen(buffer)," -e %s ",errs);
+  }
+  if(root) {
+      strcat(buffer,root);
+  }
+  system(buffer);
 }
 static void Test(int64_t a,int64_t b,int64_t c,int64_t d,int64_t e,int64_t f,int64_t  g) {
   printf("%lld,%lld,%lld,%lld,%lld,%lld,%lld\n",a,b,c,d,e,f,g);
@@ -403,7 +405,7 @@ void RegisterBuiltins() {
     CType *wind =CreateClassForwardDecl(NULL, CreateDummyName("WINDOW"));
     CType *windp =CreatePtrType(wind);
     CreateBuiltin(&GCollect,u0,"GC_Collect",0,NULL);
-    CreateBuiltin(&CreateTagsFile,u0,"CreateTagsFile",0,u8p,u8p,NULL);
+    CreateBuiltin(&CreateTagsAndErrorsFiles,u0,"CreateTagsAndErrorsFiles",0,u8p,u8p,u8p,NULL);
     CreateBuiltin(&MSize, i64, "MSize",0, u0p,NULL);
     CreateBuiltin(&BFFS, i64, "Bsf",0, i64,NULL);
     CreateBuiltin(&BCLZ, i64, "Bsr",0, i64,NULL);
