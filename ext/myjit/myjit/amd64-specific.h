@@ -253,12 +253,12 @@ static inline int emit_arguments(struct jit * jit)
 	int pushed = MAX(jit->prepared_args.gp_args +jit->prepared_args.fp_args -4, 0);
 	if (jit_current_func_info(jit)->has_prolog) {
 		//Windwos reqeuires at least 4 stack fields
-		int64_t pt=pushed;
+		int64_t pt=0;
 		if(pushed<4) {
 				stack_correction = 8*(4-pushed);
-				pt=4;
-		}
-		int64_t pushed=jit->push_count*8+8*pt;
+				pt=4-pushed;
+		} else pt=pushed;
+		pushed=jit->push_count*8+stack_correction+8*pushed;
 		if (pushed % 16 != 0)
 			stack_correction +=8;
 		if(stack_correction)

@@ -1,14 +1,15 @@
 HEADERS := HolyC.tab.h 3d.h
 CC := x86_64-w64-mingw32-gcc
-CFLAGS :=  -g3 -O0 -Wreturn-type -DUSEGC -DTARGET_WIN32 -I./ext/PDCurses-3.9/ -DNCURSES_STATIC -Iext/wineditline-2.206/include/editline
+CFLAGS :=  -g3 -O0 -Wreturn-type -DUSEGC -DTARGET_WIN32 -I./ext/PDCurses-3.9/ -DNCURSES_STATIC -Iext/wineditline-2.206/include/editline \
+-I./SDL2-mingw64/include
 all: 3d_tests.exe 3d.exe
 	echo "Done"
 main.obj: main.c
 	$(CC) $(CFLAGS) -c  main.c -o $@
 3d.exe:  vec.obj rt.obj exceptWin.obj jitlib-core.obj map.obj compile.obj lexer.obj HolyC.obj unesc.obj tosprn.obj gc.obj debugger.obj rope.obj main.obj at3.obj rl.obj  tags.obj pdcurses.a asm.obj
-	$(CC) $(CFLAGS)   $^  -lm ext/wineditline-2.206/lib64/libedit_static.a -o $@
+	$(CC) $(CFLAGS)   $^  -lm ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
 3d_tests.exe: vec.obj exceptWin.obj rt.obj jitlib-core.obj map.obj compile.obj lexer.obj unesc.obj tests.c HolyC.obj tosprn.obj gc.obj debugger.obj rope.obj  rl.obj  tags.obj pdcurses.a asm.obj
-	$(CC) $(CFLAGS)   $^  -lm  ext/wineditline-2.206/lib64/libedit_static.a -o $@
+	$(CC) $(CFLAGS)   $^  -lm  ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
 pdcurses.a:
 	cd ext/PDCurses-3.9/wincon && make CC=$(CC) && cp pdcurses.a ../../..
 HolyC.obj: HolyC.tab.c $(HEADERS)

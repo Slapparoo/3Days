@@ -313,6 +313,7 @@ static inline void funcall_put_arg(struct jit * jit, jit_op * op)
 	arg->argpos = jit->prepared_args.gp_args++;
 	#else
 	arg->argpos =pos;
+	jit->prepared_args.gp_args++;
 	#endif
 	jit->prepared_args.ready++;
 
@@ -331,6 +332,7 @@ static inline void funcall_fput_arg(struct jit * jit, jit_op * op)
 	arg->argpos = jit->prepared_args.fp_args++;
 	#else
 	arg->argpos =pos;
+	jit->prepared_args.fp_args++;
 	#endif
 	if (IS_IMM(op)) arg->value.fp = op->flt_imm;
 	else arg->value.generic = op->arg[0];

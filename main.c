@@ -27,6 +27,7 @@ char CompilerPath[1024];
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
 #define ENABLE_VIRTUAL_TERMINAL_INPUT 0x200
 static LONG WINAPI VectorHandler (struct _EXCEPTION_POINTERS *info) {
+  Backtrace();
   switch(info->ExceptionRecord->ExceptionCode) {
     #define FERR(code) case code: printf("Caught %s.\nType 'Exit(0);' to exit.\n",#code); HCLongJmp(&SigPad);
     FERR(EXCEPTION_ACCESS_VIOLATION);

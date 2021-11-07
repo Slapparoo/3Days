@@ -882,7 +882,7 @@ double EvaluateF64(AST *exp) {
         ret2=((double(*)())f->funcptr)();
         signal(SIGINT,SIG_IGN);
         #else
-        double ret2=((double(*)())f->funcptr)();
+        ret2=((double(*)())f->funcptr)();
         #endif
     }
     GC_Enable();
@@ -912,7 +912,7 @@ int64_t EvaluateInt(AST *exp,int flags) {
         ret2=((int64_t(*)())f->funcptr)();
         signal(SIGINT,SIG_IGN);
         #else
-        int64_t ret2=((int64_t(*)())f->funcptr)();
+        ret2=((int64_t(*)())f->funcptr)();
         #endif
         GC_Enable();
     }

@@ -19,12 +19,6 @@ struct AST;
 #include "ext/mropes/include/mropes/rope.h"
 #include "rl.h"
 extern char CompilerPath[1024];
-/*
- * Detects CPU and setups platform specific constants and macros used across the library
- */
-#if defined(_WIN32) || defined(WIN32) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__BORLANDC__)
-#define TARGET_WIN32
-#endif
 #ifdef TARGET_WIN32
 #include "winjmp.h"
 #define BLOCK_SIGS \
