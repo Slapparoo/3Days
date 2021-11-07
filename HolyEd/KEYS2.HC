@@ -1,4 +1,5 @@
 //https://docs.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
+#define ED_KEY_REDRAW 0+512
 #define ED_KEY_UP 1+512
 #define ED_KEY_DOWN 2+512
 #define ED_KEY_RIGHT 3+512
@@ -277,7 +278,7 @@ I64 ALT_KEY(U8 chr) {return ToUpper(chr)+256;}
 #define SDL_SCANCODE_KBDILLUMUP 0x118
 #define SDL_SCANCODE_EJECT 0x119
 #define SDL_SCANCODE_SLEEP 0x11A
-U8 ibuffer[32];
+U8 ibuffer[129];
 I64 ibufferi=0;
 I64 GetKey() {
     if(ibuffer[ibufferi]) {
@@ -289,12 +290,16 @@ I64 GetKey() {
     SDL_Event e;
     SDL_WaitEvent(&e);
     switch(e.type) {
+        case SDL_WINDOWEVENT: {
+            return ED_KEY_REDRAW;
+        }
         case SDL_KEYDOWN:
         U8 sc;
         switch(sc=e.key.keysym.scancode) {
+            case SDL_SCANCODE_TAB: return '\t';
             case SDL_SCANCODE_RETURN: return '\n';
             case SDL_SCANCODE_BACKSPACE:
-            if(e.key.keysym.mod&KMOD_CTRL) {
+ 	    if(e.key.keysym.mod&KMOD_CTRL) {
                 return ED_KEY_CTRL_BACKSPACE;
             } else
                 return ED_KEY_BACKSPACE;
@@ -313,6 +318,8 @@ I64 GetKey() {
                 return ED_KEY_CTRL_LEFT;
             } else if(e.key.keysym.mod&KMOD_CTRL) {
                 return ED_KEY_CTRL_LEFT;
+            } else if(e.key.keysym.mod&KMOD_SHIFT) {
+                return ED_KEY_SHIFT_LEFT;
             }
             return ED_KEY_LEFT;
             case SDL_SCANCODE_RIGHT:
@@ -320,6 +327,8 @@ I64 GetKey() {
                 return ED_KEY_CTRL_RIGHT;
             } else if(e.key.keysym.mod&KMOD_CTRL) {
                 return ED_KEY_CTRL_RIGHT;
+            } else if(e.key.keysym.mod&KMOD_SHIFT) {
+                return ED_KEY_SHIFT_RIGHT;
             }
             return ED_KEY_RIGHT;
             case SDL_SCANCODE_UP:
@@ -327,6 +336,8 @@ I64 GetKey() {
                 return ED_KEY_CTRL_UP;
             } else if(e.key.keysym.mod&KMOD_CTRL) {
                 return ED_KEY_CTRL_UP;
+            } else if(e.key.keysym.mod&KMOD_SHIFT) {
+                return ED_KEY_SHIFT_UP;
             }
             return ED_KEY_UP;
             case SDL_SCANCODE_DOWN:
@@ -334,6 +345,8 @@ I64 GetKey() {
                 return ED_KEY_CTRL_DOWN;
             } else if(e.key.keysym.mod&KMOD_CTRL) {
                 return ED_KEY_CTRL_DOWN;
+            } else if(e.key.keysym.mod&KMOD_SHIFT) {
+                return ED_KEY_SHIFT_DOWN;
             }
             return ED_KEY_DOWN;
             case SDL_SCANCODE_HOME:
@@ -349,12 +362,8 @@ I64 GetKey() {
         }
         break;
         case SDL_TEXTINPUT:
-        StrCpy(ibuffer,e.text.text);
+        StrCpy(ibuffer+ibufferi,e.text.text);
         goto grabb;
-        break;
     }
     return ERR;
 }
-
-
-

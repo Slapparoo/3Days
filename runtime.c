@@ -794,7 +794,7 @@ CreateMacroInt("ALT_Z",ALT_Z);
         }
     }
     CType *sdleventp_t=CreatePtrType(sdlevent_t);
-    CreateBuiltin(&SDL_SetClipboardText,i64,"SDL_PollEvent",0,sdleventp_t,NULL);
+    CreateBuiltin(&SDL_PollEvent,i64,"SDL_PollEvent",0,sdleventp_t,NULL);
     CreateBuiltin(&SDL_WaitEvent,i64,"SDL_WaitEvent",0,sdleventp_t,NULL);
     CreateBuiltin(&SDL_DestroyRenderer,u0,"SDL_DestroyRenderer",0,sdlrendp_t,NULL);
     CreateBuiltin(&SDL_DestroyTexture,u0,"SDL_DestroyTexture",0,sdltextp_t,NULL);
@@ -803,4 +803,29 @@ CreateMacroInt("ALT_Z",ALT_Z);
     CreateBuiltin(&SDL_GetError,u8p,"SDL_GetError",0,NULL);
     CreateBuiltin(&SDL_ClearError,u0,"SDL_ClearError",0,NULL);
     CreateBuiltin(&SDL_FlushEvent,u0,"SDL_FlushEvent",0,i64,NULL);
+    //Surfaces
+    CType *u32p=CreatePtrType(u32);
+    {
+        CType *sdlsurf_t=IMPORT_CLASS_WO_MEMBERS(SDL_Surface);
+        ADD_TYPED_MEMBER(sdlsurf_t,u0p,SDL_Surface,pixels);
+        ADD_PRIM_MEMBER(sdlsurf_t,SDL_Surface,w);
+        ADD_PRIM_MEMBER(sdlsurf_t,SDL_Surface,h);
+        CType *sdlsurfp_t=CreatePtrType(sdlsurfp_t);
+        CreateBuiltin(&SDL_CreateRGBSurface,sdlsurfp_t,"SDL_CreateRGBSurface",0,u32,i32,i32,i32,u32,u32,u32,u32,NULL);
+        CreateBuiltin(&SDL_CreateRGBSurfaceFrom,sdlsurfp_t,"SDL_CreateRGBSurface",0,u0p,i32,i32,i32,u32,u32,u32,u32,NULL);
+        CreateBuiltin(&SDL_UpperBlit,i64,"SDL_UpperBlit",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);
+        CreateBuiltin(&SDL_FillRect,i64,"SDL_FillRect",0,sdlsurfp_t,sdlrp_t,u32,NULL);
+        CreateBuiltin(&SDL_FillRects,i64,"SDL_FillRects",0,sdlsurfp_t,sdlrp_t,i32,u32,NULL);
+        CreateBuiltin(&SDL_GetClipRect,u0,"SDL_GetClipRect",0,sdlsurfp_t,sdlrp_t,NULL);
+        CreateBuiltin(&SDL_GetColorKey,i64,"SDL_GetColorKey",0,sdlsurfp_t,u32p,NULL);
+        CreateBuiltin(&SDL_GetSurfaceAlphaMod,i64,"SDL_GetSurfaceAlphaMod",0,sdlsurfp_t,u8p,NULL);
+        CreateBuiltin(&SDL_GetSurfaceColorMod,i64,"SDL_GetSurfaceColorMod",0,sdlsurfp_t,u8p,u8p,u8p,NULL);
+        CreateBuiltin(&SDL_LockSurface,i64,"SDL_LockSurface",0,sdlsurfp_t,NULL);
+        CreateBuiltin(&SDL_SetClipRect,i64,"SDL_SetClipRect",0,sdlsurfp_t,sdlrp_t,NULL);
+        CreateBuiltin(&SDL_SetColorKey,i64,"SDL_SetColorKey",0,sdlsurfp_t,i32, u32,NULL);
+        CreateBuiltin(&SDL_SetSurfaceAlphaMod,i64,"SDL_SetSurfaceAlphaMod",0,sdlsurfp_t,u8,NULL);
+        CreateBuiltin(&SDL_SetSurfaceColorMod,i64,"SDL_SetSurfaceColorMod",0,sdlsurfp_t,u8,u8,u8,NULL);
+        CreateBuiltin(&SDL_SetSurfaceRLE,i64,"SDL_SetSurfaceRLE",0,sdlsurfp_t,i32);
+        CreateBuiltin(&SDL_SoftStretch,i64,"SDL_SoftStretch",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);
+    }
 }

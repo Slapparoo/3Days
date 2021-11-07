@@ -76,7 +76,7 @@ U0 FreeTrie(CTrie *t) {
     FreeTrie(t->ents[cnt]);
   }
   Free(t->name);
-    Free(t->fullname);
+  Free(t->fullname);
   Free(t);
 }
 CTrie *TagNew(U8 *fullname,U8 *name,U8 *fn,I64 ln,U8 kind) {
@@ -419,7 +419,8 @@ SDL_Renderer *global_rend=NULL;
 #define FONT_X 8
 #define FONT_Y 8
 U0 SDL_InitScr() {
-    SDL_CreateWindowAndRenderer(640,480,SDL_WINDOW_RESIZABLE,&global_window,&global_rend);
+    global_window=SDL_CreateWindow("HolyEd",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,640,480,SDL_WINDOW_RESIZABLE);
+    global_rend=SDL_CreateRenderer(global_window,-1,SDL_RENDERER_TARGETTEXTURE|SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
     global_font=SDL_CreateTexture(global_rend,SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET,FONT_X*0x100,FONT_Y);
     SDL_SetRenderTarget(global_rend,global_font);
     SDL_SetRenderDrawColor(global_rend,0,0,0,0);
@@ -450,7 +451,7 @@ U0 SDL_ExitScr() {
 }
 class CSDL_ScrnChr {
     U8 chr;
-    U8 cp;
+    I8 cp; //negative for inverse
 };
 class CSDL_TextWin {
     SDL_Texture *text;
@@ -459,6 +460,7 @@ class CSDL_TextWin {
     //The charactors on the screen.
     CSDL_ScrnChr *char_cache;
     Bool cur_enabled;
+    Bool inverse;
 };
 #define FONT_X 8
 #define FONT_Y 8
@@ -490,6 +492,9 @@ I64 SDL_WinY(CSDL_TextWin *w) {
 U0 SDL_DrawWin(...) {
     I64 idx=0;
     SDL_SetRenderTarget(global_rend,NULL);
+    I32 winx,winy;
+    SDL_GetWindowSize(global_window,&winx,&winy);
+    winx/=FONT_X2,winy/=FONT_Y2;
     SDL_RenderClear(global_rend);
     for(;idx!=argc;idx++) {
         CSDL_TextWin *w=argv[idx];
@@ -504,11 +509,12 @@ U0 SDL_DrawWin(...) {
         SDL_Rect sbox={0,0,rx/FONT_X2*FONT_X2,ry/FONT_Y2*FONT_Y2};
         SDL_SetRenderTarget(rend,NULL);
         SDL_RenderCopy(rend,w->text,NULL,&box);
-        if(x!=sbox.w||y!=sbox.h) {
+        if(x/FONT_X2!=winx||y/FONT_Y2!=winy) {
+            "RESETING\n";
             SDL_DestroyTexture(w->text);
-            w->text=SDL_CreateTexture(global_rend,SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET,sbox.w,sbox.h);
+            w->text=SDL_CreateTexture(global_rend,SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET,winx*FONT_X2,winy*FONT_Y2);
             Free(w->char_cache);
-            w->char_cache=MAlloc(sizeof(CSDL_ScrnChr)*(sbox.w/FONT_X2)*(sbox.h/FONT_Y2));
+            w->char_cache=MAlloc(sizeof(CSDL_ScrnChr)*winx*winy);
         }
         if(w->cur_enabled) {
             SDL_Rect crect={w->curx*FONT_X2,w->cury*FONT_X2,FONT_X2,FONT_Y2};
@@ -518,21 +524,31 @@ U0 SDL_DrawWin(...) {
     }
     SDL_RenderPresent(global_rend);
 }
-U0 SDL_AddCh(CSDL_TextWin *win,U8 ch) {
+U0 SDL_AddCh(CSDL_TextWin *win,U8 ch,Bool force_in_view=FALSE) {
     I64 w=SDL_WinX(win);
-    if((win->char_cache[win->y*w+win->x].chr==ch)&&(win->char_cache[win->y*w+win->x].cp==win->cur_cp)) goto next;
+    if(force_in_view&&ch!='\n') {
+        if(win->x+1>=w) return;
+    }
+    if(ch=='\n') goto nxtln;
+    I64 mult=1;
+    if(win->inverse) mult=-1;
+    if((win->char_cache[win->y*w+win->x].chr==ch)&&(win->char_cache[win->y*w+win->x].cp==mult*win->cur_cp)) goto next;
     SDL_Rect fsrc={ch*FONT_X,0,FONT_X,FONT_Y};
     SDL_Rect dstbox={win->x*FONT_X2,win->y*FONT_Y2,FONT_X2,FONT_Y2};
     SDL_SetRenderTarget(global_rend,win->text);
     U_RGBA8888 bg=SDL_ColorPairs[win->cur_cp].bg;
     U_RGBA8888 fg=SDL_ColorPairs[win->cur_cp].fg;
+    if(win->inverse) {
+        U_RGBA8888 tmp=bg;
+        bg=fg;
+        fg=tmp;
+    }
     SDL_SetRenderDrawColor(global_rend,bg.r,bg.g,bg.b,0xff);
     SDL_SetTextureColorMod(global_font,fg.r,fg.g,fg.b);
     SDL_RenderFillRect(global_rend,&dstbox);
     SDL_RenderCopy(global_rend,global_font,&fsrc,&dstbox);
-    if(ch=='\n') goto nxtln;
     win->char_cache[win->y*w+win->x].chr=ch;
-    win->char_cache[win->y*w+win->x].cp=win->cur_cp;
+    win->char_cache[win->y*w+win->x].cp=win->cur_cp*mult;
     next:
     if(++win->x>=w) {
         nxtln:
@@ -546,7 +562,7 @@ U0 SDL_AddCh(CSDL_TextWin *win,U8 ch) {
 U0 SDL_Print(CSDL_TextWin *win,U8 *str) {
     I64 len=StrLen(str),idx=0;
     for(;idx!=len;idx++) {
-        SDL_AddCh(win,str[idx]);
+        SDL_AddCh(win,str[idx],TRUE);
     }
 }
 U0 SDL_SetBgColor(CSDL_TextWin *w) {
@@ -587,7 +603,10 @@ class CEditor {
     CDiag *diags;
     U8 *fn;
     I64 margin_top,margin_bottom;
+    I64 sel_start,sel_end;
 };
+U8 *EdGetSelText(CEditor *ed);
+U0 EdDelSel(CEditor *ed);
 U0 MarkLineColors(CEditor *ed);
 U0 WriteWithinWin(CSDL_TextWin *win,U8 *text,I64 x_scroll=0);
 I64 OpenFile(U8 *name,I64 ln=0);
@@ -668,6 +687,7 @@ I64 ShowDiagsWindow(CEditor *parent) {
             goto exit;
         }
         break;
+        case ED_KEY_REDRAW:
         case ED_KEY_RESIZE:
         SDL_DrawWin(win);
         break;
@@ -818,9 +838,9 @@ U0 WriteWithinWin(CSDL_TextWin *win,U8 *text,I64 x_scroll=0) {
         if(SDL_WinX(win)>=s>=0) {
            U8 chr=text[s-x_scroll];
            if(chr=='\t')
-            SDL_AddCh(win,' ');
+            SDL_AddCh(win,' ',TRUE);
            else if(chr!='\r'){
-            SDL_AddCh(win,chr);
+            SDL_AddCh(win,chr,TRUE);
            }
         }
         s++;
@@ -833,9 +853,9 @@ U0 WriteWithinView(CEditor *ed,U8 *text,I64 off) {
     while(s!=e) {
         if(ed->x_scroll+SDL_WinX(ed->window)>=s>=ed->x_scroll) {
           if(text[s-off]=='\t')
-            SDL_AddCh(ed->window,' ');
+            SDL_AddCh(ed->window,' ',TRUE);
           else if(text[s-off]!='\r')
-            SDL_AddCh(ed->window,text[s-off]);
+            SDL_AddCh(ed->window,text[s-off],TRUE);
         }
         s++;
     }
@@ -863,8 +883,36 @@ CLine *SearchForMLCommmentEnd(CLine *s) {
     }
     return NULL;
 }
+U0 __HighlightWrite(CEditor *ed,U8 *text,I64 off,I64 sel_start=I64_MAX,I64 sel_end=I64_MAX) {
+    I64 len=StrLen(text),idx;
+    for(idx=0;idx!=len;idx++) {
+        if(off+idx>=ed->x_scroll) {
+            if(sel_start<=off+idx<sel_end) {
+                ed->window->inverse=TRUE;
+            } else
+                ed->window->inverse=FALSE;
+            SDL_AddCh(ed->window,text[idx],TRUE);
+        }
+    }
+    ed->window->inverse=FALSE;
+}
 U0 Highlight(CEditor *ed,CLine *ln,Bool dryRun=FALSE,Bool recur=TRUE) {
+    I64 ln_off=GetLineOffset(ed,GetLinum(ed,ln));
+    I64 sel_start=ed->sel_start;
+    I64 sel_end=ed->sel_end;
+    if(sel_start==sel_end) goto ignoresel;
+    sel_start-=ln_off;
+    sel_end-=ln_off;
+    //Compute relative to line start
+    if(sel_start<0) sel_start=0;
+    if(sel_end<0) sel_end=0;
+    if(sel_end>RopeLength(ln->text))
+        sel_end=RopeLength(ln->text);
+    if(sel_start>sel_end) SwapI64(&sel_start,&sel_end);
+    ignoresel:
     U8 *text=Rope2Str(ln->text);
+    U8 *nl=StrFirstOcc(text,"\n");
+    if(nl) *nl=0;
     U8 *buf=MAlloc(StrLen(text)+1);
     I64 idx=0,ns=0;
     if(ln->prev) {
@@ -884,7 +932,7 @@ U0 Highlight(CEditor *ed,CLine *ln,Bool dryRun=FALSE,Bool recur=TRUE) {
                 ed->window->cur_cp=CP_COMMENT;
                 StrNCpy(buf,text,idx);
                 buf[idx]=0;
-                if(!dryRun) WriteWithinView(ed,buf,0);
+                if(!dryRun) __HighlightWrite(ed,buf,0,sel_start,sel_end);
                 ln->flags|=ED_LNF_COMMENTED_END;
                 ln->flags&=~ED_LNF_COMMENTED_OUT;
                 goto s;
@@ -892,14 +940,12 @@ U0 Highlight(CEditor *ed,CLine *ln,Bool dryRun=FALSE,Bool recur=TRUE) {
             idx++;
         }
         ed->window->cur_cp=CP_COMMENT;
-        if(!dryRun) WriteWithinView(ed,text,0);
+        if(!dryRun) __HighlightWrite(ed,text,0,sel_start,sel_end);
         ln->flags&=~ED_LNF_COMMENTED_END;
         ln->flags|=ED_LNF_COMMENTED_OUT;
     }
 s:
     U8 *orig=text;
-    U8 *nl=StrFirstOcc(text,"\n");
-    if(nl) *nl=0;
 loop:
     ns=idx;
     //Try lexing name
@@ -914,7 +960,7 @@ loop:
         } else {
             ed->window->cur_cp=CP_WORD;
         }
-        if(!dryRun) WriteWithinView(ed,buf,ns);
+        if(!dryRun) __HighlightWrite(ed,buf,ns,sel_start,sel_end);
         goto loop;
     }
 
@@ -922,7 +968,7 @@ loop:
         if(text[idx+1]=='/') {
             StrCpy(buf,text+idx);
             ed->window->cur_cp=CP_COMMENT;
-            if(!dryRun) WriteWithinView(ed,text+ns,idx);
+            if(!dryRun) __HighlightWrite(ed,text+ns,ns,sel_start,sel_end);
             idx=StrLen(text);
             goto loop;
         } else if(text[idx+1]=='*') {
@@ -933,13 +979,13 @@ loop:
                     StrNCpy(buf,text+ns,idx-ns);
                     buf[idx-ns]=0;
                     ed->window->cur_cp=CP_COMMENT;
-                    if(!dryRun) WriteWithinView(ed,buf,ns);
+                    if(!dryRun) __HighlightWrite(ed,buf,ns,sel_start,sel_end);
                     goto loop;
                 }
                 idx++;
             }
             ed->window->cur_cp=CP_COMMENT;
-            if(!dryRun) WriteWithinView(ed,text+ns,ns);
+            if(!dryRun) __HighlightWrite(ed,text+ns,ns,sel_start,sel_end);
             ln->flags|=ED_LNF_COMMENTED_START;
             //Dry run hgihlight until we find a line end
             CLine *nxtln=ln->next;
@@ -958,7 +1004,7 @@ sloop:
         U8 *sfind=StrFirstOcc(text+idx,sseek);
         if(!sfind) {
             ed->window->cur_cp=CP_STR;
-            if(!dryRun) WriteWithinView(ed,text+ns,idx);
+            if(!dryRun) __HighlightWrite(ed,text+ns,ns,sel_start,sel_end);
             idx=StrLen(text);
         } else if(IsEscaped(text,sfind)) {
             idx=sfind-orig+1;
@@ -968,7 +1014,7 @@ sloop:
             ed->window->cur_cp=CP_STR;
             StrNCpy(buf,text+ns,idx-ns);
             buf[idx-ns]=0;
-            if(!dryRun) WriteWithinView(ed,buf,ns);
+            if(!dryRun) __HighlightWrite(ed,buf,ns,sel_start,sel_end);
             goto loop;
         }
     }
@@ -980,7 +1026,7 @@ sloop:
         StrNCpy(buf,text+ns,idx-ns);
         buf[idx-ns]=0;
         ed->window->cur_cp=CP_WHITE;
-        if(!dryRun) WriteWithinView(ed,buf,ns);
+        if(!dryRun) __HighlightWrite(ed,buf,ns,sel_start,sel_end);
         goto loop;
     }
     U8 *idx2=text+idx;
@@ -990,7 +1036,7 @@ sloop:
         StrNCpy(buf,text+ns,idx-ns);
         buf[idx-ns]=0;
         ed->window->cur_cp=CP_NUM;
-        if(!dryRun) WriteWithinView(ed,buf,ns);
+        if(!dryRun) __HighlightWrite(ed,buf,ns,sel_start,sel_end);
         goto loop;
     }
     Str2F64(idx2,&idx2);
@@ -999,14 +1045,14 @@ sloop:
         StrNCpy(buf,text+ns,idx-ns);
         buf[idx-ns]=0;
         ed->window->cur_cp=CP_NUM;
-        if(!dryRun) WriteWithinView(ed,buf,ns);
+        if(!dryRun) __HighlightWrite(ed,buf,ns,sel_start,sel_end);
         goto loop;
     }
     if(!text[idx]) goto en;
     ed->window->cur_cp=CP_TOK;
     buf[1]=0;
     buf[0]=text[idx];
-    if(!dryRun) WriteWithinView(ed,buf,idx);
+    if(!dryRun) __HighlightWrite(ed,buf,ns,sel_start,sel_end);
     idx++;
     goto loop;
 en:
@@ -1101,6 +1147,7 @@ U0 RenumberLines(CEditor *ed,CLine *l=NULL) {
     }
 }
 U0 EditorInsText(CEditor *ed,U8 *text,I64 at,Bool undo=FALSE) {
+    EdDelSel(ed); //Clear selection if needed
     __EditorInsText(ed, text, at);
     if(undo) {
         CUndoInfo *prev;
@@ -1685,6 +1732,7 @@ resize:
     case ED_KEY_LEFT:
         EdLeft(sed);
         goto mvsrncur;
+    case ED_KEY_REDRAW: goto mvsrncur;
     case ED_KEY_CTRL_LEFT:
 left:
         EdWordLeft(sed);
@@ -1792,7 +1840,7 @@ loop:
     if(!cnt) goto free;
     I64 maxlen=StrLen(ents[cnt-1]->fullname); //Ents are sorted by length
     if(screenx+1<sw&&screeny+1<sh) {
-        CSDL_TextWin *ac=SDL_NewTextWin(MinI64(cnt,sh-screeny-wy1),MinI64(maxlen,sw-screenx-wx1));
+        CSDL_TextWin *ac=SDL_NewTextWin(MinI64(maxlen,sw-screenx-wx1),MinI64(cnt,sh-screeny-wy1));
         ac->begx=screenx+1,ac->begy=screeny+1;
         I64 iter=0;
         for(; iter<cnt; iter++) {
@@ -1809,8 +1857,8 @@ loop:
               SDL_AddCh(ac,' ');
             }
         }
-        DrawEditor(parent, ED_DRAW_DFT);
-        SDL_DrawWin(parent, ac);
+        DrawEditor(parent, ED_DRAW_DFT|ED_DRAW_NO_RENDER);
+        SDL_DrawWin(parent->window, ac);
         SDL_DestroyTextWin(ac);
     }
     if(interactive) {
@@ -2018,6 +2066,7 @@ loop:
     case ED_KEY_RIGHT:
         active=MinI64(cnt-1,++active),active_sub=0;
         break;
+    case ED_KEY_REDRAW: goto draw;
     case '\n':
         if(cats[active].spec[active_sub].callback)
             ret=(cats[active].spec[active_sub].callback[0])(ed);
@@ -2127,6 +2176,7 @@ U8 *FuzzySelectWindow(CEditor *parent,U8** (*match_cb)(CEditor *ed,U8 *str),U8 *
     case ED_KEY_BACKSPACE:
     EdBackspace(ed);
     goto update;
+    case ED_KEY_REDRAW: goto draw;
     case ED_KEY_RIGHT:
     right:
     EdRight(ed);
@@ -2344,6 +2394,74 @@ I64 BufferSelect(CEditor *ed) {
   }
   return ED_RET_OK;
 }
+I64 EdOffset(CEditor *ed) {
+    return GetLineOffset(ed,ed->cury)+ed->curx;
+}
+I64 EdClearSelect(CEditor *ed) {
+    ed->sel_start=ed->sel_end;
+}
+I64 EdSelLeft(CEditor *ed) {
+    Bool in_select=ed->sel_start!=ed->sel_end;
+    if(!in_select) ed->sel_start=EdOffset(ed);
+    EdLeft(ed);
+    ed->sel_end=EdOffset(ed);
+}
+I64 EdSelRight(CEditor *ed) {
+    Bool in_select=ed->sel_start!=ed->sel_end;
+    if(!in_select) ed->sel_start=EdOffset(ed);
+    EdRight(ed);
+    ed->sel_end=EdOffset(ed);
+}
+I64 EdSelUp(CEditor *ed) {
+    Bool in_select=ed->sel_start!=ed->sel_end;
+    if(!in_select) ed->sel_start=EdOffset(ed);
+    EdUp(ed);
+    ed->sel_end=EdOffset(ed);
+}
+I64 EdSelDown(CEditor *ed) {
+    Bool in_select=ed->sel_start!=ed->sel_end;
+    if(!in_select) ed->sel_start=EdOffset(ed);
+    EdDown(ed);
+    ed->sel_end=EdOffset(ed);
+}
+U0 EdDelSel(CEditor *ed) {
+    Bool in_select=ed->sel_start!=ed->sel_end;
+    if(!in_select) return;
+    if(ed->sel_start>ed->sel_end) SwapI64(&ed->sel_end,&ed->sel_start);
+    EditorDelText(ed,ed->sel_start,ed->sel_end,TRUE);
+    EdJumpToChar(ed,ed->sel_start);
+    ed->sel_start=ed->sel_end=-1;
+}
+U8 *EdGetSelText(CEditor *ed) {
+    Bool in_select=ed->sel_start!=ed->sel_end;
+    if(!in_select) return NULL;
+    if(ed->sel_start>ed->sel_end) {
+        SwapI64(&ed->sel_end,&ed->sel_start);
+    }
+    U8 *ret=MAlloc(ed->sel_end-ed->sel_start+1);
+    I64 cnt=GetLineCount(ed),idx=0;
+    I64 offset=0,reti=0;
+    for(;idx!=cnt;idx++) {
+        offset=GetLineOffset(ed,idx);
+        CRope *text;
+        I64 en=RopeLength(text=GetLine(ed,idx)->text);
+        if(ed->sel_start>=offset) {
+            I64 st=MaxI64(ed->sel_start-offset,0);
+            en=MinI64(en,ed->sel_end-offset);
+            if(st>en) goto next;
+            U8 *lntxt=Rope2Str(text);
+            StrNCpy(ret+reti,lntxt+st,en-st);
+            Free(lntxt);
+            reti+=en-st;
+            if(reti>=ed->sel_end-ed->sel_start) {
+                goto ret;
+            }
+            next:
+        }
+    }
+    ret:
+    return ret;
+}
 I64 Edit(CEditor *ed) {
   goto mvsrncur;
 loop:
@@ -2359,6 +2477,31 @@ loop:
        * [F]ile
        * [C]ode
        */
+    case 'c'&0x1f:
+    U8 *clip=EdGetSelText(ed);
+    SDL_SetClipboardText(clip);
+    EdClearSelect(ed);
+    goto mvsrncur;
+    case 'v'&0x1f:
+    EdDelSel(ed);
+    clip=SDL_GetClipboardText();
+    EditorInsText(ed,clip,GetLineOffset(ed,ed->cury)+ed->curx,TRUE);
+    I64 righti=StrLen(clip);
+    Free(clip);
+    while(--righti>=0) EdRight(ed);
+    goto mvsrncur;
+    case ED_KEY_SHIFT_UP:
+    EdSelUp(ed);
+    goto mvsrncur;
+    case ED_KEY_SHIFT_DOWN:
+    EdSelDown(ed);
+    goto mvsrncur;
+    case ED_KEY_SHIFT_LEFT:
+    EdSelLeft(ed);
+    goto mvsrncur;
+    case ED_KEY_SHIFT_RIGHT:
+    EdSelRight(ed);
+    goto mvsrncur;
     case ED_KEY_ESCAPE:
     case ALT_KEY('f'):
     if(DrawEditor(ed,ED_DRAW_DFT,,0)==ED_RET_QUIT) return ED_RET_QUIT; //First menu item
@@ -2366,42 +2509,55 @@ loop:
     case ALT_KEY('c'):
     if(DrawEditor(ed,ED_DRAW_DFT,,1)==ED_RET_QUIT) return ED_RET_QUIT; //First menu item
     goto mvsrncur;
-
     case ED_KEY_RESIZE:
         goto mvsrncur;
     case ED_KEY_UP:
+        EdClearSelect(ed);
         EdUp(ed);
         goto mvsrncur;
     case ED_KEY_DOWN:
+        EdClearSelect(ed);
         EdDown(ed);
         goto mvsrncur;
+    case ED_KEY_REDRAW: goto mvsrncur;
     case ED_KEY_LEFT:
 left:
+        EdClearSelect(ed);
         EdLeft(ed);
         goto mvsrncur;
     case ED_KEY_RIGHT:
 right:
+        EdClearSelect(ed);
         EdRight(ed);
         goto mvsrncur;
     case ED_KEY_END:
+        EdClearSelect(ed);
         ed->_curx=ed->curx=0;
         goto mvsrncur;
     case ED_KEY_HOME:
+        EdClearSelect(ed);
         CLine *heline=GetLine(ed,ed->cury);
         ed->_curx=ed->curx=RopeLength(heline->text);
         goto mvsrncur;
     case ED_KEY_CTRL_UP:
+        EdClearSelect(ed);
         goto pageup;
     case ED_KEY_CTRL_DOWN:
+        EdClearSelect(ed);
         goto pagedown;
     case ED_KEY_CTRL_LEFT:
+        EdClearSelect(ed);
         EdWordLeft(ed);
         goto mvsrncur;
     case ED_KEY_CTRL_RIGHT:
+        EdClearSelect(ed);
         EdWordRight(ed);
         goto mvsrncur;
     case ED_KEY_BACKSPACE:
-        EdBackspace(ed);
+        if(ed->sel_start!=ed->sel_end)
+            EdDelSel(ed);
+        else
+            EdBackspace(ed);
         goto mvsrncur;
     case ED_KEY_PAGEUP:
 pageup:
@@ -2481,8 +2637,5 @@ SDL_InitScr;
 CEditor *ed=EditorNew(TRUE);
 Edit(ed);
 SDL_ExitScr;
-
-
-
 
 

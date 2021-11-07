@@ -5569,7 +5569,7 @@ reglabrefs:
 	if(!Compiler.inFunction) {
 	  RaiseError(exp,"No labels in global scope.");
         } else if(map_get(&Compiler.labels,fmted)) {
-	  char *readable=GetLabelReadableName(exp->labelNode);
+	  char *readable=GetLabelReadableName(exp);
 	  RaiseError(exp,"Repeat label \"%s\".",readable);
 	  TD_FREE(readable);
         } else if(!map_get(&Compiler.labels,fmted)) {
@@ -5951,7 +5951,7 @@ noreg:
         CLabelRef ref;
         int iter;
         vec_foreach(refs, ref, iter) {
-	  char *readable=GetLabelReadableName(ref.at->labelNode);
+	  char *readable=GetLabelReadableName(ref.at);
           RaiseError(ref.at,"Unresolved label %s.",readable);
 	  TD_FREE(readable);
         }
