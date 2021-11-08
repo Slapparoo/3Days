@@ -3,11 +3,13 @@ This compiler contains a bounds checker and a debugger,but in order to use these
 
 This compiler is currently mostly a compiler,but it needs a better runtime. To get started,`#include "HolyEd/EDITOR.HC"` and use the goto-symbol function `Alt+c g or Ctrl-t` to explore the source.(you will need the compiler's source code for `HolyEd/EDITOR.HC`).
 
+There is a `Debian_pkg.sh` and `FreeBSD_pkg.sh` for building packages for those platforms. You can use 3Days.nsi with NSIS to build an installer for windows.
+
 # Debugger(BSAT Before Space and Time)
 Start the compiler with `-d`(or `-b` for bounds checking) and call `Debugger;`
 
 # Building
-You will need yasm,gnu bison,gcc and make. Other than that all dependencies are included in `ext/`  A modified [Oregon trail port from TinkerOS ](https://github.com/tinkeros/OT1975) is provided in the source code. Do `make installer` to make an installer for linux via `ext/epm`. This will require fltk for a graphical installer.
+You will need yasm,gnu bison,gcc and make and sdl2. Other than that all dependencies are included in `ext/`  A modified [Oregon trail port from TinkerOS ](https://github.com/tinkeros/OT1975) is provided in the source code. Do `make installer` to make an installer for linux via `ext/epm`. This will require fltk for a graphical installer.
 
 # Editor
 This comes with a barebones editor,you can run it using `#include "HolyEd/EDITOR.HC"` Press `alt+f` to access the file menu and `alt+c` to access the code menu(Which gives a fuzzy symbol select and compile check). If you are using windows terminal you may want to change the cursor shape to a block because the background is white
@@ -54,6 +56,8 @@ I64 x=#exe{StreamPrint("10");};
  - Garbage collection is disabled when running HolyC code.
  - (Finer) syntax checking is done only when compiling a statement or function.
  - `#include` uses the file path scheme of the OS,so you should
+ - There is no lexical scoping.
+ - Like TempleOS,pointers can be nested 3 levels.
   ```
   #if IsWindows
   #include "C:\\File.HC"
