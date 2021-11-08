@@ -810,7 +810,7 @@ CreateMacroInt("ALT_Z",ALT_Z);
         ADD_TYPED_MEMBER(sdlsurf_t,u0p,SDL_Surface,pixels);
         ADD_PRIM_MEMBER(sdlsurf_t,SDL_Surface,w);
         ADD_PRIM_MEMBER(sdlsurf_t,SDL_Surface,h);
-        CType *sdlsurfp_t=CreatePtrType(sdlsurfp_t);
+        CType *sdlsurfp_t=CreatePtrType(sdlsurf_t);
         CreateBuiltin(&SDL_CreateRGBSurface,sdlsurfp_t,"SDL_CreateRGBSurface",0,u32,i32,i32,i32,u32,u32,u32,u32,NULL);
         CreateBuiltin(&SDL_CreateRGBSurfaceFrom,sdlsurfp_t,"SDL_CreateRGBSurface",0,u0p,i32,i32,i32,u32,u32,u32,u32,NULL);
         CreateBuiltin(&SDL_UpperBlit,i64,"SDL_UpperBlit",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);
@@ -821,11 +821,15 @@ CreateMacroInt("ALT_Z",ALT_Z);
         CreateBuiltin(&SDL_GetSurfaceAlphaMod,i64,"SDL_GetSurfaceAlphaMod",0,sdlsurfp_t,u8p,NULL);
         CreateBuiltin(&SDL_GetSurfaceColorMod,i64,"SDL_GetSurfaceColorMod",0,sdlsurfp_t,u8p,u8p,u8p,NULL);
         CreateBuiltin(&SDL_LockSurface,i64,"SDL_LockSurface",0,sdlsurfp_t,NULL);
+        CreateBuiltin(&SDL_UnlockSurface,i64,"SDL_UnlockSurface",0,sdlsurfp_t,NULL);
         CreateBuiltin(&SDL_SetClipRect,i64,"SDL_SetClipRect",0,sdlsurfp_t,sdlrp_t,NULL);
         CreateBuiltin(&SDL_SetColorKey,i64,"SDL_SetColorKey",0,sdlsurfp_t,i32, u32,NULL);
         CreateBuiltin(&SDL_SetSurfaceAlphaMod,i64,"SDL_SetSurfaceAlphaMod",0,sdlsurfp_t,u8,NULL);
         CreateBuiltin(&SDL_SetSurfaceColorMod,i64,"SDL_SetSurfaceColorMod",0,sdlsurfp_t,u8,u8,u8,NULL);
         CreateBuiltin(&SDL_SetSurfaceRLE,i64,"SDL_SetSurfaceRLE",0,sdlsurfp_t,i32);
-        CreateBuiltin(&SDL_SoftStretch,i64,"SDL_SoftStretch",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);
+        CreateBuiltin(&SDL_BlitSurface,i64,"SDL_BlitSurface",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);
+        CreateBuiltin(&SDL_FreeSurface,i64,"SDL_FreeSurface",0,sdlsurfp_t,NULL);
+        CreateBuiltin(&SDL_UpdateWindowSurface,i64,"SDL_UpdateWindowSurface",0,sdlwindp_t,NULL);
+        CreateBuiltin(&SDL_GetWindowSurface,sdlsurfp_t,"SDL_GetWindowSurface",0,sdlwindp_t,NULL);
     }
 }
