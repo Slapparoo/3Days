@@ -1,8 +1,8 @@
-/* A Bison parser, made by GNU Bison 3.7.6.  */
+/* A Bison parser, made by GNU Bison 3.5.1.  */
 
 /* Bison interface for Yacc-like parsers in C
 
-   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2021 Free Software Foundation,
+   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2020 Free Software Foundation,
    Inc.
 
    This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -31,9 +31,8 @@
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
-/* DO NOT RELY ON FEATURES THAT ARE NOT DOCUMENTED in the manual,
-   especially those whose name start with YY_ or yy_.  They are
-   private implementation details that can be changed or removed.  */
+/* Undocumented macros, especially those whose name start with YY_,
+   are private implementation details.  Do not rely on them.  */
 
 #ifndef YY_HC_HOLYC_TAB_H_INCLUDED
 # define YY_HC_HOLYC_TAB_H_INCLUDED
@@ -53,115 +52,110 @@
 extern int HC_debug;
 #endif
 
-/* Token kinds.  */
+/* Token type.  */
 #ifndef HC_TOKENTYPE
 # define HC_TOKENTYPE
   enum HC_tokentype
   {
-    HC_HC_EMPTY = -2,
-    HC_YYEOF = 0,                  /* "end of file"  */
-    HC_HC_error = 256,             /* error  */
-    HC_HC_UNDEF = 257,             /* "invalid token"  */
-    HC_CHAR = 258,                 /* CHAR  */
-    HC_INT = 259,                  /* INT  */
-    HC_FLOAT = 260,                /* FLOAT  */
-    HC_DOT = 261,                  /* DOT  */
-    HC_ARROW = 262,                /* ARROW  */
-    HC_SIZEOF = 263,               /* SIZEOF  */
-    HC_ADDR_OF = 264,              /* ADDR_OF  */
-    HC_LNOT = 265,                 /* LNOT  */
-    HC_BNOT = 266,                 /* BNOT  */
-    HC_POW = 267,                  /* POW  */
-    HC_SHL = 268,                  /* SHL  */
-    HC_SHR = 269,                  /* SHR  */
-    HC_MUL = 270,                  /* MUL  */
-    HC_DIV = 271,                  /* DIV  */
-    HC_MOD = 272,                  /* MOD  */
-    HC_BAND = 273,                 /* BAND  */
-    HC_BOR = 274,                  /* BOR  */
-    HC_BXOR = 275,                 /* BXOR  */
-    HC_ADD = 276,                  /* ADD  */
-    HC_SUB = 277,                  /* SUB  */
-    HC_LT = 278,                   /* LT  */
-    HC_GT = 279,                   /* GT  */
-    HC_LE = 280,                   /* LE  */
-    HC_GE = 281,                   /* GE  */
-    HC_NE = 282,                   /* NE  */
-    HC_EQ = 283,                   /* EQ  */
-    HC_LAND = 284,                 /* LAND  */
-    HC_LXOR = 285,                 /* LXOR  */
-    HC_LOR = 286,                  /* LOR  */
-    HC_ASSIGN = 287,               /* ASSIGN  */
-    HC_EQ_SHL = 288,               /* EQ_SHL  */
-    HC_EQ_SHR = 289,               /* EQ_SHR  */
-    HC_EQ_MUL = 290,               /* EQ_MUL  */
-    HC_EQ_DIV = 291,               /* EQ_DIV  */
-    HC_EQ_MOD = 292,               /* EQ_MOD  */
-    HC_EQ_BAND = 293,              /* EQ_BAND  */
-    HC_EQ_BXOR = 294,              /* EQ_BXOR  */
-    HC_EQ_BOR = 295,               /* EQ_BOR  */
-    HC_EQ_ADD = 296,               /* EQ_ADD  */
-    HC_EQ_SUB = 297,               /* EQ_SUB  */
-    HC_COMMA = 298,                /* COMMA  */
-    HC_TRY = 299,                  /* TRY  */
-    HC_CATCH = 300,                /* CATCH  */
-    HC_LASTCLASS = 301,            /* LASTCLASS  */
-    HC_U0 = 302,                   /* U0  */
-    HC_LEFT_PAREN = 303,           /* LEFT_PAREN  */
-    HC_RIGHT_PAREN = 304,          /* RIGHT_PAREN  */
-    HC_INC = 305,                  /* INC  */
-    HC_DEC = 306,                  /* DEC  */
-    HC_NAME = 307,                 /* NAME  */
-    HC_LEFT_SQAURE = 308,          /* LEFT_SQAURE  */
-    HC_RIGHT_SQAURE = 309,         /* RIGHT_SQAURE  */
-    HC_SEMI = 310,                 /* SEMI  */
-    HC_IF = 311,                   /* IF  */
-    HC_ELSE = 312,                 /* ELSE  */
-    HC_DO = 313,                   /* DO  */
-    HC_WHILE = 314,                /* WHILE  */
-    HC_FOR = 315,                  /* FOR  */
-    HC_LEFT_CURLY = 316,           /* LEFT_CURLY  */
-    HC_RIGHT_CURLY = 317,          /* RIGHT_CURLY  */
-    HC_CASE = 318,                 /* CASE  */
-    HC_COLON = 319,                /* COLON  */
-    HC_DOT_DOT_DOT = 320,          /* DOT_DOT_DOT  */
-    HC_EXTERN2 = 321,              /* EXTERN2  */
-    HC_LOCK = 322,                 /* LOCK  */
-    HC_EXTERN = 323,               /* EXTERN  */
-    HC_IMPORT = 324,               /* IMPORT  */
-    HC_IMPORT2 = 325,              /* IMPORT2  */
-    HC_ASM_IMPORT = 326,           /* ASM_IMPORT  */
-    HC_STATIC = 327,               /* STATIC  */
-    HC_PUBLIC = 328,               /* PUBLIC  */
-    HC_CLASS = 329,                /* CLASS  */
-    HC_UNION = 330,                /* UNION  */
-    HC_INTERN = 331,               /* INTERN  */
-    HC_START = 332,                /* START  */
-    HC_END = 333,                  /* END  */
-    HC_DEFAULT = 334,              /* DEFAULT  */
-    HC_BREAK = 335,                /* BREAK  */
-    HC_RET = 336,                  /* RET  */
-    HC_GOTO = 337,                 /* GOTO  */
-    HC_SWITCH = 338,               /* SWITCH  */
-    HC_EXE = 339,                  /* EXE  */
-    HC_EVAL = 340,                 /* EVAL  */
-    HC_NL = 341,                   /* NL  */
-    HC_DBG = 342,                  /* DBG  */
-    HC_STRING = 343,               /* STRING  */
-    HC_TYPENAME = 344,             /* TYPENAME  */
-    HC_OPCODE = 345,               /* OPCODE  */
-    HC_REGISTER = 346,             /* REGISTER  */
-    HC_DOUBLE_COLON = 347,         /* DOUBLE_COLON  */
-    HC_DOUBLE_AT = 348,            /* DOUBLE_AT  */
-    HC_DU8 = 349,                  /* DU8  */
-    HC_DU16 = 350,                 /* DU16  */
-    HC_DU32 = 351,                 /* DU32  */
-    HC_DU64 = 352,                 /* DU64  */
-    HC_ALIGN = 353,                /* ALIGN  */
-    HC_BINFILE = 354,              /* BINFILE  */
-    HC_ASM = 355                   /* ASM  */
+    HC_CHAR = 258,
+    HC_INT = 259,
+    HC_FLOAT = 260,
+    HC_DOT = 261,
+    HC_ARROW = 262,
+    HC_SIZEOF = 263,
+    HC_ADDR_OF = 264,
+    HC_LNOT = 265,
+    HC_BNOT = 266,
+    HC_POW = 267,
+    HC_SHL = 268,
+    HC_SHR = 269,
+    HC_MUL = 270,
+    HC_DIV = 271,
+    HC_MOD = 272,
+    HC_BAND = 273,
+    HC_BOR = 274,
+    HC_BXOR = 275,
+    HC_ADD = 276,
+    HC_SUB = 277,
+    HC_LT = 278,
+    HC_GT = 279,
+    HC_LE = 280,
+    HC_GE = 281,
+    HC_NE = 282,
+    HC_EQ = 283,
+    HC_LAND = 284,
+    HC_LXOR = 285,
+    HC_LOR = 286,
+    HC_ASSIGN = 287,
+    HC_EQ_SHL = 288,
+    HC_EQ_SHR = 289,
+    HC_EQ_MUL = 290,
+    HC_EQ_DIV = 291,
+    HC_EQ_MOD = 292,
+    HC_EQ_BAND = 293,
+    HC_EQ_BXOR = 294,
+    HC_EQ_BOR = 295,
+    HC_EQ_ADD = 296,
+    HC_EQ_SUB = 297,
+    HC_COMMA = 298,
+    HC_TRY = 299,
+    HC_CATCH = 300,
+    HC_LASTCLASS = 301,
+    HC_U0 = 302,
+    HC_LEFT_PAREN = 303,
+    HC_RIGHT_PAREN = 304,
+    HC_INC = 305,
+    HC_DEC = 306,
+    HC_NAME = 307,
+    HC_LEFT_SQAURE = 308,
+    HC_RIGHT_SQAURE = 309,
+    HC_SEMI = 310,
+    HC_IF = 311,
+    HC_ELSE = 312,
+    HC_DO = 313,
+    HC_WHILE = 314,
+    HC_FOR = 315,
+    HC_LEFT_CURLY = 316,
+    HC_RIGHT_CURLY = 317,
+    HC_CASE = 318,
+    HC_COLON = 319,
+    HC_DOT_DOT_DOT = 320,
+    HC_EXTERN2 = 321,
+    HC_LOCK = 322,
+    HC_EXTERN = 323,
+    HC_IMPORT = 324,
+    HC_IMPORT2 = 325,
+    HC_ASM_IMPORT = 326,
+    HC_STATIC = 327,
+    HC_PUBLIC = 328,
+    HC_CLASS = 329,
+    HC_UNION = 330,
+    HC_INTERN = 331,
+    HC_START = 332,
+    HC_END = 333,
+    HC_DEFAULT = 334,
+    HC_BREAK = 335,
+    HC_RET = 336,
+    HC_GOTO = 337,
+    HC_SWITCH = 338,
+    HC_EXE = 339,
+    HC_EVAL = 340,
+    HC_NL = 341,
+    HC_DBG = 342,
+    HC_STRING = 343,
+    HC_TYPENAME = 344,
+    HC_OPCODE = 345,
+    HC_REGISTER = 346,
+    HC_DOUBLE_COLON = 347,
+    HC_DOUBLE_AT = 348,
+    HC_DU8 = 349,
+    HC_DU16 = 350,
+    HC_DU32 = 351,
+    HC_DU64 = 352,
+    HC_ALIGN = 353,
+    HC_BINFILE = 354,
+    HC_ASM = 355
   };
-  typedef enum HC_tokentype HC_token_kind_t;
 #endif
 
 /* Value type.  */

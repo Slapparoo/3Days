@@ -9,7 +9,7 @@
 !define VERSION "00.00.03.00"
 !define COPYRIGHT "None"
 !define DESCRIPTION "A HolyC Compiler"
-!define INSTALLER_NAME "C:\Users\fuffi\Documents\Nsisqssg\Output\3Days\setup.exe"
+!define INSTALLER_NAME "setup.exe"
 !define MAIN_APP_EXE "3d.exe"
 !define INSTALL_TYPE "SetShellVarContext current"
 !define REG_ROOT "HKCU"
@@ -83,6 +83,7 @@ ${INSTALL_TYPE}
 SetOverwrite ifnewer
 SetOutPath "$INSTDIR"
 File "3d.exe"
+File "SDL2.dll"
 SetOutPath "$INSTDIR\HCRT"
 File "HCRT\BITS.HC"
 File "HCRT\CHAR.HC"
@@ -146,6 +147,7 @@ SectionEnd
 
 Section Uninstall
 ${INSTALL_TYPE}
+Delete "$INSTDIR\SDL2.dll"
 Delete "$INSTDIR\${MAIN_APP_EXE}"
 Delete "$INSTDIR\HCRT\BITS.HC"
 Delete "$INSTDIR\HCRT\CHAR.HC"

@@ -56,3 +56,4 @@ epm
 *.bsd~
 *~
 !ext/wineditline-2.206/lib64/*
+!SDL2.dll
