@@ -26,7 +26,7 @@ static void (*RunPtr)(CFuncInfo *info,AST *exp,void *framePtr);
 %token  ASSIGN EQ_SHL EQ_SHR EQ_MUL EQ_DIV EQ_MOD EQ_BAND EQ_BXOR EQ_BOR EQ_ADD EQ_SUB
 %token  COMMA
 %token  TRY CATCH LASTCLASS U0 LEFT_PAREN RIGHT_PAREN INC DEC NAME LEFT_SQAURE RIGHT_SQAURE SEMI IF ELSE DO WHILE FOR LEFT_CURLY RIGHT_CURLY CASE COLON DOT_DOT_DOT
-%token  EXTERN2 LOCK EXTERN IMPORT IMPORT2 ASM_IMPORT STATIC PUBLIC CLASS UNION INTERN START END DEFAULT BREAK RET GOTO SWITCH
+%token  EXTERN2 LOCK EXTERN IMPORT IMPORT2 ASM_IMPORT STATIC PUBLIC CLASS UNION INTERN START END DEFAULT BREAK RET GOTO SWITCH EVAL_NOCOMMA
 /**
  * These tokens is used by forking the lexer  and parsing a scope/expression
  */
@@ -652,6 +652,14 @@ class[r]: _class[s] SEMI[un1] {
   $r=$s;
   ReleaseAST($un1);
 };
+class[r]: cheader[s] SEMI[un1] {
+  $r=$s;
+  ReleaseAST($un1);
+};
+union[r]: uheader[s] SEMI[un1] {
+  $r=$s;
+  ReleaseAST($un1);
+};
 union[r]: primtype0[bt] _union[s] SEMI[un1] {
   $r=$s;
   AssignUnionBasetype($s,$bt);
@@ -1258,6 +1266,11 @@ global_stmt[r]: EVAL expr_comma[s] NL {
   YYACCEPT;
   $r=NULL;
 };
+global_stmt[r]: EVAL_NOCOMMA expr[s] {
+  RunPtr(NULL,$s,NULL);
+  YYACCEPT;
+  $r=NULL;
+};
 
 global_stmt[r]: DBG expr_comma[s] {
   RunPtr(CurFuncInfo,$s,CurFramePtr);
@@ -1554,6 +1567,30 @@ void AttachParserToLexer() {
     //Lexer.cb=LexerCB;
 }
 static int __IsTruePassed;
+static int64_t exprret;
+static void __EvalExprNoComma(CFuncInfo *dummy1,AST *node,void *fp) {
+    CType *bt=BaseType(AssignTypeToNode(node));
+    exprret=0;
+    if(!bt) return;
+    union {
+        double f;
+        int64_t i;
+    } ret;
+    ExceptBuf osp;
+    memcpy(&osp,&SigPad,sizeof(SigPad));
+    if(!HCSetJmp(&SigPad)) {
+        if(bt->type==TYPE_F64) {
+            ret.f=EvaluateF64(node);
+        } else {
+            ret.i=EvaluateInt(node,0);
+        }
+    } else {
+        ARM_SIGNALS;
+    }
+    memcpy(&SigPad,&osp,sizeof(SigPad));
+    ReleaseType(bt);
+    exprret=ret.i;
+}
 static void __IsTrue(CFuncInfo *dummy1,AST *node,void *fp) {
   if(Compiler.tagsFile) {
     __IsTruePassed=1;
@@ -1602,4 +1639,14 @@ void DebugEvalExpr(void *frameptr,CFuncInfo *info,char *text) {
   yyparse();
   printf("\n");
   Lexer=old;
+}
+int64_t EvalExprNoComma(char *text,char **en) {
+    CLexer old=ForkLexer(PARSER_HOLYC);
+    mrope_append_text(Lexer.source,text);
+    Lexer.isEvalNoCommaMode=1;
+    RunPtr=__EvalExprNoComma;
+    yyparse();
+    if(en) *en=text+Lexer.cursor_pos;
+    Lexer=old;
+    return exprret;
 }

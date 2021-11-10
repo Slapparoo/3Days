@@ -468,12 +468,10 @@ U0 SDL_DestroyTextWin(CSDL_TextWin *win) {
     Free(win);
 }
 I64 SDL_WinX(CSDL_TextWin *w) {
-    I32 x=w->text->w,y=w->text->h;
-    return x/FONT_X2;
+    return SDL_GetSurfaceWidth(w->text)/FONT_X2;
 }
 I64 SDL_WinY(CSDL_TextWin *w) {
-    I32 x=w->text->w,y=w->text->h;
-    return y/FONT_Y2;
+    return SDL_GetSurfaceHeight(w->text)/FONT_Y2;
 }
 //Pass CSDL_TextWin's
 U0 SDL_DrawWin(...) {
@@ -485,7 +483,7 @@ U0 SDL_DrawWin(...) {
     SDL_FillRect(winsurf,NULL,SOL_WHITE);
     for(;idx!=argc;idx++) {
         CSDL_TextWin *w=argv[idx];
-        I32 rx=w->text->w,ry=w->text->h;
+        I32 rx=SDL_GetSurfaceWidth(w->text),ry=SDL_GetSurfaceHeight(w->text);
         SDL_Rect sbox={w->begx*FONT_X2,w->begy*FONT_Y2,rx/FONT_X2*FONT_X2,ry/FONT_Y2*FONT_Y2};
         SDL_BlitSurface(w->text,NULL,winsurf,&sbox);
         if(rx/FONT_X2!=winx||ry/FONT_Y2!=winy) {
@@ -503,7 +501,9 @@ U0 SDL_DrawWin(...) {
     SDL_UpdateWindowSurface(global_window);
 }
 U0 SDL_AddCh(CSDL_TextWin *win,U8 ch,Bool force_in_view=FALSE) {
-    I64 w=SDL_WinX(win);
+    I64 w=SDL_WinX(win),h=SDL_WinY(win);
+    if(win->x>=w) goto next;
+    if(win->y>=h) goto next;
     if(force_in_view&&ch!='\n') {
         if(win->x+1>=w) return;
     }
@@ -530,9 +530,9 @@ U0 SDL_AddCh(CSDL_TextWin *win,U8 ch,Bool force_in_view=FALSE) {
         nxtln:
         win->x=0,win->y++;
     }
-    if(win->y<SDL_WinY(win)) {
+    if(win->y<h) {
     } else {
-        win->y=SDL_WinY(win)-1;
+        win->y=h-1;
     }
 }
 U0 SDL_Print(CSDL_TextWin *win,U8 *str) {
@@ -549,8 +549,9 @@ U0 SDL_ClrToEOL(CSDL_TextWin *w) {
     SDL_FillRect(w->text,&r,SOL_WHITE);
     SDL_UnlockSurface(w->text);
     I64 idx=w->y*SDL_WinX(w)+w->x;
+    w->cur_cp=CP_WHITE;
     while(--width>=0)
-        w->char_cache[idx+width].chr=' ',w->char_cache[width].cp=CP_BLANK;
+        SDL_AddCh(w,' ');
 }
 class CEditor {
     CSDL_TextWin *window;
@@ -842,7 +843,7 @@ CLine *SearchForMLCommmentStart(CLine *s) {
     while(s) {
         if(s->flags&ED_LNF_COMMENTED_START)
             if(!(s->flags&ED_LNF_COMMENTED_OUT))
-                return s;    
+                return s;
         s=s->prev;
     }
     return NULL;
@@ -1782,7 +1783,7 @@ mvsrncur:
     SDL_DrawWin(ed.window,sed.window);
     goto loop;
 en:
-    DrawEditor(ed);
+    DrawEditor(ed,ED_DRAW_DFT);
     FreeEditor(sed);
 }
 I64 Edit(CEditor *ed);
@@ -2146,7 +2147,10 @@ U8 **FuzzySymbolSelect(CEditor *ed,U8 *str) {
 }
 U8 *FuzzySelectWindow(CEditor *parent,U8** (*match_cb)(CEditor *ed,U8 *str),U8 *init=NULL) {
   CEditor *ed=EditorNew();
-  if(init) EditorInsText(ed,init,0);
+  if(init) {
+    EditorInsText(ed,init,0);
+    ed->curx+=StrLen(init);
+  }
   I64 active=-1,idx;
   if(!init)
     U8 **matches=(*match_cb)(parent,"");
@@ -2226,6 +2230,7 @@ U8 *FuzzySelectWindow(CEditor *parent,U8** (*match_cb)(CEditor *ed,U8 *str),U8 *
   t=RemoveNL(Rope2Str(ed->lines->text));
   ed->window->y=ed->window->x=0;
   SDL_ClrToEOL(ed->window);
+  ed->window->y=ed->window->x=0;
   WriteWithinView(ed,t, 0);
   idx=1;
   for(;idx<SDL_WinY(ed->window);idx++) {
@@ -2665,10 +2670,6 @@ U0 SDL_ExitScr() {
     HashTableDel(buffers,(&FreeBuffer)(U0*));
 }
 SDL_ExitScr;
-
-
-
-
 
 
 

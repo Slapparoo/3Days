@@ -135,14 +135,7 @@ int main(int argc,char **argv) {
     mrope_append_text(Lexer.source, strdup(buffer));
   }
 #endif
-    signal(SIGSEGV,SignalHandler);
-    signal(SIGABRT,SignalHandler);
-    #ifndef TARGET_WIN32
-    signal(SIGBUS,SignalHandler);
-    signal(SIGFPE,SignalHandler);
-    signal(SIGILL,SignalHandler);
-    signal(SIGINT,SignalHandler);
-    #endif
+    ARM_SIGNALS;
     for(iter=0;iter!=includeArg->count;iter++) {
       unescapeString(includeArg->filename[iter],buffer2);
       sprintf(buffer, "#include \"%s\"", buffer2);
@@ -172,14 +165,7 @@ set:
 #endif
                 vec_truncate(&Lexer.ifStates,0);
                 FlushLexer();
-                signal(SIGSEGV,SignalHandler);
-                signal(SIGABRT,SignalHandler);
-                #ifndef TARGET_WIN32
-                signal(SIGBUS,SignalHandler);
-                signal(SIGFPE,SignalHandler);
-                signal(SIGILL,SignalHandler);
-                signal(SIGINT,SignalHandler);
-                #endif
+                ARM_SIGNALS;
                 goto set;
             }
             Compiler.errorFlag=0;

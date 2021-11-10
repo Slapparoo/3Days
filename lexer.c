@@ -1638,7 +1638,14 @@ int ASTToToken(AST *t) {
     return -1;
 }
 AST *LexItem() {
-  if(Lexer.isDebugExpr) {
+  if(Lexer.isEvalNoCommaMode) {
+      Lexer.isEvalNoCommaMode=0;
+      AST *r=TD_CALLOC(1,sizeof(AST));
+      r->type=AST_TOKEN;
+      r->refCnt=1;
+      r->tokenAtom=HC_EVAL_NOCOMMA;
+      return r;
+  } else if(Lexer.isDebugExpr) {
       Lexer.isDebugExpr=0;
       AST *r=TD_CALLOC(1,sizeof(AST));
       r->type=AST_TOKEN;

@@ -3,7 +3,7 @@ This compiler contains a bounds checker and a debugger,but in order to use these
 
 This compiler is currently mostly a compiler,but it needs a better runtime. To get started,`#include "HolyEd/EDITOR.HC"` and use the goto-symbol function `Alt+c g or Ctrl-t` to explore the source.(you will need the compiler's source code for `HolyEd/EDITOR.HC`).
 
-There is a `Debian_pkg.sh` and `FreeBSD_pkg.sh` for building packages for those platforms. You can use 3Days.nsi with NSIS to build an installer for windows.
+There is a `Debian_pkg.sh` and `FreeBSD_pkg.sh` for building packages for those platforms. You can use `3Days.nsi` with NSIS to build an installer for windows.
 
 # Debugger(BSAT Before Space and Time)
 Start the compiler with `-d`(or `-b` for bounds checking) and call `Debugger;`

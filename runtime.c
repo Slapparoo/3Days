@@ -369,6 +369,15 @@ static char *hc_SDL_GetWindowTitle(SDL_Window *win) {
 static char *hc_SDL_GetClipboardText() {
     return strdup(SDL_GetClipboardText());
 }
+static int64_t GetSurfaceW(SDL_Surface *s) {
+    return s->w;
+}
+static int64_t GetSurfaceH(SDL_Surface *s) {
+    return s->h;
+}
+int64_t JIT_EvalExpr(char *t,char **end) {
+    return EvalExprNoComma(t,end);
+}
 void RegisterBuiltins() {
     //Primitive types
   CType *u0 =CreatePrimType(TYPE_U0);
@@ -405,6 +414,7 @@ void RegisterBuiltins() {
     CType *cfileptr =CreatePtrType(cfile);
     CType *wind =CreateClassForwardDecl(NULL, CreateDummyName("WINDOW"));
     CType *windp =CreatePtrType(wind);
+    CreateBuiltin(&EvalExprNoComma,i64,"JIT_Eval",0,u8p,u8pp,NULL);
     CreateBuiltin(&GCollect,u0,"GC_Collect",0,NULL);
     CreateBuiltin(&CreateTagsAndErrorsFiles,u0,"CreateTagsAndErrorsFiles",0,u8p,u8p,u8p,NULL);
     CreateBuiltin(&MSize, i64, "MSize",0, u0p,NULL);
@@ -808,9 +818,9 @@ CreateMacroInt("ALT_Z",ALT_Z);
     {
         CType *sdlsurf_t=IMPORT_CLASS_WO_MEMBERS(SDL_Surface);
         ADD_TYPED_MEMBER(sdlsurf_t,u0p,SDL_Surface,pixels);
-        ADD_PRIM_MEMBER(sdlsurf_t,SDL_Surface,w);
-        ADD_PRIM_MEMBER(sdlsurf_t,SDL_Surface,h);
         CType *sdlsurfp_t=CreatePtrType(sdlsurf_t);
+        CreateBuiltin(&GetSurfaceW,i64,"SDL_GetSurfaceWidth",0,sdlsurfp_t,NULL);
+        CreateBuiltin(&GetSurfaceH,i64,"SDL_GetSurfaceHeight",0,sdlsurfp_t,NULL);
         CreateBuiltin(&SDL_CreateRGBSurface,sdlsurfp_t,"SDL_CreateRGBSurface",0,u32,i32,i32,i32,u32,u32,u32,u32,NULL);
         CreateBuiltin(&SDL_CreateRGBSurfaceFrom,sdlsurfp_t,"SDL_CreateRGBSurfaceFrom",0,u0p,i32,i32,i32,u32,u32,u32,u32,NULL);
         CreateBuiltin(&SDL_UpperBlit,i64,"SDL_UpperBlit",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);

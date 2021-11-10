@@ -36,6 +36,20 @@ sigprocmask(SIG_BLOCK,&newset,&oldset);
 #define UNBLOCK_SIGS \
 sigprocmask(SIG_SETMASK,&oldset,NULL);
 #endif
+#ifndef TARGET_WIN32
+#define ARM_SIGNALS \
+signal(SIGSEGV,SignalHandler); \
+signal(SIGABRT,SignalHandler); \
+signal(SIGBUS,SignalHandler); \
+signal(SIGFPE,SignalHandler); \
+signal(SIGILL,SignalHandler); \
+signal(SIGINT,SignalHandler);
+#else
+#define ARM_SIGNALS \
+signal(SIGSEGV,SignalHandler); \
+signal(SIGABRT,SignalHandler);
+
+#endif
 struct CType;
 extern ExceptBuf SigPad;
 typedef vec_t(struct AST *) vec_AST_t;
@@ -495,6 +509,7 @@ typedef struct CLexer {
     int isFreeToFlush:1;
     //Used for #if's
     int isEvalMode:1;
+    int isEvalNoCommaMode:1;
     mrope_t *source;
     lexer_cb_t cb;
     /**
@@ -888,3 +903,4 @@ char *HashLabel(char *name,LabelContext context,int is_local);
  */
 char *ResolveLabelByName(char *label,LabelContext context);
 LabelContext NextLabelContext();
+int64_t EvalExprNoComma(char *text,char **en);

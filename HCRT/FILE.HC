@@ -158,6 +158,7 @@ CDirEntry *FilesFind(U8 *mask,I64 flags=0) {
     }
   } else {
     files=__Dir(root);
+    if(!files) return NULL;
     U8 **origf=files;
     while(*files) {
       U8 *withpath=MStrPrint("%s%c%s",root,delim_chr,*files);

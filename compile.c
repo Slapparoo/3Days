@@ -3248,9 +3248,8 @@ static void __CompileSubswitBody(struct jit_label *start,CValue *subswitv,AST *s
         } else if(node->type==AST_DEFAULT) {
             int iter;
             struct jit_op *cs;
-            struct jit_label *at=jit_get_label(Compiler.JIT);
             vec_foreach(&dfts, cs, iter)
-            jit_patch(Compiler.JIT, at);
+            jit_patch(Compiler.JIT, cs);
             jit_value r=MoveValueToIntRegIfNeeded(*subswitv, 0);
             jit_beqi(Compiler.JIT,(jit_value)scodelab,r,0);
         } else if(node->type==AST_SUBSWITCH) {
