@@ -3210,7 +3210,7 @@ void __CompileAST(AST *exp);
  * case : if(subswitv==0) goto scodelab;
  *
  */
-static void __CompileSubswitBody(struct jit_label *start,CValue *subswitv,AST *subswit,vec_AST_t *cases,int64_t low,struct jit_op **table,vec_jit_op_t dfts) {
+static void __CompileSubswitBody(struct jit_label *start,CValue *subswitv,AST *subswit,vec_AST_t *cases,int64_t low,struct jit_op **table,vec_jit_op_t *dfts) {
     vec_jit_op_t oldbreaks=Compiler.breakops;
     vec_init(&Compiler.breakops);
     //
@@ -3248,8 +3248,9 @@ static void __CompileSubswitBody(struct jit_label *start,CValue *subswitv,AST *s
         } else if(node->type==AST_DEFAULT) {
             int iter;
             struct jit_op *cs;
-            vec_foreach(&dfts, cs, iter)
+            vec_foreach(dfts, cs, iter)
             jit_patch(Compiler.JIT, cs);
+            vec_truncate(dfts,0);
             jit_value r=MoveValueToIntRegIfNeeded(*subswitv, 0);
             jit_beqi(Compiler.JIT,(jit_value)scodelab,r,0);
         } else if(node->type==AST_SUBSWITCH) {
@@ -3265,7 +3266,7 @@ static void __CompileSubswitBody(struct jit_label *start,CValue *subswitv,AST *s
     vec_deinit(&Compiler.breakops);
     Compiler.breakops=oldbreaks;
 }
-static void __CompileSwitBody(struct jit_label *start,CValue *subswitv,AST *_body, vec_AST_t *cases,int64_t low,struct jit_op **table,vec_jit_op_t dfts) {
+static void __CompileSwitBody(struct jit_label *start,CValue *subswitv,AST *_body, vec_AST_t *cases,int64_t low,struct jit_op **table,vec_jit_op_t *dfts) {
     AST *node;
     int64_t iter;
     AST *body ;
@@ -3286,9 +3287,9 @@ static void __CompileSwitBody(struct jit_label *start,CValue *subswitv,AST *_bod
         } else if(node->type==AST_DEFAULT) {
             int iter;
             struct jit_op *cs;
-            vec_foreach(&dfts, cs, iter)
+            vec_foreach(dfts, cs, iter)
             jit_patch(Compiler.JIT, cs);
-            dfts.length=0;
+            vec_truncate(dfts,0);
         } else if(node->type==AST_SUBSWITCH) {
             __CompileSubswitBody(start,subswitv,node, cases, low, table, dfts);
         } else {
@@ -3299,9 +3300,9 @@ static void __CompileSwitBody(struct jit_label *start,CValue *subswitv,AST *_bod
         }
     }
     struct jit_op *cs;
-    vec_find(&dfts,NULL,iter);
+    vec_find(dfts,NULL,iter);
     if(iter==-1)
-        vec_foreach(&dfts, cs, iter)
+        vec_foreach(dfts, cs, iter)
         jit_patch(Compiler.JIT,  cs);
 }
 void __CompileCompoundLiteral(CType *type,int ptrreg,AST *comp,int adjust_off) {
@@ -5483,7 +5484,7 @@ consec_loop:
         //
         vec_jit_op_t oldbreaks=Compiler.breakops;
         vec_init(&Compiler.breakops);
-        __CompileSwitBody(start, &sswitv, exp->switStmt.body, &cases,min, table.data, dfts);
+        __CompileSwitBody(start, &sswitv, exp->switStmt.body, &cases,min, table.data, &dfts);
         struct jit_op *op;
         vec_foreach(&Compiler.breakops, op, iter) jit_patch(Compiler.JIT,op);
         vec_deinit(&Compiler.breakops);

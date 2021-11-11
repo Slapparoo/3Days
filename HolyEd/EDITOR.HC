@@ -1529,25 +1529,28 @@ U0 EdDown(CEditor *ed) {
         ed->_curx=ed->curx=RopeLength(GetLine(ed, ed->cury)->text);
     }
 }
-U0 EdRight(CEditor *ed) {
+#define ED_MOVE_DONT_SKIP_TAB 1
+U0 EdRight(CEditor *ed,I64 flags=0) {
     CLine *rline=GetLine(ed,ed->cury);
     U8 *text=Rope2Str(rline->text);
     I64 x=ed->curx,cnt=0;
     I64 ox=x;
     x++;
-    while((--x>=0)&&text[x]==' ') cnt++;
-    if(x==-1&&cnt) {
-      cnt++;
-      cnt/=4;
-      I64 cap=4*(cnt+1);
-      while(text[ed->curx]==' ') {
-        if(ed->curx>=cap) break;
-        ed->curx++;
-      }
-      if(ox==ed->curx) goto next;
-      ed->_curx=ed->curx;
-      Free(text);
-      return;
+    if(!flags&ED_MOVE_DONT_SKIP_TAB) {
+        while((--x>=0)&&text[x]==' ') cnt++;
+        if(x==-1&&cnt) {
+          cnt++;
+          cnt/=4;
+          I64 cap=4*(cnt+1);
+          while(text[ed->curx]==' ') {
+            if(ed->curx>=cap) break;
+            ed->curx++;
+          }
+          if(ox==ed->curx) goto next;
+          ed->_curx=ed->curx;
+          Free(text);
+          return;
+        }
     }
     next:
     Free(text);
@@ -1561,21 +1564,23 @@ U0 EdRight(CEditor *ed) {
         }
     } else ed->_curx=++ed->curx;
 }
-U0 EdLeft(CEditor *ed) {
+U0 EdLeft(CEditor *ed,I64 flags=0) {
     CLine *lline=GetLine(ed,ed->cury);
     U8 *text=Rope2Str(lline->text);
     I64 x=ed->curx,cnt=1;
-    if(x) {
-      while(--x&&text[x]==' ') cnt++;
-      if(!x&&cnt) {
-        cnt/=4;
-        if(cnt)
-          ed->_curx=ed->curx=4*(cnt-1);
-        else
-          ed->_curx=ed->curx=0;
-        Free(text);
-        return;
-      }
+    if(!flags&ED_MOVE_DONT_SKIP_TAB) {
+        if(x) {
+          while(--x&&text[x]==' ') cnt++;
+          if(!x&&cnt) {
+            cnt/=4;
+            if(cnt)
+              ed->_curx=ed->curx=4*(cnt-1);
+            else
+              ed->_curx=ed->curx=0;
+            Free(text);
+            return;
+          }
+        }
     }
     Free(text);
     if(ed->curx==0) {
@@ -2508,7 +2513,7 @@ loop:
     EditorInsText(ed,clip,GetLineOffset(ed,ed->cury)+ed->curx,TRUE);
     I64 righti=StrLen(clip);
     Free(clip);
-    while(--righti>=0) EdRight(ed);
+    while(--righti>=0) EdRight(ed,ED_MOVE_DONT_SKIP_TAB);
     goto mvsrncur;
     case ED_KEY_SHIFT_UP:
     EdSelUp(ed);
@@ -2670,6 +2675,7 @@ U0 SDL_ExitScr() {
     HashTableDel(buffers,(&FreeBuffer)(U0*));
 }
 SDL_ExitScr;
+
 
 
 
