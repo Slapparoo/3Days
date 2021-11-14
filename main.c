@@ -107,12 +107,23 @@ int main(int argc,char **argv) {
     Lexer.replMode=1;
     RegisterBuiltins();
     char *tagf=NULL;
-    if(tagsArg->count) {
-      Compiler.tagsFile=tagf=strdup(tagsArg->filename[0]);
-    }
-    long iter;
     char buffer[2048];
     char buffer2[2048];
+    if(tagsArg->count) {
+        tagf=(char*)tagsArg->filename[0];
+        FILE *dummy=fopen(tagf,"w");
+        fwrite("",0,0,dummy);
+        fclose(dummy);
+        #ifndef TARGET_WIN32
+        rp=realpath(tagf,NULL);
+        Compiler.tagsFile=strdup(rp);
+        free(rp);
+        #else
+        GetFullPathNameA(tagsArg->filename[0],sizeof(buffer),buffer,NULL);
+        Compiler.tagsFile=strdup(buffer);
+        #endif
+    }
+    long iter;
 #ifndef TARGET_WIN32
     if(0==access(HCRT_INSTALLTED_DIR,F_OK)) {
         sprintf(buffer, "#include \"%s\"", HCRT_INSTALLTED_DIR);
@@ -192,7 +203,7 @@ set:
       if(map_get(&Lexer.macros,"HCRT_LOADED"))
 	Compiler.tagsFile=tagf;
     if(Compiler.tagsFile)
-      DumpTagsToFile(tagf);
+      DumpTagsToFile(Compiler.tagsFile);
     TD_FREE(tagf);
     if(Compiler.errorsFile) fclose(Compiler.errorsFile);
     return (errs)?EXIT_SUCCESS:EXIT_FAILURE;
