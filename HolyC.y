@@ -542,6 +542,10 @@ primtype0[r]: primtype0[bt] _union[t] {
   $r=$t;
   AssignUnionBasetype($t,$bt);
 };
+primtype0[r]: primtype0[bt] _class[t] {
+  $r=$t;
+  AssignClassBasetype($t,$bt);
+};
 /**
  * Array/Class literals
  */
@@ -598,11 +602,9 @@ cbody[r]: cbody[a] cdecl[b] SEMI[un1] {
  $r=AppendToStmts($a,$b);
  ReleaseAST($un1);
 };
-cbody[r]: cbody[a] union[b] {
+cbody[r]: cbody[a] primtype0[b] SEMI[un] {
  $r=AppendToStmts($a,$b);
-};
-cbody[r]: cbody[a] class[b] {
- $r=AppendToStmts($a,$b);
+ ReleaseAST($un);
 };
 cbody: {$$=NULL;};
 _cheader[r]: CLASS[un1] {
@@ -648,28 +650,6 @@ uheader[r]: _uheader[h] COLON[un1] TYPENAME[ext] {
   $r=$h;
   ReleaseAST($un1);
 };
-class[r]: _class[s] SEMI[un1] {
-  $r=$s;
-  ReleaseAST($un1);
-};
-class[r]: cheader[s] SEMI[un1] {
-  $r=$s;
-  ReleaseAST($un1);
-};
-union[r]: uheader[s] SEMI[un1] {
-  $r=$s;
-  ReleaseAST($un1);
-};
-union[r]: primtype0[bt] _union[s] SEMI[un1] {
-  $r=$s;
-  AssignUnionBasetype($s,$bt);
-  ReleaseAST($un1);
-};
-union[r]: _union[s] SEMI[un1] {
-  $r=$s;
-  ReleaseAST($un1);
-};
-
 _class[r]: cheader[t] LEFT_CURLY[un1] cbody[b] RIGHT_CURLY[un2] {
   if($b) {
     int iter;
@@ -1171,6 +1151,14 @@ opcodes[r]: opcodes[b] opcode[o] SEMI[ul] {
   $r=$b;
   ReleaseAST($ul);
 }
+simple_stmt: cheader[c] SEMI[un] {
+    $$=$c;
+    ReleaseAST($un);
+};
+simple_stmt: uheader[u] SEMI[un] {
+    $$=$u;
+    ReleaseAST($un);
+};
 simple_stmt: opcodes;
 simple_stmt: asm_blk;
 simple_stmt[r]: multi_decl[d] SEMI[un] {
@@ -1219,8 +1207,7 @@ simple_stmt[r]: NAME[n] COLON[un] {
   $r=SOT(CreateLabel($n),$n);
   ReleaseAST($un);
 };
-simple_stmt[r]: class[s] {$r=$s;};
-simple_stmt[r]: union[s] {$r=$s;};
+simple_stmt[r]: primtype0[s] SEMI[ul] {$r=$s;ReleaseAST($ul);};
 simple_stmt[r]: linkage[l] UNION[un1] NAME[n] SEMI[un2] {
   CType *t=CreateUnionForwardDecl($l,$n);
   $r=CreateTypeNode(t);

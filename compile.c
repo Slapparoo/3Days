@@ -638,6 +638,10 @@ loop:
     switch(type->type) {
     case TYPE_U64:
         return 1;
+    case TYPE_CLASS:
+        type=type->cls.baseType;
+        if(type) goto loop;
+        break;
     case TYPE_UNION:
         type=type->un.baseType;
         if(type) goto loop;
@@ -659,6 +663,10 @@ loop:
     case TYPE_I32:
     case TYPE_I64:
         return 1;
+    case TYPE_CLASS:
+        type=type->cls.baseType;
+        if(type) goto loop;
+        break;
     case TYPE_UNION:
         type=type->un.baseType;
         if(type) goto loop;
@@ -958,23 +966,24 @@ static int CaseCmp(const void *a,const void *b) {
         return -1;
     return 0;
 }
-vec_AST_t FindCasesInSwitch(AST *swit) {
+vec_AST_t FindCasesInSwitchBody(AST *swit,AST *body) {
     vec_AST_t ret;
     vec_init(&ret);
-    AST *body=(swit->type==AST_SWITCH)?swit->switStmt.body:swit->subswitch.body;
     if(body->type==AST_STMT_GROUP) {
         int i;
         AST *item;
         vec_foreach(&body->stmts, item, i) {
-            if(item->type==AST_CASE) {
-                vec_push(&ret, item);
-                item->cs.owner=swit;
-            } else if(item->type==AST_SUBSWITCH) {
-                vec_AST_t subs=FindCasesInSwitch(item);
-                vec_pusharr(&ret, subs.data, subs.length);
-                vec_deinit(&subs);
-            }
+            vec_AST_t subs=FindCasesInSwitchBody(swit,item);
+            vec_pusharr(&ret,subs.data,subs.length);
+            vec_deinit(&subs);
         }
+    } else if(body->type==AST_CASE) {
+        vec_push(&ret, body);
+        body->cs.owner=swit;
+    } else if(body->type==AST_SUBSWITCH) {
+        vec_AST_t subs=FindCasesInSwitchBody(body,body->subswitch.body);
+        vec_pusharr(&ret, subs.data, subs.length);
+        vec_deinit(&subs);
     }
     return ret;
 }
@@ -1938,6 +1947,9 @@ CType *BaseType(CType *bt) {
     if(bt->type==TYPE_UNION)
         if(bt->un.baseType)
             return BaseType(bt->un.baseType);
+    if(bt->type==TYPE_CLASS)
+        if(bt->cls.baseType)
+            return BaseType(bt->cls.baseType);
     CType *ret=ResolveType(bt);
     return ret;
 }
@@ -5370,7 +5382,7 @@ alwaysfalse:
         CValue codev AF_VALUE=VALUE_VAR(codevar);
         vec_push(&Compiler.valueStack,codev);
         //
-        vec_AST_t cases=FindCasesInSwitch(exp);
+        vec_AST_t cases=FindCasesInSwitchBody(exp,exp->switStmt.body);
         int64_t iter,prevcs=-1;
         AST *cs;
         vec_foreach(&cases, cs, iter) {
@@ -6068,6 +6080,15 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
     map_deinit(&Compiler.locals);
 
     RestoreCompilerState(old);
+}
+void AssignClassBasetype(AST *t,AST *bt) {
+    if(TypeSize(t->type2)>TypeSize(bt->type2)) {
+        char *ts=TypeToString(t->type2);
+        char *bts=TypeToString(bt->type2);
+        RaiseError(bt, "Base type %s is smaller than union %s.",bts,ts);
+        TD_FREE(ts),TD_FREE(bts);
+    }
+    t->type2->cls.baseType=bt->type2;
 }
 void AssignUnionBasetype(AST *t,AST *bt) {
     if(TypeSize(t->type2)>TypeSize(bt->type2)) {

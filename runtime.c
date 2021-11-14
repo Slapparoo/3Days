@@ -720,6 +720,7 @@ CreateMacroInt("ALT_Z",ALT_Z);
             CreateMacroInt("KMOD_LGUI",KMOD_LGUI);
             CreateMacroInt("KMOD_RGUI",KMOD_RGUI);
             CreateMacroInt("KMOD_GUI",KMOD_GUI);
+            CreateMacroInt("KMOD_CAPS",KMOD_CAPS);
             CType *sdlevent_key_t=IMPORT_CLASS_WO_MEMBERS(SDL_KeyboardEvent);
             ADD_UPRIM_MEMBER(sdlevent_key_t,SDL_KeyboardEvent,type);
             ADD_UPRIM_MEMBER(sdlevent_key_t,SDL_KeyboardEvent,timestamp);
@@ -843,4 +844,6 @@ CreateMacroInt("ALT_Z",ALT_Z);
         CreateBuiltin(&SDL_UpdateWindowSurface,i64,"SDL_UpdateWindowSurface",0,sdlwindp_t,NULL);
         CreateBuiltin(&SDL_GetWindowSurface,sdlsurfp_t,"SDL_GetWindowSurface",0,sdlwindp_t,NULL);
     }
+    //Timer
+
 }

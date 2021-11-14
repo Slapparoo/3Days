@@ -132,6 +132,7 @@ typedef struct CType {
             vec_CMember_t members;
             int size;
             int align;
+            struct CType *baseType;
             unsigned int isFwd:1;
             struct CType *inheritsFrom;
             char *fn;
@@ -904,3 +905,4 @@ char *HashLabel(char *name,LabelContext context,int is_local);
 char *ResolveLabelByName(char *label,LabelContext context);
 LabelContext NextLabelContext();
 int64_t EvalExprNoComma(char *text,char **en);
+void AssignClassBasetype(AST *t,AST *bt);
