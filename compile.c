@@ -3170,10 +3170,14 @@ static AST *ValueToAST(CValue v) {
     }
 }
 static double Bit4BitU64ToF64(uint64_t b) {
-    return *(double*)&b;
+    union {double f;int64_t i;} val;
+    val.i=b;
+    return val.f;
 }
 static uint64_t Bit4BitF64ToU64(double b) {
-    return *(uint64_t*)&b;
+    union {double f;int64_t i;} val;
+    val.f=b;
+    return val.i;
 }
 CValue CloneValue(CValue v) {
     switch(v.type) {
@@ -4781,10 +4785,10 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
                 pn.i=exp->typecast.base->integer;
                 vec_push(&Compiler.valueStack, VALUE_FLOAT(pn.d));
             } else if(IsIntegerType(from)) {
-                jit_prepare(Compiler.JIT);
                 __CompileAST(exp->typecast.base);
                 CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
                 MoveValueToIntRegIfNeeded(v, 0);
+                jit_prepare(Compiler.JIT);
                 jit_putargr(Compiler.JIT, R(0));
                 jit_call(Compiler.JIT, Bit4BitU64ToF64);
                 CVariable *var AF_VAR=CreateTmpRegVar(GetFltTmpReg(), CreatePrimType(TYPE_F64));
@@ -4806,9 +4810,9 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
             } else if(exp->typecast.base->type==AST_FLOAT) {
                 vec_push(&Compiler.valueStack,VALUE_INT(*(uint64_t*)&exp->typecast.base->floating));
             } else if(IsF64(from)) {
-                jit_prepare(Compiler.JIT);
                 __CompileAST(exp->typecast.base);
                 CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
+                jit_prepare(Compiler.JIT);
                 jit_value vr=MoveValueToFltRegIfNeeded(v, 0);
                 jit_fputargr(Compiler.JIT, vr,8);
                 jit_call(Compiler.JIT, Bit4BitF64ToU64);
@@ -5272,9 +5276,6 @@ alwaysfalse:
         Compiler.breakops=oldbreaks;
         struct jit_op *b;
         int iter;
-        vec_foreach(&breaks, b, iter) {
-            jit_patch(Compiler.JIT,b);
-        }
         CompileBreakpoint(exp->doStmt.cond);
         __CompileAST(exp->doStmt.cond);
         CValue cond AF_VALUE=vec_pop(&Compiler.valueStack);
@@ -5289,6 +5290,9 @@ alwaysfalse:
             char *cts=TypeToString(ct);
             RaiseError(exp->doStmt.cond,"Do statement requires and arithmetic type(got type %s).",cts);
             TD_FREE(cts);
+        }
+        vec_foreach(&breaks, b, iter) {
+            jit_patch(Compiler.JIT,b);
         }
         //All nodes return a value on the stack
         vec_push(&Compiler.valueStack, VALUE_INT(0));

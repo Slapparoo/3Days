@@ -442,6 +442,7 @@ void RegisterBuiltins() {
     CreateBuiltin(&sqrt, f64, "Sqrt", 0,f64,NULL);
     CreateBuiltin(&tan, f64, "Tan", 0,f64,NULL);
     CreateBuiltin(&ceil, f64, "Ceil", 0,f64,NULL);
+    CreateBuiltin(&floor, f64, "Floor", 0,f64,NULL);
     CreateBuiltin(&log, f64, "Ln", 0,f64,NULL);
     CreateBuiltin(&log10, f64, "Log10", 0,f64,NULL);
     CreateBuiltin(&log2, f64, "Log2", 0,f64,NULL);

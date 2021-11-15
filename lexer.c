@@ -94,7 +94,7 @@ prevln:
 void LexerRaiseError(char *msg) {
     int ln,col;
     FPosToLineCol(Lexer.filename,Lexer.fpos,&ln,&col);
-    if(!Compiler.silentMode||Compiler.errorsFile) fprintf((Compiler.errorsFile)?Compiler.errorsFile:stderr,"LEXER_ERROR:%s:%i:%i: %s\n",Lexer.filename,ln,col,msg);
+    if(!Compiler.silentMode||Compiler.errorsFile) fprintf((Compiler.errorsFile)?Compiler.errorsFile:stderr,"%s:%i:%i: WARNING %s\n",Lexer.filename,ln,col,msg);
 }
 
 #define UNTIL_PHYSICAL ((Lexer.cursor_pos>Lexer.physical_fpos_start)?0:Lexer.physical_fpos_start-Lexer.cursor_pos)
@@ -1698,8 +1698,8 @@ loop:
     try_item(LexToken);
     SkipWhitespace(0);
     if(LEXER_PEEK()) {
-        FlushLexer();
         LexerRaiseError("Unable to lex item!");
+        FlushLexer();
     }
     return NULL;
 found:

@@ -100,9 +100,8 @@ I64 CeilI64(I64 num,I64 to)
 }
 
 //See $LK,"::/Doc/Credits.DD"$.
-#define LIN_CONGRUE_A	6364136223846793005
-#define LIN_CONGRUE_C	1442695040888963407
-
+#define LIN_CONGRUE_A 6364136223846793005
+#define LIN_CONGRUE_C 1442695040888963407
 I16 RandI16()
 {//Random I16.
   I64 res=Fs->rand_seed;
@@ -189,3 +188,4 @@ F64 ClampI64(F64 a,F64 min=0,F64 max) {
   if(a>max) return max;
   return a;
 }
+
