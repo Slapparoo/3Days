@@ -1696,6 +1696,11 @@ loop:
     try_item(LexString);
     try_item(LexName);
     try_item(LexToken);
+    SkipWhitespace(0);
+    if(LEXER_PEEK()) {
+        FlushLexer();
+        LexerRaiseError("Unable to lex item!");
+    }
     return NULL;
 found:
     //If we are in an inactive if statement,move onto the next lexer item

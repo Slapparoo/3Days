@@ -2792,7 +2792,7 @@ AST *ConvertMembersToPtrs(AST *node) {
     if(IsBinop(node)) {
         node->binop.a=ConvertMembersToPtrs(node->binop.a);
         node->binop.b=ConvertMembersToPtrs(node->binop.b);
-    } else if(IsBinop(node->unopArg)) {
+    } else if(IsUnop(node)) {
         node->unopArg=ConvertMembersToPtrs(node->unopArg);
     } else if(node->type==AST_FUNC_CALL) {
         node->funcCall.func=ConvertMembersToPtrs(node->funcCall.func);
