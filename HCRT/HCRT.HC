@@ -60,5 +60,4 @@ I64i union I64
 #include "HASH.HC"
 #include "QSORT.HC"
 #include "ASM.HC"
-//Dont change this
-#define HCRT_LOADED 1
+#include "PRINT.HC"

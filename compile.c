@@ -3754,7 +3754,15 @@ lcloop:
         jit_putargi(Compiler.JIT, (jit_value)RegisterString(exp->string));
         jit_putargi(Compiler.JIT, 0);
         jit_putargi(Compiler.JIT, 0);
-        jit_call(Compiler.JIT,TOSPrint);
+        //Check for Print in HolyC
+        CVariable *prn=GetVariable("Print");
+        if(!prn) {
+            prn_fallback:
+            jit_call(Compiler.JIT,TOSPrint);
+        } else {
+            if(!prn->func) goto prn_fallback;
+            jit_call(Compiler.JIT,(void*)prn->func->funcptr);
+        }
         vec_push(&Compiler.valueStack, VALUE_INT(0));
         break;
     }
@@ -3932,7 +3940,13 @@ prneskip:
             jit_putargr(Compiler.JIT,strval);
             jit_putargi(Compiler.JIT,vec.length-1);
             jit_putargr(Compiler.JIT,R(0));
-            jit_call(Compiler.JIT,TOSPrint);
+            CVariable *prn=GetVariable("Print");
+            if(!prn) {
+                jit_call(Compiler.JIT,TOSPrint);
+            } else {
+                if(!prn->func) goto prn_fallback;
+                jit_call(Compiler.JIT,(void*)prn->func->funcptr);
+            }
             //All operations are required to put an item on the stack
             vec_push(&Compiler.valueStack,VALUE_INT(0));
             return;

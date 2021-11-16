@@ -1041,5 +1041,10 @@ U0 Print(U8 *fmt,...)
   Free(buf);
 }
 
-
-
+U8 *MStrPrint(U8 *fmt,...)
+{//MAlloc StrPrint.See $LK,"StrPrintJoin",A="MN:StrPrintJoin"$().
+  U8 *res,*buf=StrPrintJoin(NULL,fmt,argc,argv);
+  res=StrNew(buf);
+  Free(buf);
+  return res;
+}

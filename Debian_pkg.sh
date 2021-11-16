@@ -19,6 +19,7 @@ set files = ( \
     HCRT.HC \
     MATH.HC \
     QSORT.HC \
+    PRINT.HC \
     )
 rm ${STAGEDIR}/plist
 echo "/usr/local/bin/3d" >> ${STAGEDIR}/plist
