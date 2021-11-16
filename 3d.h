@@ -50,6 +50,8 @@ signal(SIGSEGV,SignalHandler); \
 signal(SIGABRT,SignalHandler);
 
 #endif
+typedef vec_t(void***) vec_voidppp_t;
+typedef map_t(vec_voidppp_t) map_vec_voidppp_t;
 struct CType;
 extern ExceptBuf SigPad;
 typedef vec_t(struct AST *) vec_AST_t;
@@ -78,7 +80,6 @@ typedef struct {
         };
         char *importLink;
     };
-    void **dummyPtr;
     enum {
         LINK_NORMAL=0,
         LINK_EXTERN=1,
@@ -683,6 +684,7 @@ typedef struct {
   map_jit_label_t asmTaintedLabels;
   LabelContext labelContext;
   map_CVariable_t exportedLabels;
+  map_vec_voidppp_t currentRelocations;
 } CCompiler;
 #define LOCAL_LAB_FMT "@@(%li):%s"
 extern CCompiler Compiler;
@@ -698,7 +700,6 @@ typedef struct CFuncInfo {
     map_CVariable_t noregs;
     vec_map_CLiveInfo_t table;
 } CFuncInfo;
-
 typedef struct CFunction {
     struct jit *JIT;
     void(*funcptr)(int64_t,...);
@@ -706,6 +707,7 @@ typedef struct CFunction {
     map_CVariable_t locals;
     CFuncInfo funcInfo;
     char *name;
+    map_vec_voidppp_t relocations;
 } CFunction;
 void AddVariable(AST *name,CType *type);
 /**
@@ -858,6 +860,7 @@ typedef struct COldFuncState {
     map_vec_CLabelRef_t labelRefs;
   vec_AST_t __addedGlobalLabels;
   LabelContext labelContext;
+  map_vec_voidppp_t currentRelocations;
 } COldFuncState;
 COldFuncState EnterFunction(CType *returnType,AST *_args);
 COldFuncState CreateCompilerState();
@@ -906,3 +909,4 @@ char *ResolveLabelByName(char *label,LabelContext context);
 LabelContext NextLabelContext();
 int64_t EvalExprNoComma(char *text,char **en);
 void AssignClassBasetype(AST *t,AST *bt);
+void FillFunctionRelocations(CFunction *func);

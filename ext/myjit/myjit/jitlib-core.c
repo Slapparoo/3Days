@@ -158,6 +158,7 @@ static void jit_correct_int64_t_imms(struct jit * jit)
 		if (GET_OP(op) == JIT_DATA_REF_DATA) continue;
 		if (GET_OP(op) == JIT_REF_DATA) continue;
 		if (GET_OP(op) == JIT_REF_CODE) continue;
+		if (GET_OP(op) == JIT_RELOCATION) continue;
 		if (GET_OP(op) == JIT_FORCE_ASSOC) continue;
 		int imm_arg;
 		for (int i = 1; i < 4; i++)

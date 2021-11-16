@@ -47,6 +47,7 @@ COldFuncState CreateCompilerState() {
     old.labelPtrs=Compiler.labelPtrs;
     old.__addedGlobalLabels=Compiler.__addedGlobalLabels;
     old.labelContext=Compiler.labelContext;
+    old.currentRelocations=Compiler.currentRelocations;
     return old;
 }
 void RestoreCompilerState(COldFuncState old) {
@@ -67,6 +68,7 @@ void RestoreCompilerState(COldFuncState old) {
     Compiler.asmPatches=old.asmPatches;
     Compiler.__addedGlobalLabels=old.__addedGlobalLabels;
     Compiler.labelContext=old.labelContext;
+    Compiler.currentRelocations=old.currentRelocations;
 }
 static int IsControlNode(AST *node) {
     switch(node->type) {
@@ -1224,6 +1226,15 @@ void AddVariable(AST *name,CType *type) {
             map_remove(&Compiler.globals, name->name);
         }
         map_set(&Compiler.globals,name->name,var);
+        {
+            map_iter_t iter=map_iter(&Compiler.globals);
+            const char *key;
+            while(key=map_next(&Compiler.globals,&iter)) {
+                    CVariable *v=*map_get(&Compiler.globals,key);
+                    if(v->isFunc&&v->func)
+                        FillFunctionRelocations(v->func);
+            }
+        }
         //Fill in unlinked imports
         int iter;
         CVariable *unlinked;
@@ -1241,8 +1252,6 @@ remimp:
 remext:
         vec_foreach(&Compiler.unlinkedExternVars, unlinked, iter) {
             if(0==strcmp(unlinked->linkage.externVar->name,name->name)) {
-                if(0==var->isFunc)
-                    *unlinked->linkage.dummyPtr=var->linkage.globalPtr;
                 ReleaseVariable(unlinked);
                 vec_remove(&Compiler.unlinkedExternVars, unlinked);
                 goto remext;
@@ -1270,6 +1279,15 @@ static void __AddFunctionVar(AST *name,CType *type,CFunction *func) {
     }
     map_set(&Compiler.globals,name->name,var);
     //Fill in unlinked imports
+    {
+        map_iter_t iter=map_iter(&Compiler.globals);
+        const char *key;
+        while(key=map_next(&Compiler.globals,&iter)) {
+                CVariable *v=*map_get(&Compiler.globals,key);
+                if(v->isFunc&&v->func)
+                    FillFunctionRelocations(v->func);
+        }
+    }
     int iter;
     CVariable *unlinked;
 remimp:
@@ -1286,7 +1304,6 @@ remimp:
 remext:
     vec_foreach(&Compiler.unlinkedExternVars, unlinked, iter) {
         if(0==strcmp(unlinked->linkage.externVar->name,name->name)) {
-            *unlinked->linkage.dummyPtr=var->func->funcptr;
             ReleaseVariable(unlinked);
             vec_remove(&Compiler.unlinkedExternVars, unlinked);
             goto remext;
@@ -2010,22 +2027,22 @@ jit_value MoveGlobalPtrToReg(CVariable *var,int r) {
         return MoveGlobalPtrToReg(var->linkage.externVar, r);
         break;
     case LINK_IMPORT:
-    case LINK__IMPORT:
-        ;
-        CVariable **g=map_get(&Compiler.globals,var->linkage.importLink);
-        if(!g) {
-indir:
-            jit_ldi(Compiler.JIT, R(r), var->linkage.dummyPtr, sizeof(void*));
+    case LINK__IMPORT: {
+        loop:;
+        vec_voidppp_t *relocs;
+        if(relocs=map_get(&Compiler.currentRelocations,var->linkage.importLink)) {
+            void *dummy=TD_MALLOC(sizeof(void*));
+            jit_relocation(Compiler.JIT,R(r),dummy);
+            vec_push(relocs,dummy);
             return R(r);
         } else {
-            /**
-             * A forward declaration pointing to self will be resolved when it is defined,so dont infinitey recur here looking for a definition
-             */
-            if(0!=strcmp(var->linkage.importLink,var->name))
-                return MoveGlobalPtrToReg(*g, r);
-            goto indir;
+            vec_voidppp_t v;
+            vec_init(&v);
+            map_set(&Compiler.currentRelocations,var->linkage.importLink,v);
+            goto loop;
         }
         break;
+    }
     default:
         abort();
     }
@@ -2048,7 +2065,7 @@ void *GetGlobalPtr(CVariable *var) {
         CVariable **g=map_get(&Compiler.globals,var->linkage.importLink);
         if(!g) {
 indir:
-            return var->linkage.dummyPtr;
+            return NULL;
         } else {
             /**
              * A forward declaration pointing to self will be resolved when it is defined,so dont infinitey recur here looking for a definition
@@ -2061,6 +2078,7 @@ indir:
     default:
         abort();
     }
+    return NULL;
 }
 void __CompileAssignInt2V(CVariable *var,uint64_t i) {
     CType *bt =BaseType(var->type);
@@ -5988,6 +6006,7 @@ noreg:
       }
     }
     if(!Compiler.errorFlag) {
+
       //Taint labels
       const char *key;
       map_iter_t iter=map_iter(&Compiler.asmTainedLabels);
@@ -6005,6 +6024,9 @@ noreg:
     //    jit_dump_ops(curjit,1);
     if(Compiler.errorFlag)  {
         funcptr=(void(*)(int64_t,...))Blank;
+    } else {
+        func->relocations=Compiler.currentRelocations;
+        FillFunctionRelocations(func);
     }
     func->funcptr=funcptr;
     vec_deinit(&Compiler.valueStack);
@@ -6020,6 +6042,27 @@ noreg:
     map_deinit(&Compiler.labels);
     return func;
 }
+void FillFunctionRelocations(CFunction *func) {
+    map_iter_t iter=map_iter(&func->relocations);
+    const char *key;
+    loop:
+    while(key=map_next(&func->relocations,&iter)) {
+            CVariable *var;
+            if(var=GetVariable((char*)key)) {
+                    long iter;
+                    void ***to_fill,*with=GetGlobalPtr(var);
+                    if(!with) continue;
+                    vec_voidppp_t *vpp=map_get(&func->relocations,key);
+                    vec_foreach(vpp,to_fill,iter) {
+                        **to_fill=with;
+                        TD_FREE(to_fill);
+                    }
+                    vec_deinit(vpp);
+                    map_remove(&func->relocations,key);
+                    goto loop;
+            }
+    }
+}
 void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
     COldFuncState old=CreateCompilerState();
     //Add args to scope
@@ -6027,6 +6070,7 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
     CVariable *arg;
     vec_init(&Compiler.valueStack); //Freed
     map_init(&Compiler.locals); //Freed
+    map_init(&Compiler.currentRelocations);
     map_iter_t liter=map_iter(&info->noregs);
     const char *key;
     while(key=map_next(&info->noregs,&liter)) {
@@ -6069,6 +6113,8 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
     ReleaseValue(&vec_pop(&Compiler.valueStack));
     jit_reti(Compiler.JIT,0);
     if(!Compiler.errorFlag) {
+        func->relocations=Compiler.currentRelocations;
+        FillFunctionRelocations(func);
         jit_disable_optimization(curjit, JIT_OPT_ALL);
         jit_generate_code(curjit,func);
         func->funcptr=funcptr;
@@ -6455,7 +6501,6 @@ CVariable *Extern(CType *type,AST *name,char *importname) {
     ret->isFunc=bt2->type==TYPE_FUNC;
     ret->name=strdup(name->name);
     ret->linkage.type=LINK__IMPORT;
-    ret->linkage.dummyPtr=TD_MALLOC(sizeof(void*));
     ret->linkage.importLink=strdup(importname);
     ret->isGlobal=1;
     vec_push(&Compiler.unlinkedImportVars, CloneVariable(ret));
@@ -6476,7 +6521,6 @@ CVariable *Import(CType *type,AST *name,char *importname) {
     ret->refCount=1;
     ret->name=strdup(name->name);
     ret->linkage.type=LINK__IMPORT;
-    ret->linkage.dummyPtr=TD_MALLOC(sizeof(void*));
     ret->linkage.importLink=strdup(importname);
     ret->isGlobal=1;
     vec_push(&Compiler.unlinkedImportVars, CloneVariable(ret));

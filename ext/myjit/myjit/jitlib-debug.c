@@ -224,6 +224,7 @@ char * jit_get_op_name(struct jit_op * op)
 	case JIT_TAINT_LABEL:return "taint_label";
 	case JIT_END_ASM_BLK:return "end_asm_blk";
 	        case JIT_REF_CODE:	return "ref_code";
+	        case JIT_RELOCATION:	return "relocation";
 		case JIT_REF_DATA:	return "ref_data";
 		case JIT_FULL_SPILL:	return ".full_spill";
 		case JIT_FORCE_SPILL:	return "force_spill";

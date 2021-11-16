@@ -732,6 +732,14 @@ void jit_patch_local_addrs(struct jit *jit)
 			common86_mov_reg_imm(buf, op->r_arg[0], jit->buf + addr);
 		}
 
+		if(GET_OP(op)==JIT_RELOCATION) {
+            jit_value reg=op->r_arg[0];
+            unsigned char *buf = jit->buf + (int64_t) op->patch_addr;
+            amd64_emit_rex(buf, 8, 0, 0, (reg));
+            *(buf)++ = (unsigned char)0xb8 + ((reg) & 0x7);
+            *((void**)op->arg[1])=buf;
+            buf+=8;
+		}
 
 		if ((GET_OP(op) == JIT_DATA_REF_CODE) || (GET_OP(op) == JIT_DATA_REF_DATA)) {
 			unsigned char *buf = jit->buf + (int64_t) op->patch_addr;
@@ -885,6 +893,7 @@ void jit_gen_op(struct jit * jit, struct jit_op * op)
 
 		case JIT_REF_CODE:
 		case JIT_REF_DATA:
+        case JIT_RELOCATION:
 			op->patch_addr = JIT_BUFFER_OFFSET(jit);
 			common86_mov_reg_imm_size(jit->ip, a1, 0xdeadbeefcafebabe, sizeof(void *));
 			break;

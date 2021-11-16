@@ -40,7 +40,23 @@ static void __InsertSrcText(long at,char *exp) {
     }
     mrope_t *tmpr=TD_MALLOC(sizeof(mrope_t));
     mrope_init(tmpr);
-    mrope_append_text(tmpr, strdup(exp));
+    //"CHUNK" the input text to make it smaller for each peice to be modified
+    #define CHUNK_SIZE 256
+    int64_t len=strlen(exp);
+    for(;*exp;) {
+        char buffer[CHUNK_SIZE+1];
+        if(len<=CHUNK_SIZE) {
+            mrope_append_text(tmpr, strdup(exp));
+            exp+=len;
+        } else {
+            strncpy(buffer,exp,CHUNK_SIZE);
+            buffer[CHUNK_SIZE]=0;
+            len-=CHUNK_SIZE;
+            exp+=CHUNK_SIZE;
+            mrope_append_text(tmpr, strdup(buffer));
+        }
+    }
+
     mrope_insert(Lexer.source, at, tmpr);
     mrope_free(tmpr);
 }

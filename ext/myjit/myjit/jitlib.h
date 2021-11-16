@@ -275,6 +275,7 @@ typedef enum {
 	JIT_DUMP_PTR =(0xb8<<3),
 	JIT_TAINT_LABEL =(0xb9<<3), //Marks for fullspill
 	JIT_END_ASM_BLK =(0xba<<3), //Says to the allocator we can jump anywhere
+    JIT_RELOCATION =(0xbb<<3), //This dumps the ptr to arg[1] and stores in register arg[0]
 
 	JIT_MSG		= (0xf0 << 3),
 	JIT_COMMENT	= (0xf1 << 3),
@@ -621,7 +622,8 @@ int jit_allocai(struct jit * jit, int size);
 #define jit_data_ref_code(jit, a)	jit_add_op(jit, JIT_DATA_REF_CODE | IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_data_ref_data(jit, a)	jit_add_op(jit, JIT_DATA_REF_DATA | IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_data_code_offset(jit,a,b)  jit_add_op(jit, JIT_DATA_CODE_OFFSET, SPEC(IMM, IMM, NO), a, (jit_value)(b), 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
-#define jit_dump_ptr(jit,a)  jit_add_op(jit, JIT_DUMP_PTR, SPEC(IMM, IMM, NO), (jit_value)a ,0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
+#define jit_dump_ptr(jit,a)  jit_add_op(jit, JIT_DUMP_PTR, SPEC(IMM, NO, NO), (jit_value)a ,0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
+#define jit_relocation(jit,a,b)  jit_add_op(jit, JIT_RELOCATION, SPEC(TREG, IMM, NO), (jit_value)a ,(jit_value)b, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 
 #define jit_data_emptyarea(jit, count) \
 	do {  \
