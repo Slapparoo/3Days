@@ -1,4 +1,4 @@
-U0 Hello() {
+U0 HelloWorld() {
 	"HELLO WORLD\n";
 }
 /*
@@ -68,24 +68,23 @@ U0 Pile() {
   };
 }
 */
-class ABC{I64 a,b,c;};
-U0 Dummy2() {
+class ABC{I64i a,b,c;};
+U0 Dummy() {
   ABC x={0,0,0};
   asm {
     LEA RAX,I64 &x[RBP+ABC.b];
     MOV I64 [RAX],10;
   };
-  "%d\n",x.b;
+  "\n\n\n\n%d\n",x.b;
 }
-U0 Dummy() {
+U0 Dummy2() {
   I64 x=10;
 asm {
   C_HELLO::
-    IMPORT Hello;
   PUSH R12;
   MOV R12,10;
  @@Loop:
-  CALL Hello;
+  CALL &HelloWorld;
   DEC R12;
   CMP R12,0;
   JNE @@Loop;
@@ -93,6 +92,7 @@ asm {
   JMP @@Loop;
   @@Loop: //useless
   POP R12;
+
   RET;
 };
  x+=10;
@@ -102,10 +102,10 @@ U0 Foo() {
 		IMPORT Hello;
 		MOV RAX, Hello;
 		CALL RAX;
-		
+
 	};
 	return;
 }
 _import C_HELLO U0 Hi();
 Hi;
-Dummy2;
+Dummy;

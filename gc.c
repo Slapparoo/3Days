@@ -32,8 +32,9 @@ typedef struct {
     uint8_t isRoot:1;
     uint8_t isNoFree:1;
     uint8_t isExtPtr:1;
-    long size;
-    void(*destroy)(void*);
+    int64_t size;
+    void *userData;
+    void(*destroy)(void*,void*);
     void *rootPointer;
     //Data starts here
 } CPtrInfo ;
@@ -279,13 +280,15 @@ void *GC_Calloc(long sz,long num) {
 }
 static void __GC_Free(void *ptr) {
     void **has;
+
     if(!(has=GCGetPtr(ptr))) return UnlockGC();
-    void (*destroy)(void*)=((CPtrInfo*)*has)[-1].destroy;
+    long size=MSize(ptr);
+    void (*destroy)(void*,void*)=((CPtrInfo*)*has)[-1].destroy;
     if(destroy) {
         if(((CPtrInfo*)*has)[-1].isExtPtr)
-            destroy(((CPtrInfo*)*has)[-1].rootPointer);
+            destroy(((CPtrInfo*)*has)[-1].rootPointer,((CPtrInfo*)*has)[-1].userData);
         else
-            destroy(ptr);
+            destroy(ptr,((CPtrInfo*)*has)[-1].userData);
     }
     if(((CPtrInfo*)*has)[-1].isExtPtr) {
         void *old=*has;
@@ -297,6 +300,7 @@ static void __GC_Free(void *ptr) {
       gc.totalMem-=MSize(ptr);
       GCRemovePtr(ptr);
     }
+    memset(ptr,0xbe,size);
 #ifndef TARGET_WIN32
     free(ptr-sizeof(CPtrInfo));
 #else
@@ -465,10 +469,11 @@ long MSize(void *ptr) {
     CPtrInfo *info=*(void**)ptr;
     return info[-1].size;
 }
-void GC_SetDestroy(void *ptr,void(*destroy)(void *)) {
+void GC_SetDestroy(void *ptr,void(*destroy)(void *,void *),void *userdata) {
     if(!(ptr=GCGetPtr(ptr))) abort();
     CPtrInfo *p=*(void**)ptr;
     p[-1].destroy=destroy;
+    p[-1].userData=userdata;
 }
 int InBounds(void *ptr) {
     __sync_fetch_and_add(&gc.boundsCheckCounter,1);
@@ -509,11 +514,12 @@ void GC_Enable() {
     if(gc.sinceLastCollect>30000000)
       GC_Collect();
 }
-void *GCCreateExtPtr(void *ext,void(* destroy)(void*)) {
+void *GCCreateExtPtr(void *ext,void(* destroy)(void*ptr,void *user_data),void *user_data) {
     CPtrInfo *inf=calloc(sizeof(CPtrInfo),1);
     inf->rootPointer=ext;
     inf->isNoFree=1;
     inf->isExtPtr=1;
+    inf->userData=user_data;
     inf->destroy=destroy;
     GCInsertPtr(inf+1);
     assert(GCGetPtr(ext));

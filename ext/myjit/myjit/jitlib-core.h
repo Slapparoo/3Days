@@ -152,6 +152,7 @@ struct jit {
 	jit_prepared_args prepared_args; // list of arguments passed between PREPARE-CALL
 	int push_count;			// number of values pushed on the stack; used by AMD64
 	unsigned int optimizations;
+    int64_t bin_size;
 };
 
 struct jit_debug_info {

@@ -725,15 +725,15 @@ static const yytype_int16 yyrline[] =
     1123,  1124,  1125,  1126,  1133,  1140,  1141,  1149,  1154,  1158,
     1162,  1163,  1164,  1168,  1172,  1173,  1177,  1181,  1188,  1189,
     1190,  1194,  1198,  1202,  1206,  1210,  1211,  1217,  1223,  1224,
-    1225,  1226,  1231,  1236,  1237,  1242,  1246,  1251,  1256,  1262,
-    1271,  1279,  1288,  1289,  1290,  1291,  1292,  1295,  1298,  1299,
-    1303,  1304,  1308,  1312,  1316,  1320,  1324,  1328,  1332,  1336,
-    1337,  1341,  1345,  1351,  1357,  1361,  1366,  1370,  1374,  1378,
-    1382,  1386,  1392,  1393,  1397,  1401,  1406,  1407,  1411,  1415,
-    1420,  1421,  1426,  1427,  1432,  1433,  1438,  1439,  1443,  1448,
-    1449,  1453,  1457,  1461,  1466,  1467,  1471,  1476,  1477,  1482,
-    1483,  1488,  1489,  1494,  1495,  1499,  1503,  1507,  1511,  1515,
-    1519,  1523,  1527,  1531,  1535,  1539
+    1225,  1226,  1231,  1236,  1237,  1251,  1255,  1260,  1265,  1271,
+    1280,  1288,  1297,  1298,  1299,  1300,  1301,  1304,  1307,  1308,
+    1312,  1313,  1317,  1321,  1325,  1329,  1333,  1337,  1341,  1345,
+    1346,  1350,  1354,  1360,  1366,  1370,  1375,  1379,  1383,  1387,
+    1391,  1395,  1401,  1402,  1406,  1410,  1415,  1416,  1420,  1424,
+    1429,  1430,  1435,  1436,  1441,  1442,  1447,  1448,  1452,  1457,
+    1458,  1462,  1466,  1470,  1475,  1476,  1480,  1485,  1486,  1491,
+    1492,  1497,  1498,  1503,  1504,  1508,  1512,  1516,  1520,  1524,
+    1528,  1532,  1536,  1540,  1544,  1548
 };
 #endif
 
@@ -4154,63 +4154,72 @@ yyreduce:
   case 264: /* global_stmts: global_stmts ocstmt  */
 #line 1237 "HolyC.y"
                                         {
-  RunStatement(yyvsp[0]);
-  ReleaseAST(yyvsp[0]);
+  if(!Compiler.AOTMode) {
+    RunStatement(yyvsp[0]);
+    ReleaseAST(yyvsp[0]);
+  } else {
+    COldFuncState old=CreateCompilerState();
+    vec_CVariable_t empty;
+    vec_init(&empty);
+    ReleaseFunction(CompileAST(NULL,yyvsp[0],empty,C_AST_FRAME_OFF_DFT,C_AST_F_NO_COMPILE));
+    vec_push(&Compiler.AOTGlobalStmts,yyvsp[0]);
+    RestoreCompilerState(old);
+  }
   yyval=NULL;
 }
-#line 4162 "HolyC.tab.c"
+#line 4171 "HolyC.tab.c"
     break;
 
   case 265: /* global_stmt: global_stmts  */
-#line 1242 "HolyC.y"
+#line 1251 "HolyC.y"
                                 {
   yyval=NULL;
 }
-#line 4170 "HolyC.tab.c"
+#line 4179 "HolyC.tab.c"
     break;
 
   case 266: /* global_stmt: EXE scope  */
-#line 1246 "HolyC.y"
+#line 1255 "HolyC.y"
                              {
   RunStatement(yyvsp[0]);
   YYACCEPT;
   yyval=NULL;
 }
-#line 4180 "HolyC.tab.c"
+#line 4189 "HolyC.tab.c"
     break;
 
   case 267: /* global_stmt: EVAL expr_comma NL  */
-#line 1251 "HolyC.y"
+#line 1260 "HolyC.y"
                                       {
   RunPtr(CurFuncInfo,yyvsp[-1],CurFramePtr);
   YYACCEPT;
   yyval=NULL;
 }
-#line 4190 "HolyC.tab.c"
+#line 4199 "HolyC.tab.c"
     break;
 
   case 268: /* global_stmt: EVAL_NOCOMMA expr  */
-#line 1256 "HolyC.y"
+#line 1265 "HolyC.y"
                                      {
   RunPtr(NULL,yyvsp[0],NULL);
   YYACCEPT;
   yyval=NULL;
 }
-#line 4200 "HolyC.tab.c"
+#line 4209 "HolyC.tab.c"
     break;
 
   case 269: /* global_stmt: DBG expr_comma  */
-#line 1262 "HolyC.y"
+#line 1271 "HolyC.y"
                                   {
   RunPtr(CurFuncInfo,yyvsp[0],CurFramePtr);
   YYACCEPT;
   yyval=NULL;
 }
-#line 4210 "HolyC.tab.c"
+#line 4219 "HolyC.tab.c"
     break;
 
   case 270: /* _expr0: DOUBLE_AT NAME  */
-#line 1271 "HolyC.y"
+#line 1280 "HolyC.y"
                              {
   yyval=SOT(yyvsp[0],yyvsp[-1]);
   char buffer[256];
@@ -4219,11 +4228,11 @@ yyreduce:
   yyval->name=strdup(buffer);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4223 "HolyC.tab.c"
+#line 4232 "HolyC.tab.c"
     break;
 
   case 271: /* _expr0: DOUBLE_AT INT  */
-#line 1279 "HolyC.y"
+#line 1288 "HolyC.y"
                                {
  //Make a name token out of $n
   char buffer[256];
@@ -4233,523 +4242,523 @@ yyreduce:
   yyval=n;
   ReleaseAST(yyvsp[-1]);
 }
-#line 4237 "HolyC.tab.c"
+#line 4246 "HolyC.tab.c"
     break;
 
   case 272: /* _expr0: FLOAT  */
-#line 1288 "HolyC.y"
+#line 1297 "HolyC.y"
                  {yyval=SLE(yyvsp[0]);}
-#line 4243 "HolyC.tab.c"
+#line 4252 "HolyC.tab.c"
     break;
 
   case 273: /* _expr0: INT  */
-#line 1289 "HolyC.y"
+#line 1298 "HolyC.y"
                {yyval=SLE(yyvsp[0]);}
-#line 4249 "HolyC.tab.c"
+#line 4258 "HolyC.tab.c"
     break;
 
   case 274: /* _expr0: CHAR  */
-#line 1290 "HolyC.y"
+#line 1299 "HolyC.y"
                 {yyval=SLE(yyvsp[0]);}
-#line 4255 "HolyC.tab.c"
+#line 4264 "HolyC.tab.c"
     break;
 
   case 275: /* _expr0: STRING  */
-#line 1291 "HolyC.y"
+#line 1300 "HolyC.y"
                   {yyval=SLE(yyvsp[0]);}
-#line 4261 "HolyC.tab.c"
+#line 4270 "HolyC.tab.c"
     break;
 
   case 276: /* _expr0: LASTCLASS  */
-#line 1292 "HolyC.y"
+#line 1301 "HolyC.y"
                      {
   yyval=SLE(yyvsp[0]);
 }
-#line 4269 "HolyC.tab.c"
+#line 4278 "HolyC.tab.c"
     break;
 
   case 277: /* _expr0: NAME  */
-#line 1295 "HolyC.y"
+#line 1304 "HolyC.y"
                 {
   yyval=SLE(yyvsp[0]);
-}
-#line 4277 "HolyC.tab.c"
-    break;
-
-  case 279: /* _expr1: LEFT_PAREN expr_comma RIGHT_PAREN  */
-#line 1299 "HolyC.y"
-                                                          {
-  yyval=yyvsp[-1];
-  ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
 #line 4286 "HolyC.tab.c"
     break;
 
-  case 281: /* _expr2: TYPENAME DOT NAME  */
-#line 1304 "HolyC.y"
-                                     {
-  yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
-  ReleaseAST(yyvsp[-1]);
+  case 279: /* _expr1: LEFT_PAREN expr_comma RIGHT_PAREN  */
+#line 1308 "HolyC.y"
+                                                          {
+  yyval=yyvsp[-1];
+  ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
 #line 4295 "HolyC.tab.c"
     break;
 
-  case 282: /* _expr2: TYPENAME ARROW NAME  */
-#line 1308 "HolyC.y"
-                                        {
+  case 281: /* _expr2: TYPENAME DOT NAME  */
+#line 1313 "HolyC.y"
+                                     {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4304 "HolyC.tab.c"
     break;
 
-  case 283: /* _expr2: _expr2 DOT NAME  */
-#line 1312 "HolyC.y"
-                                    {
+  case 282: /* _expr2: TYPENAME ARROW NAME  */
+#line 1317 "HolyC.y"
+                                        {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4313 "HolyC.tab.c"
     break;
 
-  case 284: /* _expr2: _expr2 ARROW NAME  */
-#line 1316 "HolyC.y"
-                                      {
+  case 283: /* _expr2: _expr2 DOT NAME  */
+#line 1321 "HolyC.y"
+                                    {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4322 "HolyC.tab.c"
     break;
 
-  case 285: /* _expr2: _expr2 DEC  */
-#line 1320 "HolyC.y"
-                            {
-  yyval=SOT(CreateUnop(yyvsp[-1],AST_POST_DEC),yyvsp[0]);
-  ReleaseAST(yyvsp[0]);
+  case 284: /* _expr2: _expr2 ARROW NAME  */
+#line 1325 "HolyC.y"
+                                      {
+  yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
+  ReleaseAST(yyvsp[-1]);
 }
 #line 4331 "HolyC.tab.c"
     break;
 
-  case 286: /* _expr2: _expr2 INC  */
-#line 1324 "HolyC.y"
+  case 285: /* _expr2: _expr2 DEC  */
+#line 1329 "HolyC.y"
                             {
-  yyval=SOT(CreateUnop(yyvsp[-1],AST_POST_INC),yyvsp[0]);
+  yyval=SOT(CreateUnop(yyvsp[-1],AST_POST_DEC),yyvsp[0]);
   ReleaseAST(yyvsp[0]);
 }
 #line 4340 "HolyC.tab.c"
     break;
 
-  case 287: /* _expr2: _expr2 LEFT_PAREN callargs RIGHT_PAREN  */
-#line 1328 "HolyC.y"
-                                                                  {
-  yyval=SOT(CreateFuncCall(yyvsp[-3],yyvsp[-1]),yyvsp[-3]);
-  ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
+  case 286: /* _expr2: _expr2 INC  */
+#line 1333 "HolyC.y"
+                            {
+  yyval=SOT(CreateUnop(yyvsp[-1],AST_POST_INC),yyvsp[0]);
+  ReleaseAST(yyvsp[0]);
 }
 #line 4349 "HolyC.tab.c"
     break;
 
-  case 288: /* _expr2: _expr2 LEFT_PAREN primtype0 RIGHT_PAREN  */
-#line 1332 "HolyC.y"
-                                                                   {
-  yyval=CreateExplicitTypecast(yyvsp[-3],yyvsp[-1]);
+  case 287: /* _expr2: _expr2 LEFT_PAREN callargs RIGHT_PAREN  */
+#line 1337 "HolyC.y"
+                                                                  {
+  yyval=SOT(CreateFuncCall(yyvsp[-3],yyvsp[-1]),yyvsp[-3]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
 #line 4358 "HolyC.tab.c"
     break;
 
-  case 290: /* _expr3: SIZEOF NAME  */
-#line 1337 "HolyC.y"
-                             {
-  yyval=SOT(CreateSizeof(yyvsp[0]),yyvsp[-1]);
-  ReleaseAST(yyvsp[-1]);
+  case 288: /* _expr2: _expr2 LEFT_PAREN primtype0 RIGHT_PAREN  */
+#line 1341 "HolyC.y"
+                                                                   {
+  yyval=CreateExplicitTypecast(yyvsp[-3],yyvsp[-1]);
+  ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
 #line 4367 "HolyC.tab.c"
     break;
 
-  case 291: /* _expr3: SIZEOF sizeof_type  */
-#line 1341 "HolyC.y"
-                                    {
+  case 290: /* _expr3: SIZEOF NAME  */
+#line 1346 "HolyC.y"
+                             {
   yyval=SOT(CreateSizeof(yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4376 "HolyC.tab.c"
     break;
 
+  case 291: /* _expr3: SIZEOF sizeof_type  */
+#line 1350 "HolyC.y"
+                                    {
+  yyval=SOT(CreateSizeof(yyvsp[0]),yyvsp[-1]);
+  ReleaseAST(yyvsp[-1]);
+}
+#line 4385 "HolyC.tab.c"
+    break;
+
   case 292: /* _expr3: SIZEOF LEFT_PAREN expr_comma RIGHT_PAREN  */
-#line 1345 "HolyC.y"
+#line 1354 "HolyC.y"
                                                                      {
   yyval=SOT(CreateSizeof(yyvsp[-1]),yyvsp[-3]);
   ReleaseAST(yyvsp[-3]);
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4387 "HolyC.tab.c"
+#line 4396 "HolyC.tab.c"
     break;
 
   case 293: /* _expr3: SIZEOF LEFT_PAREN sizeof_type RIGHT_PAREN  */
-#line 1351 "HolyC.y"
+#line 1360 "HolyC.y"
                                                                       {
   yyval=SOT(CreateSizeof(yyvsp[-1]),yyvsp[-3]);
   ReleaseAST(yyvsp[-3]);
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4398 "HolyC.tab.c"
-    break;
-
-  case 294: /* _expr3: BAND _expr3  */
-#line 1357 "HolyC.y"
-                             {
-  yyval=SOT(CreateUnop(yyvsp[0],AST_ADDROF),yyvsp[-1]);
-  ReleaseAST(yyvsp[-1]);
-}
 #line 4407 "HolyC.tab.c"
     break;
 
-  case 295: /* _expr3: MUL _expr3  */
-#line 1361 "HolyC.y"
-                            {
-  yyval=SOT(CreateUnop(yyvsp[0],AST_DERREF),yyvsp[-1]);
+  case 294: /* _expr3: BAND _expr3  */
+#line 1366 "HolyC.y"
+                             {
+  yyval=SOT(CreateUnop(yyvsp[0],AST_ADDROF),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4416 "HolyC.tab.c"
     break;
 
-  case 296: /* _expr3: DEC _expr3  */
-#line 1366 "HolyC.y"
+  case 295: /* _expr3: MUL _expr3  */
+#line 1370 "HolyC.y"
                             {
-  yyval=SOT(CreateUnop(yyvsp[0],AST_PRE_DEC),yyvsp[-1]);
+  yyval=SOT(CreateUnop(yyvsp[0],AST_DERREF),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4425 "HolyC.tab.c"
     break;
 
-  case 297: /* _expr3: INC _expr3  */
-#line 1370 "HolyC.y"
+  case 296: /* _expr3: DEC _expr3  */
+#line 1375 "HolyC.y"
                             {
-  yyval=SOT(CreateUnop(yyvsp[0],AST_PRE_INC),yyvsp[-1]);
+  yyval=SOT(CreateUnop(yyvsp[0],AST_PRE_DEC),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4434 "HolyC.tab.c"
     break;
 
-  case 298: /* _expr3: ADD _expr3  */
-#line 1374 "HolyC.y"
+  case 297: /* _expr3: INC _expr3  */
+#line 1379 "HolyC.y"
                             {
-  yyval=SOT(CreateUnop(yyvsp[0],AST_POS),yyvsp[-1]);
+  yyval=SOT(CreateUnop(yyvsp[0],AST_PRE_INC),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4443 "HolyC.tab.c"
     break;
 
-  case 299: /* _expr3: SUB _expr3  */
-#line 1378 "HolyC.y"
+  case 298: /* _expr3: ADD _expr3  */
+#line 1383 "HolyC.y"
                             {
-  yyval=SOT(CreateUnop(yyvsp[0],AST_NEG),yyvsp[-1]);
+  yyval=SOT(CreateUnop(yyvsp[0],AST_POS),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4452 "HolyC.tab.c"
     break;
 
-  case 300: /* _expr3: LNOT _expr3  */
-#line 1382 "HolyC.y"
-                             {
-  yyval=SOT(CreateUnop(yyvsp[0],AST_LNOT),yyvsp[-1]);
+  case 299: /* _expr3: SUB _expr3  */
+#line 1387 "HolyC.y"
+                            {
+  yyval=SOT(CreateUnop(yyvsp[0],AST_NEG),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4461 "HolyC.tab.c"
     break;
 
-  case 301: /* _expr3: BNOT _expr3  */
-#line 1386 "HolyC.y"
+  case 300: /* _expr3: LNOT _expr3  */
+#line 1391 "HolyC.y"
                              {
-  yyval=SOT(CreateUnop(yyvsp[0],AST_BNOT),yyvsp[-1]);
+  yyval=SOT(CreateUnop(yyvsp[0],AST_LNOT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4470 "HolyC.tab.c"
     break;
 
-  case 303: /* _expr4: _expr4 POW _expr4  */
-#line 1393 "HolyC.y"
-                                      {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_POW),yyvsp[-1]);
+  case 301: /* _expr3: BNOT _expr3  */
+#line 1395 "HolyC.y"
+                             {
+  yyval=SOT(CreateUnop(yyvsp[0],AST_BNOT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4479 "HolyC.tab.c"
     break;
 
-  case 304: /* _expr4: _expr4 SHL _expr4  */
-#line 1397 "HolyC.y"
+  case 303: /* _expr4: _expr4 POW _expr4  */
+#line 1402 "HolyC.y"
                                       {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SHL),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_POW),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4488 "HolyC.tab.c"
     break;
 
-  case 305: /* _expr4: _expr4 SHR _expr4  */
-#line 1401 "HolyC.y"
+  case 304: /* _expr4: _expr4 SHL _expr4  */
+#line 1406 "HolyC.y"
                                       {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SHR),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SHL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4497 "HolyC.tab.c"
     break;
 
-  case 307: /* _expr4_5: _expr4_5 MUL _expr4_5  */
-#line 1407 "HolyC.y"
-                                            {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_MUL),yyvsp[-1]);
+  case 305: /* _expr4: _expr4 SHR _expr4  */
+#line 1410 "HolyC.y"
+                                      {
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SHR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4506 "HolyC.tab.c"
     break;
 
-  case 308: /* _expr4_5: _expr4_5 DIV _expr4_5  */
-#line 1411 "HolyC.y"
+  case 307: /* _expr4_5: _expr4_5 MUL _expr4_5  */
+#line 1416 "HolyC.y"
                                             {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_DIV),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_MUL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4515 "HolyC.tab.c"
     break;
 
-  case 309: /* _expr4_5: _expr4_5 MOD _expr4_5  */
-#line 1415 "HolyC.y"
+  case 308: /* _expr4_5: _expr4_5 DIV _expr4_5  */
+#line 1420 "HolyC.y"
                                             {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_MOD),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_DIV),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4524 "HolyC.tab.c"
     break;
 
-  case 311: /* _expr5: _expr5 BAND _expr5  */
-#line 1421 "HolyC.y"
-                                       {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BAND),yyvsp[-1]);
+  case 309: /* _expr4_5: _expr4_5 MOD _expr4_5  */
+#line 1424 "HolyC.y"
+                                            {
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_MOD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4533 "HolyC.tab.c"
     break;
 
-  case 313: /* _expr6: _expr6 BXOR _expr6  */
-#line 1427 "HolyC.y"
+  case 311: /* _expr5: _expr5 BAND _expr5  */
+#line 1430 "HolyC.y"
                                        {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BXOR),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BAND),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4542 "HolyC.tab.c"
     break;
 
-  case 315: /* _expr7: _expr7 BOR _expr7  */
-#line 1433 "HolyC.y"
-                                      {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BOR),yyvsp[-1]);
+  case 313: /* _expr6: _expr6 BXOR _expr6  */
+#line 1436 "HolyC.y"
+                                       {
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BXOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4551 "HolyC.tab.c"
     break;
 
-  case 317: /* _expr8: _expr8 ADD _expr8  */
-#line 1439 "HolyC.y"
+  case 315: /* _expr7: _expr7 BOR _expr7  */
+#line 1442 "HolyC.y"
                                       {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ADD),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4560 "HolyC.tab.c"
     break;
 
-  case 318: /* _expr8: _expr8 SUB _expr8  */
-#line 1443 "HolyC.y"
+  case 317: /* _expr8: _expr8 ADD _expr8  */
+#line 1448 "HolyC.y"
                                       {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SUB),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ADD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4569 "HolyC.tab.c"
     break;
 
-  case 320: /* _expr9: _expr9 LT _expr9  */
-#line 1449 "HolyC.y"
-                                     {
-  yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_LT),yyvsp[-1]);
+  case 318: /* _expr8: _expr8 SUB _expr8  */
+#line 1452 "HolyC.y"
+                                      {
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SUB),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4578 "HolyC.tab.c"
     break;
 
-  case 321: /* _expr9: _expr9 GT _expr9  */
-#line 1453 "HolyC.y"
+  case 320: /* _expr9: _expr9 LT _expr9  */
+#line 1458 "HolyC.y"
                                      {
-  yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_GT),yyvsp[-1]);
+  yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_LT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4587 "HolyC.tab.c"
     break;
 
-  case 322: /* _expr9: _expr9 LE _expr9  */
-#line 1457 "HolyC.y"
+  case 321: /* _expr9: _expr9 GT _expr9  */
+#line 1462 "HolyC.y"
                                      {
-  yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_LE),yyvsp[-1]);
+  yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_GT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4596 "HolyC.tab.c"
     break;
 
-  case 323: /* _expr9: _expr9 GE _expr9  */
-#line 1461 "HolyC.y"
+  case 322: /* _expr9: _expr9 LE _expr9  */
+#line 1466 "HolyC.y"
                                      {
-  yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_GE),yyvsp[-1]);
+  yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_LE),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4605 "HolyC.tab.c"
     break;
 
-  case 325: /* _expr10: _expr10 EQ _expr10  */
-#line 1467 "HolyC.y"
-                                        {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_EQ),yyvsp[-1]);
+  case 323: /* _expr9: _expr9 GE _expr9  */
+#line 1470 "HolyC.y"
+                                     {
+  yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_GE),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4614 "HolyC.tab.c"
     break;
 
-  case 326: /* _expr10: _expr10 NE _expr10  */
-#line 1471 "HolyC.y"
+  case 325: /* _expr10: _expr10 EQ _expr10  */
+#line 1476 "HolyC.y"
                                         {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_NE),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_EQ),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4623 "HolyC.tab.c"
     break;
 
-  case 328: /* _expr11: _expr11 LAND _expr11  */
-#line 1477 "HolyC.y"
-                                          {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LAND),yyvsp[-1]);
+  case 326: /* _expr10: _expr10 NE _expr10  */
+#line 1480 "HolyC.y"
+                                        {
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_NE),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4632 "HolyC.tab.c"
     break;
 
-  case 330: /* _expr12: _expr12 LXOR _expr12  */
-#line 1483 "HolyC.y"
+  case 328: /* _expr11: _expr11 LAND _expr11  */
+#line 1486 "HolyC.y"
                                           {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LXOR),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LAND),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4641 "HolyC.tab.c"
     break;
 
-  case 332: /* _expr13: _expr13 LOR _expr13  */
-#line 1489 "HolyC.y"
-                                         {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LOR),yyvsp[-1]);
+  case 330: /* _expr12: _expr12 LXOR _expr12  */
+#line 1492 "HolyC.y"
+                                          {
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LXOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4650 "HolyC.tab.c"
     break;
 
-  case 334: /* _expr14: _expr14 ASSIGN _expr14  */
-#line 1495 "HolyC.y"
-                                            {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN),yyvsp[-1]);
+  case 332: /* _expr13: _expr13 LOR _expr13  */
+#line 1498 "HolyC.y"
+                                         {
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4659 "HolyC.tab.c"
     break;
 
-  case 335: /* _expr14: _expr14 EQ_SHL _expr14  */
-#line 1499 "HolyC.y"
+  case 334: /* _expr14: _expr14 ASSIGN _expr14  */
+#line 1504 "HolyC.y"
                                             {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SHL),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4668 "HolyC.tab.c"
     break;
 
-  case 336: /* _expr14: _expr14 EQ_SHR _expr14  */
-#line 1503 "HolyC.y"
+  case 335: /* _expr14: _expr14 EQ_SHL _expr14  */
+#line 1508 "HolyC.y"
                                             {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SHR),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SHL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4677 "HolyC.tab.c"
     break;
 
-  case 337: /* _expr14: _expr14 EQ_MUL _expr14  */
-#line 1507 "HolyC.y"
+  case 336: /* _expr14: _expr14 EQ_SHR _expr14  */
+#line 1512 "HolyC.y"
                                             {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_MUL),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SHR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4686 "HolyC.tab.c"
     break;
 
-  case 338: /* _expr14: _expr14 EQ_DIV _expr14  */
-#line 1511 "HolyC.y"
+  case 337: /* _expr14: _expr14 EQ_MUL _expr14  */
+#line 1516 "HolyC.y"
                                             {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_DIV),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_MUL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4695 "HolyC.tab.c"
     break;
 
-  case 339: /* _expr14: _expr14 EQ_MOD _expr14  */
-#line 1515 "HolyC.y"
+  case 338: /* _expr14: _expr14 EQ_DIV _expr14  */
+#line 1520 "HolyC.y"
                                             {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_MOD),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_DIV),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4704 "HolyC.tab.c"
     break;
 
-  case 340: /* _expr14: _expr14 EQ_BAND _expr14  */
-#line 1519 "HolyC.y"
-                                             {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BAND),yyvsp[-1]);
+  case 339: /* _expr14: _expr14 EQ_MOD _expr14  */
+#line 1524 "HolyC.y"
+                                            {
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_MOD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4713 "HolyC.tab.c"
     break;
 
-  case 341: /* _expr14: _expr14 EQ_BXOR _expr14  */
-#line 1523 "HolyC.y"
+  case 340: /* _expr14: _expr14 EQ_BAND _expr14  */
+#line 1528 "HolyC.y"
                                              {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BXOR),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BAND),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4722 "HolyC.tab.c"
     break;
 
-  case 342: /* _expr14: _expr14 EQ_BOR _expr14  */
-#line 1527 "HolyC.y"
-                                            {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BOR),yyvsp[-1]);
+  case 341: /* _expr14: _expr14 EQ_BXOR _expr14  */
+#line 1532 "HolyC.y"
+                                             {
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BXOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4731 "HolyC.tab.c"
     break;
 
-  case 343: /* _expr14: _expr14 EQ_ADD _expr14  */
-#line 1531 "HolyC.y"
+  case 342: /* _expr14: _expr14 EQ_BOR _expr14  */
+#line 1536 "HolyC.y"
                                             {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_ADD),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4740 "HolyC.tab.c"
     break;
 
-  case 344: /* _expr14: _expr14 EQ_SUB _expr14  */
-#line 1535 "HolyC.y"
+  case 343: /* _expr14: _expr14 EQ_ADD _expr14  */
+#line 1540 "HolyC.y"
                                             {
-  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SUB),yyvsp[-1]);
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_ADD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
 #line 4749 "HolyC.tab.c"
     break;
 
+  case 344: /* _expr14: _expr14 EQ_SUB _expr14  */
+#line 1544 "HolyC.y"
+                                            {
+  yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SUB),yyvsp[-1]);
+  ReleaseAST(yyvsp[-1]);
+}
+#line 4758 "HolyC.tab.c"
+    break;
 
-#line 4753 "HolyC.tab.c"
+
+#line 4762 "HolyC.tab.c"
 
       default: break;
     }
@@ -4943,7 +4952,7 @@ yyreturn:
   return yyresult;
 }
 
-#line 1541 "HolyC.y"
+#line 1550 "HolyC.y"
 
 static int code;
 int yylex() {
@@ -4995,7 +5004,7 @@ static void __IsTrue(CFuncInfo *dummy1,AST *node,void *fp) {
   vec_init(&args);
   Compiler.returnType=rtype;
   AST *retn =CreateReturn(node);
-  CFunction *f=CompileAST(NULL,retn,args,C_AST_FRAME_OFF_DFT);
+  CFunction *f=CompileAST(NULL,retn,args,C_AST_FRAME_OFF_DFT,0);
   int ret;
   if(IsF64(rtype)) {
     ret=0!=((double(*)())f->funcptr)();

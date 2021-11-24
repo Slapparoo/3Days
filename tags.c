@@ -28,6 +28,7 @@ void DumpTagsToFile(char *fn) {
   miter=map_iter(&Compiler.globals);
   while(key=map_next(&Compiler.globals, &miter)) {
     CVariable **var=map_get(&Compiler.globals,key);
+    if(var[0]->isInternal) continue;
     if(var[0]->type->type==TYPE_FUNC) {
         fprintf(f,"%s\t%s\t%ld;\tkind:f\n",key,var[0]->fn,var[0]->line);
     } else {

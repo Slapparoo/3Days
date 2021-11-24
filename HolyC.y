@@ -1235,8 +1235,17 @@ scope[r]: LEFT_CURLY[un1] RIGHT_CURLY[un2] {
 };
 global_stmts[r]:{$$=NULL;};
 global_stmts[r]: global_stmts ocstmt[s] {
-  RunStatement($s);
-  ReleaseAST($s);
+  if(!Compiler.AOTMode) {
+    RunStatement($s);
+    ReleaseAST($s);
+  } else {
+    COldFuncState old=CreateCompilerState();
+    vec_CVariable_t empty;
+    vec_init(&empty);
+    ReleaseFunction(CompileAST(NULL,$s,empty,C_AST_FRAME_OFF_DFT,C_AST_F_NO_COMPILE));
+    vec_push(&Compiler.AOTGlobalStmts,$s);
+    RestoreCompilerState(old);
+  }
   $r=NULL;
 };
 global_stmt[r]: global_stmts[s] {
@@ -1589,7 +1598,7 @@ static void __IsTrue(CFuncInfo *dummy1,AST *node,void *fp) {
   vec_init(&args);
   Compiler.returnType=rtype;
   AST *retn =CreateReturn(node);
-  CFunction *f=CompileAST(NULL,retn,args,C_AST_FRAME_OFF_DFT);
+  CFunction *f=CompileAST(NULL,retn,args,C_AST_FRAME_OFF_DFT,0);
   int ret;
   if(IsF64(rtype)) {
     ret=0!=((double(*)())f->funcptr)();

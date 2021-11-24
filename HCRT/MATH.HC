@@ -170,9 +170,6 @@ I64 RandRangeSeed(I64 min=0, I64 max, I64 seed)
   res2=res * (1 + 1<<16 + 1<<32 + 1<<48);
   return ((res2&0xffffffff)(U64) * (max-min+1)) >> 32 + min;
 }
-F64 Pow(F64 a,F64 b) {
-  return a`b;
-}
 U64 ClampU64(U64 a,U64 min=0,U64 max) {
   if(a<min) return min;
   if(a>max) return max;
@@ -183,9 +180,3 @@ I64 ClampI64(I64 a,I64 min=0,I64 max) {
   if(a>max) return max;
   return a;
 }
-F64 ClampI64(F64 a,F64 min=0,F64 max) {
-  if(a<min) return min;
-  if(a>max) return max;
-  return a;
-}
-

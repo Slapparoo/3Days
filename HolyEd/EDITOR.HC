@@ -1,6 +1,5 @@
 #include "KEYS2.HC"
 #include "ROPE.HC"
-#include "FONT.HC"
 #define EDIT_UNUSED 0
 #define EDIT_INS_STR 3
 #define EDIT_DEL_STR 4
@@ -1479,7 +1478,10 @@ I64 DrawEditor(CEditor *ed,I64 flags=0,U8 *dialogtxt=NULL,I64 mb_active=-1) {
         ++screen_line;
         ln=ln->next;
     }
-    U8 *pad=MStrPrint("%*c",lnumlen,' ');
+    if(lnumlen)
+        U8 *pad=MStrPrint("%*c",lnumlen,' ');
+    else
+        pad=StrNew("");
     while(cnt>=0) {
         ed->window->cur_cp=CP_LINUM;
         ed->window->y=screen_line,ed->window->x=0;
@@ -2635,7 +2637,10 @@ pagedown:
         if(key=='\n') {
             CLine *prev=GetLine(ed,ed->cury);
             EdRight(ed);
-            U8 *margin=MStrPrint("%*c",IndentLevel(prev),'    ');
+            if(IndentLevel(prev))
+                U8 *margin=MStrPrint("%*c",IndentLevel(prev),'    ');
+            else
+                margin=StrNew("");
             EditorInsText(ed,margin,soff+1,TRUE);
             ed->_curx=ed->curx=4*IndentLevel(prev);
         }

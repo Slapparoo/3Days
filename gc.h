@@ -7,7 +7,7 @@ void DestroyGC();
 void CreateGC(void *stacktop,int boundscheckmode);
 void AddGCRoot(void *addr,long len);
 long MSize(void *ptr);
-void GC_SetDestroy(void *ptr,void(*destroy)(void *));
+void GC_SetDestroy(void *ptr,void(*destroy)(void *,void*),void *userdata);
 
 #define GC_FREE(ptr) GC_Free(ptr)
 #define GC_MALLOC(sz) GC_Calloc(sz,1)
@@ -18,4 +18,4 @@ int InBounds(void *ptr);
 void GC_Enable();
 void GC_Disable();
 void *GC_Malloc(long num);
-void *GCCreateExtPtr(void *ext,void(* destroy)(void*));
+void *GCCreateExtPtr(void *ext,void(* destroy)(void*,void*),void*);

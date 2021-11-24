@@ -364,6 +364,7 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 
 	jit_prepare_spills_on_jmpr_targets(jit);
 	jit_prepare_unloads_at_tainted(jit);
+	//jit_flw_analysis(jit);
 	ReduceRegisterCount(jit,func);
 
 	jit_prepare_arguments(jit);
@@ -436,6 +437,16 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 		op->code_length = offset_2 - offset_1;
 	}
 
+	//Add floating points to end of code as they are RIP relative
+	jit->ip+=16-(((int64_t)jit->ip)%16);
+	for (struct jit_op * op = jit->ops; op != NULL; op = op->next) {
+	    if(op->code!=(JIT_FMOV|IMM)) continue;
+	    if (jit->buf_capacity - (8+jit->ip - jit->buf) < MINIMAL_BUF_SPACE) jit_buf_expand(jit);
+	    *(int32_t*)((char*)jit->buf+op->flt_imm_code_offset)=(jit->ip-jit->buf)-op->flt_imm_code_offset-4; //-4 offset points to displacement,so bytes is subtraced as RIP displacemnets are 32bit here
+	    *(double*)(jit->ip)=op->flt_imm;
+	    jit->ip+=8;
+	}
+
 	/* moves the code to its final destination */
 	int code_size = jit->ip - jit->buf;
 	void * mem;
@@ -457,6 +468,7 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 	int64_t pos = jit->ip - jit->buf;
 	jit->buf = mem;
 	jit->ip = jit->buf + pos;
+	jit->bin_size=pos;
 
 	jit_patch_external_calls(jit);
 	jit_patch_local_addrs(jit);
@@ -505,9 +517,16 @@ void jit_disable_optimization(struct jit * jit, int opt)
     if(!jit) return;
 	jit->optimizations &= ~opt;
 }
+int64_t jit_bin_size(struct jit * jit) {
+    return jit->bin_size;
+}
 void jit_free(struct jit * jit)
 {
     if(!jit) return;
+    jit_reg_allocator_free(jit->reg_al);
+    free_ops(jit_op_first(jit->ops));
+    free_labels(jit->labels);
+    if(jit->buf) TD_FREE(jit->buf);
 #ifndef TARGET_WIN32
 	munmap(jit->buf,jit->ip-jit->buf);
 #else

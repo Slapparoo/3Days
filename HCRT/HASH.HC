@@ -28,7 +28,6 @@ U0 HashAdd(CHash* tmp, CHashTable* t) {
   tmp->next = NULL;
   I64 hash = HashStr(tmp->str);
   CHash* bucket = t->body[hash & t->mask];
-
   if (!bucket) {
     t->body[hash & t->mask] = tmp;
     return;

@@ -221,6 +221,11 @@ static int assign_getarg(jit_op * op, struct jit_reg_allocator * al)
 				op->r_arg[1] = op->arg[1];
 				// FIXME: should have its own name
 				op->code = JIT_NOP;
+				//Dont store items in XMM0(Used as acccumaltor)
+				if(hreg->fp&&hreg->id==0) {
+                    unload_reg(op, hreg, op->arg[0]);
+                    rmap_unassoc(op->regmap, op->arg[0]);
+				}
 				return 1;
 			}
 		}

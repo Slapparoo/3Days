@@ -181,6 +181,7 @@ memberchk:
     while(key=map_next(&Compiler.globals, &gi)) {
         if(text) if(0!=strncmp(text, key,strlen(text))) continue;
         CVariable *find=map_get(&Compiler.globals,key)[0];
+        if(find->isInternal) continue;
         char *type=TypeToString(find->type);
         if(!find->isFunc)
             sprintf(buffer,"Global:%s(%s)",key,type);
@@ -256,6 +257,8 @@ void FlushLexer() {
     vec_int_t *lns;
     if(lns=map_get(&Lexer.fileLineStarts,REPL_SOURCE_NAME))
         vec_deinit(lns);
+    Lexer.source=TD_MALLOC(sizeof(mrope_t));
+    mrope_init(Lexer.source);
 }
 char *LexExpandText(char*text) {
     CLexerFileState s=CreateLexerFileState();
@@ -300,6 +303,7 @@ static char *__EscapeString(char stopat) {
     int i;
     for(; LEXER_PEEK()!=stopat;) {
         if(!LEXER_PEEK()&&Lexer.replMode) {
+            FlushLexer();
             WaitForInput();
             continue;
         } else if(!LEXER_PEEK()) {
@@ -455,6 +459,7 @@ void LexerSearch(char *text) {
   }
 loop:
     if(!LEXER_PEEK()&&Lexer.replMode) {
+        FlushLexer();
         WaitForInput();
         goto loop;
     } else if(!LEXER_PEEK()&&!Lexer.replMode)
@@ -601,6 +606,78 @@ void RestoreLexerFileState(CLexerFileState backup) {
 void HandleLexerIf(int success) {
     CPreprocIfState state= {.success=success,.hasElse=0};
     vec_push(&Lexer.ifStates,state);
+}
+static int IsBinFile(char *text) {
+    char *dot;
+    if(dot=strrchr(text,'.'))
+        if(!strcmp(dot+1,"BIN")||!strcmp(dot+1,"bin"))
+            return 1;
+    return 0;
+}
+static int IsZSourceFile(char *text) {
+    char *dot;
+    char clone[strlen(text)+1];
+    strcpy(clone,text);
+    if(dot=strrchr(clone,'.')) {
+        if(!strcmp(dot+1,"Z")||!strcmp(dot+1,"z")) {
+            *dot=0;
+            return !IsBinFile(clone);
+        }
+    }
+    return 0;
+}
+static int IsZBinFile(char *text) {
+    char *dot;
+    char clone[strlen(text)+1];
+    strcpy(clone,text);
+    if(dot=strrchr(clone,'.')) {
+        if(!strcmp(dot+1,"Z")||!strcmp(dot+1,"z")) {
+            *dot=0;
+            return IsBinFile(clone);
+        }
+    }
+    return 0;
+}
+static FILE *ExpandFile(char *fn) {
+    FILE *ret=NULL;
+    CVariable **expand;
+    CType **carcCompress;
+    if(!(expand=map_get(&Compiler.globals,"ExpandBuf"))) {
+        LexerRaiseError("ExpandBuf not loaded,can't load \".Z\" files.");
+    } else if(!(carcCompress=map_get(&Compiler.types,"CArcCompress"))) {
+        LexerRaiseError("CArcCompress not loaded,can't load \".Z\" files.");
+    } else {
+        assert(expand[0]->func->funcptr);
+        FILE *f=fopen(fn,"rb");
+        long start=ftell(f);
+        fseek(f,0,SEEK_END);
+        long end=ftell(f);
+        fseek(f,0,SEEK_SET);
+        void *buf=TD_MALLOC(end-start);
+        fread(buf,1,end-start,f);
+        fclose(f);
+        void *exp=((void*(*)(void*))expand[0]->func->funcptr)(buf);
+
+        long iter,offset=-1;
+        CMember mem;
+        vec_foreach(&carcCompress[0]->cls.members,mem,iter)
+            if(!strcmp(mem.name,"expanded_size")) {
+                offset=mem.offset;
+                break;
+            }
+        assert(mem.offset!=-1);
+        long expanded_size=*(int64_t*)((char*)buf+offset);
+
+        TD_FREE(buf);
+        if(!exp) {
+            LexerRaiseError("Invalid 3Days archive.");
+        } else {
+            ret=tmpfile();
+            fwrite(exp,1,expanded_size,ret);
+            fseek(ret,0,SEEK_SET);
+        }
+    }
+    return ret;
 }
 int LexMacro() {
     int ret=0;
@@ -765,23 +842,17 @@ expfn:
         long origcpos=Lexer.cursor_pos;
         CLexerFileState backup=CreateLexerFileState();
         vec_push(&Lexer.fileStates,backup);
-#ifndef TARGET_WIN32
-        char *rp=realpath(str->string,NULL);
-        if(rp) strcpy(Lexer.filename, rp);
-        free(rp);
-#else
-        GetFullPathNameA(str->string,sizeof(Lexer.filename),Lexer.filename,NULL);
-#endif
-        //Unload the old line starts
-        vec_int_t *lns=map_get(&Lexer.fileLineStarts,Lexer.filename);
-        if(lns) {
-            vec_deinit(lns);
-            map_remove(&Lexer.fileLineStarts,Lexer.filename);
-        }
         char *clone1=strdup(str->string);
         char *clone2=strdup(str->string);
         char *fn=basename(clone1);
         char *dn=dirname(clone2);
+        #ifndef TARGET_WIN32
+            char *rp=realpath(str->string,NULL);
+            if(rp) strcpy(Lexer.filename, rp);
+            free(rp);
+        #else
+            GetFullPathNameA(str->string,sizeof(Lexer.filename),Lexer.filename,NULL);
+        #endif
         chdir(dn);
         struct stat s;
         stat(fn, &s);
@@ -792,7 +863,40 @@ expfn:
             RestoreLexerFileState(vec_pop(&Lexer.fileStates));
             LexerRaiseError(buffer);
             Lexer.cursor_pos=origcpos;
+        } else if(IsBinFile(fn)) {
+            loadBinary:;
+            CBinaryModule mod;
+            map_set(&Compiler.binModules,fn,mod=LoadAOTBin(f,0));
+            //Make sure we load the main function's code in AOT mode by appending named @@Main call to the global statements
+            if(Compiler.AOTMode) {
+                static long count;
+                CVariable *main=*map_get(&mod.vars,"@@Main");
+                char buffer[1024];
+                sprintf(buffer,"__SECRET_%ldMain",count++);
+                TD_FREE(main->name);
+                TD_FREE(main->func->name);
+                main->func->name=strdup(buffer);
+                main->name=strdup(buffer);
+                map_set(&Compiler.globals,buffer,main);
+                vec_push(&Compiler.AOTGlobalStmts,CreateFuncCall(CreateName(buffer),NULL));
+            }
+            RestoreLexerFileState(vec_pop(&Lexer.fileStates));
+        } else if(IsZBinFile(fn)) {
+            fclose(f);
+            f=ExpandFile(fn);
+            goto loadBinary;
+        } else if(IsZSourceFile(fn)) {
+            fclose(f);
+            f=ExpandFile(fn);
+            goto loadSource;
         } else {
+            loadSource:;
+            //Unload the old line starts
+            vec_int_t *lns=map_get(&Lexer.fileLineStarts,Lexer.filename);
+            if(lns) {
+                vec_deinit(lns);
+                map_remove(&Lexer.fileLineStarts,Lexer.filename);
+            }
             fseek(f,0,SEEK_END);
             long size=ftell(f);
             fseek(f,0,SEEK_SET);
@@ -1338,6 +1442,51 @@ void CreateLexer(int whichparser) {
     Lexer.replSource=tmpfile();
     Lexer.isFreeToFlush=1;
 }
+void DestroyLexer() {
+    mrope_free(Lexer.source);
+    map_deinit(&Lexer.__registers);
+    map_deinit(&Lexer.__opcodes);
+    map_deinit(&Lexer.keywords);
+    char *s;
+    long iter;
+    vec_foreach(&Lexer.expandChain,s,iter) {
+        TD_FREE(s);
+    }
+    vec_deinit(&Lexer.expandChain);
+    CLexerFileState f;
+    vec_foreach(&Lexer.fileStates,f,iter) {
+        TD_FREE(f.olddir);
+        TD_FREE(f.oldfile);
+    }
+    vec_deinit(&Lexer.fileStates);
+    map_iter_t miter=map_iter(&Lexer.filenames);
+    const char *key;
+    while(key=map_next(&Lexer.filenames,&miter)) {
+        TD_FREE(*map_get(&Lexer.filenames,key));
+    }
+    map_deinit(&Lexer.filenames);
+    miter=map_iter(&Lexer.macros);
+    while(key=map_next(&Lexer.macros,&miter)) {
+        FreeMacro(map_get(&Lexer.macros,key));
+    }
+    map_deinit(&Lexer.macros);
+}
+void JoinWithOldLexer(CLexer old_lex) {
+    CLexer toDestroy=Lexer;
+    const char *key;
+    map_iter_t miter=map_iter(&toDestroy.macros);
+    while(key=map_next(&toDestroy.macros,&miter)) {
+        CMacro new,*old=map_get(&toDestroy.macros,key);
+        new.expand=strdup(old->expand);
+        if(old->fn) new.fn=strdup(old->fn);
+        new.name=strdup(old->name);
+        new.line=old->line;
+        map_set(&old_lex.macros,key,new);
+    }
+    Lexer=toDestroy;
+    DestroyLexer();
+    Lexer=old_lex;
+}
 AST *LexMatchF64() {
     int isf64=0;
     int digitsfound;
@@ -1637,7 +1786,7 @@ int ASTToToken(AST *t) {
         if(t->type==AST_FLOAT) return HC_FLOAT;
         if(t->type==AST_NAME) {
             if(map_get(&Compiler.types, t->name)) return HC_TYPENAME;
-            if(Compiler.tagsFile) {
+            if(Compiler.tagsFile||Compiler.AOTMode) {
                 /**
                  * The assembler is written in HolyC and IsOpcode calls HolyC code,(code is not generated in tags mode)
                  */

@@ -119,6 +119,14 @@ loop:
         }
         break;
     }
+    case 'q': {
+        char *str=((char**)argv)[arg];
+        char *buf=TD_MALLOC(strlen(str)*4+1);
+        unescapeString(str,buf);
+        vec_pusharr(&tmp,buf,strlen(buf));
+        TD_FREE(buf);
+        break;
+    }
     case '%': {
         vec_pusharr(&tmp,"%",1);
         break;

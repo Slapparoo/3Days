@@ -971,7 +971,7 @@ void jit_gen_op(struct jit * jit, struct jit_op * op)
 		case (JIT_X86_ADDMUL | IMM): common86_lea_memindex(jit->ip, a1, X86_NOBASEREG, a3, a2, op->arg_size); break;
 		case (JIT_X86_ADDIMM): {
 			jit_value tmp;
-			memcpy(&tmp, &op->flt_imm, sizeof(jit_value));
+			memcpy(&tmp, &op->flt_imm, sizeof(double));
 			common86_lea_memindex(jit->ip, a1, a2, tmp, a3, 0); break;
 		}
 

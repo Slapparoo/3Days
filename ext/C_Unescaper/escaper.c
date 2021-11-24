@@ -59,12 +59,6 @@ char* unescapeString(uint8_t* str,uint8_t* where) {
 			where+=2;
 			continue;
 		}
-		if(*str=='\?') {
-			memcpy(where,"\\?",2);
-			where+=2;
-			str++;
-			continue;
-		}
 		if(*str=='\"') {
 			memcpy(where,"\\\"",2);
 			where+=2;

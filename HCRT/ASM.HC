@@ -408,10 +408,8 @@ U0 ParseOpcodes(U8 *text) {
     goto loop;
     en:
 }
-I64 cnt;
-U8 *ops=FileRead("Opcodes.DD",&cnt);
+U8 *ops=#exe{StreamPrint("\"%q\";",FileRead("Opcodes.DD",NULL));};
 ParseOpcodes(ops);
-Free(ops);
 
 // See ext/x64.h
 Bool __X64RegIsIntExt(I64 code) {
@@ -1104,7 +1102,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
 	}
       }
     }
-    
+
     //Operand size
     if(opc->flags&OPC_F_16) *endptr++=0x66;
     //Address size
@@ -1119,7 +1117,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
 	rexb=0!=mem->reg->code&0b1000;
 	rexw=mem->reg->type==GP_64;
 	Bool rexr=FALSE;
-	if(mdrmR) rexr=0!=mdrmR->code&0b1000; 
+	if(mdrmR) rexr=0!=mdrmR->code&0b1000;
 	if(X64Rex(rexw,rexr,0,rexb)) *endptr++=X64Rex(rexw,rexr,0,rexb);
 	I64 rmasked=0;
 	if(mdrmR) rmasked=mdrmR->code&7;

@@ -101,20 +101,12 @@
  */
 static void sse_mov_reg_safeimm(struct jit * jit, jit_op * op, jit_value reg, double * imm)
 {
-	if (((jit_unsigned_value)imm) > 0xffffffffUL) {
-		jit_hw_reg * r = jit_get_unused_reg(jit->reg_al, op, 0);
-		if (r) {
-			amd64_mov_reg_imm(jit->ip, r->id, (jit_value)imm);
-			amd64_movsd_reg_membase(jit->ip, reg, r->id, 0);
-		} else {
-			amd64_push_reg(jit->ip, AMD64_RAX);
-			amd64_mov_reg_imm(jit->ip, AMD64_RAX, (jit_value)imm);
-			amd64_movsd_reg_membase(jit->ip, reg, AMD64_RAX, 0);
-			amd64_pop_reg(jit->ip, AMD64_RAX);
-		}
-	} else {
-		amd64_movsd_reg_mem(jit->ip, reg, (jit_value)imm);
-	}
+    *(jit->ip)++ = (unsigned char)0xf2;
+    amd64_emit_rex(jit->ip, 0, (reg), 0, (AMD64_RIP));
+    *(jit->ip)++ = (unsigned char)0x0f;
+    *(jit->ip)++ = (unsigned char)0x10;
+    x86_membase_emit ((jit->ip), (reg) & 0x7, (AMD64_RIP), (0x112233)); //0x112233 Forces a 32bit displacement
+    op->flt_imm_code_offset=(jit->ip-jit->buf)-4;
 }
 
 /**

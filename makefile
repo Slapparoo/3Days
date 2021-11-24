@@ -3,16 +3,12 @@ CC := gcc
 CFLAGS :=  -g3 -O0 -Wformat=0 -Wreturn-type -DUSEGC `pkg-config --libs --cflags readline` #-fsanitize=address
 all: 3d_tests 3d
 	echo "Done"
-installer: 3d epm
-	./epm --setup-image logo.gif 3Days HolyCC.list
 main.o: main.c
 	$(CC) $(CFLAGS) -c  main.c -o $@
-3d: tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o main.o at3.o exceptLin.o asm.o
+3d: aot.o tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o main.o at3.o exceptLin.o asm.o
 	gcc $(CFLAGS) $^ -lm -lncurses -ltinfo -lpthread -lreadline -lSDL2 -o $@
-3d_tests: tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tests.c tosprn.o gc.o debugger.o rope.o exceptLin.o asm.o
+3d_tests: aot.o tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tests.c tosprn.o gc.o debugger.o rope.o exceptLin.o asm.o
 	gcc $(CFLAGS) $^ -lm -lncurses -ltinfo -lpthread -lreadline -lSDL2 -o $@
-epm:
-	cd ext/epm-5.0.0 && sh ./configure  --enable-fltk  && make && cp epm ../..
 HolyC.o: HolyC.tab.c $(HEADERS)
 	$(CC) $(CFLAGS) -g -c HolyC.tab.c -o $@
 HolyC.tab.c HolyC.tab.h: HolyC.y
@@ -51,5 +47,7 @@ exceptLin.o: exceptLin.yasm
 	yasm -f elf64 exceptLin.yasm -o $@
 tags.o: tags.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c tags.c -o $@
+aot.o: aot.c $(HEADERS)
+	$(CC) $(CFLAGS) -c aot.c -o aot.o
 sexy:
 	astyle *.c *.h

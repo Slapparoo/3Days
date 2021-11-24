@@ -121,11 +121,41 @@ static int64_t BFFS(int64_t v) {
 static int64_t BCLZ(int64_t v) {
     return __builtin_clzl(v);
 }
+static uint64_t PowU64(uint64_t x,uint64_t n) {
+    if(n==0) return 1;
+    uint64_t y=1;
+    while(n>1) {
+        if(!(n%2)) {
+            x=x*x;
+            n=n/2;
+        } else {
+            y=x*y;
+            x=x*x;
+            n=(n-1)/2;
+        }
+    }
+    return x*y;
+}
+static int64_t PowI64(int64_t x,int64_t n) {
+    if(n<0) return 0;
+    if(n==0) return 1;
+    int64_t y=1;
+    while(n>1) {
+        if(!(n%2)) {
+            x=x*x;
+            n=n/2;
+        } else {
+            y=x*y;
+            x=x*x;
+            n=(n-1)/2;
+        }
+    }
+    return x*y;
+}
 static void CreateBuiltin(void *fptr,CType *rtype,char *name,int hasvargs,...) {
     va_list list;
     va_start(list,hasvargs);
     CType *ftype=TD_MALLOC(sizeof(CType));
-    ftype->refCnt=1;
     ftype->func.ret=rtype;
     ftype->func.hasvargs=hasvargs;
     ftype->type=TYPE_FUNC;
@@ -136,13 +166,14 @@ static void CreateBuiltin(void *fptr,CType *rtype,char *name,int hasvargs,...) {
         vec_push(&ftype->func.names,NULL);
     }
     va_end(list);
-    CFunction *func=TD_MALLOC(sizeof(CType));
+    CFunction *func=TD_MALLOC(sizeof(CFunction));
     func->type=ftype;
     func->funcptr=fptr;
-    CVariable *var=TD_MALLOC(sizeof(CType));
-    var->isGlobal=1,var->isFunc=1;
+    CVariable *var=TD_MALLOC(sizeof(CVariable));
+    var->isGlobal=1,var->isFunc=1,var->isBuiltin=1;
     var->func=func;
     var->type=ftype;
+    var->name=strdup(name);
     map_set(&Compiler.globals, name, var);
 }
 static AST *CreateDummyName(char *text) {
@@ -285,6 +316,17 @@ void GetParYX(WINDOW *w,int64_t *y,int64_t *x) {
 WINDOW *StdScr() {
     return stdscr;
 }
+void CreateBinFile(char *bin,char *root) {
+  char buffer[2048];
+  strcpy(buffer,CompilerPath);
+  strcat(buffer," -s -c ");
+  strcat(buffer,bin);
+  if(root) {
+        strcat(buffer," ");
+        strcat(buffer,root);
+  }
+  system(buffer);
+}
 void CreateTagsAndErrorsFiles(char *tags,char *errs,char *root) {
   char buffer[2048];
   strcpy(buffer,CompilerPath);
@@ -352,6 +394,7 @@ void UAddMemberToClassBySize(CType *cls,long size,char* name,long offset) {
 }
 static CType *CreateEmptyClass(char *name,long size,long align) {
     CType *t=TD_MALLOC(sizeof(CType));
+    t->isBuiltin=1;
     t->type=TYPE_CLASS;
     t->cls.name=strdup(name);
     t->cls.size=size;
@@ -377,6 +420,31 @@ static int64_t GetSurfaceH(SDL_Surface *s) {
 }
 int64_t JIT_EvalExpr(char *t,char **end) {
     return EvalExprNoComma(t,end);
+}
+static double Bit4BitU64ToF64(uint64_t b) {
+    union {double f;int64_t i;} val;
+    val.i=b;
+    return val.f;
+}
+static uint64_t Bit4BitF64ToU64(double b) {
+    union {double f;int64_t i;} val;
+    val.f=b;
+    return val.i;
+}
+static double F64And(double a,double b) {
+    return (*(uint64_t*)&a)&(*(uint64_t*)&b);
+}
+static double F64Or(double a,double b) {
+    return (*(uint64_t*)&a)&(*(uint64_t*)&b);
+}
+static double F64Xor(double a,double b) {
+    return (*(uint64_t*)&a)&(*(uint64_t*)&b);
+}
+static double F64Shl(double a,int64_t b) {
+    return (*(uint64_t*)&a)<<b;
+}
+static double F64Shr(double a,int64_t b) {
+    return (*(uint64_t*)&a)>>b;
 }
 void RegisterBuiltins() {
     //Primitive types
@@ -414,6 +482,23 @@ void RegisterBuiltins() {
     CType *cfileptr =CreatePtrType(cfile);
     CType *wind =CreateClassForwardDecl(NULL, CreateDummyName("WINDOW"));
     CType *windp =CreatePtrType(wind);
+    CreateBuiltin(&TOSPrint,u0,"TOSPrint",1,u8p,NULL);
+    CreateBuiltin(&PowU64,u64,"PowU64",0,u64,u64,NULL);
+    CreateBuiltin(&PowI64,i64,"PowI64",0,i64,i64,NULL);
+    CreateBuiltin(&fmod,f64,"FMod",0,f64,f64,NULL);
+    CreateBuiltin(&WhineOnOutOfBounds,u0,"WhineOnOutOfBounds",0,u0p,i64,NULL);
+    CreateBuiltin(&Bit4BitU64ToF64,f64,"Bit4BitU64ToF64",0,u64,NULL);
+    CreateBuiltin(&Bit4BitF64ToU64,u64,"Bit4BitF64ToU64",0,f64,NULL);
+    CreateBuiltin(&DbgLeaveFunction,u0,"DbgLeaveFunction",0,NULL);
+    CreateBuiltin(&VisitBreakpoint,u0,"VisitBreakpoint",0,u0p,NULL);
+    CreateBuiltin(&DbgEnterFunction,u0,"DbgEnterFunction",0,u0p,u0p,NULL);
+    CreateBuiltin(&F64And,f64,"F64And",0,f64,f64,NULL);
+    CreateBuiltin(&F64Xor,f64,"F64Xor",0,f64,f64,NULL);
+    CreateBuiltin(&F64Or,f64,"F64Or",0,f64,f64,NULL);
+    CreateBuiltin(&F64Shr,f64,"F64Shr",0,f64,i64,NULL);
+    CreateBuiltin(&F64Shl,f64,"F64Shl",0,f64,i64,NULL);
+    CreateBuiltin(&pow,f64,"Pow",0,f64,f64,NULL);
+    CreateBuiltin(&CreateBinFile,u0,"CreateBinFile",0,u8p,u8p,NULL);
     CreateBuiltin(&EvalExprNoComma,i64,"JIT_Eval",0,u8p,u8pp,NULL);
     CreateBuiltin(&GCollect,u0,"GC_Collect",0,NULL);
     CreateBuiltin(&CreateTagsAndErrorsFiles,u0,"CreateTagsAndErrorsFiles",0,u8p,u8p,u8p,NULL);
@@ -838,7 +923,7 @@ CreateMacroInt("ALT_Z",ALT_Z);
         CreateBuiltin(&SDL_SetColorKey,i64,"SDL_SetColorKey",0,sdlsurfp_t,i32, u32,NULL);
         CreateBuiltin(&SDL_SetSurfaceAlphaMod,i64,"SDL_SetSurfaceAlphaMod",0,sdlsurfp_t,u8,NULL);
         CreateBuiltin(&SDL_SetSurfaceColorMod,i64,"SDL_SetSurfaceColorMod",0,sdlsurfp_t,u8,u8,u8,NULL);
-        CreateBuiltin(&SDL_SetSurfaceRLE,i64,"SDL_SetSurfaceRLE",0,sdlsurfp_t,i32);
+        CreateBuiltin(&SDL_SetSurfaceRLE,i64,"SDL_SetSurfaceRLE",0,sdlsurfp_t,i32,NULL);
         CreateBuiltin(&SDL_BlitSurface,i64,"SDL_BlitSurface",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);
         CreateBuiltin(&SDL_BlitScaled,i64,"SDL_BlitScaled",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);
         CreateBuiltin(&SDL_FreeSurface,i64,"SDL_FreeSurface",0,sdlsurfp_t,NULL);

@@ -104,11 +104,13 @@ typedef enum
 #define AMD64_REX(bits) ((unsigned char)(0x40 | (bits)))
 #define amd64_emit_rex(inst, width, reg_modrm, reg_index, reg_rm_base_opcode) do \
 	{ \
+        int reg_rm_base_opcode2=reg_rm_base_opcode; \
+        if(reg_rm_base_opcode==AMD64_RIP) reg_rm_base_opcode2=0b100; \
 		unsigned char _amd64_rex_bits = \
 			(((width) > 4) ? AMD64_REX_W : 0) | \
 			(((reg_modrm) > 7) ? AMD64_REX_R : 0) | \
 			(((reg_index) > 7) ? AMD64_REX_X : 0) | \
-			(((reg_rm_base_opcode) > 7) ? AMD64_REX_B : 0); \
+			(((reg_rm_base_opcode2) > 7) ? AMD64_REX_B : 0); \
 		if ((_amd64_rex_bits != 0) || (((width) == 1))) *(inst)++ = AMD64_REX(_amd64_rex_bits); \
 	} while (0)
 
@@ -649,7 +651,6 @@ do {     \
 		*(inst)++ = (unsigned char)0x10;	\
 		x86_membase_emit ((inst), (reg) & 0x7, (basereg) & 0x7, (disp));	\
 	} while (0)
-
 #define amd64_movsd_reg_mem(inst,reg,mem)  \
 	do {    \
 		*(inst)++ = (unsigned char)0xf2;        \

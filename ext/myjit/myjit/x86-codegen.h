@@ -281,6 +281,11 @@ typedef union {
 #define x86_mem_emit(inst,r,disp)    do { x86_address_byte ((inst), 0, (r), 5); x86_imm_emit32((inst), (disp)); } while (0)
 
 #define x86_membase_emit(inst,r,basereg,disp)	do {\
+    if ((basereg) == AMD64_RIP) { \
+        x86_address_byte ((inst), 0, (r), (0b101));	\
+        x86_imm_emit32 ((inst), (disp));	\
+        break; \
+    }  \
 	if ((basereg) == X86_ESP) {	\
 		if ((disp) == 0) {	\
 			x86_address_byte ((inst), 0, (r), X86_ESP);	\

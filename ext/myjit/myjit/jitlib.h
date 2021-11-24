@@ -57,6 +57,12 @@ typedef struct jit_op {
         unsigned char fp;               // FP if it's a floating-point operation
 	unsigned char in_use;		// used be dead-code analyzer
         double flt_imm;                 // floating point immediate value
+        /**
+         * MyJIT(until i editied it) used to store flaoting points in pointer (pointing to flt_imm),but
+         * I made it so float immeditates are now stored at end of function. flt_imm_code_offset if the offset
+         * In the code which is RIP relative
+         */
+        long flt_imm_code_offset;
         jit_value arg[3];               // arguments passed by user
         jit_value r_arg[3];             // arguments transformed by register allocator
         int64_t patch_addr;
@@ -92,7 +98,8 @@ typedef struct {
         unsigned reserved: 32;
 #endif
 } jit_reg;
-
+struct jit;
+int64_t jit_bin_size(struct jit * jit);
 
 /*
  * internal auxiliary functions
@@ -642,5 +649,4 @@ do {\
  */
 #define jit_force_spill(jit, a) jit_add_fop(jit, JIT_FORCE_SPILL, SPEC(REG, NO, NO), a, 0, 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_force_assoc(jit, a, b, c) jit_add_fop(jit, JIT_FORCE_ASSOC, SPEC(REG, IMM, NO), a, b, c, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
-void jit_free_ir(struct jit * jit);
 #endif

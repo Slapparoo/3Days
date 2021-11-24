@@ -21,10 +21,55 @@ static void __TaintLabels(AST *n, void *data) {
 void TaintLabelsInExpr(AST* a) {
   ScanAST(a, __TaintLabels, NULL);
 }
-void* EvalLabelExpr(AST* a,LabelContext labContext) {
-  int err=0;
-  COldFuncState old = CreateCompilerState();
-  map_CVariable_t oldlocals=Compiler.locals;
+//Used for loading from binary file.
+void PatchLabelExprFunc(CAsmPatch *patch,CFunction *func) {
+    const char *key;
+    map_iter_t iter=map_iter(&Compiler.exportedLabels);
+    //RELOCATIONS POINT TO VARIABLE(WHICH CONTAINS THE LABLE ADDRESS)
+    //Think "MOV LABEL_PTR,I64 [relocation]"
+    long glob_idx=0;
+    while(key=map_next(&Compiler.exportedLabels, &iter)) {
+        vec_voidppp_t *pats=map_get(&patch->apply->relocations,key);
+        if(!pats) continue;
+        long iter;
+        void ***pat;
+        vec_foreach(pats,pat,iter) {
+            //map_get returns pointer to pointer ,DITTO(SEE ABOVE)
+            **pat=map_get(&Compiler.exportedLabels,key);
+            TD_FREE(*pat);
+        }
+        map_remove(&patch->apply->relocations,key);
+    }
+    iter=map_iter(&func->labelPtrs);
+    while(key=map_next(&func->labelPtrs, &iter)) {
+        char resolved[256];
+        LabelContext ul;
+        if(2==sscanf(key, LOCAL_LAB_FMT,&ul,resolved)) {
+            if(ul!=patch->context) continue;
+            //Add a "@@" prefix
+            memmove(resolved+2,resolved,strlen(resolved)+1);
+            strncpy(resolved,"@@",2);
+        } else {
+            strcpy(resolved,key);
+        }
+        vec_voidppp_t *pats=map_get(&patch->apply->relocations,resolved);
+        if(!pats) continue;
+        long iter;
+        void ***pat;
+        vec_foreach(pats,pat,iter) {
+            //map_get returns pointer to pointer ,DITTO(SEE ABOVE)
+            **pat=map_get(&func->labelPtrs,key);
+            TD_FREE(*pat);
+        }
+        map_remove(&patch->apply->relocations,resolved);
+    }
+    FillFunctionRelocations(func);
+}
+CFunction *CompileLabelExprFunc(CFunction *func,AST* a,LabelContext labContext) {
+      int err=0;
+  COldFuncState old = EnterFunction(CreatePrimType(TYPE_I64),NULL);
+  Compiler.inFunction=0;
+  map_CVariable_t oldlocals=func->locals;
   map_init(&Compiler.locals);
   {
     //Prepare old local variables
@@ -49,9 +94,9 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
     map_set(&Compiler.locals, key, v);
   }
   //Prepare local labels
-  iter = map_iter(&Compiler.labelPtrs);
+  iter = map_iter(&func->labelPtrs);
   char buffer[256];
-  while (key = map_next(&Compiler.labelPtrs, &iter)) {
+  while (key = map_next(&func->labelPtrs, &iter)) {
     long ul;
     if(!sscanf(key, LOCAL_LAB_FMT,&ul,buffer)) {
       CVariable* v = TD_MALLOC(sizeof(CVariable));
@@ -59,13 +104,13 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
       v->name = strdup(key);
       v->isGlobal = 1;
       v->linkage.type = LINK_NORMAL;
-      v->linkage.globalPtr = map_get(&Compiler.labelPtrs, key);
+      v->linkage.globalPtr = map_get(&func->labelPtrs, key);
       map_set(&Compiler.locals, key, v);
     }
   }
   //Import local labels for context
-  iter = map_iter(&Compiler.labelPtrs);
-  while (key = map_next(&Compiler.labelPtrs, &iter)) {
+  iter = map_iter(&func->labelPtrs);
+  while (key = map_next(&func->labelPtrs, &iter)) {
     LabelContext ul;
     if(2==sscanf(key, LOCAL_LAB_FMT,&ul,buffer)) {
       if(ul!=labContext) continue;
@@ -76,40 +121,32 @@ void* EvalLabelExpr(AST* a,LabelContext labContext) {
       v->name = strdup(buffer2);
       v->isGlobal = 1;
       v->linkage.type = LINK_NORMAL;
-      v->linkage.globalPtr = map_get(&Compiler.labelPtrs, key);
+      v->linkage.globalPtr = map_get(&func->labelPtrs, key);
       map_set(&Compiler.locals, buffer2, v);
     }
   }
-
-  Compiler.JIT = jit_init();
-  void* (*fptr)() = NULL;
-  jit_prolog(Compiler.JIT, &fptr);
-  int olda = Assembler.active,oldf=Compiler.addrofFrameoffsetMode;
-  //Compile will recognize assembler imports if active
-  Assembler.active = 1;
-  Compiler.addrofFrameoffsetMode=1;
-  __CompileAST(CreateReturn(a));
-  Compiler.addrofFrameoffsetMode=oldf;
-  Assembler.active = olda;
-  if(Compiler.errorFlag) {
-    err=1;
-    goto end;
-  }
-  jit_generate_code(Compiler.JIT,  NULL);
-  iter = map_iter(&Compiler.labelPtrs);
-
-  while (key = map_next(&Compiler.locals, &iter)) {
-    ReleaseVariable(*map_get(&Compiler.locals, key));
-  }
-
-  map_deinit(&Compiler.locals);
-  GC_Disable();
-  void* ptr = fptr();
-  GC_Enable();
-  jit_free(Compiler.JIT);
+    int oldf=Compiler.addrofFrameoffsetMode,olda=Assembler.active;
+      Compiler.addrofFrameoffsetMode=1;
+      vec_CVariable_t empty;
+      vec_init(&empty);
+      CFunction *apply_func=CompileAST(&Compiler.locals,CreateReturn(a),empty,func->funcInfo.frameOffset,0);
+      Compiler.addrofFrameoffsetMode=oldf;
+      Assembler.active = olda;
+    RestoreCompilerState(old);
+    return apply_func;
+}
+void* EvalLabelExpr(CFunction *func,AST* a,LabelContext labContext) {
+    void* ptr=NULL;
+    int err=0;
+    CFunction *apply_func=CompileLabelExprFunc(func,a,labContext);
+    if(apply_func) {
+      GC_Disable();
+      ptr=((void*(*)())apply_func->funcptr)();
+      GC_Enable();
+      if(!Compiler.AOTMode) ReleaseFunction(apply_func);
+    }
  end:
-  RestoreCompilerState(old);
-  Compiler.errorFlag|=err;
+  Compiler.errorFlag|=!apply_func;
   return ptr;
 }
 void* AST2X64Mode(AST* a, int64_t* lab_offset) {
@@ -189,6 +226,7 @@ void* AST2X64Mode(AST* a, int64_t* lab_offset) {
 }
 void* GetRegister(char* name) {
   if(Compiler.tagsFile) return NULL;
+  if(!Compiler.loadedHCRT) return NULL;
 
   CVariable** enc = map_get(&Compiler.globals, "GetRegister");
 
@@ -198,6 +236,7 @@ void* GetRegister(char* name) {
 }
 int IsOpcode(char* name) {
   if(Compiler.tagsFile) return 0;
+  if(!Compiler.loadedHCRT) return NULL;
 
   CVariable** enc = map_get(&Compiler.globals, "IsOpcode");
 
@@ -259,7 +298,7 @@ void AssembleOpcode(AST* at, char* name, vec_AST_t operands) {
       vec_foreach(&operands, a, iter)
 
 	if (a->type == AST_ASM_ADDR) {
-	  pat->exp = a->asmAddr.disp;
+	  pat->exp= a->asmAddr.disp;
 	  if(!pat->exp) pat->exp=CreateI64(0);
 	}
 
@@ -397,11 +436,13 @@ AST* CreateAsmAlign(AST* a, AST* fill) {
   return r;
 }
 CAssembler Assembler;
-void ApplyPatches() {
+void ApplyPatches(CFunction *func) {
   CAsmPatch* pat;
   int iter;
-  vec_foreach(&Compiler.asmPatches, pat, iter) {
-    int64_t i = (int64_t)EvalLabelExpr(pat->exp,pat->context);
+  vec_foreach(&func->asmPatches, pat, iter) {
+    if(!pat->apply)
+        pat->apply=CompileLabelExprFunc(func,pat->exp,pat->context);
+    int64_t i = ((int64_t(*)())pat->apply->funcptr)();
 
     if (pat->isRel) {
       i += pat->rel_offset;

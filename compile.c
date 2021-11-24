@@ -7,12 +7,43 @@
 #ifdef TARGET_WIN32
 #include <memoryapi.h>
 #endif
+CVariable *UniqueGlblVar(CType *type) {
+    static long try;
+    char buffer[256];
+    loop:
+    sprintf(buffer,"uni@@%ld",try++);
+    if(map_get(&Compiler.globals,buffer)) goto loop;
+    CVariable *var=TD_MALLOC(sizeof(CVariable));
+    var->type=type;
+    var->isGlobal=var->isInternal=1;
+    var->linkage.type=LINK_NORMAL;
+    var->linkage.globalPtr=TD_MALLOC(TypeSize(type));
+    var->name=strdup(buffer);
+    map_set(&Compiler.globals,buffer,var);
+    return var;
+}
 static void Blank();
+static int GetIntTmpReg();
+static jit_value __LoadFuncPtrIntoIntReg(char *name,int r) {
+    void ***hole=TD_MALLOC(sizeof(void**));
+    jit_relocation(Compiler.JIT,R(r),hole);
+    loop:;
+    vec_voidppp_t *relocs=map_get(&Compiler.currentRelocations,name);
+    if(!relocs) {
+        vec_voidppp_t v;
+        vec_init(&v);
+        map_set(&Compiler.currentRelocations,name,v);
+        goto loop;
+    } else {
+        vec_push(relocs,hole);
+    }
+    return R(r);
+}
 void ApplyAsmPatchesAndFreeThem(CFunction *func ) {
   int oldaa=Assembler.active;int oldada=Compiler.addrofFrameoffsetMode;
   Assembler.active=1;
   Compiler.addrofFrameoffsetMode=1;
-  if(!Compiler.errorFlag) ApplyPatches();
+  if(!Compiler.errorFlag) ApplyPatches(func);
   if(Compiler.errorFlag) {
     func->funcptr=Blank;
   }
@@ -48,6 +79,7 @@ COldFuncState CreateCompilerState() {
     old.__addedGlobalLabels=Compiler.__addedGlobalLabels;
     old.labelContext=Compiler.labelContext;
     old.currentRelocations=Compiler.currentRelocations;
+    old.stringDatas=Compiler.stringDatas;
     return old;
 }
 void RestoreCompilerState(COldFuncState old) {
@@ -69,6 +101,7 @@ void RestoreCompilerState(COldFuncState old) {
     Compiler.__addedGlobalLabels=old.__addedGlobalLabels;
     Compiler.labelContext=old.labelContext;
     Compiler.currentRelocations=old.currentRelocations;
+    Compiler.stringDatas=old.stringDatas;
 }
 static int IsControlNode(AST *node) {
     switch(node->type) {
@@ -97,21 +130,6 @@ static int IsCompositeType(CType *_t) {
 static void PutXBytes(long srcreg,long ptrreg,long size);
 static jit_value MoveValueToIntRegIfNeeded(CValue v,int r);
 static jit_value MoveValueToFltRegIfNeeded(CValue v,int r);
-static double F64And(double a,double b) {
-    return (*(uint64_t*)&a)&(*(uint64_t*)&b);
-}
-static double F64Or(double a,double b) {
-    return (*(uint64_t*)&a)&(*(uint64_t*)&b);
-}
-static double F64Xor(double a,double b) {
-    return (*(uint64_t*)&a)&(*(uint64_t*)&b);
-}
-static double F64Shl(double a,int64_t b) {
-    return (*(uint64_t*)&a)<<b;
-}
-static double F64Shr(double a,int64_t b) {
-    return (*(uint64_t*)&a)>>b;
-}
 static char *__ArgsToStr(CType *f) {
     vec_char_t ret;
     vec_init(&ret);
@@ -212,7 +230,6 @@ ret:
 static CType *ConvertToArrayRefs(CType *t) {
     if(t->type==TYPE_ARRAY) {
         CType *r=TD_MALLOC(sizeof(CType));
-        r->refCnt=1;
         r->type=TYPE_ARRAY_REF;
         r->array.base=ConvertToArrayRefs(t->array.base);
         r->array.dim=t->array.dim;
@@ -315,6 +332,7 @@ void RaiseError(AST *at,...) {
     va_end(list);
     Compiler.errorFlag=1;
     Compiler.JIT=NULL;
+    Compiler.errorCount++;
 }
 void RaiseWarning(AST *at,...) {
     va_list list;
@@ -572,7 +590,6 @@ AST *CreateDo(AST *cond,AST *body) {
 }
 CType *CreateArrayType(CType * base,AST *dim) {
     CType *r=TD_CALLOC(1,sizeof(CType));
-    r->refCnt=1;
     r->array.base=base;
     if(dim)
       r->array.dim=EvaluateInt(dim,0);
@@ -583,14 +600,12 @@ CType *CreateArrayType(CType * base,AST *dim) {
 }
 CType *CreatePtrType(CType * type) {
     CType *r=TD_CALLOC(1,sizeof(CType));
-    r->refCnt=1;
     r->type=TYPE_PTR;
     r->ptr=type;
     return r;
 }
 CType *CreatePrimType(int type) {
     CType *r=TD_CALLOC(1,sizeof(CType));
-    r->refCnt=1;
     r->type=type;
     return r;
 }
@@ -827,7 +842,7 @@ void ReleaseAST(AST *t) {
         CDeclTail tail;
         int iter;
         vec_foreach(&t->declTail, tail, iter) {
-            ReleaseAST(tail.dft);
+            //ReleaseAST(tail.dft);
             //basetype is in finalType
             //ReleaseAST(tail.basetype);
             ReleaseAST(tail.name);
@@ -882,7 +897,7 @@ double EvaluateF64(AST *exp) {
     vec_CVariable_t args;
     vec_init(&args);
     Compiler.returnType=CreatePrimType(TYPE_F64);
-    CFunction *f=CompileAST(NULL, ret, args,C_AST_FRAME_OFF_DFT);
+    CFunction *f=CompileAST(NULL, ret, args,C_AST_FRAME_OFF_DFT,0);
     ReleaseType(Compiler.returnType);
     double ret2=0;
     if(f&&!Compiler.tagsFile) {
@@ -911,7 +926,7 @@ int64_t EvaluateInt(AST *exp,int flags) {
     if(flags&EVAL_INT_F_PRESERVE_LOCALS)
       locals=&Compiler.locals;
     Compiler.returnType=CreatePrimType(TYPE_I64);
-    CFunction *f=CompileAST(locals, ret, args,Compiler.frameOffset);
+    CFunction *f=CompileAST(locals, ret, args,Compiler.frameOffset,0);
     ReleaseType(Compiler.returnType);
     vec_deinit(&args);
     int64_t ret2=0;
@@ -1084,26 +1099,21 @@ lcloop:
  */
 CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
     CType *r=TD_CALLOC(1,sizeof(CType));
-    r->refCnt=1;
     r->type=TYPE_FUNC;
     r->func.ret=ret;
     r->func.hasvargs=hasvargs;
     if(_args) {
         assert(_args->type==__AST_DECL_TAILS);
-        int iter;
+        long iter;
         CDeclTail decl;
         vec_foreach(&_args->declTail,decl,iter) {
             vec_push(&r->func.names,strdup(decl.name->name));
             if(decl.dft) {
+                vec_push(&r->func.origDftArgs,decl.dft);
                 if(decl.dft->type==AST_LASTCLASS) {
                     vec_push(&r->func.dftArgs,decl.dft);
                 } else {
-                    CVariable *dftvar AF_VAR=TD_MALLOC(sizeof(CVariable));
-                    dftvar->refCount=1;
-                    dftvar->type=decl.finalType;
-                    dftvar->linkage.globalPtr=TD_MALLOC(TypeSize(decl.finalType));
-                    dftvar->linkage.type=LINK_NORMAL;
-                    dftvar->isGlobal=1;
+                    CVariable *dftvar =UniqueGlblVar(decl.finalType);
                     AST *vnode =CreateVarNode(dftvar);
                     AST *asn =CreateBinop(vnode, decl.dft, AST_ASSIGN);
                     SetPosFromOther(asn,decl.name);
@@ -1111,33 +1121,36 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
                     vec_CVariable_t empty;
                     vec_init(&empty);
                     if(!Compiler.tagsFile) {
-		      COldFuncState olds=CreateCompilerState();
-		      Compiler.returnType=decl.finalType;
-		      CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT);
-		      RestoreCompilerState(olds);
-		      vec_deinit(&empty);
-		      GC_Disable();
-#ifndef TARGET_WIN32
-		      signal(SIGINT,SignalHandler);
-		      stmt->funcptr(0);
-		      signal(SIGINT,SIG_IGN);
-#else
-		      stmt->funcptr(0);
-#endif
-		      GC_Enable();
-		      ReleaseFunction(stmt);
-		    } else {
-                COldFuncState olds=CreateCompilerState();
-		      Compiler.returnType=decl.finalType;
-		      CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT);
-		      RestoreCompilerState(olds);
-		      vec_deinit(&empty);
-
-		    }
-                    vec_push(&r->func.dftArgs,vnode);
+                      COldFuncState olds=CreateCompilerState();
+                      Compiler.returnType=decl.finalType;
+                      CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT,0);
+                      RestoreCompilerState(olds);
+                      vec_deinit(&empty);
+                      GC_Disable();
+        #ifndef TARGET_WIN32
+                      signal(SIGINT,SignalHandler);
+                      stmt->funcptr(0);
+                      signal(SIGINT,SIG_IGN);
+        #else
+                      stmt->funcptr(0);
+        #endif
+                      GC_Enable();
+                      ReleaseFunction(stmt);
+                    } else {
+                        COldFuncState olds=CreateCompilerState();
+                        Compiler.returnType=decl.finalType;
+                        CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT,0);
+                        RestoreCompilerState(olds);
+                        vec_deinit(&empty);
+                    }
+                    if(Compiler.AOTMode)
+                        vec_push(&Compiler.AOTGlobalStmts,asn);
+                    vec_push(&r->func.dftArgs,CreateVarNode(dftvar));
                 }
-            } else
+            } else {
                 vec_push(&r->func.dftArgs,NULL);
+                vec_push(&r->func.origDftArgs,NULL);
+            }
             vec_push(&r->func.arguments,decl.finalType);
         }
     }
@@ -1219,6 +1232,16 @@ void AddVariable(AST *name,CType *type) {
             map_set(&Compiler.locals,name->name,var);
         }
     } else {
+        CVariable **existing;
+        if(!Compiler.allowRedeclarations)
+            if(existing=map_get(&Compiler.globals,name->name)) {
+                int is_concrete=(existing[0]->linkage.type==LINK_NORMAL||existing[0]->linkage.type==LINK_NORMAL);
+                if(is_concrete&&!existing[0]->isBuiltin) {
+                    char buffer[1024];
+                    sprintf(buffer,"Redefinition of %s.",name->name);
+                    RaiseError(name, buffer);
+                }
+            }
         var->isGlobal=1;
         var->linkage.globalPtr=TD_CALLOC(1,TypeSize(type));
         if(map_get(&Compiler.globals,name->name)) {
@@ -1227,12 +1250,13 @@ void AddVariable(AST *name,CType *type) {
         }
         map_set(&Compiler.globals,name->name,var);
         {
-            map_iter_t iter=map_iter(&Compiler.globals);
-            const char *key;
-            while(key=map_next(&Compiler.globals,&iter)) {
-                    CVariable *v=*map_get(&Compiler.globals,key);
-                    if(v->isFunc&&v->func)
-                        FillFunctionRelocations(v->func);
+            vec_CFunction_t *funcs=map_get(&Compiler.unlinkedFuncsByRelocation,name->name);
+            if(funcs) {
+                long iter;CFunction *func;
+                vec_foreach(funcs,func,iter)
+                    FillFunctionRelocations(func);
+                vec_deinit(funcs);
+                map_remove(&Compiler.unlinkedFuncsByRelocation,name->name);
             }
         }
         //Fill in unlinked imports
@@ -1280,12 +1304,13 @@ static void __AddFunctionVar(AST *name,CType *type,CFunction *func) {
     map_set(&Compiler.globals,name->name,var);
     //Fill in unlinked imports
     {
-        map_iter_t iter=map_iter(&Compiler.globals);
-        const char *key;
-        while(key=map_next(&Compiler.globals,&iter)) {
-                CVariable *v=*map_get(&Compiler.globals,key);
-                if(v->isFunc&&v->func)
-                    FillFunctionRelocations(v->func);
+        vec_CFunction_t *funcs=map_get(&Compiler.unlinkedFuncsByRelocation,name->name);
+        if(funcs) {
+            long iter;CFunction *func;
+            vec_foreach(funcs,func,iter)
+                FillFunctionRelocations(func);
+            vec_deinit(funcs);
+            map_remove(&Compiler.unlinkedFuncsByRelocation,name->name);
         }
     }
     int iter;
@@ -1415,430 +1440,11 @@ EXT:
                 if(map_get(&Compiler.locals,stat->name)) {
                     RaiseError(decl.name,"Redefinition of variable %s.",stat->name);
                 }
+                map_set(&Compiler.currentFuncStatics,stat->name,stat);
                 map_set(&Compiler.locals,stat->name,stat);
             }
             break;
         }
-    }
-}
-void PrintAST(AST *n,int tabs) {
-    int oldtabs=tabs;
-    while(--tabs>=0) printf(" ");
-    tabs=oldtabs;
-    if(!n) {
-        printf("<NULL>");
-        return ;
-    }
-    long iter;
-    switch(n->type) {
-    case __AST_DECL_TAILS: {
-        CDeclTail tail;
-        vec_foreach(&n->declTail, tail, iter) {
-            printf("(DECL ");
-            PrintAST(tail.name,0);
-            printf(" = ");
-            PrintAST(tail.dft,0);
-            printf(")");
-        }
-        break;
-    }
-    case AST_PRINT_STRING:
-        printf("(PRINT:%s)\n",n->string);
-        break;
-    //
-    case AST_NOP:
-        printf("NOP\n");
-        break;
-    case AST_STMT_GROUP: {
-        printf("{\n");
-        AST *stmt;
-        vec_foreach(&n->stmts, stmt, iter) {
-            PrintAST(stmt, tabs+1);
-        }
-        while(--tabs>=0) printf(" ");
-        printf("}\n");
-        break;
-    }
-    //
-    case AST_NAME: {
-        printf("NAME: %s",n->name);
-        break;
-    }
-    case AST_MEMBER_ACCESS: {
-        puts("(");
-        PrintAST(n->memberAccess.a, 0);
-        printf(".");
-        puts(n->memberAccess.member);
-        puts(")");
-        break;
-    }
-    //
-    case AST_PAREN: {
-        printf("(");
-        PrintAST(n,0);
-        printf(")");
-        break;
-    }
-    case AST_INT:
-        printf("%lu",n->integer);
-        break;
-    case AST_FLOAT:
-        printf("%lf",n->floating);
-        break;
-    case AST_CHAR: {
-        uint64_t chr=n->chr;
-        printf("'");
-        int i=8;
-        while(--i>=0) {
-            uint8_t shifted=0xff&(chr>>(8*i));
-            if(shifted) printf("%c",shifted);
-        }
-        printf("'");
-        break;
-    }
-    case AST_STRING: {
-        char buffer[strlen(n->string)*2+1];
-        unescapeString((uint8_t*)n->string,buffer);
-        printf("\"");
-        puts(buffer);
-        printf("\"");
-        break;
-    }
-    //
-    case AST_COMMA:
-#define PRN_BINOP(txt) \
-        printf("("); \
-        PrintAST(n->binop.a, 0); \
-        puts(txt); \
-        PrintAST(n->binop.b, 0);\
-        printf(")");
-        PRN_BINOP(",");
-        break;
-    //
-    case AST_SHL:
-        PRN_BINOP("<<");
-        break;
-    case AST_SHR:
-        PRN_BINOP(">>");
-        break;
-    case AST_POW:
-        PRN_BINOP("`");
-        break;
-    //
-    case AST_MUL:
-        PRN_BINOP("*");
-        break;
-    case AST_DIV:
-        PRN_BINOP("/");
-        break;
-    case AST_MOD:
-        PRN_BINOP("%");
-        break;
-    //
-    case AST_BAND:
-        PRN_BINOP("&");
-        break;
-    case AST_BXOR:
-        PRN_BINOP("^");
-        break;
-    case AST_BOR:
-        PRN_BINOP("|");
-        break;
-    //
-    case AST_ADD:
-        PRN_BINOP("+");
-        break;
-    case AST_SUB:
-        PRN_BINOP("-");
-        break;
-    //
-    case AST_LT:
-        PRN_BINOP("<");
-        break;
-    case AST_GE:
-        PRN_BINOP(">=");
-        break;
-    case AST_GT:
-        PRN_BINOP(">");
-        break;
-    case AST_RANGE: {
-        printf("(");
-        int op,iter;
-        vec_foreach(&n->range.ops, op, iter) {
-            PrintAST(n->range.operands.data[iter],0);
-            switch(op) {
-            case AST_LT:
-                printf("<");
-                break;
-            case AST_GT:
-                printf(">");
-                break;
-            case AST_LE:
-                printf("<=");
-                break;
-            case AST_GE:
-                printf(">=");
-                break;
-            default:
-                abort();
-            }
-            PrintAST(n->range.operands.data[n->range.ops.length],0);
-        }
-        printf(")");
-        break;
-    }
-    //
-    case AST_EQ:
-        PRN_BINOP("==");
-        break;
-    case AST_NE:
-        PRN_BINOP("!=");
-        break;
-    //
-    case AST_LAND:
-        PRN_BINOP("&&");
-        break;
-    case AST_LXOR:
-        PRN_BINOP("^^");
-        break;
-    case AST_LOR:
-        PRN_BINOP("||");
-        break;
-    //
-    case AST_ASSIGN:
-        PRN_BINOP("=");
-        break;
-    case AST_ASSIGN_SHL:
-        PRN_BINOP("<<=");
-        break;
-    case AST_ASSIGN_SHR:
-        PRN_BINOP(">>=");
-        break;
-    case AST_ASSIGN_MUL:
-        PRN_BINOP("*=");
-        break;
-    case AST_ASSIGN_MOD:
-        PRN_BINOP("%=");
-        break;
-    case AST_ASSIGN_DIV:
-        PRN_BINOP("/=");
-        break;
-    case AST_ASSIGN_BAND:
-        PRN_BINOP("&=");
-        break;
-    case AST_ASSIGN_BOR:
-        PRN_BINOP("|=");
-        break;
-    case AST_ASSIGN_BXOR:
-        PRN_BINOP("^=");
-        break;
-    case AST_ASSIGN_ADD:
-        PRN_BINOP("+=");
-        break;
-    case AST_ASSIGN_SUB:
-        PRN_BINOP("-=");
-        break;
-    //
-    case AST_POST_INC:
-        printf("(");
-        PrintAST(n->unopArg,0);
-        printf("++)");
-        break;
-    case AST_POST_DEC:
-        printf("(");
-        PrintAST(n->unopArg,0);
-        printf("--)");
-        break;
-    //
-    case AST_ARRAY_ACCESS:
-        printf("(");
-        PrintAST(n->arrayAccess.array,0);
-        printf("[");
-        PrintAST(n->arrayAccess.subscript,0);
-        printf("])");
-        break;
-    //
-    case AST_PRE_INC:
-        printf("(++");
-        PrintAST(n->unopArg,0);
-        printf(")");
-        break;
-    case AST_PRE_DEC:
-        printf("(--");
-        PrintAST(n->unopArg,0);
-        printf(")");
-        break;
-    //
-    case AST_POS:
-#define PRN_UNOP(op) \
-    printf("("op); \
-    PrintAST(n->unopArg,0); \
-    printf(")");
-        PRN_UNOP("+");
-        break;
-    case AST_NEG:
-        PRN_UNOP("-");
-        break;
-    //
-    case AST_LNOT:
-        PRN_UNOP("!");
-        break;
-    case AST_BNOT:
-        PRN_UNOP("~");
-        break;
-    //
-    case AST_DERREF:
-        PRN_UNOP("*");
-        break;
-    case AST_ADDROF:
-        PRN_UNOP("&");
-        break;
-    //
-    case AST_SIZEOF:
-        PRN_UNOP("sizeof");
-        break;
-    //
-    case AST_TOKEN:
-        break;
-    //
-    case AST_IMPLICIT_TYPECAST:
-        printf("(IMP-TYPECAST ");
-        PrintAST(n->typecast.base,0);
-        printf(" -> ");
-        PrintAST(n->typecast.toType,0);
-        printf(")");
-        break;
-    case AST_EXPLICIT_TYPECAST:
-        printf("(EXP-TYPECAST ");
-        PrintAST(n->typecast.base,0);
-        printf(" -> ");
-        PrintAST(n->typecast.toType,0);
-        printf(")");
-        break;
-    //
-    case AST_FUNC_CALL: {
-        printf("(FCALL ");
-        PrintAST(n->funcCall.func,0);
-        printf("(");
-        long iter;
-        AST *arg;
-        vec_AST_t unpacked=CommaToVec(n->funcCall.args);
-        vec_foreach(&unpacked, arg, iter) {
-            PrintAST(arg,0);
-            printf(",");
-        }
-        vec_deinit(&unpacked);
-        printf("))");
-        break;
-    }
-    //
-    case AST_IF:
-        printf("(IF ");
-        PrintAST(n->ifStmt.cond,0);
-        printf(")\n");
-        PrintAST(n->ifStmt.body,0);
-        if(n->ifStmt.elseBody)
-            PrintAST(n->ifStmt.elseBody,tabs+1);
-        break;
-    case AST_FOR:
-        printf("(FOR ");
-        PrintAST(n->forStmt.init,0);
-        printf(";");
-        PrintAST(n->forStmt.cond,0);
-        printf(";");
-        PrintAST(n->forStmt.next,0);
-        printf(")\n");
-        PrintAST(n->forStmt.body,tabs+1);
-        if(n->ifStmt.elseBody) {
-            printf("ELSE");
-            PrintAST(n->ifStmt.elseBody,tabs+1);
-        }
-        break;
-    case AST_DO:
-        printf("DO\n");
-        PrintAST(n->doStmt.body,tabs+1);
-        while(--tabs>=0) printf(" ");
-        printf("(WHILE ");
-        PrintAST(n->doStmt.cond, 0);
-        printf(")");
-        break;
-    case AST_WHILE:
-        printf("(WHILE\n");
-        PrintAST(n->whileStmt.cond,0);
-        printf(")");
-        PrintAST(n->whileStmt.body, tabs+1);
-        break;
-    //
-    case AST_METADATA: {
-        int iter;
-        CMetaData meta;
-        printf("(META ");
-        vec_foreach(&n->metaData, meta, iter) {
-            printf("(");
-            printf("%s",meta.name);
-            puts(" = ");
-            PrintAST(meta.value, 0);
-            printf(")");
-        }
-        printf(")");
-        break;
-    }
-    //
-    case AST_DECL:
-        printf("(DECL ");
-        printf("%s",n->decl.name);
-        if(n->decl.dft) {
-            puts(" = ");
-            PrintAST(n->decl.dft, 0);
-        }
-        printf(")");
-        break;
-    case AST_VAR:
-        printf("(%s ",(n->var->isGlobal)?"GLOBAL":"LOCAL");
-        printf("%s)",n->var->name);
-        break;
-    //
-    case AST_KEYWORD:
-        break;
-    //
-    case AST_CASE:
-        puts("(CASE");
-        if(n->cs.low) {
-            printf(" [%ld",n->cs.low);
-            puts(",");
-        }
-        if(n->cs.low) {
-            printf("%ld",n->cs.high);
-            puts("]");
-        }
-        puts(")");
-        break;
-    case AST_SWITCH:
-        puts("(SWITCH ");
-        PrintAST(n->switStmt.cond,0);
-        puts(")");
-        PrintAST(n->switStmt.body,tabs+1);
-        break;
-    case AST_SUBSWITCH:
-        puts("(SUB SWITCH)");
-        PrintAST(n->subswitch.startCode,tabs+1);
-        PrintAST(n->subswitch.body,tabs+1);
-        break;
-    case AST_BREAK:
-        puts("(BREAK)");
-        break;
-    case AST_DEFAULT:
-        puts("(DEFAULT)");
-        break;
-    //
-    case AST_TYPE: {
-        puts("(TYPE ");
-        char *ts=TypeToString(n->type2);
-        puts(ts);
-        TD_FREE(ts);
-        puts(")");
-        break;
-    }
     }
 }
 CType *FinalizeClass(CType *class) {
@@ -1856,11 +1462,13 @@ AST *AppendToTypeMembers (AST *appendto,AST* member) {
     assert(appendto->type==AST_TYPE);
     CType *t=appendto->type2;
     long base=TypeSize(t);
+    if(t->type==TYPE_UNION) base=0;
     vec_CMember_t *members=(t->type==TYPE_CLASS)?
                            &appendto->type2->cls.members:
                            &appendto->type2->un.members;
     if(member->type==AST_DECL) {
         CMember mem;
+        mem.offset=0;
         mem.name=strdup(member->decl.name);
         mem.type=member->decl.type;
         mem.fn=member->fn;
@@ -1901,9 +1509,9 @@ if(t->type==TYPE_UNION) { \
           size=(TypeSize(mem.type)>size)?TypeSize(mem.type):size; \
         } else if(t->type==TYPE_CLASS) { \
           size=t->cls.size; \
-          size=(TypeSize(mem.type)+base>size)?TypeSize(mem.type)+base:size; \
+          size=(TypeSize(mem.type)+base+mem.offset>size)?TypeSize(mem.type)+base+mem.offset:size; \
         } \
-        mem.offset=(t->type==TYPE_UNION)?0:base; \
+        mem.offset+=(t->type==TYPE_UNION)?0:base; \
         long align=TypeAlign(mem.type); \
         FINALIZE_SA(mem); \
       }
@@ -1939,13 +1547,14 @@ if(t->type==TYPE_UNION) { \
             members2=&t2->cls.members;
         }
         //Padd to member->type2 pad;
-        if(t->type==TYPE_CLASS) {
+        if(1) {
             long size=t->cls.size;
             long align=TypeAlign(t2);
             int pad=(align-size%align)%align;
             t->cls.size+=pad;
             if(TypeAlign(t)<align) t->cls.align=align;
-            base=t->cls.size;
+            base=TypeSize(t);
+            if(t->type==TYPE_UNION) base=0;
         }
         CMember member;
         long iter;
@@ -1953,7 +1562,10 @@ if(t->type==TYPE_UNION) { \
             CMember clone=member;
             clone.type=member.type;
             clone.name=strdup(member.name);
-            UPDATE_SA(clone,t2->type==TYPE_CLASS);
+            member.offset+=base;
+            int align=TypeAlign(member.type);
+            long size=member.offset+TypeSize(member.type);
+            FINALIZE_SA(member);
         }
     } else {
         abort();
@@ -1988,14 +1600,6 @@ int IsIntegerType(CType *t) {
     }
     return 0;
 }
-static void CompileLargeTransfer(jit_value dst,jit_value src,CType *type) {
-    long size=TypeSize(type);
-    jit_prepare(Compiler.JIT);
-    jit_putargr(Compiler.JIT, dst);
-    jit_putargr(Compiler.JIT, src);
-    jit_putargi(Compiler.JIT, size);
-    jit_call(Compiler.JIT, &memcpy);
-}
 CVariable *GetVariable(char *name) {
     CVariable **var;
     if(var=(map_get(&Compiler.locals,name))) {
@@ -2014,8 +1618,14 @@ static CVariable *CreateTmpVarAtFrameOff(long foff,CType *t) {
     return tmp;
 }
 jit_value MoveGlobalPtrToReg(CVariable *var,int r) {
+    char *name;
     switch(var->linkage.type) {
+    case LINK_STATIC:
     case LINK_NORMAL:
+        if(Compiler.AOTMode&&var->name) {
+            name=var->name;
+            goto reloc;
+        }
         if(var->isFunc)
             jit_movi(Compiler.JIT,R(r),var->func->funcptr);
         else
@@ -2028,9 +1638,11 @@ jit_value MoveGlobalPtrToReg(CVariable *var,int r) {
         break;
     case LINK_IMPORT:
     case LINK__IMPORT: {
+        name=var->linkage.importLink;
+        reloc:
         loop:;
         vec_voidppp_t *relocs;
-        if(relocs=map_get(&Compiler.currentRelocations,var->linkage.importLink)) {
+        if(relocs=map_get(&Compiler.currentRelocations,name)) {
             void *dummy=TD_MALLOC(sizeof(void*));
             jit_relocation(Compiler.JIT,R(r),dummy);
             vec_push(relocs,dummy);
@@ -2038,7 +1650,7 @@ jit_value MoveGlobalPtrToReg(CVariable *var,int r) {
         } else {
             vec_voidppp_t v;
             vec_init(&v);
-            map_set(&Compiler.currentRelocations,var->linkage.importLink,v);
+            map_set(&Compiler.currentRelocations,name,v);
             goto loop;
         }
         break;
@@ -2049,6 +1661,7 @@ jit_value MoveGlobalPtrToReg(CVariable *var,int r) {
 }
 void *GetGlobalPtr(CVariable *var) {
     switch(var->linkage.type) {
+    case LINK_STATIC:
     case LINK_NORMAL:
         if(var->isFunc)
 	  return var->func->funcptr;
@@ -2266,11 +1879,12 @@ R2f:
             GrabXBytes(var->reg,0,TypeSize(var2->type));
             return;
         }
+        jit_value fr=__LoadFuncPtrIntoIntReg("MemNCpy",2);
         jit_prepare(Compiler.JIT);
         jit_putargr(Compiler.JIT, R(1));
         jit_putargr(Compiler.JIT, R(0));
         jit_putargi(Compiler.JIT,TypeSize(var2->type));
-        jit_call(Compiler.JIT, memcpy);
+        jit_callr(Compiler.JIT, fr);
     }
 end:
     ;
@@ -2370,11 +1984,12 @@ static void __CompileAssignV2GV(CVariable *var,CVariable *var2) {
             PutXBytes(var2->reg, 1, TypeSize(bt2));
             return;
         }
+        jit_value fr=__LoadFuncPtrIntoIntReg("MemNCpy",2);
         jit_prepare(Compiler.JIT);
         jit_putargr(Compiler.JIT, R(1));
         jit_putargr(Compiler.JIT, R(0));
         jit_putargi(Compiler.JIT,TypeSize(var2->type));
-        jit_call(Compiler.JIT, memcpy);
+        jit_callr(Compiler.JIT, fr);
     }
 end:
     ;
@@ -2382,6 +1997,12 @@ end:
 void __CompileAssignToFrameV(long off,CVariable *var,CType *t) {
     CVariable *tmp AF_VAR=CreateTmpVarAtFrameOff(off, t);
     __CompileAssignV2LV(tmp, var);
+}
+AST *CreateName(char *name) {
+    AST *ret=TD_MALLOC(sizeof(AST));
+    ret->type=AST_NAME;
+    ret->name=strdup(name);
+    return ret;
 }
 void CompileAssign(CValue dst,CValue src) {
     if(dst.type==VALUE_VAR) {
@@ -2424,11 +2045,12 @@ void CompileAssign(CValue dst,CValue src) {
                 } else {
                     //memcpy
                     MoveGlobalPtrToReg(dst.var,0);
+                    __LoadFuncPtrIntoIntReg("MemNCpy",2);
                     jit_prepare(Compiler.JIT);
                     jit_putargr(Compiler.JIT,R(0));
                     jit_putargr(Compiler.JIT,ins);
                     jit_putargi(Compiler.JIT,TypeSize(derefts));
-                    jit_call(Compiler.JIT,&memcpy);
+                    jit_callr(Compiler.JIT,R(2));
                 }
             } else if(IsVarRegCanidate(dst.var)) {
                 if(IsIntegerType(derefts)) {
@@ -2482,11 +2104,12 @@ r02f:
                 } else {
                     //memcpy
                     jit_addi(Compiler.JIT, R(0), R_FP, Compiler.frameOffset+dst.var->frameOffset);
+                    jit_value fr=__LoadFuncPtrIntoIntReg("MemNCpy",2);
                     jit_prepare(Compiler.JIT);
                     jit_putargr(Compiler.JIT,R(0));
                     jit_putargr(Compiler.JIT,ins);
                     jit_putargi(Compiler.JIT, TypeSize(derefts));
-                    jit_call(Compiler.JIT,&memcpy);
+                    jit_callr(Compiler.JIT,fr);
                 }
             }
         }
@@ -2520,12 +2143,13 @@ r02f:
                     jit_ldr_u(Compiler.JIT, R(0), in2, 8);
                 jit_str(Compiler.JIT,in,R(0), TypeSize(deref1));
             } else {
+                jit_value fr=__LoadFuncPtrIntoIntReg("MemNCpy",2);
                 //memcpy
                 jit_prepare(Compiler.JIT);
                 jit_putargr(Compiler.JIT,in);
                 jit_putargr(Compiler.JIT,in2);
                 jit_putargi(Compiler.JIT, TypeSize(deref1));
-                jit_call(Compiler.JIT,&memcpy);
+                jit_callr(Compiler.JIT,fr);
             }
         } else if(src.type==VALUE_VAR) {
             if(IsF64(deref1)) {
@@ -2536,18 +2160,20 @@ r02f:
                 jit_str(Compiler.JIT, in, v, TypeSize(deref1));
             } else if(IsCompositeType(deref1)&&src.var->isGlobal) {
                 MoveGlobalPtrToReg(src.var, 1);
+                jit_value fr=__LoadFuncPtrIntoIntReg("MemNCpy",2);
                 jit_prepare(Compiler.JIT);
                 jit_putargr(Compiler.JIT,in);
                 jit_putargr(Compiler.JIT,R(1));
                 jit_putargi(Compiler.JIT, TypeSize(deref1));
-                jit_call(Compiler.JIT,&memcpy);
+                jit_callr(Compiler.JIT,fr);
             } else if(IsCompositeType(deref1)&&src.var->isNoreg) {
                 jit_addxi(Compiler.JIT, R(1), R_FP, Compiler.frameOffset+src.var->frameOffset);
+                jit_value fr=__LoadFuncPtrIntoIntReg("MemNCpy",2);
                 jit_prepare(Compiler.JIT);
                 jit_putargr(Compiler.JIT,in);
                 jit_putargr(Compiler.JIT,R(1));
                 jit_putargi(Compiler.JIT, TypeSize(deref1));
-                jit_call(Compiler.JIT,&memcpy);
+                jit_callr(Compiler.JIT,fr);
             } else if(IsCompositeType(deref1)&&src.var->isReg) {
                 jit_movi(Compiler.JIT, R(0), in);
                 PutXBytes(0,src.var->reg, TypeSize(deref1));
@@ -2596,13 +2222,29 @@ CType *ResolveType(CType *type) {
     }
     return type;
 }
-char *RegisterString(char *string) {
+CValue RegisterString(char *string) {
+    char **str;
+    hloop:
+    if(str=map_get(&Compiler.strings,string)) {
+        if(!Compiler.AOTMode)
+            return VALUE_INT((int64_t)*str);
+    } else {
+        map_set(&Compiler.strings,string,strdup(string));
+        goto hloop;
+    }
+    vec_voidppp_t *ops;
   strloop:
-  if(map_get(&Compiler.strings,string)) {
-      return *map_get(&Compiler.strings,string);
+  if(ops=map_get(&Compiler.stringDatas,string)) {
+        int r=GetIntTmpReg();
+        void ***where=TD_MALLOC(sizeof(void**));
+        jit_relocation(Compiler.JIT,R(r),(jit_value)where);
+        vec_push(ops,where);
+        return VALUE_VAR(CreateTmpRegVar(r,CreatePtrType(CreatePrimType(TYPE_U8))));
   } else {
-      map_set(&Compiler.strings,string,strdup(string));
-      goto strloop;
+        vec_voidppp_t v;
+        vec_init(&v);
+        map_set(&Compiler.stringDatas,string,v);
+        goto strloop;
   }
 }
 CType *__AssignTypeToNode(AST *node) {
@@ -2855,7 +2497,6 @@ getmembers:
     return node;
 }
 void ReleaseValue(CValue *v) {
-    if(v->type==VALUE_STRING) TD_FREE(v->string);
     if(v->type==VALUE_VAR) ReleaseVariable(v->var);
     if(v->type==VALUE_INDIR_VAR) ReleaseVariable(v->var);
 }
@@ -3010,11 +2651,6 @@ static jit_value MoveValueToIntRegIfNeeded(CValue v,int r) {
         }
         return R(r);
     }
-    case VALUE_STRING: {
-        char *str;
-        jit_movi(Compiler.JIT, R(r), (jit_value)RegisterString(v.string));
-        return R(r);
-    }
     case VALUE_INDIR_VAR: {
         CValue indir AF_VALUE=VALUE_VAR(v.var);
         jit_value value=MoveValueToIntRegIfNeeded(indir,r);
@@ -3062,11 +2698,6 @@ static jit_value MoveValueToFltRegIfNeeded(CValue v,int r) {
             jit_extr(Compiler.JIT, FR(r), MoveValueToIntRegIfNeeded(v, 0));
         }
         return FR(r);
-    }
-    case VALUE_STRING: {
-        char *str;
-        jit_fmovr(Compiler.JIT, FR(r), (jit_value)RegisterString(v.string));
-        return  FR(r);
     }
     case VALUE_INDIR_VAR: {
         CValue varv AF_VALUE=VALUE_VAR(v.var);
@@ -3138,45 +2769,12 @@ loop:
         if(iter==-1) return cur;
     }
 }
-static uint64_t PowU64(uint64_t x,uint64_t n) {
-    if(n==0) return 1;
-    uint64_t y=1;
-    while(n>1) {
-        if(!(n%2)) {
-            x=x*x;
-            n=n/2;
-        } else {
-            y=x*y;
-            x=x*x;
-            n=(n-1)/2;
-        }
-    }
-    return x*y;
-}
-static int64_t PowI64(int64_t x,int64_t n) {
-    if(n<0) return 0;
-    if(n==0) return 1;
-    int64_t y=1;
-    while(n>1) {
-        if(!(n%2)) {
-            x=x*x;
-            n=n/2;
-        } else {
-            y=x*y;
-            x=x*x;
-            n=(n-1)/2;
-        }
-    }
-    return x*y;
-}
 static AST *ValueToAST(CValue v) {
     switch(v.type) {
     case VALUE_FLOAT:
         return CreateF64(v.flt);
     case VALUE_INT:
         return CreateI64(v.integer);
-    case VALUE_STRING:
-        return CreateString(v.string);
     case VALUE_VAR:
         return CreateVarNode(v.var);
     case VALUE_INDIR_VAR: {
@@ -3187,23 +2785,11 @@ static AST *ValueToAST(CValue v) {
         abort();
     }
 }
-static double Bit4BitU64ToF64(uint64_t b) {
-    union {double f;int64_t i;} val;
-    val.i=b;
-    return val.f;
-}
-static uint64_t Bit4BitF64ToU64(double b) {
-    union {double f;int64_t i;} val;
-    val.f=b;
-    return val.i;
-}
 CValue CloneValue(CValue v) {
     switch(v.type) {
     case VALUE_INT:
     case VALUE_FLOAT:
         return v;
-    case VALUE_STRING:
-        return VALUE_STRING(v.string);
     case VALUE_VAR:
         return VALUE_VAR(v.var);
     case VALUE_INDIR_VAR:
@@ -3533,6 +3119,23 @@ incompatptr:
         }
     }
 }
+//TempleOS lets you typecast indirect lvalues.
+//(*x)(I64)=10;
+static void TypeCastLvalueIfNeeded(AST *a) {
+    if(a->type!=AST_EXPLICIT_TYPECAST) {
+        __CompileAST(a);
+        return;
+    }
+    __CompileAST(a->typecast.base);
+    CValue value=vec_pop(&Compiler.valueStack);
+    if(value.type!=VALUE_INDIR_VAR) {
+        RaiseError(a->typecast.base,"Cant't typecast this lvalue.");
+        vec_push(&Compiler.valueStack,value);
+        return;
+    }
+    value.var->type=CreatePtrType(a->typecast.toType->type2);
+    vec_push(&Compiler.valueStack,value);
+}
 static void ___CompileAST(AST *exp) {
     switch (exp->type) {
     case AST_ASM_BLK: {
@@ -3590,8 +3193,8 @@ static void ___CompileAST(AST *exp) {
     case AST_ASM_DU16: {
         AST *d;int iter;
         vec_foreach(&exp->duData,d,iter) {
-	  int64_t v=(int64_t)EvalLabelExpr(d,exp->labelContext);
-	  jit_data_word(Compiler.JIT,v);
+          int64_t v=0;//(int64_t)EvalLabelExpr(d,exp->labelContext);
+          jit_data_word(Compiler.JIT,v);
         }
         vec_push(&Compiler.valueStack,VALUE_INT(0));
         break;
@@ -3599,8 +3202,8 @@ static void ___CompileAST(AST *exp) {
     case AST_ASM_DU32: {
         AST *d;int iter;
         vec_foreach(&exp->duData,d,iter) {
-	  int64_t v=(int64_t)EvalLabelExpr(d,exp->labelContext);
-	  jit_data_dword(Compiler.JIT,v);
+            int64_t v=0;//(int64_t)EvalLabelExpr(,d,exp->labelContext);
+            jit_data_dword(Compiler.JIT,v);
         }
         vec_push(&Compiler.valueStack,VALUE_INT(0));
         break;
@@ -3608,8 +3211,8 @@ static void ___CompileAST(AST *exp) {
     case AST_ASM_DU64: {
         AST *d;int iter;
         vec_foreach(&exp->duData,d,iter) {
-	  int64_t v=(int64_t)EvalLabelExpr(d,exp->labelContext);
-	  jit_data_qword(Compiler.JIT,v);
+          int64_t v=0;//(int64_t)EvalLabelExpr(d,exp->labelContext);
+          jit_data_qword(Compiler.JIT,v);
         }
         vec_push(&Compiler.valueStack,VALUE_INT(0));
         break;
@@ -3617,7 +3220,7 @@ static void ___CompileAST(AST *exp) {
     case AST_ASM_DU8: {
       AST *d;int iter;
       vec_foreach(&exp->duData, d, iter) {
-	int64_t v=(int64_t)EvalLabelExpr(d,exp->labelContext);
+	int64_t v=0;//(int64_t)EvalLabelExpr(d,exp->labelContext);
 	jit_data_qword(Compiler.JIT,v);
       }
       vec_push(&Compiler.valueStack,VALUE_INT(0));
@@ -3716,10 +3319,12 @@ lcloop:
                             int r=(IsF64(fbt->func.arguments.data[iter]))?GetFltTmpReg():GetIntTmpReg();
                             CVariable *var AF_VAR=CreateTmpRegVar(r,fbt->func.arguments.data[iter]);
                             CValue val =VALUE_VAR(var);
+                            CValue str=RegisterString(ts);
                             if(IsF64(fbt->func.arguments.data[iter]))
-                                MoveValueToFltRegIfNeeded(VALUE_STRING(ts), r);
+                                MoveValueToFltRegIfNeeded(str, r);
                             else
-                                MoveValueToIntRegIfNeeded(VALUE_STRING(ts), r);
+                                MoveValueToIntRegIfNeeded(str, r);
+                            ReleaseValue(&str);
                             vec_push(&Compiler.valueStack, val);
                         }
                     } else {
@@ -3768,19 +3373,24 @@ lcloop:
       break;
     }
     case AST_PRINT_STRING: {
+        CValue str=RegisterString(exp->string);
+        int r=0;
+        jit_value inr=MoveValueToIntRegIfNeeded(str, r);
+        jit_value fr=-1;
+        CVariable *prn=GetVariable("Print");
+        if(!prn) {
+            prn_fallback1:
+            fr=__LoadFuncPtrIntoIntReg("TOSPrint",2);
+        } else {
+            if(!prn->func) goto prn_fallback1;
+            fr=__LoadFuncPtrIntoIntReg("Print",2);
+        }
         jit_prepare(Compiler.JIT);
-        jit_putargi(Compiler.JIT, (jit_value)RegisterString(exp->string));
+        jit_putargr(Compiler.JIT, inr);
         jit_putargi(Compiler.JIT, 0);
         jit_putargi(Compiler.JIT, 0);
         //Check for Print in HolyC
-        CVariable *prn=GetVariable("Print");
-        if(!prn) {
-            prn_fallback:
-            jit_call(Compiler.JIT,TOSPrint);
-        } else {
-            if(!prn->func) goto prn_fallback;
-            jit_call(Compiler.JIT,(void*)prn->func->funcptr);
-        }
+        jit_callr(Compiler.JIT,fr);
         vec_push(&Compiler.valueStack, VALUE_INT(0));
         break;
     }
@@ -3901,7 +3511,7 @@ lcloop:
         return;
     }
     case AST_STRING: {
-        CValue r=VALUE_STRING(exp->string);
+        CValue r=RegisterString(exp->string);
         vec_push(&Compiler.valueStack,r);
         return;
     }
@@ -3954,17 +3564,20 @@ prneskip:
             CValue str AF_VALUE=vec_pop(&Compiler.valueStack);
             jit_value strval=MoveValueToIntRegIfNeeded(str,1);
             jit_addi(Compiler.JIT,R(0),R_FP,off);
+            jit_value fr=-1;
+            CVariable *prn=GetVariable("Print");
+            if(!prn) {
+                prn_fallback2:
+                fr=__LoadFuncPtrIntoIntReg("TOSPrint",2);
+            } else {
+                if(!prn->func) goto prn_fallback2;
+                fr=__LoadFuncPtrIntoIntReg("Print",2);
+            }
             jit_prepare(Compiler.JIT);
             jit_putargr(Compiler.JIT,strval);
             jit_putargi(Compiler.JIT,vec.length-1);
             jit_putargr(Compiler.JIT,R(0));
-            CVariable *prn=GetVariable("Print");
-            if(!prn) {
-                jit_call(Compiler.JIT,TOSPrint);
-            } else {
-                if(!prn->func) goto prn_fallback;
-                jit_call(Compiler.JIT,(void*)prn->func->funcptr);
-            }
+            jit_callr(Compiler.JIT,fr);
             //All operations are required to put an item on the stack
             vec_push(&Compiler.valueStack,VALUE_INT(0));
             return;
@@ -4020,6 +3633,7 @@ __CompileAST(exp->binop.b); \
 CType *bt =CreatePrimType(TYPE_I64); \
 TypecastValFromStackIfNeeded(bt,r); \
 WarnOnWeirdPass(exp,at,bt); \
+jit_value fr=__LoadFuncPtrIntoIntReg(#func,2); \
 CValue b AF_VALUE=vec_pop(&Compiler.valueStack); \
 CValue a AF_VALUE=vec_pop(&Compiler.valueStack); \
 jit_value f1=MoveValueToFltRegIfNeeded(a, 0); \
@@ -4027,7 +3641,7 @@ jit_value i1=MoveValueToIntRegIfNeeded(b, 1); \
 jit_prepare(Compiler.JIT); \
 jit_fputargr(Compiler.JIT, f1, 8); \
 jit_putargr(Compiler.JIT, i1); \
-jit_call(Compiler.JIT, func); \
+jit_callr(Compiler.JIT, fr); \
 CVariable *vr AF_VAR=CreateTmpRegVar(GetFltTmpReg(), r); \
 jit_fretval(Compiler.JIT,FR(vr->reg),8); \
 vec_push(&Compiler.valueStack,VALUE_VAR(vr));
@@ -4057,30 +3671,36 @@ vec_push(&Compiler.valueStack,VALUE_VAR(vr));
         __CompileAST(exp->binop.b);
         CType *bt =AssignTypeToNode(exp->binop.b);
         TypecastValFromStackIfNeeded(bt,r);
-        CValue b AF_VALUE=vec_pop(&Compiler.valueStack);
-        CValue a AF_VALUE=vec_pop(&Compiler.valueStack);
         if(IsF64(r)) {
+            jit_value fr=__LoadFuncPtrIntoIntReg("Pow",2);
+            CValue b AF_VALUE=vec_pop(&Compiler.valueStack);
+            CValue a AF_VALUE=vec_pop(&Compiler.valueStack);
             jit_value a2=MoveValueToFltRegIfNeeded(a, 0);
             jit_value b2=MoveValueToFltRegIfNeeded(b, 1);
             jit_prepare(Compiler.JIT);
             jit_fputargr(Compiler.JIT,a2,8);
             jit_fputargr(Compiler.JIT,b2,8);
-            jit_call(Compiler.JIT, &pow);
+            jit_callr(Compiler.JIT, fr);
             int t;
             jit_value r=FR(t=GetFltTmpReg());
             jit_fretval(Compiler.JIT, r, 8);
             vec_push(&Compiler.valueStack,VALUE_VAR(CreateTmpRegVar(t, CreatePrimType(TYPE_F64))));
             return;
         } else {
+            jit_value fr=-1;
+            if(TypeIsSigned(r)) {
+                fr=__LoadFuncPtrIntoIntReg("PowI64",2);
+            } else {
+                fr=__LoadFuncPtrIntoIntReg("PowU64",2);
+            }
+            CValue b AF_VALUE=vec_pop(&Compiler.valueStack);
+            CValue a AF_VALUE=vec_pop(&Compiler.valueStack);
             jit_value a2=MoveValueToIntRegIfNeeded(a, 0);
             jit_value b2=MoveValueToIntRegIfNeeded(b, 1);
             jit_prepare(Compiler.JIT);
             jit_putargr(Compiler.JIT,a2);
             jit_putargr(Compiler.JIT,b2);
-            if(TypeIsSigned(r))
-                jit_call(Compiler.JIT, &PowI64);
-            else
-                jit_call(Compiler.JIT, &PowU64);
+            jit_callr(Compiler.JIT,fr);
             int t;
             jit_value r=R(t=GetIntTmpReg());
             jit_retval(Compiler.JIT, r);
@@ -4149,6 +3769,7 @@ vec_push(&Compiler.valueStack,VALUE_VAR(CreateTmpRegVar(rr, rtype)));
             __CompileAST(exp->binop.b);
             CType *bt =AssignTypeToNode(exp->binop.b);
             TypecastValFromStackIfNeeded(bt,r);
+            jit_value funcr=__LoadFuncPtrIntoIntReg("FMod",2);
             CValue b AF_VALUE=vec_pop(&Compiler.valueStack);
             CValue a AF_VALUE=vec_pop(&Compiler.valueStack);
             jit_value a2 =MoveValueToFltRegIfNeeded(a, 0);
@@ -4157,7 +3778,7 @@ vec_push(&Compiler.valueStack,VALUE_VAR(CreateTmpRegVar(rr, rtype)));
             jit_prepare(Compiler.JIT);
             jit_fputargr(Compiler.JIT,a2,8);
             jit_fputargr(Compiler.JIT,b2,8);
-            jit_call(Compiler.JIT, &fmod);
+            jit_callr(Compiler.JIT, funcr);
             int t;
             jit_value fr=FR(t=GetFltTmpReg());
             jit_fretval(Compiler.JIT, fr, 8);
@@ -4180,6 +3801,7 @@ __CompileAST(exp->binop.b); \
 CType *bt =AssignTypeToNode(exp->binop.b); \
 TypecastValFromStackIfNeeded(bt,r); \
 if(!TypeEqual(at, bt)) RaiseError(exp,"Type-mismatch for F64 bitwise operator."); \
+jit_value funcr=__LoadFuncPtrIntoIntReg(#func,2);\
 CValue b AF_VALUE=vec_pop(&Compiler.valueStack); \
 CValue a AF_VALUE=vec_pop(&Compiler.valueStack); \
 jit_value f1=MoveValueToFltRegIfNeeded(a, 0); \
@@ -4188,7 +3810,7 @@ CVariable *rv =CreateTmpRegVar(GetFltTmpReg(), r); \
 jit_prepare(Compiler.JIT); \
 jit_fputargr(Compiler.JIT, f1, 8); \
 jit_fputargr(Compiler.JIT, f2, 8); \
-jit_call(Compiler.JIT, func); \
+jit_callr(Compiler.JIT, funcr); \
 jit_fretval(Compiler.JIT,FR(rv->reg),8); \
 vec_push(&Compiler.valueStack,VALUE_VAR(rv));
             FBITWISE(F64And);
@@ -4507,7 +4129,7 @@ to=vec_pop(&Compiler.valueStack); \
         CType *at =AssignTypeToNode(exp->binop.a);
         CType *bt =AssignTypeToNode(exp->binop.b);
         WarnOnWeirdPass(exp, at, bt);
-        __CompileAST(exp->binop.a);
+        TypeCastLvalueIfNeeded(exp->binop.a);
         __CompileAST(exp->binop.b);
         CValue src AF_VALUE=vec_pop(&Compiler.valueStack);
         CValue dst AF_VALUE=vec_pop(&Compiler.valueStack);
@@ -4522,7 +4144,7 @@ to=vec_pop(&Compiler.valueStack); \
     case AST_ASSIGN_SHL:
     {
 #define ASSIGN_OP(oper) \
-  __CompileAST(exp->binop.a); \
+  TypeCastLvalueIfNeeded(exp->binop.a); \
   "Stack: dst "; \
   AST *dst =ValueToAST(vec_last(&Compiler.valueStack)); \
   AST *b =CreateBinop(dst, exp->binop.b, oper); \
@@ -4710,14 +4332,15 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
         CVariable *ret AF_VAR=CreateTmpRegVar(GetIntTmpReg(), t);
         CValue dst AF_VALUE=VALUE_VAR(ret),src AF_VALUE;
         CompileAssign(dst, src=vec_pop(&Compiler.valueStack));
+        CValue ret2 = {.type=VALUE_INDIR_VAR,.var=CloneVariable(ret)}; //Returned so dont TD_FREE
+        vec_push(&Compiler.valueStack,ret2);
         if(Compiler.boundsCheckMode) {
+            jit_value fr=__LoadFuncPtrIntoIntReg("WhineOnOutOfBounds",2);
             jit_prepare(Compiler.JIT);
             jit_putargr(Compiler.JIT, R(ret->reg));
             jit_putargi(Compiler.JIT, TypeSize(DerrefedType(t)));
-            jit_call(Compiler.JIT, WhineOnOutOfBounds);
+            jit_callr(Compiler.JIT, fr);
         }
-        CValue ret2 = {.type=VALUE_INDIR_VAR,.var=CloneVariable(ret)}; //Returned so dont TD_FREE
-        vec_push(&Compiler.valueStack,ret2);
         return;
     }
     case AST_ADDROF: {
@@ -4818,11 +4441,12 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
                 vec_push(&Compiler.valueStack, VALUE_FLOAT(pn.d));
             } else if(IsIntegerType(from)) {
                 __CompileAST(exp->typecast.base);
+                jit_value fr=__LoadFuncPtrIntoIntReg("Bit4BitU64ToF64",2);
                 CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
                 MoveValueToIntRegIfNeeded(v, 0);
                 jit_prepare(Compiler.JIT);
                 jit_putargr(Compiler.JIT, R(0));
-                jit_call(Compiler.JIT, Bit4BitU64ToF64);
+                jit_callr(Compiler.JIT, fr);
                 CVariable *var AF_VAR=CreateTmpRegVar(GetFltTmpReg(), CreatePrimType(TYPE_F64));
                 jit_fretval(Compiler.JIT, FR(var->reg),8);
                 vec_push(&Compiler.valueStack,VALUE_VAR(var));
@@ -4843,11 +4467,12 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
                 vec_push(&Compiler.valueStack,VALUE_INT(*(uint64_t*)&exp->typecast.base->floating));
             } else if(IsF64(from)) {
                 __CompileAST(exp->typecast.base);
+                jit_value fr=__LoadFuncPtrIntoIntReg("Bit4BitF64ToU64",2);
                 CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
                 jit_prepare(Compiler.JIT);
                 jit_value vr=MoveValueToFltRegIfNeeded(v, 0);
                 jit_fputargr(Compiler.JIT, vr,8);
-                jit_call(Compiler.JIT, Bit4BitF64ToU64);
+                jit_callr(Compiler.JIT, fr);
                 CVariable *var AF_VAR= CreateTmpRegVar(GetIntTmpReg(), CreatePrimType(TYPE_F64));
                 jit_retval(Compiler.JIT, R(var->reg));
                 vec_push(&Compiler.valueStack,VALUE_VAR(var));
@@ -4901,9 +4526,10 @@ exptcend:
         if(IsPtr(fbt)) {
             CType *d =DerrefedType(fbt);
             if(d->type!=TYPE_FUNC) {
+                fbt=d;
 notfunction:
                 ;
-                char *ts=TypeToString(d);
+                char *ts=TypeToString(fbt);
                 RaiseError(exp,"Can't call type %s.",ts);
                 TD_FREE(ts);
                 vec_push(&Compiler.valueStack, VALUE_INT(0));
@@ -4954,7 +4580,6 @@ notfunction:
             __CompileAST(arg);
             CValue v=vec_pop(&Compiler.valueStack);
             switch(v.type) {
-            case VALUE_STRING:
             case VALUE_INT:
                 if(fbt->func.arguments.length>iter) {
                     if(IsIntegerType(fbt->func.arguments.data[iter])) {
@@ -5091,9 +4716,6 @@ stuffint:
             case VALUE_INT:
                 jit_putargi(Compiler.JIT, v.integer);
                 break;
-            case VALUE_STRING:
-                jit_putargi(Compiler.JIT, v.string);
-                break;
             case VALUE_VAR:
                 if(IsF64(v.var->type))
                     jit_fputargr(Compiler.JIT, FR(v.var->reg),8);
@@ -5141,8 +4763,9 @@ stuffint:
             //Put dummy value on stack
             vec_push(&Compiler.valueStack,VALUE_INT(0));
             if(Compiler.debugMode) {
+                jit_value fr=__LoadFuncPtrIntoIntReg("DbgLeaveFunction",2);
                 jit_prepare(Compiler.JIT);
-                jit_call(Compiler.JIT, DbgLeaveFunction);
+                jit_callr(Compiler.JIT, fr);
             }
             jit_reti(Compiler.JIT, 0);
             return;
@@ -5151,8 +4774,9 @@ stuffint:
         WarnOnWeirdPass(exp->retval, Compiler.returnType, rtype);
         __CompileAST(exp->retval);
         if(Compiler.debugMode) {
+            jit_value fr=__LoadFuncPtrIntoIntReg("DbgLeaveFunction",2);
             jit_prepare(Compiler.JIT);
-            jit_call(Compiler.JIT, DbgLeaveFunction);
+            jit_callr(Compiler.JIT, fr);
         }
         if(Compiler.returnType)
             TypecastValFromStackIfNeeded(rtype, Compiler.returnType);
@@ -5199,10 +4823,10 @@ stuffint:
          */
         struct jit_op *elbranch,*endjmp=NULL;
         CValue cond AF_VALUE=vec_pop(&Compiler.valueStack);
-        if(cond.type==AST_FLOAT) {
+        if(cond.type==VALUE_FLOAT) {
             if(cond.flt) goto alwaystrue;
             else goto alwaysfalse;
-        } else if(cond.type==AST_STRING||cond.type==AST_CHAR||cond.type==AST_INT) {
+        } else if(cond.type==VALUE_INT) {
             if(cond.integer) goto alwaystrue;
             else goto alwaysfalse;
         } else {
@@ -5704,9 +5328,10 @@ add:
         map_set(&Compiler.breakpoints,buffer,en);
         goto add;
     }
+    jit_value fr=__LoadFuncPtrIntoIntReg("VisitBreakpoint",2);
     jit_prepare(Compiler.JIT);
     jit_putargi(Compiler.JIT,bp);
-    jit_call(Compiler.JIT, VisitBreakpoint);
+    jit_callr(Compiler.JIT, fr);
 }
 void ReleaseFunction(CFunction*func) {
     CFunction *f=func;
@@ -5832,12 +5457,13 @@ static void Blank() {
 /**
  * Expression,function args(CVariable *) are put in ...(terminated with NULL)
  */
-CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long frameOffset) {
+CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long frameOffset,long flags) {
     /**
      * R(0)==accmulator
      * R(1)==Dest ptr
+     * R(2)==Funcptr
      */
-    int frameSize=0,ireg=2,freg=2;
+    int frameSize=0,ireg=3,freg=2;
     //Add args to scope
     int iter;
     CVariable *arg;
@@ -5845,6 +5471,10 @@ CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long
     vec_init(&Compiler.breakops); //Freed
     map_init(&Compiler.labels); //Freed
     map_init(&Compiler.labelRefs); //Freed
+    vec_init(&Compiler.stringDatas); //Dont free(belongs to function)
+    map_init(&Compiler.currentRelocations);
+    vec_init(&Compiler.currentFuncStatics);
+    vec_init(&Compiler.asmPatches);
     if(locals!=&Compiler.locals)
     map_init(&Compiler.locals); //Freed
     int assign_offs=0;
@@ -5888,7 +5518,9 @@ noreg:
         }
     }
     struct jit *curjit=Compiler.JIT=NULL;
-    if(!Compiler.tagsFile) {
+    int dont_compile=!!Compiler.tagsFile;
+    dont_compile|=!!(flags&C_AST_F_NO_COMPILE);
+    if(!dont_compile) {
             curjit=Compiler.JIT=jit_init();
     }
     void(*funcptr)(int64_t,...);
@@ -5971,18 +5603,20 @@ noreg:
 
     //Call enter function
     if(Compiler.debugMode) {
+        jit_value fr=__LoadFuncPtrIntoIntReg("DbgEnterFunction",2);
         jit_addi(Compiler.JIT,R(0),R_FP,Compiler.frameOffset);
         jit_prepare(Compiler.JIT);
         jit_putargr(Compiler.JIT, R(0));
         jit_putargi(Compiler.JIT, func);
-        jit_call(Compiler.JIT, DbgEnterFunction);
+        jit_callr(Compiler.JIT, fr);
     }
     CompileBodyWithBreakpoints(exp);
     ReleaseValue(&vec_pop(&Compiler.valueStack));
     //jit_dump_ops(Compiler.JIT,0); //DEBUG
     if(Compiler.debugMode) {
+        jit_value fr=__LoadFuncPtrIntoIntReg("DbgLeaveFunction",2);
         jit_prepare(Compiler.JIT);
-        jit_call(Compiler.JIT, DbgLeaveFunction);
+        jit_callr(Compiler.JIT, fr);
     }
     jit_reti(Compiler.JIT,0);
     //if(Compiler.debugMode)
@@ -6022,13 +5656,33 @@ noreg:
     }
     //if(Compiler.debugMode)
     //    jit_dump_ops(curjit,1);
-    if(Compiler.errorFlag)  {
+    if(Compiler.errorFlag||dont_compile)  {
         funcptr=(void(*)(int64_t,...))Blank;
     } else {
         func->relocations=Compiler.currentRelocations;
         FillFunctionRelocations(func);
+        //Register the unlinked stuff
+        map_iter_t miter=map_iter(&func->relocations);
+        const char *key;
+        while(key=map_next(&func->relocations,&miter)) {
+            relocLoop:;
+            vec_CFunction_t *funcs=map_get(&Compiler.unlinkedFuncsByRelocation,key);
+            if(!funcs) {
+                vec_CFunction_t vec;
+                vec_init(&vec);
+                map_set(&Compiler.unlinkedFuncsByRelocation,key,vec);
+                goto relocLoop;
+            }
+            vec_push(funcs,func);
+        }
+        func->stringRelocations=Compiler.stringDatas;
+        AddStringDataToFunc(func);
+        func->funcInfo.funcSize=jit_bin_size(func->JIT);
     }
+    func->funcInfo.frameOffset=Compiler.frameOffset;
     func->funcptr=funcptr;
+    func->labelPtrs=Compiler.labelPtrs;
+    func->asmPatches=Compiler.asmPatches;
     vec_deinit(&Compiler.valueStack);
     map_iter_t miter=map_iter(&Compiler.locals);
     const char *key;
@@ -6042,10 +5696,28 @@ noreg:
     map_deinit(&Compiler.labels);
     return func;
 }
-void FillFunctionRelocations(CFunction *func) {
-    map_iter_t iter=map_iter(&func->relocations);
+void AddStringDataToFunc(CFunction *f) {
+    map_iter_t iter=map_iter(&f->stringRelocations);
     const char *key;
     loop:
+    while(key=map_next(&f->stringRelocations,&iter)) {
+        vec_voidppp_t *ops=map_get(&f->stringRelocations,key);
+        long iter;void ***tofill;
+        vec_foreach(ops,tofill,iter) {
+            **tofill=*map_get(&Compiler.strings,key);
+            if(!Compiler.AOTMode) TD_FREE(tofill);
+        }
+        if(!Compiler.AOTMode) {
+            vec_deinit(ops);
+            map_remove(&f->stringRelocations,key);
+            goto loop;
+        }
+    }
+}
+void FillFunctionRelocations(CFunction *func) {
+    loop:;
+    map_iter_t iter=map_iter(&func->relocations);
+    const char *key;
     while(key=map_next(&func->relocations,&iter)) {
             CVariable *var;
             if(var=GetVariable((char*)key)) {
@@ -6055,11 +5727,13 @@ void FillFunctionRelocations(CFunction *func) {
                     vec_voidppp_t *vpp=map_get(&func->relocations,key);
                     vec_foreach(vpp,to_fill,iter) {
                         **to_fill=with;
-                        TD_FREE(to_fill);
+                        if(!Compiler.AOTMode) TD_FREE(to_fill);
                     }
-                    vec_deinit(vpp);
-                    map_remove(&func->relocations,key);
-                    goto loop;
+                    if(!Compiler.AOTMode) {
+                        vec_deinit(vpp);
+                        map_remove(&func->relocations,key);
+                        goto loop;
+                    }
             }
     }
 }
@@ -6117,6 +5791,8 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         FillFunctionRelocations(func);
         jit_disable_optimization(curjit, JIT_OPT_ALL);
         jit_generate_code(curjit,func);
+        func->stringRelocations=Compiler.stringDatas;
+        AddStringDataToFunc(func);
         func->funcptr=funcptr;
 	GC_Disable();
         #ifndef TARGET_WIN32
@@ -6220,7 +5896,6 @@ createfwd:
         else
             ret->un.linkage.type=LINK_NORMAL;
         ret->type=TYPE_UNION;
-        ret->refCnt=1;
         ret->un.isFwd=1;
         if(name)
             ret->un.name=strdup(name->name);
@@ -6350,7 +6025,6 @@ createfwd:
           ret->cls.ln=name->ln;
         }
         ret->type=TYPE_CLASS;
-        ret->refCnt=1;
         ret->cls.isFwd=1;
         if(name)
             ret->cls.name=strdup(name->name);
@@ -6489,9 +6163,12 @@ EXT:
 CVariable *Extern(CType *type,AST *name,char *importname) {
     if(!importname)
         importname=name->name;
-    CVariable **found;
-    if(found=map_get(&Compiler.globals,name->name))
-      map_remove(&Compiler.globals, name->name);
+    CVariable **found=map_get(&Compiler.globals,name->name);
+    if(found&&!strcmp(importname,name->name)) {
+        found[0]->type=type;
+        map_set(&Compiler.globals,importname,*found);
+        return *found;
+    }
     CType *bt2 =BaseType(type);
     CVariable *ret=TD_MALLOC(sizeof(CVariable));
     ret->fn=strdup(name->fn);
@@ -6510,8 +6187,12 @@ CVariable *Extern(CType *type,AST *name,char *importname) {
 CVariable *Import(CType *type,AST *name,char *importname) {
     if(!importname)
         importname=name->name;
-    if(map_get(&Compiler.globals,name->name))
-      map_remove(&Compiler.globals, name->name);
+    CVariable **found=map_get(&Compiler.globals, name->name);
+    if(found&&!strcmp(importname,name->name)) {
+        found[0]->type=type;
+        map_set(&Compiler.globals,importname,*found);
+        return *found;
+    }
     CType *bt2 =BaseType(type);
     CVariable *ret=TD_MALLOC(sizeof(CVariable));
     ret->fn=strdup(name->fn);
@@ -6532,7 +6213,9 @@ COldFuncState EnterFunction(CType *returnType,AST *_args) {
   Compiler.returnType=returnType;
     COldFuncState old=CreateCompilerState();
     Compiler.inFunction=1;
+    map_init(&Compiler.currentFuncStatics);
     vec_init(&Compiler.asmPatches);
+    map_init(&Compiler.currentRelocations);
     return old;
 }
 void LeaveFunction(COldFuncState old) {
@@ -6540,11 +6223,6 @@ void LeaveFunction(COldFuncState old) {
     Compiler.returnType=NULL;
     int iter;
     CAsmPatch *pat;
-    vec_foreach(&Compiler.asmPatches, pat, iter)
-      TD_FREE(pat);
-    vec_deinit(&Compiler.asmPatches);
-    memset(&Compiler.asmPatches,0,sizeof(Compiler.asmPatches));
-
     RestoreCompilerState(old);
 }
 void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int hasvargs) {
@@ -6562,7 +6240,12 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
             ;
         }
     }
-    if(map_get(&Compiler.globals,name->name)) {
+    CVariable **existing;
+    if(existing=map_get(&Compiler.globals,name->name)) {
+        int is_concrete=(existing[0]->linkage.type==LINK_NORMAL||existing[0]->linkage.type==LINK_NORMAL);
+        if((!Compiler.allowRedeclarations)&&is_concrete&&!existing[0]->isBuiltin) {
+            RaiseError(name,"Redefinition of function %s.",name->name);
+        }
         ReleaseVariable(*map_get(&Compiler.globals,name->name));
         map_remove(&Compiler.globals, name->name);
     }
@@ -6596,8 +6279,11 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
         argv->type=CreatePtrType(argc->type);
         vec_push(&args2, argv);
     }
-    CFunction *f=CompileAST(NULL, body, args2,C_AST_FRAME_OFF_DFT);
+    CFunction *f=CompileAST(NULL, body, args2,C_AST_FRAME_OFF_DFT,0);
     ApplyAsmPatchesAndFreeThem(f);
+    f->statics=Compiler.currentFuncStatics;
+    f->asmPatches=Compiler.asmPatches;
+    f->labelPtrs=Compiler.labelPtrs;
     if(Compiler.errorFlag) {
       ReleaseFunction(f);
       LeaveFunction(oldstate);
@@ -6606,7 +6292,6 @@ void CompileFunction(AST *linkage,CType *rtype,AST *name,AST *args,AST *body,int
     if(name)
         f->name=strdup(name->name);
     LeaveFunction(oldstate);
-    GC_SetDestroy(f,ReleaseFunction);;
     __AddFunctionVar(name,ftype,f);
     vec_deinit(&args2);
     CVariable *fv=*map_get(&Compiler.globals,name->name);
@@ -6624,7 +6309,7 @@ void RunStatement(AST *s) {
     AST *tnode =CreateTypeNode(t);
     Compiler.returnType=t;
     int oldflag=Compiler.errorFlag;
-    CFunction *stmt=CompileAST(NULL,s,empty,C_AST_FRAME_OFF_DFT);
+    CFunction *stmt=CompileAST(NULL,s,empty,C_AST_FRAME_OFF_DFT,0);
     ApplyAsmPatchesAndFreeThem(stmt);
     if(stmt&&!Compiler.errorFlag&&!Compiler.tagsFile) {
       GC_Disable();
@@ -6636,6 +6321,7 @@ void RunStatement(AST *s) {
       ((void(*)())stmt->funcptr)();
       #endif
       GC_Enable();
+        ReleaseFunction(stmt);
     }
     Compiler.errorFlag=oldflag;
     vec_deinit(&empty);

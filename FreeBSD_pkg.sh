@@ -8,19 +8,7 @@ mkdir -p ${STAGEDIR}/usr/local/bin
 mkdir -p ${STAGEDIR}/usr/local/include/HolyC
 cp 3d ${STAGEDIR}/usr/local/bin/
 set files = ( \
-    ASM.HC \
-    BITS.HC \
-    COMPRESS.HC \
-    FILE.HC \
-    HASH.HC \
-    Opcodes.DD \
-    CHAR.HC \
-    FIFO.HC \
-    FS.HC \
-    HCRT.HC \
-    MATH.HC \
-    QSORT.HC \
-    PRINT.HC \
+    HCRT.BIN \
     )
 rm ${STAGEDIR}/plist
 echo "/usr/local/bin/3d" >> ${STAGEDIR}/plist

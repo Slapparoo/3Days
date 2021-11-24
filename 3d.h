@@ -52,6 +52,8 @@ signal(SIGABRT,SignalHandler);
 #endif
 typedef vec_t(void***) vec_voidppp_t;
 typedef map_t(vec_voidppp_t) map_vec_voidppp_t;
+typedef vec_t(struct jit_op*) vec_jit_op_t;
+typedef map_t(vec_jit_op_t) map_vec_jit_op_t;
 struct CType;
 extern ExceptBuf SigPad;
 typedef vec_t(struct AST *) vec_AST_t;
@@ -90,7 +92,7 @@ typedef struct {
     } type;
 } CLinkage;
 typedef struct CType {
-    int refCnt;
+    unsigned int isBuiltin:1;
     enum {
         TYPE_U0,
         TYPE_I8,
@@ -119,6 +121,7 @@ typedef struct CType {
             struct CType *ret;
             vec_CType_t arguments;
             vec_AST_t dftArgs;
+            vec_AST_t origDftArgs;
             vec_str_t names;
             unsigned int hasvargs:1;
         } func;
@@ -572,6 +575,8 @@ typedef struct CVariable {
     int isGlobal:1;
     int isFunc:1;
     int isPublic:1;
+    int isBuiltin:1;
+    int isInternal:1;
     char *name;
     CType *type;
     int refCount;
@@ -589,14 +594,12 @@ typedef struct CValue {
         VALUE_FLOAT,
         VALUE_INT,
         VALUE_VAR,
-        VALUE_STRING,
         VALUE_INDIR_VAR,
     } type;
     union {
         struct CVariable *var;
         uint64_t integer;
         double flt;
-        char *string;
     };
 } CValue;
 AST *CreateTry(AST *try,AST *catch);
@@ -605,13 +608,11 @@ CVariable *CloneVariable(CVariable *var);
 #define VALUE_INDIR_VAR(vari) ((CValue){VALUE_INDIR_VAR,.var=CloneVariable(vari)})
 #define VALUE_INT(i) ((CValue){VALUE_INT,.integer=i})
 #define VALUE_FLOAT(f) ((CValue){VALUE_FLOAT,.flt=f})
-char *RegisterString(char *string);
-#define VALUE_STRING(s) ((CValue){VALUE_INT,.string=RegisterString(s)})
+CValue RegisterString(char *string);
 typedef map_t(CType*) map_CType_t;
 typedef map_t(CVariable*) map_CVariable_t;
 typedef vec_t(CVariable*) vec_CVariable_t;
 typedef vec_t(CValue) vec_CValue_t;
-typedef vec_t(struct jit_op*) vec_jit_op_t;
 typedef map_t(struct jit_label*) map_jit_label_t;
 CVariable *Import(CType *type,AST *name,char *importname);
 CVariable *Extern(CType *type,AST *name,char *importname);
@@ -628,10 +629,12 @@ typedef struct CLabelRef {
 typedef vec_t(CLabelRef) vec_CLabelRef_t;
 typedef map_t(vec_CLabelRef_t) map_vec_CLabelRef_t;
 typedef long LabelContext;
+struct CFunction ;
 typedef struct {
   unsigned int isRel:1;
   void *ptr;
-  AST *exp;
+  struct AST *exp;
+  struct CFunction *apply;
   long width,rel_offset;
   LabelContext context;
 } CAsmPatch;
@@ -642,6 +645,13 @@ typedef struct {
   unsigned long inAsmBlk:1;
 } CLabel;
 typedef map_t(CLabel) map_CLabel_t;
+typedef struct {
+    map_CVariable_t vars;
+} CBinaryModule;
+typedef map_t(CBinaryModule) map_CBinaryModule_t;
+struct CFunction;
+typedef vec_t(struct CFunction*) vec_CFunction_t;
+typedef map_t(vec_CFunction_t) map_vec_CFunction_t;
 typedef struct {
   vec_CAsmPatchP_t asmPatches;
   vec_CVariable_t unlinkedImportVars;
@@ -659,6 +669,12 @@ typedef struct {
     int silentMode:1;
     //addrofFrameoffsetMode will make addr-ofs return the frame offset
     int addrofFrameoffsetMode:1;
+    int AOTMode:1;
+    int dontCompile:1;
+    int loadedHCRT:1;
+    int allowRedeclarations:1;
+    //This is used for the code outside of the functions.
+    struct jit *AOTMain;
     char *tagsFile;
     FILE *errorsFile;
     struct jit *JIT;
@@ -669,7 +685,6 @@ typedef struct {
     vec_jit_op_t breakops;
     map_CLabel_t labels;
   map_void_t labelPtrs;
-  map_str_t strings;
   map_vec_CLabelRef_t labelRefs;
     map_CBreakpoint_t breakpoints;
     /**
@@ -685,10 +700,16 @@ typedef struct {
   LabelContext labelContext;
   map_CVariable_t exportedLabels;
   map_vec_voidppp_t currentRelocations;
+  map_vec_voidppp_t stringDatas;
+  map_str_t strings;
+  vec_AST_t AOTGlobalStmts;
+  map_CVariable_t currentFuncStatics;
+  long errorCount;
+  map_CBinaryModule_t binModules;
+  map_vec_CFunction_t unlinkedFuncsByRelocation;
 } CCompiler;
 #define LOCAL_LAB_FMT "@@(%li):%s"
 extern CCompiler Compiler;
-
 typedef struct CLiveInfo {
     jit_value value;
     CVariable *var;
@@ -699,6 +720,8 @@ typedef vec_t(map_CLiveInfo_t) vec_map_CLiveInfo_t;
 typedef struct CFuncInfo {
     map_CVariable_t noregs;
     vec_map_CLiveInfo_t table;
+    long frameOffset;
+    long funcSize;
 } CFuncInfo;
 typedef struct CFunction {
     struct jit *JIT;
@@ -708,6 +731,10 @@ typedef struct CFunction {
     CFuncInfo funcInfo;
     char *name;
     map_vec_voidppp_t relocations;
+    map_vec_voidppp_t stringRelocations;
+    map_CVariable_t statics;
+    map_void_t labelPtrs;
+    vec_CAsmPatchP_t asmPatches;
 } CFunction;
 void AddVariable(AST *name,CType *type);
 /**
@@ -744,10 +771,11 @@ AST *CreateImplicitTypecast(AST *a,AST *to_type);
 AST *CreateExplicitTypecast(AST *a,AST *to_type);
 AST *CreateReturn(AST *exp);
 #define C_AST_FRAME_OFF_DFT -1
+#define C_AST_F_NO_COMPILE 1
 /**
  * Use C_AST_FRAME_OFF_DFT to compute the frame offset for you
  */
-CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long frameOffset);
+CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long frameOffset,long flags);
 CValue CloneValue(CValue v) ;
 AST *SetPosFromLex(AST *t);
 AST *SetPosFromOther(AST *dst,AST *src);
@@ -861,6 +889,7 @@ typedef struct COldFuncState {
   vec_AST_t __addedGlobalLabels;
   LabelContext labelContext;
   map_vec_voidppp_t currentRelocations;
+  map_vec_voidppp_t stringDatas;
 } COldFuncState;
 COldFuncState EnterFunction(CType *returnType,AST *_args);
 COldFuncState CreateCompilerState();
@@ -895,11 +924,11 @@ AST *CreateAsmAlign(AST *a,AST *fill);
 void LeaveAssembler();
 void EnterAssembler();
 void *GetGlobalPtr(CVariable *var);
-void *EvalLabelExpr(AST *a,LabelContext context);
+void* EvalLabelExpr(CFunction *func,AST* a,LabelContext labContext);
 struct ExceptFrame;
 struct ExceptFrame *EnterTry();
 void PopTryFrame();
-void ApplyPatches();
+void ApplyPatches(CFunction *func);
 void LeaveFunction(COldFuncState old);
 char *HashLabel(char *name,LabelContext context,int is_local);
 /**
@@ -910,3 +939,16 @@ LabelContext NextLabelContext();
 int64_t EvalExprNoComma(char *text,char **en);
 void AssignClassBasetype(AST *t,AST *bt);
 void FillFunctionRelocations(CFunction *func);
+void AddStringDataToFunc(CFunction *func);
+void SerializeModule(FILE *f);
+void SerializeVar(FILE *f,CVariable *var) ;
+void SerializeFunction(FILE *f,CFunction *func);
+CBinaryModule LoadAOTBin(FILE *f,int verbose);
+void MakeHeaderForModule(FILE *f);
+void DestroyLexer();
+void JoinWithOldLexer(CLexer old);
+//Used for loading from binary file.
+void PatchLabelExprFunc(CAsmPatch *patch,CFunction *func);
+CVariable *LoadAOTFunction(FILE *f,int verbose,int flags);
+AST *CreateName(char *name);
+CVariable *UniqueGlblVar(CType *type);

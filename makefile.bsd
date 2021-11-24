@@ -1,12 +1,14 @@
 HEADERS := HolyC.tab.h 3d.h
-CC := gcc
-CFLAGS :=  `pkg-config --cflags --libs sdl2` -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC -DBSD #-fsanitize=address
-OBJS := tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o at3.o exceptLin.o asm.o
+CC := zapcc
+CFLAGS :=  `pkg-config --cflags --libs sdl2` -g3 -O0 -Wformat=0 -Wreturn-type -DUSEGC -DBSD -Wno-parentheses -Wno-switch #-fsanitize=address
+OBJS := aot.o tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o at3.o exceptLin.o asm.o
 all: 3d_tests 3d
 	echo "Done"
-installer: 3d
-	epm -fbsd 3Days HolyCC.list
-
+HCRT := HCRT/ASM.HC  HCRT/BITS.HC  HCRT/CHAR.HC  HCRT/COMPRESS.HC  HCRT/FIFO.HC  HCRT/FILE.HC  HCRT/FS.HC  HCRT/HASH.HC  HCRT/HCRT.HC  HCRT/MATH.HC  HCRT/Opcodes.DD  HCRT/PRINT.HC  HCRT/QSORT.HC
+HCRT/HCRT.BIN: 3d $(HCRT)
+	./3d -c HCRT/HCRT.BIN HCRT/HCRT.HC
+package: HCRT/HCRT.BIN 3d FreeBSD_pkg.sh
+	tcsh FreeBSD_pkg.sh
 main.o: main.c
 	$(CC) $(CFLAGS) -c  main.c -o $@
 3d: $(OBJS) main.o
@@ -51,5 +53,7 @@ tags.o: tags.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c tags.c -o $@
 asm.o: asm.c $(HEADERS)
 	$(CC) $(CFLAGS) -c asm.c -o asm.o
+aot.o: aot.c $(HEADERS)
+	$(CC) $(CFLAGS) -c aot.c -o aot.o
 sexy:
 	astyle *.c *.h

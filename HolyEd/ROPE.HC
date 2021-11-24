@@ -1,7 +1,4 @@
 #define ROPE_LEN 48
-
-I64 x=10;
-
 class CRope {
   CRope *left,*right,*parent;
   I64 text_length;
@@ -157,6 +154,7 @@ U8 *Rope2Str(CRope *r) {
   __Rope2Str(r,ret,0);
   return ret;
 }
+/*
 U8 *str="123456789";
 CRope *r=NULL;
 I64 x=0;
@@ -190,3 +188,4 @@ str="123456789";
 for(x=0;x!=StrLen(str);x++)
   if(str[x]!=RopeChar(r,x))
     "FAIL AT %d:(%c,%c)\n",x,str[x],RopeChar(r,x);
+*/

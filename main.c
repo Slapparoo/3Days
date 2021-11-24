@@ -4,14 +4,14 @@
 #ifndef TARGET_WIN32
 #include <sys/syscall.h>
 #include <unistd.h>
-#define HCRT_INSTALLTED_DIR "/usr/local/include/HolyC/HCRT.HC"
+#define HCRT_INSTALLTED_DIR "/usr/local/include/HolyC/HCRT.BIN"
 #include <libgen.h>
 #else
 #include <windows.h>
 #include <libloaderapi.h>
 #include <fileapi.h>
 #include <winnt.h>
-#define HCRT_INSTALLTED_DIR "\\HCRT\\HCRT.HC"
+#define HCRT_INSTALLTED_DIR "\\HCRT\\HCRT.BIN"
 #endif
 static struct arg_lit *helpArg;
 static struct arg_lit *dbgArg;
@@ -21,6 +21,7 @@ static struct arg_end *endArg;
 static struct arg_file *includeArg;
 static struct arg_file *tagsArg;
 static struct arg_file *errsFile;
+static struct arg_file *compileTo;
 ExceptBuf SigPad;
 char CompilerPath[1024];
 #ifdef TARGET_WIN32
@@ -49,7 +50,7 @@ static LONG WINAPI VectorHandler (struct _EXCEPTION_POINTERS *info) {
   }
   //SignalHandler(0);
   return EXCEPTION_CONTINUE_EXECUTION;
-}
+}\
 BOOL WINAPI CtrlCHandlerRoutine(DWORD c) {
   printf("User Abort.\n");
   return FALSE;
@@ -78,6 +79,7 @@ int main(int argc,char **argv) {
         boundsArg=arg_lit0("b", "bounds", "This enables bounds checking."),
         tagsArg=arg_file0("t", "tags", "<file>", "File to dump tags to(ctags compatable)."),
         errsFile=arg_file0("e","diags","<file>","Dump diagnostics to a file."),
+        compileTo=arg_file0("c","compile","<file>","Compile code to a .BIN file for faster loading."),
         includeArg=arg_filen(NULL, NULL, "<file>", 0, 1024, "Files to include after loading."),
         endArg=arg_end(1),
     };
@@ -109,6 +111,29 @@ int main(int argc,char **argv) {
     char *tagf=NULL;
     char buffer[2048];
     char buffer2[2048];
+    char *binf=NULL;
+    if(compileTo->count) {
+        if(Compiler.debugMode||Compiler.boundsCheckMode) {
+            fprintf(stderr,"Compiled binaries cannot be used with debugger(which is required by bounds check mode).");
+            return EXIT_FAILURE;
+        }
+        Compiler.AOTMode=1;
+        Compiler.allowRedeclarations=0;
+        Compiler.AOTMain=jit_init();
+        binf=(char*)compileTo->filename[0];
+        FILE *dummy=fopen(binf,"w");
+        fwrite("",0,0,dummy);
+        fclose(dummy);
+        #ifndef TARGET_WIN32
+        rp=realpath(binf,NULL);
+        binf=strdup(rp);
+        free(rp);
+        #else
+        GetFullPathNameA(binf,sizeof(buffer),buffer,NULL);
+        binf=strdup(binf);
+        #endif
+    } else
+        Compiler.allowRedeclarations=1;
     if(tagsArg->count) {
         tagf=(char*)tagsArg->filename[0];
         FILE *dummy=fopen(tagf,"w");
@@ -124,17 +149,20 @@ int main(int argc,char **argv) {
         #endif
     }
     long iter;
+
 #ifndef TARGET_WIN32
     if(0==access(HCRT_INSTALLTED_DIR,F_OK)) {
         sprintf(buffer, "#include \"%s\"", HCRT_INSTALLTED_DIR);
         mrope_append_text(Lexer.source, strdup(buffer));
     } else {
+        /*
       strcpy(buffer,argv[0]);
       strcat(dirname(buffer),"/HCRT/HCRT.HC");
       if(0==access(buffer, F_OK)) {
         sprintf(buffer2, "#include \"%s\"", buffer);
         mrope_append_text(Lexer.source, strdup(buffer2));
       }
+      */
     }
 #else
   GetModuleFileNameA(NULL,buffer,sizeof(buffer));
@@ -152,7 +180,7 @@ int main(int argc,char **argv) {
       sprintf(buffer, "#include \"%s\"", buffer2);
       mrope_append_text(Lexer.source, strdup(buffer));
     }
-    if(Compiler.tagsFile) Lexer.replMode=0;
+    if(Compiler.tagsFile||Compiler.AOTMode) Lexer.replMode=0;
     long extraFileIndex=0;
     if(run&&!errs) {
       for(;;) {
@@ -187,16 +215,25 @@ set:
 	    vec_truncate(&Compiler.asmPatches, 0);
 	    vec_truncate(&Compiler.__addedGlobalLabels, 0);
 	    map_init(&Assembler.imports);
-	    if(!Compiler.tagsFile) Lexer.replMode=1;
+	    if(!(Compiler.tagsFile||Compiler.AOTMode)) Lexer.replMode=1;
 	    else Lexer.replMode=0;
             HC_parse();
             #ifdef TARGET_WIN32
             RemoveVectoredExceptionHandler(h);
             #endif
-            if(Compiler.tagsFile) {
+            if(Compiler.tagsFile||Compiler.AOTMode) {
               break;
             }
         }
+    }
+    if(binf) {
+        if(Compiler.errorsFile) {
+                fprintf(stderr,"Errors detected,not compiling to binary.\n");
+                abort();
+        }
+        FILE *f=fopen(binf,"wb");
+        SerializeModule(f);
+        fclose(f);
     }
     arg_freetable(argtable, sizeof(argtable)/sizeof(*argtable));
     if(!Compiler.tagsFile)
@@ -204,7 +241,7 @@ set:
 	Compiler.tagsFile=tagf;
     if(Compiler.tagsFile)
       DumpTagsToFile(Compiler.tagsFile);
-    TD_FREE(tagf);
+    TD_FREE(tagf),TD_FREE(binf);
     if(Compiler.errorsFile) fclose(Compiler.errorsFile);
-    return (errs)?EXIT_SUCCESS:EXIT_FAILURE;
+    return (!errs)?EXIT_SUCCESS:EXIT_FAILURE;
 }
