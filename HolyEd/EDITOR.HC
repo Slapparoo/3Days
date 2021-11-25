@@ -1,4 +1,5 @@
 #include "KEYS2.HC"
+#include "FONT.HC"
 #include "ROPE.HC"
 #define EDIT_UNUSED 0
 #define EDIT_INS_STR 3
@@ -811,7 +812,7 @@ U0 WriteWithinWin(CSDL_TextWin *win,U8 *text,I64 x_scroll=0) {
            U8 chr=text[s-x_scroll];
            if(chr=='\t')
                 SDL_AddCh(win,' ',TRUE);
-           else if(chr!='\r'){
+           else if(chr!=13){
                 SDL_AddCh(win,chr,TRUE);
            }
         }
@@ -826,7 +827,7 @@ U0 WriteWithinView(CEditor *ed,U8 *text,I64 off) {
         if(ed->x_scroll+SDL_WinX(ed->window)>=s>=ed->x_scroll) {
           if(text[s-off]=='\t')
             SDL_AddCh(ed->window,' ',TRUE);
-          else if(text[s-off]!='\r')
+          else if(text[s-off]!=13)
             SDL_AddCh(ed->window,text[s-off],TRUE);
         }
         s++;
@@ -863,7 +864,8 @@ U0 __HighlightWrite(CEditor *ed,U8 *text,I64 off,I64 sel_start=I64_MAX,I64 sel_e
                 ed->window->inverse=TRUE;
             } else
                 ed->window->inverse=FALSE;
-            SDL_AddCh(ed->window,text[idx],TRUE);
+            if(NULL==StrOcc("\n\r\t",text[idx]))
+                SDL_AddCh(ed->window,text[idx],TRUE);
         }
     }
     ed->window->inverse=FALSE;
@@ -2680,7 +2682,3 @@ U0 SDL_ExitScr() {
     HashTableDel(buffers,(&FreeBuffer)(U0*));
 }
 SDL_ExitScr;
-
-
-
-

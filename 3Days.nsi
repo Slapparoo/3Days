@@ -1,7 +1,7 @@
 ############################################################################################
 #      NSIS Installation Script created by NSIS Quick Setup Script Generator v1.09.18
-#               Entirely Edited with NullSoft Scriptable Installation System                
-#              by Vlasis K. Barkas aka Red Wine red_wine@freemail.gr Sep 2006               
+#               Entirely Edited with NullSoft Scriptable Installation System
+#              by Vlasis K. Barkas aka Red Wine red_wine@freemail.gr Sep 2006
 ############################################################################################
 
 !define APP_NAME "3Days"
@@ -85,18 +85,7 @@ SetOutPath "$INSTDIR"
 File "3d.exe"
 File "SDL2.dll"
 SetOutPath "$INSTDIR\HCRT"
-File "HCRT\BITS.HC"
-File "HCRT\CHAR.HC"
-File "HCRT\COMPRESS.HC"
-File "HCRT\FIFO.HC"
-File "HCRT\FILE.HC"
-File "HCRT\FS.HC"
-File "HCRT\HASH.HC"
-File "HCRT\HCRT.HC"
-File "HCRT\MATH.HC"
-File "HCRT\QSORT.HC"
-File "HCRT\ASM.HC"
-File "HCRT\OPCODES.DD"
+File "HCRT\HCRT.BIN"
 SectionEnd
 
 ######################################################################
@@ -149,20 +138,9 @@ Section Uninstall
 ${INSTALL_TYPE}
 Delete "$INSTDIR\SDL2.dll"
 Delete "$INSTDIR\${MAIN_APP_EXE}"
-Delete "$INSTDIR\HCRT\BITS.HC"
-Delete "$INSTDIR\HCRT\CHAR.HC"
-Delete "$INSTDIR\HCRT\COMPRESS.HC"
-Delete "$INSTDIR\HCRT\FIFO.HC"
-Delete "$INSTDIR\HCRT\FILE.HC"
-Delete "$INSTDIR\HCRT\FS.HC"
-Delete "$INSTDIR\HCRT\HASH.HC"
-Delete "$INSTDIR\HCRT\HCRT.HC"
-Delete "$INSTDIR\HCRT\MATH.HC"
-Delete "$INSTDIR\HCRT\QSORT.HC"
-Delete "$INSTDIR\HCRT\ASM.HC"
-Delete "$INSTDIR\HCRT\OPCODES.DD" 
+Delete "$INSTDIR\HCRT\HCRT.BIN"
 RmDir "$INSTDIR\HCRT"
- 
+
 Delete "$INSTDIR\uninstall.exe"
 !ifdef WEB_SITE
 Delete "$INSTDIR\${APP_NAME} website.url"
@@ -198,4 +176,3 @@ DeleteRegKey ${REG_ROOT} "${UNINSTALL_PATH}"
 SectionEnd
 
 ######################################################################
-

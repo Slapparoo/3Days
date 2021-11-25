@@ -121,16 +121,30 @@ int main(int argc,char **argv) {
         Compiler.allowRedeclarations=0;
         Compiler.AOTMain=jit_init();
         binf=(char*)compileTo->filename[0];
-        FILE *dummy=fopen(binf,"w");
-        fwrite("",0,0,dummy);
-        fclose(dummy);
+        int deleteDummy=0;
         #ifndef TARGET_WIN32
+        if(0!=access(HCRT_INSTALLTED_DIR,F_OK)) {
+          FILE *dummy=fopen(binf,"w");
+          fwrite("",0,0,dummy);
+          fclose(dummy);
+          deleteDummy=1;
+        }
         rp=realpath(binf,NULL);
         binf=strdup(rp);
         free(rp);
+        if(deleteDummy)
+          remove(buffer);
         #else
+        if(INVALID_FILE_ATTRIBUTES==GetFileAttributesA(binf)) {
+          FILE *dummy=fopen(binf,"w");
+          fwrite("",0,0,dummy);
+          fclose(dummy);
+          deleteDummy=1;
+        }
         GetFullPathNameA(binf,sizeof(buffer),buffer,NULL);
         binf=strdup(binf);
+        if(deleteDummy)
+          remove(buffer);
         #endif
     } else
         Compiler.allowRedeclarations=1;

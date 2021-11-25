@@ -1,53 +1,60 @@
 HEADERS := HolyC.tab.h 3d.h
-CC := x86_64-w64-mingw32-gcc
-CFLAGS :=  -g3 -O0 -Wreturn-type -DUSEGC -DTARGET_WIN32 -I./ext/PDCurses-3.9/ -DNCURSES_STATIC -Iext/wineditline-2.206/include/editline \
+CC := gcc
+CFLAGS :=  -g -O0 -Wreturn-type -DUSEGC -DTARGET_WIN32 -I./ext/PDCurses-3.9/ -DNCURSES_STATIC -Iext/wineditline-2.206/include/editline \
 -I./SDL2-mingw64/include
 all: 3d_tests.exe 3d.exe
 	echo "Done"
+HCRT := HCRT/ASM.HC  HCRT/BITS.HC  HCRT/CHAR.HC  HCRT/COMPRESS.HC  HCRT/FIFO.HC  HCRT/FILE.HC  HCRT/FS.HC  HCRT/HASH.HC  HCRT/HCRT.HC  HCRT/MATH.HC  HCRT/Opcodes.DD  HCRT/PRINT.HC  HCRT/QSORT.HC
+installer.exe: 3Days.nsi 3d.exe HCRT/HCRT.BIN
+	makensis 3Days.nsi
+HCRT/HCRT.BIN: 3d.exe $(HCRT)
+	rm HCRT/HCRT.BIN || ./3d.exe -c HCRT/HCRT.BIN HCRT/HCRT.HC
 main.obj: main.c
-	$(CC) $(CFLAGS) -c  main.c -o $@
-3d.exe:  vec.obj rt.obj exceptWin.obj jitlib-core.obj map.obj compile.obj lexer.obj HolyC.obj unesc.obj tosprn.obj gc.obj debugger.obj rope.obj main.obj at3.obj rl.obj  tags.obj pdcurses.a asm.obj
+	$(CC) $(CFLAGS) -c  main.c -g -o $@
+3d.exe:  vec.obj rt.obj exceptWin.obj jitlib-core.obj map.obj compile.obj lexer.obj HolyC.obj unesc.obj tosprn.obj gc.obj debugger.obj rope.obj main.obj at3.obj rl.obj  tags.obj pdcurses.a asm.obj aot.obj
 	$(CC) $(CFLAGS)   $^  -lm ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
-3d_tests.exe: vec.obj exceptWin.obj rt.obj jitlib-core.obj map.obj compile.obj lexer.obj unesc.obj tests.c HolyC.obj tosprn.obj gc.obj debugger.obj rope.obj  rl.obj  tags.obj pdcurses.a asm.obj
+3d_tests.exe: vec.obj exceptWin.obj rt.obj jitlib-core.obj map.obj compile.obj lexer.obj unesc.obj tests.c HolyC.obj tosprn.obj gc.obj debugger.obj rope.obj  rl.obj  tags.obj pdcurses.a asm.obj aot.obj
 	$(CC) $(CFLAGS)   $^  -lm  ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
 pdcurses.a:
 	cd ext/PDCurses-3.9/wincon && make CC=$(CC) && cp pdcurses.a ../../..
 HolyC.obj: HolyC.tab.c $(HEADERS)
-	$(CC) $(CFLAGS) -g -c HolyC.tab.c -o $@
+	$(CC) $(CFLAGS) -g -c HolyC.tab.c -g -o $@
 HolyC.tab.c HolyC.tab.h: HolyC.y
 	bison -v -d -b HolyC HolyC.y
 vec.obj: ext/vec/src/vec.c $(HEADERS)
-	$(CC) $(CFLAGS) -c ext/vec/src/vec.c  -o $@
+	$(CC) $(CFLAGS) -c ext/vec/src/vec.c  -g -o $@
 map.obj: ext/map/src/map.c $(HEADERS)
-	$(CC) $(CFLAGS) -c ext/map/src/map.c -o $@
+	$(CC) $(CFLAGS) -c ext/map/src/map.c -g -o $@
 compile.obj: compile.c 3d.h $(HEADERS)
-	$(CC) $(CFLAGS) -c compile.c -o $@
+	$(CC) $(CFLAGS) -c compile.c -g -o $@
 lexer.obj: lexer.c 3d.h $(HEADERS)
-	$(CC) $(CFLAGS) -c lexer.c -o $@
+	$(CC) $(CFLAGS) -c lexer.c -g -o $@
 jitlib-core.obj: ext/myjit/myjit/jitlib-core.c
-	$(CC) $(CFLAGS) -c ext/myjit/myjit/jitlib-core.c -o $@
+	$(CC) $(CFLAGS) -c ext/myjit/myjit/jitlib-core.c -g  -o $@
 tosprn.obj: TOSPrint.c $(HEADERS)
-	$(CC) $(CFLAGS) -c TOSPrint.c -o $@
+	$(CC) $(CFLAGS) -c TOSPrint.c -g -o $@
 unesc.obj: ext/C_Unescaper/escaper.c
-	$(CC) $(CFLAGS) -c ext/C_Unescaper/escaper.c -o unesc.obj
+	$(CC) $(CFLAGS) -c ext/C_Unescaper/escaper.c -g -o unesc.obj
 rope.obj: ext/mropes/src/rope.c
-		$(CC) $(CFLAGS) -c ext/mropes/src/rope.c -o $@
+		$(CC) $(CFLAGS) -c ext/mropes/src/rope.c -g -o $@
 at3.obj: ext/argtable3/argtable3.c
-	$(CC) $(CFLAGS) -c ext/argtable3/argtable3.c -o $@
-rl.obj: rl.c
-	$(CC) $(CFLAGS) -c rl.c -o $@
-rt.obj: runtime.c
-	$(CC) $(CFLAGS) -c runtime.c -o $@
+	$(CC) $(CFLAGS) -c ext/argtable3/argtable3.c -g -o $@
+rl.obj: rl.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c rl.c -g -o $@
+rt.obj: runtime.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c runtime.c -g -o $@
 gc.obj: gc.c gc.h
-	$(CC) $(CFLAGS) -c gc.c -o gc.obj
-debugger.obj: debugger.c
-	$(CC) $(CFLAGS) -c debugger.c -o $@
-asm.obj: asm.c
-	$(CC) $(CFLAGS) -c asm.c -o asm.obj
+	$(CC) $(CFLAGS) -c gc.c -g -o gc.obj
+debugger.obj: debugger.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c debugger.c -g -o $@
+asm.obj: asm.c $(HEADERS)
+	$(CC) $(CFLAGS) -c asm.c -g -o asm.obj
 exceptWin.obj: exceptWin.yasm
 	yasm -f win64 exceptWin.yasm -o $@
 tags.obj: tags.c
-	$(CC) $(CFLAGS) -c tags.c -o $@
+	$(CC) $(CFLAGS) -c tags.c -g -o $@
+aot.obj: aot.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c aot.c -gdwarf -g -o aot.obj
 clean:
 	del *.obj *.exe *.a HolyC.tab.c HolyC.tab.h
 sexy:
