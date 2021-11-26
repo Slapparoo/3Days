@@ -5788,9 +5788,9 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
     jit_reti(Compiler.JIT,0);
     if(!Compiler.errorFlag) {
         func->relocations=Compiler.currentRelocations;
-        FillFunctionRelocations(func);
         jit_disable_optimization(curjit, JIT_OPT_ALL);
         jit_generate_code(curjit,func);
+        FillFunctionRelocations(func);
         func->stringRelocations=Compiler.stringDatas;
         AddStringDataToFunc(func);
         func->funcptr=funcptr;
@@ -6145,8 +6145,9 @@ void CreateFuncForwardDecl(AST *linkage,CType *rtype,AST *name,AST *args,int has
         goto EXT;
     switch(linkage->linkage.type) {
     case LINK_NORMAL:
+    EXT:
+    map_remove(&Compiler.globals,name->name);
     case LINK_EXTERN:
-EXT:
         Extern(ftype, name, NULL);
         break;
     case LINK__EXTERN:

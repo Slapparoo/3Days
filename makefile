@@ -1,11 +1,11 @@
 HEADERS := HolyC.tab.h 3d.h
 CC := gcc
-CFLAGS :=  -g3 -O0 -Wformat=0 -Wreturn-type -DUSEGC `pkg-config --libs --cflags readline` #-fsanitize=address
+CFLAGS :=  -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC `pkg-config --libs --cflags readline` `sdl2-config --cflags --libs` #-fsanitize=address
 all: 3d_tests 3d
 	echo "Done"
 HCRT := HCRT/ASM.HC HCRT/COMPRESS.HC HCRT/FS.HC HCRT/Opcodes.DD HCRT/BITS.HC HCRT/FIFO.HC HCRT/HASH.HC HCRT/HCRT.HC HCRT/PRINT.HC HCRT/CHAR.HC HCRT/FILE.HC HCRT/MATH.HC HCRT/QSORT.HC
 HCRT/HCRT.BIN: 3d $(HCRT)
-	./3d -c HCRT/HCRT.BIN HCRT/HCRT.HC
+	./3d --noruntime -c HCRT/HCRT.BIN HCRT/HCRT.HC
 package: 3d HCRT/HCRT.BIN
 	tcsh Debian_pkg.sh
 main.o: main.c

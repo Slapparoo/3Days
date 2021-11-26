@@ -244,8 +244,6 @@ found:
     return fn;
 }
 void VisitBreakpoint(CBreakpoint *bp) {
-    register int64_t rsp asm ("rsp");
-    assert(rsp%16==0);
     if(!bp) goto dbg;
     int stksz=Debugger.callStack.length;
     if(bp)

@@ -161,21 +161,21 @@ static char *SerializeMembers(vec_CMember_t *members,long start);
     //1 for normal
     //2 For exported
     int64_t type;;
-    char name;
+    char name[64];
  } CBinLabel;
  typedef struct {
     int64_t size;
-    char name;
+    char name[64];
  } CBinStatic;
 typedef struct {
     int64_t offset;
     //This member is terminated with '\0'
-    char name;
+    char name[64];
 } CBinPatch;
 typedef struct {
     int64_t offset;
     int64_t len;
-    char str;
+    char str[64];
 } CBinString;
 typedef vec_t(CBinString*) vec_CBinStringp_t;
 typedef vec_t(CBinPatch*) vec_CBinPatchp_t;
@@ -205,7 +205,7 @@ void SerializeFunction(FILE *f,CFunction *func) {
         if(stat=map_get(&func->statics,key)) {
             CBinStatic *stat2=TD_MALLOC(sizeof(int64_t)+strlen(key)+1);
             stat2->size=TypeSize(stat[0]->type);
-            strcpy(&stat2->name,key);
+            strcpy(stat2->name,key);
             vec_push(&statics,stat2);
         }
         vec_voidppp_t *relocs=map_get(&func->relocations,key);
@@ -214,7 +214,7 @@ void SerializeFunction(FILE *f,CFunction *func) {
         vec_foreach(relocs,ptr,iter) {
             CBinPatch *pat=TD_MALLOC(sizeof(int64_t)+strlen(key)+1);
             pat->offset=((char*)*ptr)-(char*)func->funcptr;
-            strcpy(&pat->name,key);
+            strcpy(pat->name,key);
             vec_push(&patches,pat);
         }
     }
@@ -240,7 +240,7 @@ void SerializeFunction(FILE *f,CFunction *func) {
             CBinString *pat=TD_MALLOC(2*sizeof(int64_t)+strlen(key)+1);
             pat->offset=((char*)*ptr)-(char*)func->funcptr;
             pat->len=strlen(key)+1;
-            strcpy(&pat->str,key);
+            strcpy(pat->str,key);
             vec_push(&strings,pat);
         }
     }
@@ -285,7 +285,7 @@ void SerializeFunction(FILE *f,CFunction *func) {
             else
                 lab->type=LABEL_NORMAL;
             lab->offset=(char*)ptr-(char*)func->funcptr;
-            strcpy(&lab->name,key);
+            strcpy(lab->name,key);
             fwrite(lab,1,MSize(lab),f);
             TD_FREE(lab);
         }
@@ -879,7 +879,7 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
             buffer[idx]=0;
             CBinPatch *pat=TD_MALLOC(sizeof(offset)+strlen(buffer)+1);
             pat->offset=offset;
-            strcpy((void*)&pat->name,buffer);
+            strcpy(pat->name,buffer);
             vec_push(&patches,pat);
             if(verbose) {
                     printf("RELOCATION:%s(@%p)\n",buffer,offset);
@@ -901,7 +901,7 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
         CBinString *str=TD_MALLOC(2*sizeof(int64_t)+len);
         str->len=len;
         str->offset=offset;
-        strncpy(&str->str,buffer,len);
+        strncpy(str->str,buffer,len);
         vec_push(&strings,str);
         if(verbose) {
             printf("STRING:%s(@%p)\n",buffer,offset);
@@ -986,30 +986,30 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
     vec_foreach(&patches,pat,iter) {
         loop:;
         vec_voidppp_t *vec;
-        if(vec=map_get(&v->func->relocations,&pat->name)) {
+        if(vec=map_get(&v->func->relocations,pat->name)) {
             void ***where=TD_MALLOC(sizeof(void**));
             *where=mem+pat->offset;
             vec_push(vec,where);
         } else {
             vec_voidppp_t new;
             vec_init(&new);
-            map_set(&v->func->relocations,&pat->name,new);
+            map_set(&v->func->relocations,pat->name,new);
             goto loop;
         }
     }
     CBinString *str;
     vec_foreach(&strings,str,iter) {
-        *(char**)(mem+str->offset)=*map_get(&Compiler.strings,&str->str);
+        *(char**)(mem+str->offset)=*map_get(&Compiler.strings,str->str);
         sloop:
-        if(!map_get(&v->func->stringRelocations,&str->str)) {
+        if(!map_get(&v->func->stringRelocations,str->str)) {
             vec_voidppp_t vp;
             vec_init(&vp);
-            map_set(&v->func->stringRelocations,&str->str,vp);
+            map_set(&v->func->stringRelocations,str->str,vp);
             goto sloop;
         } else {
             void ***new=TD_MALLOC(sizeof(void**));
             *new=(char*)mem+str->offset;
-            vec_push(map_get(&v->func->stringRelocations,&str->str),new);
+            vec_push(map_get(&v->func->stringRelocations,str->str),new);
         }
         TD_FREE(str);
     }
@@ -1060,7 +1060,6 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
     return v;
 }
 CBinaryModule LoadAOTBin(FILE *f,int verbose) {
-    CType *u0=CreatePrimType(TYPE_U0);
     char buffer[256];
     vec_CVariable_t loaded;
     vec_init(&loaded);
@@ -1080,7 +1079,11 @@ CBinaryModule LoadAOTBin(FILE *f,int verbose) {
                     int64_t size;
                     fread(&size,1,sizeof(size),f);
                     CVariable *v=TD_MALLOC(sizeof(CVariable));
-                    v->type=u0;
+                    CType *arr=TD_MALLOC(sizeof(CType));
+                    arr->type=TYPE_ARRAY;
+                    arr->array.dim=size;
+                    arr->array.base=CreatePrimType(TYPE_U8);
+                    v->type=arr;
                     v->isGlobal=1;
                     v->linkage.globalPtr=TD_MALLOC(size);
                     v->linkage.type=LINK_NORMAL;
@@ -1096,7 +1099,7 @@ CBinaryModule LoadAOTBin(FILE *f,int verbose) {
                 case 1:; //Function
                     CVariable *v=LoadAOTFunction(f,verbose,0);
                     if(!strcmp("@@Main",v->name)) {
-                        v->type=CreateFuncType(u0,NULL,0);
+                        v->type=CreateFuncType(CreatePrimType(TYPE_U0),NULL,0);
                         aaMain=v;
                     } else {
                         map_set(&Compiler.globals,v->name,v);

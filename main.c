@@ -22,6 +22,7 @@ static struct arg_file *includeArg;
 static struct arg_file *tagsArg;
 static struct arg_file *errsFile;
 static struct arg_file *compileTo;
+static struct arg_lit *noRuntime;
 ExceptBuf SigPad;
 char CompilerPath[1024];
 #ifdef TARGET_WIN32
@@ -80,6 +81,7 @@ int main(int argc,char **argv) {
         tagsArg=arg_file0("t", "tags", "<file>", "File to dump tags to(ctags compatable)."),
         errsFile=arg_file0("e","diags","<file>","Dump diagnostics to a file."),
         compileTo=arg_file0("c","compile","<file>","Compile code to a .BIN file for faster loading."),
+        noRuntime=arg_lit0(NULL,"noruntime","Don't include the runtime(useful for compiling the runtime)."),
         includeArg=arg_filen(NULL, NULL, "<file>", 0, 1024, "Files to include after loading."),
         endArg=arg_end(1),
     };
@@ -123,7 +125,7 @@ int main(int argc,char **argv) {
         binf=(char*)compileTo->filename[0];
         int deleteDummy=0;
         #ifndef TARGET_WIN32
-        if(0!=access(HCRT_INSTALLTED_DIR,F_OK)) {
+        if(0!=access(binf,F_OK)) {
           FILE *dummy=fopen(binf,"w");
           fwrite("",0,0,dummy);
           fclose(dummy);
@@ -163,31 +165,32 @@ int main(int argc,char **argv) {
         #endif
     }
     long iter;
-
-#ifndef TARGET_WIN32
-    if(0==access(HCRT_INSTALLTED_DIR,F_OK)) {
-        sprintf(buffer, "#include \"%s\"", HCRT_INSTALLTED_DIR);
+    if(!noRuntime->count) {
+    #ifndef TARGET_WIN32
+        if(0==access(HCRT_INSTALLTED_DIR,F_OK)) {
+            sprintf(buffer, "#include \"%s\"", HCRT_INSTALLTED_DIR);
+            mrope_append_text(Lexer.source, strdup(buffer));
+        } else {
+            /*
+          strcpy(buffer,argv[0]);
+          strcat(dirname(buffer),"/HCRT/HCRT.HC");
+          if(0==access(buffer, F_OK)) {
+            sprintf(buffer2, "#include \"%s\"", buffer);
+            mrope_append_text(Lexer.source, strdup(buffer2));
+          }
+          */
+        }
+    #else
+      GetModuleFileNameA(NULL,buffer,sizeof(buffer));
+      dirname(buffer);
+      strcat(buffer,HCRT_INSTALLTED_DIR);
+      if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
+        unescapeString(buffer,buffer2);
+        sprintf(buffer, "#include \"%s\"", strdup(buffer2));
         mrope_append_text(Lexer.source, strdup(buffer));
-    } else {
-        /*
-      strcpy(buffer,argv[0]);
-      strcat(dirname(buffer),"/HCRT/HCRT.HC");
-      if(0==access(buffer, F_OK)) {
-        sprintf(buffer2, "#include \"%s\"", buffer);
-        mrope_append_text(Lexer.source, strdup(buffer2));
       }
-      */
+    #endif
     }
-#else
-  GetModuleFileNameA(NULL,buffer,sizeof(buffer));
-  dirname(buffer);
-  strcat(buffer,HCRT_INSTALLTED_DIR);
-  if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
-    unescapeString(buffer,buffer2);
-    sprintf(buffer, "#include \"%s\"", strdup(buffer2));
-    mrope_append_text(Lexer.source, strdup(buffer));
-  }
-#endif
     ARM_SIGNALS;
     for(iter=0;iter!=includeArg->count;iter++) {
       unescapeString(includeArg->filename[iter],buffer2);
