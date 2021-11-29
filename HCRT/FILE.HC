@@ -1,12 +1,3 @@
-#define CDIR_FILENAME_LEN 1024
-class CDirEntry
-{
-  CDirEntry *next,*parent,*prev;
- U16 attr;	//Unused in Cubit
- U8 name[CDIR_FILENAME_LEN];
- I64 size;	//In bytes
- I64 datetime; //In Unix time(not used yet)
-};
 //Checks a signle mask
 static Bool __FileFitsMask(U8 *fn,U8 *mask) {
   I64 maskchr=StrLen(mask)-1;
@@ -266,7 +257,6 @@ U0 Dir(U8 *path=".") {
   Free(fpath);
 }
 U0 Zip(U8 *f,I64 flags=0) {
-  Debugger;
   CDirEntry *ents=FilesFind(f,flags);
   loop:
   if(ents) {
@@ -285,7 +275,6 @@ U0 Zip(U8 *f,I64 flags=0) {
   }
 }
 U0 Unzip(U8 *f,I64 flags=0) {
-  Debugger;
   CDirEntry *ents=FilesFind(f,flags);
   loop:
   if(ents) {

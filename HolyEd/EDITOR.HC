@@ -501,6 +501,7 @@ U0 SDL_DrawWin(...) {
     SDL_UpdateWindowSurface(global_window);
 }
 U0 SDL_AddCh(CSDL_TextWin *win,U8 ch,Bool force_in_view=FALSE) {
+    if(ch=='\t') ch=' ';
     I64 w=SDL_WinX(win),h=SDL_WinY(win);
     if(win->x>=w) goto next;
     if(win->y>=h) goto next;
@@ -864,7 +865,7 @@ U0 __HighlightWrite(CEditor *ed,U8 *text,I64 off,I64 sel_start=I64_MAX,I64 sel_e
                 ed->window->inverse=TRUE;
             } else
                 ed->window->inverse=FALSE;
-            if(NULL==StrOcc("\n\r\t",text[idx]))
+            if(NULL==StrOcc("\n\r",text[idx]))
                 SDL_AddCh(ed->window,text[idx],TRUE);
         }
     }
@@ -2640,7 +2641,7 @@ pagedown:
             CLine *prev=GetLine(ed,ed->cury);
             EdRight(ed);
             if(IndentLevel(prev))
-                U8 *margin=MStrPrint("%*c",IndentLevel(prev),'    ');
+                U8 *margin=MStrPrint("%*c",4*IndentLevel(prev),' ');
             else
                 margin=StrNew("");
             EditorInsText(ed,margin,soff+1,TRUE);

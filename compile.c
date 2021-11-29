@@ -1565,6 +1565,7 @@ if(t->type==TYPE_UNION) { \
             member.offset+=base;
             int align=TypeAlign(member.type);
             long size=member.offset+TypeSize(member.type);
+            if(TypeSize(t)>size) size=TypeSize(t);
             FINALIZE_SA(member);
         }
     } else {
@@ -1663,8 +1664,9 @@ void *GetGlobalPtr(CVariable *var) {
     switch(var->linkage.type) {
     case LINK_STATIC:
     case LINK_NORMAL:
-        if(var->isFunc)
-	  return var->func->funcptr;
+        if(var->isFunc) {
+          return var->func->funcptr;
+         }
         else
 	  return var->linkage.globalPtr;
         break;
@@ -1828,6 +1830,7 @@ R2f:
                 jit_truncr(Compiler.JIT, R(var->reg), FR(0));
             } else if(!IsVarRegCanidate(var)&&!IsVarRegCanidate(var2)&&!var2->isGlobal) {
                 jit_fldxi(Compiler.JIT,FR(0),R_FP,Compiler.frameOffset+var2->frameOffset,t2sz);
+                jit_truncr(Compiler.JIT, R(0), FR(0));
                 goto R2f;
             } else if(!IsVarRegCanidate(var)&&IsVarRegCanidate(var2)) {
                 jit_truncr(Compiler.JIT, R(0), FR(var2->reg));
@@ -1928,8 +1931,8 @@ static void __CompileAssignV2GV(CVariable *var,CVariable *var2) {
                 jit_extr(Compiler.JIT,FR(0),R(var2->reg));
                 jit_fstr(Compiler.JIT,MoveGlobalPtrToReg(var,0),FR(0),tsz);
             } else if(var2->isGlobal) {
-                CVariable *tvar AF_VAR=CreateTmpRegVar(GetIntTmpReg(), bt);
-                MoveGlobalPtrToReg(tvar, tvar->reg);
+                CVariable *tvar AF_VAR=CreateTmpRegVar(1, bt);
+                MoveGlobalPtrToReg(var2, tvar->reg);
                 if(bt2->type==TYPE_ARRAY||bt2->type==TYPE_ARRAY) {
                   jit_movr(Compiler.JIT, R(0), R(tvar->reg));
                 } else if(TypeIsSigned(bt2))
@@ -2031,26 +2034,26 @@ void CompileAssign(CValue dst,CValue src) {
                     if(IsIntegerType(dst.var->type))  {
                         jit_str(Compiler.JIT, MoveGlobalPtrToReg(dst.var,1), R(0), TypeSize(dst.var->type));
                     } else {
-                        jit_truncr(Compiler.JIT, FR(0), R(0));
-                        jit_str(Compiler.JIT, MoveGlobalPtrToReg(dst.var,1), FR(0), TypeSize(dst.var->type));
+                        jit_extr(Compiler.JIT, FR(0), R(0));
+                        jit_fstr(Compiler.JIT, MoveGlobalPtrToReg(dst.var,1), FR(0), TypeSize(dst.var->type));
                     }
                 } else if(IsF64(derefts)) {
-                    jit_fldr(Compiler.JIT,FR(0),R(0),8);
+                    jit_fldr(Compiler.JIT,FR(0),ins,8);
                     if(IsIntegerType(dst.var->type))  {
-                        jit_fstr(Compiler.JIT, MoveGlobalPtrToReg(dst.var,0), FR(0), TypeSize(dst.var->type));
+                        jit_truncr(Compiler.JIT, R(0), FR(0));
+                        jit_str(Compiler.JIT, MoveGlobalPtrToReg(dst.var,1), R(0), TypeSize(dst.var->type));
                     } else {
-                        jit_extr(Compiler.JIT, R(0),FR(0));
-                        jit_str(Compiler.JIT, MoveGlobalPtrToReg(dst.var,0), FR(0), TypeSize(dst.var->type));
+                        jit_fstr(Compiler.JIT, MoveGlobalPtrToReg(dst.var,0), FR(0), TypeSize(dst.var->type));
                     }
                 } else {
                     //memcpy
                     MoveGlobalPtrToReg(dst.var,0);
-                    __LoadFuncPtrIntoIntReg("MemNCpy",2);
+                    jit_value fr=__LoadFuncPtrIntoIntReg("MemNCpy",2);
                     jit_prepare(Compiler.JIT);
                     jit_putargr(Compiler.JIT,R(0));
                     jit_putargr(Compiler.JIT,ins);
                     jit_putargi(Compiler.JIT,TypeSize(derefts));
-                    jit_callr(Compiler.JIT,R(2));
+                    jit_callr(Compiler.JIT,fr);
                 }
             } else if(IsVarRegCanidate(dst.var)) {
                 if(IsIntegerType(derefts)) {
@@ -2071,7 +2074,7 @@ void CompileAssign(CValue dst,CValue src) {
                         jit_fldr(Compiler.JIT, FR(0), ins, derefss);
                         jit_truncr(Compiler.JIT, R(dst.var->reg), FR(0));
                     } else if(IsF64(dst.var->type)) {
-                        jit_fldr(Compiler.JIT, dst.var->reg,ins, derefss);
+                        jit_fldr(Compiler.JIT, FR(dst.var->reg),ins, derefss);
                     } else abort();
                 } else abort();
             } else {
@@ -2090,15 +2093,15 @@ r02f:
                     if(IsIntegerType(dst.var->type))  {
                         jit_stxi(Compiler.JIT, Compiler.frameOffset+dst.var->frameOffset,R_FP, R(0), TypeSize(dst.var->type));
                     } else {
-                        jit_truncr(Compiler.JIT, FR(0), R(0));
+                        jit_extr(Compiler.JIT, FR(0), R(0));
                         jit_fstxi(Compiler.JIT, Compiler.frameOffset+dst.var->frameOffset,R_FP, FR(0), TypeSize(dst.var->type));
                     }
                 } else if(IsF64(derefts)) {
-                    jit_fldr(Compiler.JIT,FR(0),R(0),8);
-                    if(IsIntegerType(dst.var->type))  {
+                    jit_fldr(Compiler.JIT,FR(0),ins,8);
+                    if(!IsIntegerType(dst.var->type))  {
                         jit_fstxi(Compiler.JIT, Compiler.frameOffset+dst.var->frameOffset,R_FP, FR(0), TypeSize(dst.var->type));
                     } else {
-                        jit_extr(Compiler.JIT, R(0),FR(0));
+                        jit_truncr(Compiler.JIT, R(0),FR(0));
                         jit_stxi(Compiler.JIT,Compiler.frameOffset+ dst.var->frameOffset,R_FP, R(0), TypeSize(dst.var->type));
                     }
                 } else {
@@ -2118,11 +2121,13 @@ r02f:
         jit_value in=MoveValueToIntRegIfNeeded(inval,1);
         CType *deref1 =DerrefedType(dst.var->type);
         if(src.type==VALUE_INT) {
-            jit_value i=MoveValueToIntRegIfNeeded(src,0);
-            if(IsIntegerType(deref1))
+            if(IsIntegerType(deref1)) {
+                jit_value i=MoveValueToIntRegIfNeeded(src,0);
                 jit_str(Compiler.JIT, in, i, TypeSize(deref1));
-            else if(IsF64(deref1))
-                jit_str(Compiler.JIT, in, i, TypeSize(deref1));
+            } else if(IsF64(deref1)) {
+                jit_value i=MoveValueToFltRegIfNeeded(src, 0);
+                jit_fstr(Compiler.JIT, in, i, TypeSize(deref1));
+            }
         } else if(src.type==VALUE_FLOAT) {
             jit_value f=MoveValueToIntRegIfNeeded(src,0);
             if(IsIntegerType(deref1))
@@ -2135,13 +2140,23 @@ r02f:
             jit_value in2=MoveValueToIntRegIfNeeded(sinval, 0);
             if(IsF64(stype)) {
                 jit_fldr(Compiler.JIT, FR(0), in2, 8);
-                jit_fstr(Compiler.JIT,in,FR(0),8);
+                if(IsF64(deref1))
+                  jit_fstr(Compiler.JIT,in,FR(0),8);
+                else {
+                  jit_truncr(Compiler.JIT, R(0), FR(0));
+                  jit_str(Compiler.JIT,in,R(0),8);
+                }
             } else if(IsIntegerType(stype)) {
                 if(TypeIsSigned(stype))
-                    jit_ldr(Compiler.JIT, R(0), in2, 8);
+                    jit_ldr(Compiler.JIT, R(0), in2, TypeSize(stype));
                 else
-                    jit_ldr_u(Compiler.JIT, R(0), in2, 8);
-                jit_str(Compiler.JIT,in,R(0), TypeSize(deref1));
+                    jit_ldr_u(Compiler.JIT, R(0), in2, TypeSize(stype));
+                if(IsF64(deref1)) {
+                  jit_extr(Compiler.JIT, FR(0), R(0));
+                  jit_fstr(Compiler.JIT,in,FR(0),8);
+                } else {
+                  jit_str(Compiler.JIT,in,R(0),TypeSize(deref1));
+                }
             } else {
                 jit_value fr=__LoadFuncPtrIntoIntReg("MemNCpy",2);
                 //memcpy
@@ -3600,9 +3615,9 @@ prneskip:
   CType *bt =AssignTypeToNode(exp->binop.b); \
   WarnOnWeirdPass(exp,at, bt); \
   TypecastValFromStackIfNeeded(bt,totype); \
+  int rr=GetIntTmpReg(); \
   CValue b AF_VALUE=vec_pop(&Compiler.valueStack); \
   CValue a AF_VALUE=vec_pop(&Compiler.valueStack); \
-  int rr=GetIntTmpReg(); \
   if(b.type==VALUE_INT) { \
 if(a.type==VALUE_INT) { \
   if(IsU64(totype)) { \
@@ -3720,9 +3735,9 @@ __CompileAST(exp->binop.b); \
 CType *bt =AssignTypeToNode(exp->binop.b); \
 WarnOnWeirdPass(exp, at, bt); \
 TypecastValFromStackIfNeeded(bt,totype); \
+int rr=GetFltTmpReg(); \
 CValue b AF_VALUE=vec_pop(&Compiler.valueStack); \
 CValue a AF_VALUE=vec_pop(&Compiler.valueStack); \
-int rr=GetFltTmpReg(); \
 if(b.type==VALUE_INT) { \
   jit_value av=MoveValueToFltRegIfNeeded(a,0); \
   iop(Compiler.JIT, FR(rr), av, b.integer); \
@@ -3922,10 +3937,10 @@ __CompileAST(exp->binop.b); \
 CType *bt =AssignTypeToNode(exp->binop.b); \
 WarnOnWeirdPass(exp, at, bt); \
 TypecastValFromStackIfNeeded(bt,f64); \
-CValue b AF_VALUE =vec_pop(&Compiler.valueStack); \
-CValue a AF_VALUE=vec_pop(&Compiler.valueStack); \
 int t;\
 jit_value rr=R(t=GetIntTmpReg()); \
+CValue b AF_VALUE =vec_pop(&Compiler.valueStack); \
+CValue a AF_VALUE=vec_pop(&Compiler.valueStack); \
 jit_movi(Compiler.JIT, rr,0); \
 jit_op *tp=NULL; \
 jit_value a2=MoveValueToFltRegIfNeeded(a, 0); \
@@ -4263,15 +4278,16 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
         return;
     }
     case AST_NEG: {
-        __CompileAST(exp->unopArg);
-        CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
         CType *t =AssignTypeToNode(exp->unopArg);
+        __CompileAST(exp->unopArg);
+        int tmpreg=(IsF64(t))?GetFltTmpReg():GetIntTmpReg();
+        CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
         CVariable *ret AF_VAR;
         if(IsF64(t)) {
-            ret=CreateTmpRegVar(GetFltTmpReg(), CreatePrimType(TYPE_F64));
+            ret=CreateTmpRegVar(tmpreg, CreatePrimType(TYPE_F64));
             jit_fnegr(Compiler.JIT, FR(ret->reg), MoveValueToFltRegIfNeeded(v, 0));
         } else {
-            ret=CreateTmpRegVar(GetIntTmpReg(), t);
+            ret=CreateTmpRegVar(tmpreg, t);
             jit_negr(Compiler.JIT, R(ret->reg), MoveValueToIntRegIfNeeded(v, 0));
         }
         vec_push(&Compiler.valueStack,VALUE_VAR(ret));
@@ -4311,8 +4327,8 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
             //TODO
         } else {
             __CompileAST(exp->unopArg);
-            CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
             ret=CreateTmpRegVar(GetIntTmpReg(), t);
+            CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
             jit_value vr=MoveValueToIntRegIfNeeded(v, 0);
             jit_notr(Compiler.JIT, R(ret->reg), vr);
         }
@@ -4326,10 +4342,10 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
             RaiseError(exp,"Can't derrefernce type %s.",ts);
             TD_FREE(ts);
         }
+        CVariable *ret AF_VAR=CreateTmpRegVar(GetIntTmpReg(), t);
         AST *ptr =PtrifyIfNeeded(exp->unopArg); //Account for arrays
         __CompileAST(ptr);
         if(DerrefedType(t)->type==TYPE_FUNC) return;
-        CVariable *ret AF_VAR=CreateTmpRegVar(GetIntTmpReg(), t);
         CValue dst AF_VALUE=VALUE_VAR(ret),src AF_VALUE;
         CompileAssign(dst, src=vec_pop(&Compiler.valueStack));
         CValue ret2 = {.type=VALUE_INDIR_VAR,.var=CloneVariable(ret)}; //Returned so dont TD_FREE
@@ -4400,20 +4416,23 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
     }
     case AST_IMPLICIT_TYPECAST: {
         CType *t =AssignTypeToNode(exp->typecast.base);
-        __CompileAST(exp->typecast.base);
         if(IsIntegerType(exp->typecast.toType->type2)&&IsIntegerType(t)) {
+          __CompileAST(exp->typecast.base);
             break;
         } else if(IsF64(exp->typecast.toType->type2)&&IsF64(t)) {
+            __CompileAST(exp->typecast.base);
             break;
         } else if(IsF64(exp->typecast.toType->type2)) {
-            CValue src AF_VALUE=vec_pop(&Compiler.valueStack);
             CVariable *ftmp AF_VAR=CreateTmpRegVar(GetFltTmpReg(), exp->typecast.toType->type2);
+            __CompileAST(exp->typecast.base);
+            CValue src AF_VALUE=vec_pop(&Compiler.valueStack);
             CValue ret=VALUE_VAR(ftmp);
             CompileAssign(ret, src);
             vec_push(&Compiler.valueStack, ret);
         } else if(IsIntegerType(t)) {
-            CValue src AF_VALUE=vec_pop(&Compiler.valueStack);
             CVariable *ftmp AF_VAR=CreateTmpRegVar(GetIntTmpReg(), exp->typecast.toType->type2);
+            __CompileAST(exp->typecast.base);
+            CValue src AF_VALUE=vec_pop(&Compiler.valueStack);
             CValue ret=VALUE_VAR(ftmp);
             CompileAssign(ret, src);
             vec_push(&Compiler.valueStack, ret);
@@ -4440,14 +4459,14 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
                 pn.i=exp->typecast.base->integer;
                 vec_push(&Compiler.valueStack, VALUE_FLOAT(pn.d));
             } else if(IsIntegerType(from)) {
+                CVariable *var AF_VAR=CreateTmpRegVar(GetFltTmpReg(), CreatePrimType(TYPE_F64));
                 __CompileAST(exp->typecast.base);
                 jit_value fr=__LoadFuncPtrIntoIntReg("Bit4BitU64ToF64",2);
                 CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
-                MoveValueToIntRegIfNeeded(v, 0);
+                jit_value reg=MoveValueToIntRegIfNeeded(v, 0);
                 jit_prepare(Compiler.JIT);
-                jit_putargr(Compiler.JIT, R(0));
+                jit_putargr(Compiler.JIT, reg);
                 jit_callr(Compiler.JIT, fr);
-                CVariable *var AF_VAR=CreateTmpRegVar(GetFltTmpReg(), CreatePrimType(TYPE_F64));
                 jit_fretval(Compiler.JIT, FR(var->reg),8);
                 vec_push(&Compiler.valueStack,VALUE_VAR(var));
             } else if(IsF64(from)) {
@@ -4458,8 +4477,8 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
         } else if(IsIntegerType(to)) {
             if(IsIntegerType(from)) {
                 __CompileAST(exp->typecast.base);
-                CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
                 CVariable *var AF_VAR=CreateTmpRegVar(GetIntTmpReg(), from);
+                CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
                 CValue ret AF_VALUE=VALUE_VAR(var);
                 CompileAssign(ret, v);
                 vec_push(&Compiler.valueStack, VALUE_VAR(var));
@@ -4468,12 +4487,12 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
             } else if(IsF64(from)) {
                 __CompileAST(exp->typecast.base);
                 jit_value fr=__LoadFuncPtrIntoIntReg("Bit4BitF64ToU64",2);
+                CVariable *var AF_VAR= CreateTmpRegVar(GetIntTmpReg(), CreatePrimType(TYPE_F64));
                 CValue v AF_VALUE=vec_pop(&Compiler.valueStack);
                 jit_prepare(Compiler.JIT);
                 jit_value vr=MoveValueToFltRegIfNeeded(v, 0);
                 jit_fputargr(Compiler.JIT, vr,8);
                 jit_callr(Compiler.JIT, fr);
-                CVariable *var AF_VAR= CreateTmpRegVar(GetIntTmpReg(), CreatePrimType(TYPE_F64));
                 jit_retval(Compiler.JIT, R(var->reg));
                 vec_push(&Compiler.valueStack,VALUE_VAR(var));
             } else {
@@ -4681,6 +4700,8 @@ stuffint:
             long excess=Compiler.valueStack.length-fbt->func.arguments.length-(origstacksz+1);
             argc=excess;
             long offset=jit_allocai(Compiler.JIT, excess*8); //In TempleOS,all arguments are 64bit
+            int tmp_reg;
+            argv=CreateTmpRegVar(tmp_reg=GetIntTmpReg(), CreatePrimType(TYPE_I64));
             while(--excess>=0) {
                 CType *type =AssignTypeToNode(args.data[excess+fbt->func.arguments.length]);
                 CValue top AF_VALUE=vec_pop(&Compiler.valueStack);
@@ -4693,8 +4714,6 @@ stuffint:
                 CValue framev AF_VALUE=VALUE_VAR(frame);
                 CompileAssign(framev,top);
             }
-            int tmp_reg;
-            argv=CreateTmpRegVar(tmp_reg=GetIntTmpReg(), CreatePrimType(TYPE_I64));
             jit_addi(Compiler.JIT, R(tmp_reg), R_FP, offset);
         } else if(hasexcess) {
             char *fs=TypeToString(fbt);
@@ -5335,7 +5354,11 @@ add:
 }
 void ReleaseFunction(CFunction*func) {
     CFunction *f=func;
-    jit_free(f->JIT);
+    //Should have a GC destructor to free JIT
+    TD_FREE(func);
+}
+static void ReleaseFunction2(void *f,void *ul) {
+  jit_free(((CFunction *)f)->JIT);
 }
 AST* CreateReturn(AST *exp) {
     AST *r=TD_CALLOC(1,sizeof(AST));
@@ -5652,7 +5675,9 @@ noreg:
 	}
       }
         jit_disable_optimization(curjit, JIT_OPT_JOIN_ADDMUL); //Seems to mess things up
+        GC_Disable();
         jit_generate_code(curjit,func);
+        GC_Enable();
     }
     //if(Compiler.debugMode)
     //    jit_dump_ops(curjit,1);
@@ -5694,6 +5719,7 @@ noreg:
         vec_deinit(map_get(&Compiler.labelRefs,key));
     map_deinit(&Compiler.labelRefs);
     map_deinit(&Compiler.labels);
+    GC_SetDestroy(func, ReleaseFunction2, NULL);
     return func;
 }
 void AddStringDataToFunc(CFunction *f) {
@@ -5789,7 +5815,9 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
     if(!Compiler.errorFlag) {
         func->relocations=Compiler.currentRelocations;
         jit_disable_optimization(curjit, JIT_OPT_ALL);
+        GC_Disable();
         jit_generate_code(curjit,func);
+        GC_Enable();
         FillFunctionRelocations(func);
         func->stringRelocations=Compiler.stringDatas;
         AddStringDataToFunc(func);
@@ -5820,6 +5848,7 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
     map_deinit(&Compiler.locals);
 
     RestoreCompilerState(old);
+    ReleaseFunction(func);
 }
 void AssignClassBasetype(AST *t,AST *bt) {
     if(TypeSize(t->type2)>TypeSize(bt->type2)) {
@@ -6146,7 +6175,6 @@ void CreateFuncForwardDecl(AST *linkage,CType *rtype,AST *name,AST *args,int has
     switch(linkage->linkage.type) {
     case LINK_NORMAL:
     EXT:
-    map_remove(&Compiler.globals,name->name);
     case LINK_EXTERN:
         Extern(ftype, name, NULL);
         break;
@@ -6165,8 +6193,9 @@ CVariable *Extern(CType *type,AST *name,char *importname) {
     if(!importname)
         importname=name->name;
     CVariable **found=map_get(&Compiler.globals,name->name);
-    if(found&&!strcmp(importname,name->name)) {
+    if(Compiler.allowForwardAfterDefine&&found&&!strcmp(importname,name->name)) {
         found[0]->type=type;
+        found[0]->isInternal=0;
         map_set(&Compiler.globals,importname,*found);
         return *found;
     }
@@ -6189,8 +6218,9 @@ CVariable *Import(CType *type,AST *name,char *importname) {
     if(!importname)
         importname=name->name;
     CVariable **found=map_get(&Compiler.globals, name->name);
-    if(found&&!strcmp(importname,name->name)) {
+    if(Compiler.allowForwardAfterDefine&&found&&!strcmp(importname,name->name)) {
         found[0]->type=type;
+        found[0]->isInternal=0;
         map_set(&Compiler.globals,importname,*found);
         return *found;
     }

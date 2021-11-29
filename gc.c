@@ -326,7 +326,7 @@ void *GC_Realloc(void *ptr,long size) {
 static void CheckPtr(void **ptr,int depth);
 static void ScanRange(void **from,long size,int depth) {
     void **end=(void*)from+size;
-    for(; from+1<=end; from++) {
+    for(; from<end; from++) {
         CheckPtr(from,depth+1);
     }
 }
@@ -342,7 +342,7 @@ static void CheckPtr(void **ptr,int depth) {
         ScanRange(*ptr,info->size,depth);
     }
 }
-static void __GC_Collect(jmp_buf *regs) {
+static void __GC_Collect(jmp_buf *_regs) {
   long origmem=gc.totalMem;
 
     void *dummy=NULL;
@@ -372,6 +372,8 @@ static void __GC_Collect(jmp_buf *regs) {
             printf("ROOTE\n");
         }
     }
+    ExceptBuf regs;
+    HCSetJmp(&regs);
     ScanRange((void*)regs, sizeof(*regs), 0);
     printf("ROOT COUNT:%i\n",rootcount);
     printf("MARKED %li items.\n",items);

@@ -8,7 +8,7 @@ HCRT := HCRT/ASM.HC  HCRT/BITS.HC  HCRT/CHAR.HC  HCRT/COMPRESS.HC  HCRT/FIFO.HC 
 installer.exe: 3Days.nsi 3d.exe HCRT/HCRT.BIN
 	makensis 3Days.nsi
 HCRT/HCRT.BIN: 3d.exe $(HCRT)
-	rm HCRT/HCRT.BIN || ./3d.exe --noruntime -c HCRT/HCRT.BIN HCRT/HCRT.HC
+	rm HCRT/HCRT.BIN || ./3d.exe --noruntime -c HCRT/HCRT.BIN HCRT/HCRT.HC --binheader HCRT/HCRT.HH
 main.obj: main.c
 	$(CC) $(CFLAGS) -c  main.c -g -o $@
 3d.exe:  vec.obj rt.obj exceptWin.obj jitlib-core.obj map.obj compile.obj lexer.obj HolyC.obj unesc.obj tosprn.obj gc.obj debugger.obj rope.obj main.obj at3.obj rl.obj  tags.obj pdcurses.a asm.obj aot.obj

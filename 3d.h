@@ -515,6 +515,8 @@ typedef struct CLexer {
     //Used for #if's
     int isEvalMode:1;
     int isEvalNoCommaMode:1;
+    //This is used generating a single header from some files.It will also not remove macros definitions
+    int preprocessMode:1;
     mrope_t *source;
     lexer_cb_t cb;
     /**
@@ -673,6 +675,7 @@ typedef struct {
     int dontCompile:1;
     int loadedHCRT:1;
     int allowRedeclarations:1;
+    int allowForwardAfterDefine:1;
     //This is used for the code outside of the functions.
     struct jit *AOTMain;
     char *tagsFile;
@@ -940,7 +943,7 @@ int64_t EvalExprNoComma(char *text,char **en);
 void AssignClassBasetype(AST *t,AST *bt);
 void FillFunctionRelocations(CFunction *func);
 void AddStringDataToFunc(CFunction *func);
-void SerializeModule(FILE *f);
+void SerializeModule(FILE *f,char *header) ;
 void SerializeVar(FILE *f,CVariable *var) ;
 void SerializeFunction(FILE *f,CFunction *func);
 CBinaryModule LoadAOTBin(FILE *f,int verbose);
@@ -952,3 +955,4 @@ void PatchLabelExprFunc(CAsmPatch *patch,CFunction *func);
 CVariable *LoadAOTFunction(FILE *f,int verbose,int flags);
 AST *CreateName(char *name);
 CVariable *UniqueGlblVar(CType *type);
+char *PreprocessFile(char *to_include);

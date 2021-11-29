@@ -226,21 +226,24 @@ void* AST2X64Mode(AST* a, int64_t* lab_offset) {
 }
 void* GetRegister(char* name) {
   if(Compiler.tagsFile) return NULL;
-  if(!Compiler.loadedHCRT) return NULL;
+  if(!Compiler.loadedHCRT) return 0;
 
   CVariable** enc = map_get(&Compiler.globals, "GetRegister");
 
   if (!enc) return NULL;
+  if(!enc[0]->func) return NULL;
+  if(!enc[0]->func->funcptr) return NULL;
 
   return ((void* (*)(char*))enc[0]->func->funcptr)(name);
 }
 int IsOpcode(char* name) {
   if(Compiler.tagsFile) return 0;
-  if(!Compiler.loadedHCRT) return NULL;
-
+  if(!Compiler.loadedHCRT) return 0;
   CVariable** enc = map_get(&Compiler.globals, "IsOpcode");
 
   if (!enc) return 0;
+  if(!enc[0]->func) return 0;
+  if(!enc[0]->func->funcptr) return NULL;
 
   return ((int(*)(char*))enc[0]->func->funcptr)(name);
 }

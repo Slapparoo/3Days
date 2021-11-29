@@ -223,5 +223,15 @@ static void ReduceRegisterCount(struct jit *jit,struct CFunction *f) {
       }
     }
   }
+  int64_t iter=0;
+  for(;iter!=info->fp_reg_count;iter++)
+    if(fcolors[iter]==-1)
+      break;
+  info->fp_reg_count=iter+((iter%2)?1:0);
+
+  for(iter=0;iter!=info->gp_reg_count;iter++)
+    if(icolors[iter]==-1)
+      break;
+  info->gp_reg_count=iter+((iter%2)?1:0);
   //jit_dump_ops(jit, JIT_DEBUG_OPS);
 }

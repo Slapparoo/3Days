@@ -329,7 +329,7 @@ void SerializeVar(FILE *f,CVariable *var) {
     int64_t binsize=TypeSize(var->type);
     fwrite(&binsize,1,sizeof(binsize),f);
 }
-void SerializeModule(FILE *f) {
+void SerializeModule(FILE *f,char *header) {
     AST *all=TD_MALLOC(sizeof(AST));
     all->type=AST_STMT_GROUP;
     vec_pusharr(&all->stmts,Compiler.AOTGlobalStmts.data,Compiler.AOTGlobalStmts.length);
@@ -360,8 +360,12 @@ void SerializeModule(FILE *f) {
         }
     }
     //HEADER IDENT
-    fputc(2,f);
-    MakeHeaderForModule(f);
+    if(header) {
+      fputc(2,f);
+      char *buf=PreprocessFile(header);
+      fwrite(buf, 1, strlen(buf), f);
+      TD_FREE(buf);
+    }
 }
 static char *MStrCat(char *a,char *b) {
     char buffer[strlen(a)+strlen(b)+1];
@@ -369,486 +373,10 @@ static char *MStrCat(char *a,char *b) {
     TD_FREE(a),TD_FREE(b);
     return strdup(buffer);
 }
-char *DumpTypeWithName(CType *t,char *name) {
-    char buffer[1024];
-    char *base;
-    switch(t->type) {
-    case TYPE_ARRAY:
-    case TYPE_ARRAY_REF: {
-        base=DumpTypeWithName(t->array.base,name);
-        if(t->array.dim!=-1) {
-            sprintf(buffer,"%s[%ld]",base,t->array.dim);
-        } else {
-            sprintf(buffer,"%s[]",base);
-        }
-        TD_FREE(base);
-        return strdup(buffer);
-        break;
-    }
-    case TYPE_PTR: {
-        if(t->ptr->type==TYPE_FUNC) {
-            base=TypeToString(t->ptr->func.ret);
-            base=MStrCat(base,strdup("(*"));
-            base=MStrCat(base,strdup(name));
-            base=MStrCat(base,strdup(")("));
-            t=t->ptr;
-            goto args;
-        } else {
-            base=TypeToString(t);
-            base=MStrCat(base,strdup(" "));
-            base=MStrCat(base,strdup(name));
-            return base;
-        }
-        break;
-    }
-    case TYPE_FUNC: {
-        base=TypeToString(t->array.base);
-        sprintf(buffer,"%s %s(",base,name);
-        base=strdup(buffer);
-        args:;
-        CType *argt=NULL;long iter;
-        vec_foreach(&t->func.arguments,argt,iter) {
-            if(t->func.names.data[iter]) {
-                char *base2=DumpTypeWithName(argt,t->func.names.data[iter]);
-                base=MStrCat(base,base2);
-                if(!t->func.origDftArgs.data[iter]) {
-                } else {
-                    base=MStrCat(base,strdup("="));
-                    char *dft=DumpExpr(t->func.origDftArgs.data[iter]);
-                    base=MStrCat(base,dft);
-                }
-            } else {
-                base=MStrCat(base,TypeToString(argt));
-            }
-            if(iter+1<t->func.arguments.length)
-                base=MStrCat(base,strdup(","));
-            else if(t->func.hasvargs) {
-                if(t)
-                    base=MStrCat(base,strdup(",..."));
-                else
-                    base=MStrCat(base,strdup("..."));
-            }
-        }
-        base=MStrCat(base,strdup(")"));
-        return base;
-    }
-    case TYPE_UNION:{
-        if(!t->un.name) {
-            return MStrCat(MStrCat(strdup("union "),SerializeMembers(&t->un.members,0)),strdup(name));
-        } else goto normal;
-    }
-    case TYPE_CLASS: {
-        if(!t->cls.name) {
-            return MStrCat(MStrCat(strdup("class "),SerializeMembers(&t->cls.members,0)),strdup(name));
-        } else goto normal;
-    }
-    case TYPE_BOOL:
-    case TYPE_F64:
-    case TYPE_I16:
-    case TYPE_I32:
-    case TYPE_I64:
-    case TYPE_I8:
-    case TYPE_U16:
-    case TYPE_U32:
-    case TYPE_U64:
-    case TYPE_U8:
-    case TYPE_U0: {
-        normal:;
-        char *base=TypeToString(t);
-        sprintf(buffer,"%s %s",base,name);
-        TD_FREE(base);
-        return strdup(buffer);
-        break;
-    }
-    }
-}
 typedef vec_t(vec_int_t) vec_vec_int_t;
 typedef map_t(vec_vec_int_t) map_vec_vec_int_t;
 static int longCmp(const void *a,const void *b) {
     return *(long*)a-*(long*)b;
-}
-static long GetFirstMemberAtOffset(vec_CMember_t *members,long start,long offset) {
-    CMember mem;
-    long iter;
-    vec_foreach(members,mem,iter) {
-        if(iter<start) continue;
-        if(mem.offset==offset) return iter;
-    }
-    abort();
-}
-static char *DumpStreaks(char *ret,long *start_at,vec_CMember_t *members,map_vec_vec_int_t *starts,int where) {
-    char buffer[18];
-    sprintf(buffer,"%ld",where);
-    vec_vec_int_t *streaks=map_get(starts,buffer);
-    long iter2,iter;
-    int idx,added=0;
-    vec_int_t streak;
-    vec_foreach(streaks,streak,iter) {
-        ret=MStrCat(ret,strdup("class {\n"));
-        vec_foreach(&streak,idx,iter2) {
-            if(idx!=*start_at) continue;
-            else (*start_at)++;
-            CMember mem=members->data[idx];
-            sprintf(buffer,"%ld",mem.offset);
-            vec_vec_int_t *find;
-            ret=MStrCat(ret,DumpTypeWithName(mem.type,mem.name));
-            ret=MStrCat(ret,strdup(";\n"));
-            added++;
-        }
-        if(*start_at>members->length) {
-            ret=MStrCat(ret,strdup("};\n"));
-            break;
-        }
-        CMember mem=members->data[*start_at];
-        /**
-         * If union procedes member,group in class,else(LOOK BELOW)
-         */
-        if(!(mem.offset>where))  {
-            ret=MStrCat(ret,strdup("};\n"));
-            continue;
-        }
-        sprintf(buffer,"%ld",mem.offset);
-        vec_vec_int_t *find;
-        if((find=map_get(starts,buffer))&&!(mem.offset==where)) {
-            ret=MStrCat(ret,strdup("union {\n"));
-            ret=DumpStreaks(ret,start_at,members,starts,mem.offset);
-            ret=MStrCat(ret,strdup("};\n"));
-        }
-        /**
-         * Go after class.
-         */
-        if(mem.offset>where) ret=MStrCat(ret,strdup("};\n"));
-    }
-    if(!added) {
-        TD_FREE(ret);
-        return strdup("");
-    }
-    return ret;
-}
-static char *__SerializeMembers(vec_CMember_t *members,long start,long *written) {
-    long current_start=members->data[start].offset;
-    long orig_start=current_start;
-    long break_start=current_start;
-    //Check for sequntal members,if a member precedes or starts at another members offset,it is put in that members start location(which in a union)
-    map_vec_vec_int_t starts;
-    map_init(&starts);
-    long iter=start;
-    char *ret=strdup("");
-    char buffer[18];
-    long switched=0;
-    loop:
-    //Find union starts
-    for(;iter!=members->length;iter++) {
-        if(iter+1<members->length) {
-            long coff=members->data[iter].offset;
-            long noff=members->data[iter+1].offset;
-            //Out of order
-            if(coff>=noff) {
-                sprintf(buffer,"%ld",current_start);
-                //Make a union start
-                #define REGISTER_START \
-                current_start=(coff<noff)?coff:noff; \
-                vec_vec_int_t *prev; \
-                if(prev=map_get(&starts,buffer)) { \
-                } else { \
-                    vec_vec_int_t v; \
-                    vec_init(&v); \
-                    map_set(&starts,buffer,v); \
-                }
-                REGISTER_START;
-                continue;
-            }
-        }
-    }
-    sprintf(buffer,"%ld",current_start);
-    vec_vec_int_t *prev;
-    if(prev=map_get(&starts,buffer)) {
-    } else {
-        vec_vec_int_t v;
-        vec_init(&v);
-        map_set(&starts,buffer,v);
-    }
-    sprintf(buffer,"%ld",members->data[start].offset);
-    vec_vec_int_t*streaks=map_get(&starts,buffer);
-    assert(streaks);
-    //Find streaks
-    vec_int_t cur_streak;
-    vec_init(&cur_streak);
-    current_start=orig_start;
-    for(iter=start;iter!=members->length;iter++) {
-        sprintf(buffer,"%ld",members->data[iter].offset);
-        if(map_get(&starts,buffer)&&cur_streak.length) {
-            sprintf(buffer,"%ld",current_start);
-            vec_vec_int_t *streaks=map_get(&starts,buffer);
-            current_start=members->data[iter].offset;
-            vec_push(streaks,cur_streak);
-            vec_init(&cur_streak);
-        }
-        vec_push(&cur_streak,iter);
-    }
-    if(cur_streak.length) {
-        sprintf(buffer,"%ld",current_start);
-        vec_vec_int_t *streaks=map_get(&starts,buffer);
-        vec_push(streaks,cur_streak);
-    }
-    return DumpStreaks(ret,&start,members,&starts,members->data[start].offset);
-}
-static char *SerializeMembers(vec_CMember_t *members,long start) {
-    char *ret=MStrCat(strdup("{union{"),__SerializeMembers(members,start,NULL));
-    ret=MStrCat(ret,strdup("};}"));
-    return ret;
-}
-typedef struct {
-    vec_str_t in;
-    vec_str_t out;
-    long visited;
-    long indegree;
-} CTypeGraph;
-typedef map_t(CTypeGraph) map_CTypeGraph_t;
-static char *__MakeOrGetTypeNode(map_CTypeGraph_t *world,CType *t) {
-    if(TypeIsForward(t)) return NULL;
-    if(t->isBuiltin) return NULL;
-    if(t->type==TYPE_CLASS||t->type==TYPE_UNION) {
-        char *ret=NULL;
-        if(t->type==TYPE_CLASS) {
-            if(!t->cls.name) return NULL;
-            ret=strdup(t->cls.name);
-        } else {
-            if(!t->un.name) return NULL;
-            ret=strdup(t->un.name);
-        }
-        if(map_get(world,ret)) return ret;
-        CTypeGraph g;
-        vec_init(&g.in);vec_init(&g.out);
-        g.visited=0;
-        map_set(world,t->un.name,g);
-        return ret;
-    }
-    return NULL;
-}
-//Kahn's algorithm
-static vec_CType_t TopoSort(map_CTypeGraph_t graph) {
-    vec_CType_t ret;
-    vec_str_t q;
-    vec_init(&q);
-    vec_init(&ret);
-    map_iter_t miter=map_iter(&graph);
-    long visited=0,total=0;
-    const char *key;
-    while(key=map_next(&graph,&miter)) {
-        CTypeGraph *node=map_get(&graph,key);
-        long ind=node->indegree=node->in.length;
-        if(!ind) {
-                vec_push(&q,strdup(key));
-        }
-        total++;
-    }
-    loop:
-    while(q.length) {
-        char *str=vec_pop(&q),*str2;
-        vec_push(&ret,*map_get(&Compiler.types,str));
-        CTypeGraph *node=map_get(&graph,str);
-        node->indegree=-1;
-        node->visited=visited++;
-        long iter;
-        vec_foreach(&node->out,str2,iter) {
-            CTypeGraph *node=map_get(&graph,str2);
-            if(0==--node->indegree) vec_push(&q,strdup(str2));
-        }
-        TD_FREE(str);
-    }
-    assert(total==visited);
-    return ret;
-}
-//Avoid members from inhirted class/union
-static long UniqueMemberStart(CType *t) {
-    CType *inher=NULL;
-    if(t->type==TYPE_CLASS) inher=t->cls.inheritsFrom;
-    else if(t->type==TYPE_UNION) inher=t->un.inheritsFrom;
-    if(!inher) return 0;
-    if(inher->type==TYPE_CLASS) return inher->cls.members.length;
-    if(inher->type==TYPE_UNION) return inher->un.members.length;
-    return 0;
-}
-//ONLY INCLUDES TYPE BY VALUE ONLY
-static vec_CType_t TypesWithin(CType *t,int recur,int force) {
-    vec_CType_t ret;
-    vec_init(&ret);
-    long iter;
-    CMember mem;
-    switch(t->type) {
-    case TYPE_UNION:
-        if(t->un.inheritsFrom)
-            vec_push(&ret,t->un.inheritsFrom);
-        if(t->un.baseType)
-            vec_push(&ret,t->un.baseType);
-        //Force include anonoymus
-        if((!recur)&&t->un.name&&!force) goto normal;
-        vec_foreach(&t->un.members,mem,iter) {
-            //Recurse if anomus class
-            vec_CType_t arr=TypesWithin(mem.type,1,0);
-            vec_pusharr(&ret,arr.data,arr.length);
-            vec_deinit(&arr);
-            vec_push(&ret,mem.type);
-        }
-    break;
-    case TYPE_CLASS:
-        //CHeck if anoymus
-        if(t->cls.inheritsFrom) vec_push(&ret,t->cls.inheritsFrom);
-        if(t->cls.baseType)
-            vec_push(&ret,t->cls.baseType);
-        //Force include anonoymus
-        if((!recur)&&t->cls.name&&!force) goto normal;
-        vec_foreach(&t->cls.members,mem,iter) {
-            //Recurse if anomus class
-            vec_CType_t arr=TypesWithin(mem.type,1,0);
-            vec_pusharr(&ret,arr.data,arr.length);
-            vec_deinit(&arr);
-            vec_push(&ret,mem.type);
-        }
-    break;
-    case TYPE_PTR:
-        vec_deinit(&ret);
-        return TypesWithin(t->ptr,0,0);
-    case TYPE_FUNC:;
-        vec_CType_t arr=TypesWithin(t->func.ret,1,0);
-        vec_pusharr(&ret,arr.data,arr.length);
-        vec_deinit(&arr);
-        CType *arg;
-        vec_foreach(&t->func.arguments,arg,iter) {
-            vec_CType_t arr=TypesWithin(arg,1,0);
-            vec_pusharr(&ret,arr.data,arr.length);
-            vec_deinit(&arr);
-        }
-        break;
-    case TYPE_ARRAY_REF:
-    case TYPE_ARRAY:
-        if(recur) {
-            vec_CType_t arr=TypesWithin(t->array.base,1,0);
-            vec_push(&ret,t->array.base);
-            vec_pusharr(&ret,arr.data,arr.length);
-            vec_deinit(&arr);
-        }
-        break;
-    default:
-        normal:
-        if(recur) vec_push(&ret,t);
-        break;
-    }
-    return ret;
-}
-static map_CTypeGraph_t CreateTypeGraph() {
-    map_iter_t iter=map_iter(&Compiler.types);
-    const char *key;
-    map_CTypeGraph_t ret;
-    map_init(&ret);
-    while(key=map_next(&Compiler.types,&iter)) {
-        CType *t=*map_get(&Compiler.types,key);
-        if(TypeIsForward(t)) continue;
-        if(t->isBuiltin) continue;
-        vec_CMember_t *mems;
-        if(t->type==TYPE_CLASS) {
-            mems=&t->cls.members;
-        } else if(t->type==TYPE_UNION) {
-            mems=&t->un.members;
-        } else continue;
-        char *cur_node=__MakeOrGetTypeNode(&ret,t);
-        long iter,iter2;
-        vec_CType_t within=TypesWithin(t,1,1);
-        CType *type;
-        vec_foreach(&within,type,iter2) {
-            char *ref=__MakeOrGetTypeNode(&ret,type);
-            if(ref) {
-                vec_push(&map_get(&ret,cur_node)->in,strdup(ref));
-                vec_push(&map_get(&ret,ref)->out,strdup(cur_node));
-            }
-        }
-        vec_deinit(&within);
-        TD_FREE(cur_node);
-    }
-    return ret;
-}
-void MakeHeaderForModule(FILE *header) {
-    //MACROS;
-    map_iter_t iter=map_iter(&Lexer.macros);
-    const char *key;
-    while(key=map_next(&Lexer.macros,&iter)) {
-        CMacro *m=map_get(&Lexer.macros,key);
-        fprintf(header,"#define %s %s\n",key,m->expand);
-    }
-    //TYPE FORWARDS
-    iter=map_iter(&Compiler.types);
-    while(key=map_next(&Compiler.types,&iter)) {
-        CType *type=*map_get(&Compiler.types,key);
-        if(type->isBuiltin) continue;
-        if(type->type==TYPE_CLASS) {
-            fprintf(header,"class %s;\n",key);
-        } else if(type->type==TYPE_UNION) {
-            fprintf(header,"union %s;\n",key);
-        }
-    }
-    //TYPES
-    //TOPOLOGICALLY SORT TYPES BY USAGE TO ENSURE A CORRECT LINE OF DESCENT
-    map_CTypeGraph_t graph=CreateTypeGraph();
-    vec_CType_t sorted=TopoSort(graph);
-    CType *type;long iter2;
-    vec_foreach(&sorted,type,iter2) {
-        if(type->isBuiltin) continue;
-        if(TypeIsForward(type)) continue;
-        if(type->type==TYPE_CLASS) {
-            key=type->cls.name;
-            if(type->cls.baseType) {
-                char *ser=DumpTypeWithName(type->cls.baseType,"");
-                fprintf(header,"%s ",ser);
-                TD_FREE(ser);
-            }
-            fprintf(header,"class %s ",key);
-            if(type->cls.inheritsFrom) {
-                char *ser=DumpTypeWithName(type->cls.inheritsFrom,"");
-                fprintf(header,":%s",ser);
-                TD_FREE(ser);
-            }
-            char * ser=SerializeMembers(&type->cls.members,UniqueMemberStart(type));
-            fprintf(header,"%s;\n",ser);
-        } else if(type->type==TYPE_UNION) {
-            key=type->un.name;
-            if(type->un.baseType) {
-                char *ser=DumpTypeWithName(type->un.baseType,"");
-                fprintf(header,"%s ",ser);
-                TD_FREE(ser);
-            }
-            fprintf(header,"union %s ",key);
-            if(type->un.inheritsFrom) {
-                char *ser=DumpTypeWithName(type->un.inheritsFrom,"");
-                fprintf(header,":%s",ser);
-                TD_FREE(ser);
-            }
-            char * ser=SerializeMembers(&type->un.members,UniqueMemberStart(type));
-            fprintf(header,"%s;\n",ser);
-        }
-    }
-    vec_deinit(&sorted);
-    //FUNCTIONS
-    iter=map_iter(&Compiler.globals);
-    while(key=map_next(&Compiler.globals,&iter)) {
-        CVariable *v=GetVariable((char*)key);
-        if(v->isBuiltin) continue;
-        if(!v->name) continue;
-        if(v->isInternal) continue;
-        char *hd=DumpTypeWithName(v->type,v->name);
-        switch(v->linkage.type) {
-            case LINK_EXTERN:
-            case LINK_NORMAL:
-            case LINK_IMPORT:
-            fprintf(header,"extern %s;\n",hd);
-            break;
-            case LINK__EXTERN:
-            case LINK__IMPORT:
-            fprintf(header,"_extern %s %s;\n",v->linkage.importLink,hd);
-            break;
-        }
-        TD_FREE(hd);
-    }
 }
 static void FuncCodeDestroy(void *mem,void *sz) {
 #ifndef TARGET_WIN32
@@ -923,6 +451,7 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
             var->isGlobal=1;
             var->linkage.type=LINK_NORMAL;
             var->linkage.globalPtr=TD_MALLOC(size);
+            var->isInternal=1;
             char chr;int idx=0;
             while(chr=fgetc(f)) buffer[idx++]=chr;
             buffer[idx]=0;
@@ -980,6 +509,7 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
     v->name=strdup(buffer);
     v->func->name=strdup(buffer);
     v->func->funcInfo.funcSize=code_size;
+    v->isInternal=1;
     GCCreateExtPtr(mem,FuncCodeDestroy,(void*)code_size);
     CBinPatch *pat;
     long iter;
@@ -1061,6 +591,14 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
 }
 CBinaryModule LoadAOTBin(FILE *f,int verbose) {
     char buffer[256];
+    //We will remove any item not in the header. So if we have an intenrnal symbol that shares a name with a global,restore the previous global
+    map_CVariable_t oldGlobals;
+    map_init(&oldGlobals);
+    const char *key;
+    map_iter_t miter=map_iter(&Compiler.globals);
+    while(key=map_next(&Compiler.globals,&miter)) {
+      map_set(&oldGlobals,key,*map_get(&Compiler.globals, key));
+    }
     vec_CVariable_t loaded;
     vec_init(&loaded);
     CVariable *aaMain=NULL;
@@ -1088,7 +626,7 @@ CBinaryModule LoadAOTBin(FILE *f,int verbose) {
                     v->linkage.globalPtr=TD_MALLOC(size);
                     v->linkage.type=LINK_NORMAL;
                     v->name=strdup(buffer);
-                    v->isInternal=is_internal;
+                    v->isInternal=1;
                     map_set(&Compiler.globals,buffer,v);
 
                     if(verbose) {
@@ -1143,7 +681,25 @@ CBinaryModule LoadAOTBin(FILE *f,int verbose) {
     CLexer old=ForkLexer(PARSER_HOLYC);
     Lexer.replMode=0;
     mrope_append_text(Lexer.source,strdup(header_text));
+    Compiler.allowForwardAfterDefine=1;
     HC_parse();
+    Compiler.allowForwardAfterDefine=0;
     JoinWithOldLexer(old);
+    //Remove all internal variables(they can be made external in the header.) Restore any old globals that share a name with an intenal variable
+    miter=map_iter(&module.vars);
+    while(key=map_next(&module.vars,&miter)) {
+      CVariable **find=map_get(&Compiler.globals, key);
+      if(find) {
+        if(find[0]->isInternal) {
+          CVariable **old;
+          if(old=map_get(&oldGlobals,key)) {
+            map_set(&Compiler.globals,key,old[0]);
+          } else {
+            map_remove(&Compiler.globals, key);
+          }
+        }
+      }
+    }
+    map_deinit(&oldGlobals);
     return module;
 }

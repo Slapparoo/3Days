@@ -6,7 +6,7 @@ all: 3d_tests 3d
 	echo "Done"
 HCRT := HCRT/ASM.HC  HCRT/BITS.HC  HCRT/CHAR.HC  HCRT/COMPRESS.HC  HCRT/FIFO.HC  HCRT/FILE.HC  HCRT/FS.HC  HCRT/HASH.HC  HCRT/HCRT.HC  HCRT/MATH.HC  HCRT/Opcodes.DD  HCRT/PRINT.HC  HCRT/QSORT.HC
 HCRT/HCRT.BIN: 3d $(HCRT)
-	./3d --noruntime -c HCRT/HCRT.BIN HCRT/HCRT.HC
+	./3d --noruntime -c HCRT/HCRT.BIN HCRT/HCRT.HC --binheader HCRT/HCRT.HH
 package: HCRT/HCRT.BIN 3d FreeBSD_pkg.sh
 	tcsh FreeBSD_pkg.sh
 main.o: main.c

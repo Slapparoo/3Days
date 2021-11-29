@@ -97,15 +97,6 @@ asm {
 };
  x+=10;
 }
-U0 Foo() {
-	asm {
-		IMPORT Hello;
-		MOV RAX, Hello;
-		CALL RAX;
-
-	};
-	return;
-}
 _import C_HELLO U0 Hi();
 Hi;
 Dummy;

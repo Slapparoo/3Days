@@ -22,6 +22,7 @@ static struct arg_file *includeArg;
 static struct arg_file *tagsArg;
 static struct arg_file *errsFile;
 static struct arg_file *compileTo;
+static struct arg_file *binHeader;
 static struct arg_lit *noRuntime;
 ExceptBuf SigPad;
 char CompilerPath[1024];
@@ -83,6 +84,7 @@ int main(int argc,char **argv) {
         compileTo=arg_file0("c","compile","<file>","Compile code to a .BIN file for faster loading."),
         noRuntime=arg_lit0(NULL,"noruntime","Don't include the runtime(useful for compiling the runtime)."),
         includeArg=arg_filen(NULL, NULL, "<file>", 0, 1024, "Files to include after loading."),
+        binHeader=arg_file0(NULL, "binheader", "<file>", "Header to embed in the binary."),
         endArg=arg_end(1),
     };
     int errs=arg_parse(argc, argv, argtable);
@@ -170,6 +172,7 @@ int main(int argc,char **argv) {
         if(0==access(HCRT_INSTALLTED_DIR,F_OK)) {
             sprintf(buffer, "#include \"%s\"", HCRT_INSTALLTED_DIR);
             mrope_append_text(Lexer.source, strdup(buffer));
+            Compiler.loadedHCRT=1;
         } else {
             /*
           strcpy(buffer,argv[0]);
@@ -188,6 +191,7 @@ int main(int argc,char **argv) {
         unescapeString(buffer,buffer2);
         sprintf(buffer, "#include \"%s\"", strdup(buffer2));
         mrope_append_text(Lexer.source, strdup(buffer));
+        Compiler.loadedHCRT=1;
       }
     #endif
     }
@@ -249,7 +253,10 @@ set:
                 abort();
         }
         FILE *f=fopen(binf,"wb");
-        SerializeModule(f);
+        char *head=NULL;
+        if(binHeader->count)
+          head=binHeader->filename[0];
+        SerializeModule(f,head);
         fclose(f);
     }
     arg_freetable(argtable, sizeof(argtable)/sizeof(*argtable));

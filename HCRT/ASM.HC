@@ -1,4 +1,4 @@
-U8 *SkipComment(U8 *text) {
+static U8 *SkipComment(U8 *text) {
     loop:
     U8 *orig=text;
     if(0==StrNCmp(text,"/*",2)) {
@@ -1272,4 +1272,3 @@ EncodeOpcode(buffer,"ADD",rm8,r8);
 "MOVSX R64,RM8\n";
 EncodeOpcode(buffer,"MOVSX",r64,rm8);
 */
-

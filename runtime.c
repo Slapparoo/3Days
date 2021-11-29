@@ -75,16 +75,18 @@ static void ExitCatch() {
     }
 }
 static struct jit_op *CompileEnterTry() {
+    jit_value fr=MoveGlobalPtrToReg(GetVariable("EnterTry"), 2);
     jit_prepare(Compiler.JIT);
-    jit_call(Compiler.JIT,EnterTry);
+    jit_callr(Compiler.JIT,fr);
     jit_retval(Compiler.JIT, R(0));
+    fr=MoveGlobalPtrToReg(GetVariable("HCSetJmp"), 2);
     jit_prepare(Compiler.JIT);
     jit_putargr(Compiler.JIT, R(0));
     jit_putargi(Compiler.JIT, 1);
 #ifndef TARGET_WIN32
-    jit_call(Compiler.JIT,&HCSetJmp);
+    jit_callr(Compiler.JIT,fr);
 #else
-    jit_call(Compiler.JIT,&HCSetJmp);
+    jit_callr(Compiler.JIT,fr);
 #endif
     jit_retval(Compiler.JIT, R(0));
     return jit_bnei(Compiler.JIT, (jit_value)NULL,R(0),0);
@@ -95,8 +97,9 @@ static void CompileCatch(AST *catch,struct jit_op *patch) {
      *    ...
      */
     //Pop the exception frame,we shouldnt have thrown if we are here
+    jit_value fr=MoveGlobalPtrToReg(GetVariable("PopTryFrame"), 2);
     jit_prepare(Compiler.JIT);
-    jit_call(Compiler.JIT, PopTryFrame);
+    jit_callr(Compiler.JIT, fr);
     struct jit_op *jmp=jit_jmpi(Compiler.JIT, (jit_value)NULL);
     /**
      * catch {...}
@@ -105,8 +108,9 @@ static void CompileCatch(AST *catch,struct jit_op *patch) {
     __CompileAST(catch);
     //Throw again
     ReleaseValue(&vec_pop(&Compiler.valueStack));
+    fr=MoveGlobalPtrToReg(GetVariable("ExitCatch"), 2);
     jit_prepare(Compiler.JIT);
-    jit_call(Compiler.JIT, ExitCatch);
+    jit_callr(Compiler.JIT, fr);
     jit_patch(Compiler.JIT,jmp);
 }
 void CompileTry(AST *t) {
@@ -482,6 +486,10 @@ void RegisterBuiltins() {
     CType *cfileptr =CreatePtrType(cfile);
     CType *wind =CreateClassForwardDecl(NULL, CreateDummyName("WINDOW"));
     CType *windp =CreatePtrType(wind);
+    CreateBuiltin(&HCSetJmp,u0,"HCSetJmp",0,NULL);
+    CreateBuiltin(&PopTryFrame,u0,"PopTryFrame",0,NULL);
+    CreateBuiltin(&EnterTry,u0,"EnterTry",0,NULL);
+    CreateBuiltin(&ExitCatch,u0,"ExitCatch",0,NULL);
     CreateBuiltin(&TOSPrint,u0,"TOSPrint",1,u8p,NULL);
     CreateBuiltin(&PowU64,u64,"PowU64",0,u64,u64,NULL);
     CreateBuiltin(&PowI64,i64,"PowI64",0,i64,i64,NULL);

@@ -346,7 +346,7 @@ U8 *GetStr(U8 *msg=NULL,U8 *dft=NULL,I64 flags=0)
 {//Returns a $LK,"MAlloc",A="MN:MAlloc"$()ed prompted string.  See $LK,"Flags",A="MN:GSF_SHIFT_ESC_EXIT"$.
   U8 *st;
   if (msg)
-    "%s\n",msg;
+    "%s",msg;
   st=__GetStr;
   if (!*st) {
     Free(st);

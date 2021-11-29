@@ -526,10 +526,10 @@ void jit_free(struct jit * jit)
     jit_reg_allocator_free(jit->reg_al);
     free_ops(jit_op_first(jit->ops));
     free_labels(jit->labels);
-    if(jit->buf) TD_FREE(jit->buf);
 #ifndef TARGET_WIN32
 	munmap(jit->buf,jit->ip-jit->buf);
 #else
 	VirtualFree(jit->buf,0,MEM_RELEASE);
 #endif
+	JIT_FREE(jit);
 }

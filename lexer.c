@@ -801,7 +801,8 @@ int LexMacro() {
         map_set(&Lexer.macros, mname, macro);
         //
 define_splice:
-        SpliceToCurrentFromBehind(orig_pos);
+        if(!Lexer.preprocessMode)
+          SpliceToCurrentFromBehind(orig_pos);
     } else if(0==strcmp(word,"exe")) {
         ret=1;
         //This will cuase a HC_EXE token to be sent
@@ -1915,4 +1916,29 @@ CLexer ForkLexer(int whichparser) {
         map_set(&Lexer.macros,macro.name,macro);
     }
     return old;
+}
+char *PreprocessFile(char *to_include) {
+  CLexer old=Lexer;
+  //Include a fresh lexer
+  CreateLexer(PARSER_HOLYC);
+  Lexer.preprocessMode=1;
+  char buffer[1024];
+  FILE *f2=fopen(to_include, "rb");
+  fseek(f2, 0, SEEK_END);
+  long end=ftell(f2);
+  fseek(f2, 0, SEEK_SET);
+  long start=ftell(f2);
+  char *buf=TD_MALLOC(end-start+1);
+  fread(buf, 1, end-start, f2);
+  fclose(f2);
+  __InsertSrcText(0, buf);
+  TD_FREE(buf);
+  Lexer.replMode=Lexer.isFreeToFlush=0;
+  while(LEXER_PEEK()) {
+      ReleaseAST(LexItem());
+  }
+  char *r=rope2str(Lexer.source);
+  DestroyLexer();
+  Lexer=old;
+  return r;
 }
