@@ -25,6 +25,7 @@ typedef struct TOS_Fs {
     uint64_t except_ch;
     uint64_t catch_except;
     int64_t rand_seed;
+    void *last_cc;
 } TOS_Fs;
 static __thread TOS_Fs Fs;
 void *GetFs() {
@@ -40,8 +41,146 @@ ExceptFrame *EnterTry() {
     ExceptFrame *new=TD_MALLOC(sizeof(ExceptFrame));
     new->parent=curframe;
     curframe=new;
+    #ifdef BOOTSTRAPED
     new->callStackSize=Debugger.callStack.length;
+    #endif
     return new;
+}
+static AST *HC_CreateI64(int64_t i) {
+    AST *r=TD_MALLOC(sizeof(AST));
+    r->type=AST_INT;
+    r->integer=i;
+    return r;
+}
+static AST *HC_CreateF64(double f) {
+    AST *r=TD_MALLOC(sizeof(AST));
+    r->type=AST_FLOAT;
+    r->floating=f;
+    return r;
+}
+static AST *HC_CreateStr(char *str) {
+    AST *r=TD_MALLOC(sizeof(AST));
+    r->type=AST_STRING;
+    r->string=strdup(str);
+    return r;
+}
+static AST *HC_SetPosFromLexer(AST *node,char *fn,long line) {
+    node->fn=fn;
+    node->ln=line;
+    return node;
+}
+#include "LEXER.HH"
+#include "HolyC.tab.h"
+static AST *HC_CreateToken(int64_t tok) {
+    AST *r=TD_MALLOC(sizeof(AST));
+    r->type=AST_TOKEN;
+    switch(tok) {
+      case TK_EOF: r->tokenAtom=0;  break;
+      case TK_PLUS_PLUS:  r->tokenAtom=HC_INC; break;
+      case TK_MINUS_MINUS: r->tokenAtom=HC_DEC; break;
+      case TK_DEREFERENCE: r->tokenAtom=HC_ARROW; break;
+      case TK_DBL_COLON: r->tokenAtom=HC_DOUBLE_COLON; break;
+      case TK_SHL: r->tokenAtom=HC_SHL; break;
+      case TK_SHR: r->tokenAtom=HC_SHR; break;
+      case TK_EQU_EQU: r->tokenAtom=HC_EQ; break;
+      case TK_NOT_EQU: r->tokenAtom=HC_NE; break;
+      case TK_LESS_EQU: r->tokenAtom=HC_LE; break;
+      case TK_GREATER_EQU: r->tokenAtom=HC_GE; break;
+      case TK_AND_AND: r->tokenAtom=HC_LAND; break;
+      case TK_OR_OR: r->tokenAtom=HC_LOR; break;
+      case TK_XOR_XOR: r->tokenAtom=HC_LXOR; break;
+      case TK_SHL_EQU	: r->tokenAtom=HC_EQ_SHL; break;
+      case TK_SHR_EQU:	r->tokenAtom=HC_EQ_SHR; break;
+      case TK_MUL_EQU: r->tokenAtom=HC_EQ_MUL; break;
+      case TK_DIV_EQU:	r->tokenAtom=HC_EQ_DIV; break;
+      case TK_AND_EQU: r->tokenAtom=HC_EQ_BAND; break;
+      case TK_OR_EQU: r->tokenAtom=HC_EQ_BOR; break;
+      case TK_XOR_EQU: r->tokenAtom=HC_EQ_BXOR; break;
+      case TK_ADD_EQU: r->tokenAtom=HC_EQ_ADD; break;
+      case TK_SUB_EQU: r->tokenAtom=HC_EQ_SUB; break;
+      case TK_IF: r->tokenAtom=HC_IF; break;
+      case TK_ELSE: r->tokenAtom=HC_ELSE; break;
+      case TK_MOD_EQU: r->tokenAtom=HC_EQ_MOD; break;
+      case TK_ELLIPSIS:r->tokenAtom=HC_DOT_DOT_DOT; break;
+      case '.': r->tokenAtom=HC_DOT; break;
+      case '!': r->tokenAtom=HC_LNOT; break;
+      case '~': r->tokenAtom=HC_BNOT; break;
+      case '>': r->tokenAtom=HC_GT; break;
+      case '<': r->tokenAtom=HC_LT; break;
+      case '`': r->tokenAtom=HC_POW; break;
+      case '*': r->tokenAtom=HC_MUL; break;
+      case '/': r->tokenAtom=HC_DIV; break;
+      case '%': r->tokenAtom=HC_MOD; break;
+      case '+': r->tokenAtom=HC_ADD; break;
+      case '-': r->tokenAtom=HC_SUB; break;
+      case '=': r->tokenAtom=HC_ASSIGN; break;
+      case ',': r->tokenAtom=HC_COMMA; break;
+      case '{': r->tokenAtom=HC_LEFT_CURLY; break;
+      case '[': r->tokenAtom=HC_LEFT_SQAURE; break;
+      case '(': r->tokenAtom=HC_LEFT_PAREN; break;
+      case '}': r->tokenAtom=HC_RIGHT_CURLY; break;
+      case ']': r->tokenAtom=HC_RIGHT_SQAURE; break;
+      case ')': r->tokenAtom=HC_RIGHT_PAREN; break;
+      case ';': r->tokenAtom=HC_SEMI; break;
+      case ':': r->tokenAtom=HC_COLON; break;
+      case '&': r->tokenAtom=HC_BAND; break;
+      case '|': r->tokenAtom=HC_BOR; break;
+      case '^': r->tokenAtom=HC_BXOR; break;
+      default: printf("Unkown token %d\n",tok); abort();
+    }
+    return r;
+}
+static AST *HC_CreateIdent(char *id) {
+    AST *r=TD_MALLOC(sizeof(AST));
+    const struct {
+        const char *name;
+        int code;
+    } kws[]={{"union",HC_UNION},
+        {"catch",HC_CATCH},
+        {"class",HC_CLASS},
+        {"try",HC_TRY},
+        {"if",HC_IF},
+        {"else",HC_ELSE},
+        {"for",HC_FOR},
+        {"while",HC_WHILE},
+        {"extern",HC_EXTERN},
+        {"_extern",HC_EXTERN2},
+        {"return",HC_RET},
+        {"sizeof",HC_SIZEOF},
+        {"intern",HC_INTERN},
+        {"do",HC_DO},
+        {"goto",HC_GOTO},
+        {"break",HC_BREAK},
+        {"switch",HC_SWITCH},
+        {"start",HC_START},
+        {"end",HC_END},
+        {"case",HC_CASE},
+        {"default",HC_DEFAULT},
+        {"public",HC_PUBLIC},
+        {"import",HC_IMPORT},
+        {"_import",HC_IMPORT2},
+        {"lastclass",HC_LASTCLASS},
+        {"static",HC_STATIC},
+        {"DU8",HC_DU8},
+        {"DU16",HC_DU16},
+        {"DU32",HC_DU32},
+        {"DU64",HC_DU64},
+        {"ALIGN",HC_ALIGN},
+        {"BINFILE",HC_BINFILE},
+        {"asm",HC_ASM},
+        {"IMPORT",HC_ASM_IMPORT},
+    };
+    long count=sizeof(kws)/sizeof(*kws);
+    while(--count>=0) {
+        if(!strcmp(kws[count].name,id)) {
+            r->type=AST_TOKEN ;
+            r->tokenAtom=kws[count].code;
+            return r;
+        }
+    }
+    r->type=AST_NAME;
+    r->name=strdup(id);
+    return r;
 }
 void PopTryFrame() {
     ExceptFrame *c=curframe;
@@ -49,17 +188,28 @@ void PopTryFrame() {
     TD_FREE(curframe);
     curframe=par;
 }
-static void GCollect() {
-  GC_Enable();
-  GC_Collect();
-  GC_Disable();
+static void GC_Free(void *ptr) {
+    tgc_free(&gc,ptr);
 }
-static void throw(uint64_t val) {
+static void *GC_Malloc(size_t sz) {
+    return TD_MALLOC(sz);
+}
+static size_t MSize2(void *ptr) {
+    return tgc_get_size(&gc,ptr);
+}
+static void GCollect() {
+  tgc_resume(&gc);
+  tgc_run(&gc);
+  tgc_pause(&gc);
+}
+void throw(uint64_t val) {
     assert(curframe); //TODO
     Fs.except_ch=val;
     Fs.catch_except=0;
     ExceptFrame old=*curframe;
+    #ifdef BOOTSTRAPED
     vec_truncate(&Debugger.callStack,curframe->callStackSize);
+    #endif
     PopTryFrame();
     HCLongJmp(old.pad);
 }
@@ -157,6 +307,7 @@ static int64_t PowI64(int64_t x,int64_t n) {
     return x*y;
 }
 static void CreateBuiltin(void *fptr,CType *rtype,char *name,int hasvargs,...) {
+    if(GetVariable(name)) return ;
     va_list list;
     va_start(list,hasvargs);
     CType *ftype=TD_MALLOC(sizeof(CType));
@@ -187,8 +338,8 @@ static AST *CreateDummyName(char *text) {
     t->name=strdup(text);
     return t;
 }
-static char *__GetStr() {
-    return rl("");
+static char *__GetStr(char*txt) {
+    return rl(txt);
 }
 static FILE *FOpen(char *fn,char *flags,long cnt) {
     return fopen(fn,flags);
@@ -230,11 +381,14 @@ static char *FileNameAbs(char *fn) {
 
 #ifndef TARGET_WIN32
     char *d=realpath(fn,NULL);
+    if(!d) return NULL;
     char *ret=strdup(d);
     free(d);
     return ret;
 #else
     char buf[1024];
+    if(GetFileAttributesA(fn)==INVALID_FILE_ATTRIBUTES)
+      return NULL;
     GetFullPathNameA(fn,1024,buf,NULL);
     return strdup(buf);
 #endif
@@ -251,7 +405,7 @@ static int64_t FileWrite(char *fn,void *data,int64_t sz) {
     fclose(f);
     return 1;
 }
-static void* FileRead(char *fn,int64_t *sz) {
+void* FileRead(char *fn,int64_t *sz) {
     FILE *f=fopen(fn,"rb");
     if(!f) return NULL;
     long len=FSize(f);
@@ -283,12 +437,22 @@ static int64_t IsWindows() {
 static int64_t ColorPair(int64_t i) {
     return COLOR_PAIR(i);
 }
+#ifndef BOOTSTRAPED
 void CreateMacroInt(char *name,int64_t i) {
     char buffer[128];
     sprintf(buffer,"%ld",i);
     CMacro macro= {strdup(name),strdup(buffer)};
     map_set(&Lexer.macros,name,macro);
 }
+#else
+void CreateMacroInt(char *name,int64_t i) {
+    if(!GetVariable("LexIncludeStr")) return;
+    char buffer[128];
+    sprintf(buffer,"#define %s %ld\n",name,i);
+    void(*inc)(void*cc,char *fn,char *src,int64_t act_f)=(void*)GetVariable("LexIncludeStr")->func->funcptr;
+    inc(Lexer.HCLexer,"(nofile)",strdup(buffer),0);
+}
+#endif
 static void WMove(void *w,int64_t y,int64_t x) {
     wmove(w, y, x);
 }
@@ -320,21 +484,26 @@ void GetParYX(WINDOW *w,int64_t *y,int64_t *x) {
 WINDOW *StdScr() {
     return stdscr;
 }
+static void LoadBinFile(char *name) {
+  FILE *f=fopen(name,"rb");
+  LoadAOTBin(f,0);
+  fclose(f);
+}
 void CreateBinFile(char *bin,char *root) {
   char buffer[2048];
   strcpy(buffer,CompilerPath);
   strcat(buffer," -s -c ");
   strcat(buffer,bin);
   if(root) {
-        strcat(buffer," ");
-        strcat(buffer,root);
+      strcat(buffer," ");
+      strcat(buffer,root);
   }
   system(buffer);
 }
 void CreateTagsAndErrorsFiles(char *tags,char *errs,char *root) {
   char buffer[2048];
   strcpy(buffer,CompilerPath);
-  strcat(buffer," -s ");
+  strcat(buffer," -s");
   if(tags) {
         sprintf(buffer+strlen(buffer)," -t %s ",tags);
   }
@@ -354,15 +523,10 @@ static void TestMixed(int a, double b, int c, double d, int e, double f) {
   printf("%d,%lf,%d,%lf,%d,%lf\n",a,b,c,d,e,f);
 }
 static void MVWCHGAT(WINDOW *w,int64_t y,int64_t x,int64_t n,int64_t a,int64_t c,void *opts) {
-  register long rsp asm ("rsp");
-  assert(rsp%16==0);
-  FILE *f=fopen("TAODS","w");
-  double toads=a+1.2;
-  fprintf(f,"%lld,%lld,%lld,%lld,%lld,%lld,%lld,%p\n",w,y,x,n,A_REVERSE,c,opts,rsp);
-  fclose(f);
   mvwchgat(w,y,x,n,a,c,opts);
 }
 void AddMemberToClass(CType *cls,CType *t,char* name,long offset) {
+    if(!cls) return;
     CMember mem;
     memset(&mem,0,sizeof(mem));
     mem.name=strdup(name);
@@ -371,6 +535,7 @@ void AddMemberToClass(CType *cls,CType *t,char* name,long offset) {
     vec_push(&cls->cls.members,mem);
 }
 void AddMemberToClassBySize(CType *cls,long size,char* name,long offset) {
+    if(!cls) return;
     CMember mem;
     memset(&mem,0,sizeof(mem));
     mem.name=strdup(name);
@@ -384,6 +549,7 @@ void AddMemberToClassBySize(CType *cls,long size,char* name,long offset) {
     vec_push(&cls->cls.members,mem);
 }
 void UAddMemberToClassBySize(CType *cls,long size,char* name,long offset) {
+    if(!cls) return;
     CMember mem;
     memset(&mem,0,sizeof(mem));
     mem.name=strdup(name);
@@ -397,6 +563,7 @@ void UAddMemberToClassBySize(CType *cls,long size,char* name,long offset) {
     vec_push(&cls->cls.members,mem);
 }
 static CType *CreateEmptyClass(char *name,long size,long align) {
+    if(map_get(&Compiler.types,name)) return NULL;
     CType *t=TD_MALLOC(sizeof(CType));
     t->isBuiltin=1;
     t->type=TYPE_CLASS;
@@ -486,6 +653,14 @@ void RegisterBuiltins() {
     CType *cfileptr =CreatePtrType(cfile);
     CType *wind =CreateClassForwardDecl(NULL, CreateDummyName("WINDOW"));
     CType *windp =CreatePtrType(wind);
+    //
+    CreateBuiltin(&HC_CreateF64,u0p,"HC_CreateF64",0,f64,NULL);
+    CreateBuiltin(&HC_CreateI64,u0p,"HC_CreateI64",0,i64,NULL);
+    CreateBuiltin(&HC_CreateToken,u0p,"HC_CreateToken",0,i64,NULL);
+    CreateBuiltin(&HC_CreateStr,u0p,"HC_CreateStr",0,u8p,NULL);
+    CreateBuiltin(&HC_CreateIdent,u0p,"HC_CreateIdent",0,u8p,NULL);
+    CreateBuiltin(&HC_SetPosFromLexer,u0p,"HC_SetPosFromLexer",0,u0p,u8p,i64,NULL);
+    //
     CreateBuiltin(&HCSetJmp,u0,"HCSetJmp",0,NULL);
     CreateBuiltin(&PopTryFrame,u0,"PopTryFrame",0,NULL);
     CreateBuiltin(&EnterTry,u0,"EnterTry",0,NULL);
@@ -494,12 +669,18 @@ void RegisterBuiltins() {
     CreateBuiltin(&PowU64,u64,"PowU64",0,u64,u64,NULL);
     CreateBuiltin(&PowI64,i64,"PowI64",0,i64,i64,NULL);
     CreateBuiltin(&fmod,f64,"FMod",0,f64,f64,NULL);
+    #ifdef BOOTSTRAPED
     CreateBuiltin(&WhineOnOutOfBounds,u0,"WhineOnOutOfBounds",0,u0p,i64,NULL);
-    CreateBuiltin(&Bit4BitU64ToF64,f64,"Bit4BitU64ToF64",0,u64,NULL);
-    CreateBuiltin(&Bit4BitF64ToU64,u64,"Bit4BitF64ToU64",0,f64,NULL);
     CreateBuiltin(&DbgLeaveFunction,u0,"DbgLeaveFunction",0,NULL);
     CreateBuiltin(&VisitBreakpoint,u0,"VisitBreakpoint",0,u0p,NULL);
     CreateBuiltin(&DbgEnterFunction,u0,"DbgEnterFunction",0,u0p,u0p,NULL);
+    CreateBuiltin(&EnterDebugger, u0, "Debugger",0,NULL);
+    CreateBuiltin(&__LexExe,u0,"__LexExe",0,NULL);
+    #else
+    CreateBuiltin(NULL,u0,"__LexExe",0,NULL);
+    #endif
+    CreateBuiltin(&Bit4BitU64ToF64,f64,"Bit4BitU64ToF64",0,u64,NULL);
+    CreateBuiltin(&Bit4BitF64ToU64,u64,"Bit4BitF64ToU64",0,f64,NULL);
     CreateBuiltin(&F64And,f64,"F64And",0,f64,f64,NULL);
     CreateBuiltin(&F64Xor,f64,"F64Xor",0,f64,f64,NULL);
     CreateBuiltin(&F64Or,f64,"F64Or",0,f64,f64,NULL);
@@ -507,10 +688,11 @@ void RegisterBuiltins() {
     CreateBuiltin(&F64Shl,f64,"F64Shl",0,f64,i64,NULL);
     CreateBuiltin(&pow,f64,"Pow",0,f64,f64,NULL);
     CreateBuiltin(&CreateBinFile,u0,"CreateBinFile",0,u8p,u8p,NULL);
+    CreateBuiltin(&LoadBinFile,u0,"LoadBinFile",0,u8p,NULL);
     CreateBuiltin(&EvalExprNoComma,i64,"JIT_Eval",0,u8p,u8pp,NULL);
     CreateBuiltin(&GCollect,u0,"GC_Collect",0,NULL);
     CreateBuiltin(&CreateTagsAndErrorsFiles,u0,"CreateTagsAndErrorsFiles",0,u8p,u8p,u8p,NULL);
-    CreateBuiltin(&MSize, i64, "MSize",0, u0p,NULL);
+    CreateBuiltin(&MSize2, i64, "MSize",0, u0p,NULL);
     CreateBuiltin(&BFFS, i64, "Bsf",0, i64,NULL);
     CreateBuiltin(&BCLZ, i64, "Bsr",0, i64,NULL);
     CreateBuiltin(&nonl,u0,"nonl",0,NULL);
@@ -521,13 +703,12 @@ void RegisterBuiltins() {
     CreateBuiltin(&MemNCpy, u0p, "MemNCpy",0, u0p,u0p,i64,NULL);
     CreateBuiltin(&strlen, i64, "StrLen",0, u8p,NULL);
     CreateBuiltin(&strcmp, i64, "StrCmp",0, u8p,u8p,NULL);
-    CreateBuiltin(&EnterDebugger, u0, "Debugger",0,NULL);
     CreateBuiltin(&strncmp, i64, "StrNCmp",0,u8p,u8p,i64,NULL);
     CreateBuiltin(&strcpy, u8p, "StrCpy",0,u8p,u8p,NULL);
     CreateBuiltin(&strncpy, u8p, "StrNCpy",0,u8p,u8p,i64,NULL);
     CreateBuiltin(&strstr, u8p, "StrMatch",0,u8p,u8p,NULL);
     CreateBuiltin(&GetFs, cfsptr, "Fs",0,NULL);
-    CreateBuiltin(&__GetStr, u8p, "__GetStr",0,NULL);
+    CreateBuiltin(&__GetStr, u8p, "__GetStr",0,u8p,NULL);
     CreateBuiltin(&atan, f64,"ATan", 0,f64,NULL);
     CreateBuiltin(&fabs, f64, "Abs",0,f64,NULL);
     CreateBuiltin(&cos, f64, "Cos", 0,f64,NULL);
@@ -780,17 +961,6 @@ CreateMacroInt("ALT_Z",ALT_Z);
         ADD_PRIM_MEMBER(sdlevent_t,SDL_Event,type);
         {
             CreateMacroInt("SDL_WINDOWEVENT",SDL_WINDOWEVENT);
-            CreateMacroInt("SDL_WINDOWEVENT_SHOWN",SDL_WINDOWEVENT_SHOWN);
-            CreateMacroInt("SDL_WINDOWEVENT_HIDDEN",SDL_WINDOWEVENT_HIDDEN);
-            CreateMacroInt("SDL_WINDOWEVENT_EXPOSED",SDL_WINDOWEVENT_EXPOSED);
-            CreateMacroInt("SDL_WINDOWEVENT_MOVED",SDL_WINDOWEVENT_MOVED);
-            CreateMacroInt("SDL_WINDOWEVENT_RESIZED",SDL_WINDOWEVENT_RESIZED);
-            CreateMacroInt("SDL_WINDOWEVENT_MINIMIZED",SDL_WINDOWEVENT_MINIMIZED);
-            CreateMacroInt("SDL_WINDOWEVENT_MAXIMIZED",SDL_WINDOWEVENT_MAXIMIZED);
-            CreateMacroInt("SDL_WINDOWEVENT_RESTORED",SDL_WINDOWEVENT_RESTORED);
-            CreateMacroInt("SDL_WINDOWEVENT_ENTER",SDL_WINDOWEVENT_ENTER); //Mouse
-            CreateMacroInt("SDL_WINDOWEVENT_LEAVE",SDL_WINDOWEVENT_LEAVE); //Mouse
-            CreateMacroInt("SDL_WINDOWEVENT_CLOSE",SDL_WINDOWEVENT_CLOSE);
             CType *sdlevent_wind_t=IMPORT_CLASS_WO_MEMBERS(SDL_WindowEvent);
             ADD_UPRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,type);
             ADD_UPRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,timestamp);

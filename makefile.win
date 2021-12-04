@@ -5,57 +5,103 @@ CFLAGS :=  -g -O0 -Wreturn-type -DUSEGC -DTARGET_WIN32 -I./ext/PDCurses-3.9/ -DN
 all: 3d_tests.exe 3d.exe
 	echo "Done"
 HCRT := HCRT/ASM.HC  HCRT/BITS.HC  HCRT/CHAR.HC  HCRT/COMPRESS.HC  HCRT/FIFO.HC  HCRT/FILE.HC  HCRT/FS.HC  HCRT/HASH.HC  HCRT/HCRT.HC  HCRT/MATH.HC  HCRT/Opcodes.DD  HCRT/PRINT.HC  HCRT/QSORT.HC
+B_OBJS :=vec.bootstrap.obj rt.bootstrap.obj exceptWin.bootstrap.obj jitlib-core.bootstrap.obj map.bootstrap.obj compile.bootstrap.obj lexer.bootstrap.obj HolyC.bootstrap.obj unesc.bootstrap.obj tosprn.bootstrap.obj gc.bootstrap.obj debugger.bootstrap.obj rope.bootstrap.obj at3.bootstrap.obj rl.bootstrap.obj  tags.bootstrap.obj pdcurses.a asm.bootstrap.obj aot.bootstrap.obj
 installer.exe: 3Days.nsi 3d.exe HCRT/HCRT.BIN
 	makensis 3Days.nsi
-HCRT/HCRT.BIN: 3d.exe $(HCRT)
-	./3d.exe --noruntime -c HCRT/HCRT.BIN HCRT/HCRT.HC --binheader HCRT/HCRT.HH
-main.obj: main.c
+HCRT/HCRT.BIN: 3d.bootstrap.exe $(HCRT)
+	rm HCRT/HCRT.BIN || ./3d.bootstrap.exe --noruntime -c HCRT/HCRT.BIN HCRT/HCRT.HC --binheader HCRT/HCRT.HH
+main.bootstrap.obj: main.c
 	$(CC) $(CFLAGS) -c  main.c -g -o $@
-3d.exe:  vec.obj rt.obj exceptWin.obj jitlib-core.obj map.obj compile.obj lexer.obj HolyC.obj unesc.obj tosprn.obj gc.obj debugger.obj rope.obj main.obj at3.obj rl.obj  tags.obj pdcurses.a asm.obj aot.obj
+3d.bootstrap.exe:  main.bootstrap.obj $(B_OBJS)
 	$(CC) $(CFLAGS)   $^  -lm ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
-3d_tests.exe: vec.obj exceptWin.obj rt.obj jitlib-core.obj map.obj compile.obj lexer.obj unesc.obj tests.c HolyC.obj tosprn.obj gc.obj debugger.obj rope.obj  rl.obj  tags.obj pdcurses.a asm.obj aot.obj
+3d_tests.exe: $(B_OBJS) tests.c
 	$(CC) $(CFLAGS)   $^  -lm  ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
 pdcurses.a:
 	cd ext/PDCurses-3.9/wincon && make CC=$(CC) && cp pdcurses.a ../../..
-HolyC.obj: HolyC.tab.c $(HEADERS)
+HolyC.bootstrap.obj: HolyC.tab.c $(HEADERS)
 	$(CC) $(CFLAGS) -g -c HolyC.tab.c -g -o $@
 HolyC.tab.c HolyC.tab.h: HolyC.y
 	bison -v -d -b HolyC HolyC.y
-vec.obj: ext/vec/src/vec.c $(HEADERS)
+vec.bootstrap.obj: ext/vec/src/vec.c $(HEADERS)
 	$(CC) $(CFLAGS) -c ext/vec/src/vec.c  -g -o $@
-map.obj: ext/map/src/map.c $(HEADERS)
+map.bootstrap.obj: ext/map/src/map.c $(HEADERS)
 	$(CC) $(CFLAGS) -c ext/map/src/map.c -g -o $@
-compile.obj: compile.c 3d.h $(HEADERS)
+compile.bootstrap.obj: compile.c 3d.h $(HEADERS)
 	$(CC) $(CFLAGS) -c compile.c -g -o $@
-lexer.obj: lexer.c 3d.h $(HEADERS)
+lexer.bootstrap.obj: lexer.c 3d.h $(HEADERS)
 	$(CC) $(CFLAGS) -c lexer.c -g -o $@
-jitlib-core.obj: ext/myjit/myjit/jitlib-core.c
+jitlib-core.bootstrap.obj: ext/myjit/myjit/jitlib-core.c
 	$(CC) $(CFLAGS) -c ext/myjit/myjit/jitlib-core.c -g  -o $@
-tosprn.obj: TOSPrint.c $(HEADERS)
+tosprn.bootstrap.obj: TOSPrint.c $(HEADERS)
 	$(CC) $(CFLAGS) -c TOSPrint.c -g -o $@
-unesc.obj: ext/C_Unescaper/escaper.c
-	$(CC) $(CFLAGS) -c ext/C_Unescaper/escaper.c -g -o unesc.obj
-rope.obj: ext/mropes/src/rope.c
+unesc.bootstrap.obj: ext/C_Unescaper/escaper.c
+	$(CC) $(CFLAGS) -c ext/C_Unescaper/escaper.c -g -o $@
+rope.bootstrap.obj: ext/mropes/src/rope.c
 		$(CC) $(CFLAGS) -c ext/mropes/src/rope.c -g -o $@
-at3.obj: ext/argtable3/argtable3.c
+at3.bootstrap.obj: ext/argtable3/argtable3.c
 	$(CC) $(CFLAGS) -c ext/argtable3/argtable3.c -g -o $@
-rl.obj: rl.c  $(HEADERS)
+rl.bootstrap.obj: rl.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c rl.c -g -o $@
-rt.obj: runtime.c  $(HEADERS)
+rt.bootstrap.obj: runtime.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c runtime.c -g -o $@
-gc.obj: gc.c gc.h
-	$(CC) $(CFLAGS) -c gc.c -g -o gc.obj
-debugger.obj: debugger.c  $(HEADERS)
+debugger.bootstrap.obj: debugger.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c debugger.c -g -o $@
-asm.obj: asm.c $(HEADERS)
-	$(CC) $(CFLAGS) -c asm.c -g -o asm.obj
-exceptWin.obj: exceptWin.yasm
+asm.bootstrap.obj: asm.c $(HEADERS)
+	$(CC) $(CFLAGS) -c asm.c -g -o $@
+exceptWin.bootstrap.obj: exceptWin.yasm
 	yasm -f win64 exceptWin.yasm -o $@
-tags.obj: tags.c
+tags.bootstrap.obj: tags.c
 	$(CC) $(CFLAGS) -c tags.c -g -o $@
-aot.obj: aot.c  $(HEADERS)
-	$(CC) $(CFLAGS) -c aot.c -gdwarf -g -o aot.obj
+aot.bootstrap.obj: aot.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c aot.c -gdwarf -g -o $@
+gc.bootstrap.obj: ext/tgc/tgc.c ext/tgc/tgc.h  $(HEADERS)
+	$(CC) $(CFLAGS) -c ext/tgc/tgc.c -o $@
 clean:
 	del *.obj *.exe *.a HolyC.tab.c HolyC.tab.h
 sexy:
 	astyle *c *.h
+
+OBJS := HolyC.obj vec.obj map.obj lexer.obj compile.obj jitlib-core.obj tosprn.obj unesc.obj rope.obj at3.obj rl.obj rt.obj debugger.obj asm.obj exceptWin.obj tags.obj aot.obj gc.obj  pdcurses.a
+
+main.obj: main.c
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c  main.c -o $@
+3d.exe: $(OBJS) main.obj HCRT/HCRT.BIN
+	$(CC) $(CFLAGS) -DBOOTSTRAPED   $(OBJS) main.obj  -lm ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
+HolyC.obj: HolyC.tab.c $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c HolyC.tab.c -g -o $@
+HolyC.tab.c HolyC.tab.h: HolyC.y
+	bison -v -d -b HolyC HolyC.y
+vec.obj: ext/vec/src/vec.c $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c ext/vec/src/vec.c  -g -o $@
+map.obj: ext/map/src/map.c $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c ext/map/src/map.c -g -o $@
+compile.obj: compile.c 3d.h $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c compile.c -g -o $@
+lexer.obj: lexer.c 3d.h $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c lexer.c -g -o $@
+jitlib-core.obj: ext/myjit/myjit/jitlib-core.c
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c ext/myjit/myjit/jitlib-core.c -g  -o $@
+tosprn.obj: TOSPrint.c $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c TOSPrint.c -g -o $@
+unesc.obj: ext/C_Unescaper/escaper.c
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c ext/C_Unescaper/escaper.c -g -o $@
+rope.obj: ext/mropes/src/rope.c
+		$(CC) $(CFLAGS) -DBOOTSTRAPED -c ext/mropes/src/rope.c -g -o $@
+at3.obj: ext/argtable3/argtable3.c
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c ext/argtable3/argtable3.c -g -o $@
+rl.obj: rl.c  $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c rl.c -g -o $@
+rt.obj: runtime.c  $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c runtime.c -g -o $@
+debugger.obj: debugger.c  $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c debugger.c -g -o $@
+asm.obj: asm.c $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c asm.c -g -o asm.obj
+exceptWin.obj: exceptWin.yasm
+	yasm -f win64 exceptWin.yasm -o $@
+tags.obj: tags.c
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c tags.c -g -o $@
+aot.obj: aot.c  $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c aot.c -gdwarf -g -o aot.obj
+gc.obj: ext/tgc/tgc.c ext/tgc/tgc.h  $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c ext/tgc/tgc.c -o gc.obj

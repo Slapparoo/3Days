@@ -4,7 +4,7 @@
 #ifndef TARGET_WIN32
 #include <sys/syscall.h>
 #include <unistd.h>
-#define HCRT_INSTALLTED_DIR "/usr/local/include/HolyC/HCRT.BIN"
+#define HCRT_INSTALLTED_DIR "/HolyC/HCRT.BIN"
 #include <libgen.h>
 #else
 #include <windows.h>
@@ -30,9 +30,11 @@ char CompilerPath[1024];
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
 #define ENABLE_VIRTUAL_TERMINAL_INPUT 0x200
 static LONG WINAPI VectorHandler (struct _EXCEPTION_POINTERS *info) {
+  #ifdef BOOTSTRAPED
   Backtrace();
+  #endif
   switch(info->ExceptionRecord->ExceptionCode) {
-    #define FERR(code) case code: printf("Caught %s.\nType 'Exit(0);' to exit.\n",#code); HCLongJmp(&SigPad);
+    #define FERR(code) case code: printf("Caught %s.\nType 'Exit(0);' to exit.\n",#code); throw(0);
     FERR(EXCEPTION_ACCESS_VIOLATION);
     FERR(EXCEPTION_ARRAY_BOUNDS_EXCEEDED);
     FERR(EXCEPTION_DATATYPE_MISALIGNMENT);
@@ -102,15 +104,24 @@ int main(int argc,char **argv) {
         Compiler.boundsCheckMode=1;
     if(dbgArg->count||boundsArg->count)
         Compiler.debugMode=1;
+    #ifndef BOOTSTRAPED
+    if(Compiler.debugMode) {
+        fprintf(stderr,"Debugging not allowed on bootstrap compiler.\n");
+        exit(1);
+    }
+    #endif
     if(silentArg->count)
       Compiler.silentMode=1;
-    CreateGC(__builtin_frame_address(0), 0!=Compiler.boundsCheckMode);
+    tgc_start(&gc,__builtin_frame_address(0),Compiler.boundsCheckMode);
     AddGCRoot(&Compiler, sizeof(Compiler));
+    #ifdef  BOOTSTRAPED
     AddGCRoot(&Debugger, sizeof(Debugger));
+    #endif
     AddGCRoot(&Lexer, sizeof(Lexer));
-    CreateLexer(PARSER_HOLYC);
-    InitREPL();
-    Lexer.replMode=1;
+    #ifndef BOOTSTRAPED
+    EnableREPL();
+    CreateLexer(0);
+    #endif
     RegisterBuiltins();
     char *tagf=NULL;
     char buffer[2048];
@@ -153,7 +164,7 @@ int main(int argc,char **argv) {
     } else
         Compiler.allowRedeclarations=1;
     if(tagsArg->count) {
-        tagf=(char*)tagsArg->filename[0];
+        tagf=strdup((char*)tagsArg->filename[0]);
         FILE *dummy=fopen(tagf,"w");
         fwrite("",0,0,dummy);
         fclose(dummy);
@@ -169,9 +180,17 @@ int main(int argc,char **argv) {
     long iter;
     if(!noRuntime->count) {
     #ifndef TARGET_WIN32
-        if(0==access(HCRT_INSTALLTED_DIR,F_OK)) {
-            sprintf(buffer, "#include \"%s\"", HCRT_INSTALLTED_DIR);
-            mrope_append_text(Lexer.source, strdup(buffer));
+        if(0==access("HCRT/HCRT.BIN",F_OK)) {
+            FILE *rt=fopen("HCRT/HCRT.BIN","rb");
+            map_set(&Compiler.binModules,"HCRT/HCRT.BIN",LoadAOTBin(rt,0));
+            fclose(rt);
+            Compiler.loadedHCRT=1;
+            Compiler.hcrt=map_get(&Compiler.binModules, "HCRT/HCRT.BIN");
+        } else if(0==access("/usr/local/include" HCRT_INSTALLTED_DIR,F_OK)) {
+            FILE *rt=fopen("/usr/local/include" HCRT_INSTALLTED_DIR,"rb");
+            map_set(&Compiler.binModules,"/usr/local/include" HCRT_INSTALLTED_DIR,LoadAOTBin(rt,0));
+            Compiler.hcrt=map_get(&Compiler.binModules, "/usr/local/include" HCRT_INSTALLTED_DIR);
+            fclose(rt);
             Compiler.loadedHCRT=1;
         } else {
             /*
@@ -188,20 +207,40 @@ int main(int argc,char **argv) {
       dirname(buffer);
       strcat(buffer,HCRT_INSTALLTED_DIR);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
-        unescapeString(buffer,buffer2);
-        sprintf(buffer, "#include \"%s\"", strdup(buffer2));
-        mrope_append_text(Lexer.source, strdup(buffer));
+        FILE *rt=fopen(buffer,"rb");
+        map_set(&Compiler.binModules,buffer,LoadAOTBin(rt,0));
+        fclose(rt);
         Compiler.loadedHCRT=1;
+        Compiler.hcrt=map_get(&Compiler.binModules, buffer);
       }
     #endif
     }
     ARM_SIGNALS;
+    #ifndef BOOTSTRAPED
     for(iter=0;iter!=includeArg->count;iter++) {
       unescapeString(includeArg->filename[iter],buffer2);
-      sprintf(buffer, "#include \"%s\"", buffer2);
+      sprintf(buffer, "#include \"%s\"\n", buffer2);
       mrope_append_text(Lexer.source, strdup(buffer));
     }
-    if(Compiler.tagsFile||Compiler.AOTMode) Lexer.replMode=0;
+    #else
+    //Used for including command line arguments
+    vec_char_t includetext;
+    vec_init(&includetext);
+    for(iter=0;iter!=includeArg->count;iter++) {
+      unescapeString(includeArg->filename[iter],buffer2);
+      sprintf(buffer, "#include \"%s\"\n", buffer2);
+      vec_pusharr(&includetext, buffer, strlen(buffer));
+    }
+    vec_push(&includetext, 0);
+    {
+      CVariable *is=GetVariable("LexIncludeStr");
+      assert(is);
+      void(*fp)(void*,char*,char*,int64_t)=((void(*)(void*,char*,char*,int64_t))is->func->funcptr);
+      fp(Lexer.HCLexer,"@TMP",includetext.data,0);
+    }
+    #endif
+    if(Compiler.tagsFile||Compiler.AOTMode) DisableREPL();
+    InitREPL();
     long extraFileIndex=0;
     if(run&&!errs) {
       for(;;) {
@@ -211,20 +250,19 @@ set:
             #ifdef TARGET_WIN32
             HANDLE h=AddVectoredExceptionHandler(1,VectorHandler);
             #endif
-            if(sig=HCSetJmp(SigPad)) {
+            if(HCSetJmp(EnterTry())) {
               err:
                 #ifdef TARGET_WIN32
                 RemoveVectoredExceptionHandler(h);
                 #endif
+                #ifdef BOOTSTRAPED
                 vec_truncate(&Debugger.callStack,0);
+                #endif // BOOTSTRAPED
                 printf("Recieved signal %d. Discarding input.\n",sig);
-#ifndef TARGET_WIN32
-                sigset_t empty;
-                sigfillset(&empty);
-                sigprocmask(SIG_UNBLOCK,&empty,NULL);
-#endif
+                #ifndef BOOTSTRAPED
                 vec_truncate(&Lexer.ifStates,0);
                 FlushLexer();
+                #endif // BOOTSTRAPED
                 ARM_SIGNALS;
                 goto set;
             }
@@ -232,13 +270,16 @@ set:
             Compiler.addrofFrameoffsetMode=0;
 	    Assembler.active=0;
             Compiler.inFunction=0;
+            if(!(Compiler.tagsFile||Compiler.AOTMode)) EnableREPL();
+            else DisableREPL();
+            #ifndef BOOTSTRAPED
             Lexer.isFreeToFlush=1;
-	    vec_truncate(&Compiler.asmPatches, 0);
-	    vec_truncate(&Compiler.__addedGlobalLabels, 0);
-	    map_init(&Assembler.imports);
-	    if(!(Compiler.tagsFile||Compiler.AOTMode)) Lexer.replMode=1;
-	    else Lexer.replMode=0;
+            #endif
+            vec_truncate(&Compiler.asmPatches, 0);
+            vec_truncate(&Compiler.__addedGlobalLabels, 0);
+            map_init(&Assembler.imports);
             HC_parse();
+            PopTryFrame();
             #ifdef TARGET_WIN32
             RemoveVectoredExceptionHandler(h);
             #endif
@@ -248,7 +289,7 @@ set:
         }
     }
     if(binf) {
-        if(Compiler.errorsFile) {
+        if(Compiler.errorCount) {
                 fprintf(stderr,"Errors detected,not compiling to binary.\n");
                 abort();
         }
@@ -260,8 +301,6 @@ set:
         fclose(f);
     }
     arg_freetable(argtable, sizeof(argtable)/sizeof(*argtable));
-    if(!Compiler.tagsFile)
-      if(map_get(&Lexer.macros,"HCRT_LOADED"))
 	Compiler.tagsFile=tagf;
     if(Compiler.tagsFile)
       DumpTagsToFile(Compiler.tagsFile);

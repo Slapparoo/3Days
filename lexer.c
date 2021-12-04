@@ -15,13 +15,69 @@
 #include <stdlib.h>
 #include "rl.h"
 #define REPL_SOURCE_NAME "(nofile)"
+#include "LEXER.HH"
+CCompletion *ReplCompleteions(const char *start,long srcoff,const char *text,long *length);
+void InitREPL() {
+    InitRL();
+    rlACGen=&ReplCompleteions;
+}
+int ASTToToken(AST *t) {
+    if(1) {
+        if(t->type==AST_LASTCLASS) return HC_LASTCLASS;
+        if(t->type==AST_CHAR) return HC_CHAR;
+        if(t->type==AST_STRING) return HC_STRING;
+        if(t->type==AST_INT) return HC_INT;
+        if(t->type==AST_FLOAT) return HC_FLOAT;
+        if(t->type==AST_NAME) {
+            if(map_get(&Compiler.types, t->name)) return HC_TYPENAME;
+            if(Compiler.tagsFile||Compiler.AOTMode) {
+                #ifndef BOOTSTRAPED
+                /**
+                 * The assembler is written in HolyC and IsOpcode calls HolyC code,(code is not generated in tags mode)
+                 */
+                if(map_get(&Lexer.__opcodes,t->name))
+                    return HC_OPCODE;
+                #endif
+            }
+            if(IsOpcode(t->name)) return HC_OPCODE;
+            if(GetRegister(t->name)) {
+              t->type=AST_ASM_REG;
+              t->asmReg=GetRegister(t->name);
+              return HC_REGISTER;
+            }
+            return HC_NAME;
+        }
+        if(t->type==AST_ASM_REG) return HC_REGISTER;
+    }
+    if(t->type==AST_KEYWORD) return t->keyword;
+    if(t->type==AST_TOKEN) return t->tokenAtom;
+    return -1;
+}
+
+void HC_CreateLexer() {
+    CVariable *ccn=GetHCRTVar("CmpCtrlNew");
+    void* (*fp)(char* buf,int64_t flags,char*fn)=(void*)ccn->func->funcptr;
+    Lexer.HCLexer=fp(NULL,0,NULL);
+}
+AST *HC_LexItem() {
+    CVariable *li=GetHCRTVar("LexItem");
+    void* (*fp)(void* ctrl)=li->func->funcptr;
+    return Lexer.lastToken=fp(Lexer.HCLexer);
+}
+CLexer Lexer;
+AST *SetPosFromOther(AST *dst,AST *src) {
+    dst->ln=src->ln;
+    dst->col=src->col;
+    dst->fn=src->fn;
+    return dst;
+}
+#ifndef BOOTSTRAPED
 void DisableREPL() {
     Lexer.replMode=0;
 }
 void EnableREPL() {
     Lexer.replMode=1;
 }
-CLexer Lexer;
 static void SpliceToCurrentFromBehind(long behind);
 static void PopNullBytes(vec_char_t *v) {
     while(v->length!=0) if(vec_last(v)==0) vec_pop(v);
@@ -203,21 +259,12 @@ memberchk:
     *length=ret.length;
     return ret.data;
 }
-void InitREPL() {
-    InitRL();
-    rlACGen=&ReplCompleteions;
-}
 void WaitForInput() {
     if(Lexer.isFreeToFlush) FlushLexer();
 #ifndef TARGET_WIN32
-    sigset_t oldset;
-    sigset_t newset;
-    sigfillset(&newset);
-    sigprocmask(SIG_UNBLOCK,&newset,&oldset);
-    void *oldhand=signal(SIGINT,SignalHandler);
+    UNBLOCK_SIGS;
     char *input=rl("HolyCC:>> ");
-    sigprocmask(SIG_SETMASK,&oldset,NULL);
-    signal(SIGINT,oldhand);
+    BLOCK_SIGS;
     #else
     char *input=rl("HolyCC:>> ");
     #endif
@@ -237,7 +284,7 @@ set:
     mrope_append_text(Lexer.source, strdup("\n"));
     fwrite(input,strlen(input),1,Lexer.replSource);
     fputc('\n', Lexer.replSource);
-}
+  }
 static char *rope2str(mrope_t *r) {
     long len=mrope_length(r);
     char *ret=TD_CALLOC(1,len+1);
@@ -1442,6 +1489,13 @@ void CreateLexer(int whichparser) {
     Lexer.macroExpandDepth=0;
     Lexer.replSource=tmpfile();
     Lexer.isFreeToFlush=1;
+    if(Compiler.loadedHCRT) {
+        if(GetHCRTVar("CmpCtrlNew")&&GetHCRTVar("LexItem")) {
+            HC_CreateLexer();
+            Lexer.useHolyCLexer=1;
+        }
+        return;
+    }
 }
 void DestroyLexer() {
     mrope_free(Lexer.source);
@@ -1777,33 +1831,10 @@ end:
     }
     return NULL;
 }
-//See HolyC.h
-int ASTToToken(AST *t) {
-    if(Lexer.whichParser==PARSER_HOLYC) {
-        if(t->type==AST_LASTCLASS) return HC_LASTCLASS;
-        if(t->type==AST_CHAR) return HC_CHAR;
-        if(t->type==AST_STRING) return HC_STRING;
-        if(t->type==AST_INT) return HC_INT;
-        if(t->type==AST_FLOAT) return HC_FLOAT;
-        if(t->type==AST_NAME) {
-            if(map_get(&Compiler.types, t->name)) return HC_TYPENAME;
-            if(Compiler.tagsFile||Compiler.AOTMode) {
-                /**
-                 * The assembler is written in HolyC and IsOpcode calls HolyC code,(code is not generated in tags mode)
-                 */
-                if(map_get(&Lexer.__opcodes,t->name))
-                    return HC_OPCODE;
-            }
-            if(IsOpcode(t->name)) return HC_OPCODE;
-            return HC_NAME;
-        }
-        if(t->type==AST_ASM_REG) return HC_REGISTER;
-    }
-    if(t->type==AST_KEYWORD) return t->keyword;
-    if(t->type==AST_TOKEN) return t->tokenAtom;
-    return -1;
-}
 AST *LexItem() {
+    if(Lexer.useHolyCLexer) {
+        return HC_LexItem();
+    }
   if(Lexer.isEvalNoCommaMode) {
       Lexer.isEvalNoCommaMode=0;
       AST *r=TD_CALLOC(1,sizeof(AST));
@@ -1897,12 +1928,6 @@ loop:
     }
     return t;
 }
-AST *SetPosFromOther(AST *dst,AST *src) {
-    dst->ln=src->ln;
-    dst->col=src->col;
-    dst->fn=src->fn;
-    return dst;
-}
 CLexer ForkLexer(int whichparser) {
     CLexer old=Lexer;
     CreateLexer(whichparser);
@@ -1933,7 +1958,7 @@ char *PreprocessFile(char *to_include) {
   fclose(f2);
   __InsertSrcText(0, buf);
   TD_FREE(buf);
-  Lexer.replMode=Lexer.isFreeToFlush=0;
+  DisableREPL();
   while(LEXER_PEEK()) {
       ReleaseAST(LexItem());
   }
@@ -1942,3 +1967,126 @@ char *PreprocessFile(char *to_include) {
   Lexer=old;
   return r;
 }
+#else
+AST *LexItem() {
+  if(Lexer.isExeMode) {
+      Lexer.isExeMode=0;
+      AST *r=TD_CALLOC(1,sizeof(AST));
+      r->type=AST_TOKEN;
+      r->refCnt=1;
+      r->tokenAtom=HC_EXE;
+      return r;
+  } else if(Lexer.isDebugExpr) {
+      Lexer.isDebugExpr=0;
+      AST *r=TD_CALLOC(1,sizeof(AST));
+      r->type=AST_TOKEN;
+      r->refCnt=1;
+      r->tokenAtom=HC_DBG;
+      return r;
+  }  else if(Lexer.isEvalExpr) {
+      Lexer.isEvalExpr=0;
+      AST *r=TD_CALLOC(1,sizeof(AST));
+      r->type=AST_TOKEN;
+      r->refCnt=1;
+      r->tokenAtom=HC_EVAL;
+      return r;
+  }
+    return HC_LexItem();
+}
+void DestroyLexer() {
+    //Leave it to the Garbage collector
+}
+void CreateLexer(int ul) {
+    HC_CreateLexer();
+}
+CLexer ForkLexer(int ul) {
+    CLexer old=Lexer;
+    HC_CreateLexer();
+    return old;
+}
+
+typedef vec_t(CCompletion) vec_CCompletion_t;
+CCompletion *ReplCompleteions(const char *start,long srcoff,const char *text,long *length) {
+    map_iter_t gi=map_iter(&Compiler.globals);
+    vec_CCompletion_t ret;
+    vec_init(&ret);
+    const char* key;
+    char buffer[1024];
+    while(key=map_next(&Compiler.types, &gi)) {
+        CType **find=map_get(&Compiler.types,key);
+        if(text) if(0!=strncmp(text, key,strlen(text))) goto memberchk;
+        sprintf(buffer,"%s:%s",((find[0]->type==TYPE_CLASS)?"Class":"Union"),key);
+        CCompletion comp= {strdup(buffer),strdup(key)};
+        vec_push(&ret, comp);
+        //Complete members
+memberchk:
+        ;
+        vec_CMember_t *members=NULL;
+        if(find[0]->type==TYPE_CLASS) members=&find[0]->cls.members;
+        else if(find[0]->type==TYPE_UNION) members=&find[0]->un.members;
+        CMember mem;
+        int iter;
+        if(members)
+            vec_foreach(members, mem, iter) {
+            if(text) if(0!=strncmp(text, mem.name,strlen(text))) continue;
+            char *ts=TypeToString(mem.type);
+            sprintf(buffer,"Member:%s.%s(%s)",key,mem.name,ts);
+            CCompletion comp= {strdup(buffer),strdup(mem.name)};
+            TD_FREE(ts);
+            vec_push(&ret, comp);
+        }
+    }
+    gi=map_iter(&Compiler.globals);
+    while(key=map_next(&Compiler.globals, &gi)) {
+        if(text) if(0!=strncmp(text, key,strlen(text))) continue;
+        CVariable *find=map_get(&Compiler.globals,key)[0];
+        if(find->isInternal) continue;
+        char *type=TypeToString(find->type);
+        if(!find->isFunc)
+            sprintf(buffer,"Global:%s(%s)",key,type);
+        else
+            sprintf(buffer,"Function:%s(%s)",key,type);
+        CCompletion comp= {strdup(buffer),strdup(key)};
+        vec_push(&ret, comp);
+        TD_FREE(type);
+    }
+    map_iter_t li=map_iter(&Compiler.locals);
+    while(key=map_next(&Compiler.locals, &gi)) {
+        if(text) if(0!=strncmp(text, key,strlen(text))) continue;
+        char *type=TypeToString(map_get(&Compiler.locals,key)[0]->type);
+        sprintf(buffer,"Local:%s(%t)",key,type);
+        CCompletion comp= {strdup(buffer),strdup(key)};
+        vec_push(&ret, comp);
+        TD_FREE(type);
+    }
+    *length=ret.length;
+    return ret.data;
+}
+void StreamPrint(const char *fmt,int64_t argc,int64_t *argv) {
+    CVariable *sp;
+    if(!(sp=GetHCRTVar("__StreamPrint"))) {
+        fprintf(stderr,"Load __StreamPrint.\n");;
+        return;
+    }
+    void(*fp)(const char *,int64_t,int64_t *)=(void(*)(const char *,int64_t,int64_t *))sp->func->funcptr;
+    fp(fmt,argc,argv);
+}
+
+AST *SetPosFromLex(AST *t) {
+    return t;
+}
+void DisableREPL() {
+    CVariable *var=GetHCRTVar("LexSetReplMode");
+    if(!var) return;
+    ((int64_t(*)(void*,int64_t))var->func->funcptr)(Lexer.HCLexer,0);
+}
+void EnableREPL() {
+    CVariable *var=GetHCRTVar("LexSetReplMode");
+    if(!var) return;
+    ((int64_t(*)(void*,int64_t))var->func->funcptr)(Lexer.HCLexer,1);
+}
+void __LexExe() {
+  Lexer.isExeMode=1;
+  HC_parse();
+}
+#endif

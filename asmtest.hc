@@ -98,5 +98,5 @@ asm {
  x+=10;
 }
 _import C_HELLO U0 Hi();
-Hi;
 Dummy;
+Hi;

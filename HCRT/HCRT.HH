@@ -3,6 +3,7 @@
 #define TRUE 1
 #define U8 U8i
 #define I8 I8i
+class CCmpCtrl;
 U16i union U16
 {
   I8i	i8[2];
@@ -54,6 +55,7 @@ class CFs {
   U64i except_ch;
   U64i catch_except;
   I64i rand_seed;
+  CCmpCtrl *last_cc;
 };
 
 //MATH
@@ -348,3 +350,14 @@ extern U0 X64ModeFree(X64Mode *m) ;
  * Jumps are not encoded here
  */
 extern U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...);
+//LEXER.HC
+CCmpCtrl *CmpCtrlNew(U8 *buf=NULL,I64 flags=0,U8 *filename=NULL);
+I64 Lex(CCmpCtrl *cc);
+U0 *LexItem(CCmpCtrl *ctrl);
+U0 LexIncludeStr(CCmpCtrl *cc,U8 *abs_filename,U8 *src,Bool actual_file);
+Bool LexSetReplMode(CCmpCtrl *ctrl,Bool set); //Returns old value
+U8 *LexMatchFile(CCmpCtrl *cc,U8 *name);
+I64 *LexFileLines(CCmpCtrl *cc,U8 *name,I64 *cnt);
+U0 __StreamPrint(U8 *fmt,...);
+// ../HolyEd/EDITOR.HC
+U0 Ed(U8 *fn);

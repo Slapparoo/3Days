@@ -503,10 +503,10 @@ void CompileTests() {
     GenerateUnopAssignTest(0, 1,0, AST_POST_INC, f64);
 }
 int main() {
-    CreateGC(__builtin_frame_address(0),0);
+    tgc_start(&gc,__builtin_frame_address(0),0);
     AddGCRoot(&Compiler,sizeof(Compiler));
     AddGCRoot(&Lexer,sizeof(Lexer));
-    AddGCRoot(&Debugger,sizeof(Debugger));
+    //AddGCRoot(&Debugger,sizeof(Debugger));
     CreateLexer(PARSER_HOLYC);
     // LexerTests();
     //Compiler.debugMode=1;

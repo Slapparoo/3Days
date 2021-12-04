@@ -7,6 +7,7 @@
 #ifdef TARGET_WIN32
 #include <memoryapi.h>
 #endif
+void CompileBreakpoint(AST *at);
 CVariable *UniqueGlblVar(CType *type) {
     static long try;
     char buffer[256];
@@ -556,6 +557,8 @@ char *GetLabelReadableName(AST *t) {
   return strdup(t->labelNode->name);
 }
 AST *CreateLabel(AST *name) {
+    if(!strncmp("@@",name->name,2))
+      return CreateLocalLabel(CreateName(name->name+2));
     AST *r=TD_CALLOC(1,sizeof(AST));
     r->refCnt=1;
     r->type=AST_LABEL;
@@ -695,6 +698,16 @@ AST *CreateString(char *txt) {
     r->type=AST_STRING;
     r->string=strdup(txt);
     r->refCnt=1;
+    return r;
+}
+AST *JoinStrings(AST *a,AST *b) {
+    AST *r=TD_CALLOC(1,sizeof(AST));
+    r->type=AST_STRING;
+    r->string=TD_MALLOC(strlen(a->string)+strlen(b->string)+1);
+    strcat(strcpy(r->string,a->string),b->string);
+    r->refCnt=1;
+    SetPosFromOther(r,a);
+    ReleaseAST(a),ReleaseAST(b);
     return r;
 }
 static void ReleaseMembers(vec_CMember_t *mems) {
@@ -897,11 +910,11 @@ double EvaluateF64(AST *exp) {
     vec_CVariable_t args;
     vec_init(&args);
     Compiler.returnType=CreatePrimType(TYPE_F64);
-    CFunction *f=CompileAST(NULL, ret, args,C_AST_FRAME_OFF_DFT,0);
+    CFunction *f=CompileAST(NULL, ret, args,C_AST_FRAME_OFF_DFT,C_AST_IS_TMP_FUNCTION);
     ReleaseType(Compiler.returnType);
     double ret2=0;
     if(f&&!Compiler.tagsFile) {
-        GC_Disable();
+        tgc_pause(&gc);
         #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
         ret2=((double(*)())f->funcptr)();
@@ -910,7 +923,7 @@ double EvaluateF64(AST *exp) {
         ret2=((double(*)())f->funcptr)();
         #endif
     }
-    GC_Enable();
+    tgc_resume(&gc);
     ReleaseFunction(f);
     RestoreCompilerState(old);
     return ret2;
@@ -926,12 +939,12 @@ int64_t EvaluateInt(AST *exp,int flags) {
     if(flags&EVAL_INT_F_PRESERVE_LOCALS)
       locals=&Compiler.locals;
     Compiler.returnType=CreatePrimType(TYPE_I64);
-    CFunction *f=CompileAST(locals, ret, args,Compiler.frameOffset,0);
+    CFunction *f=CompileAST(locals, ret, args,Compiler.frameOffset,C_AST_IS_TMP_FUNCTION);
     ReleaseType(Compiler.returnType);
     vec_deinit(&args);
     int64_t ret2=0;
     if(f&&!Compiler.tagsFile) {
-        GC_Disable();
+        tgc_pause(&gc);
         #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
         ret2=((int64_t(*)())f->funcptr)();
@@ -939,7 +952,7 @@ int64_t EvaluateInt(AST *exp,int flags) {
         #else
         ret2=((int64_t(*)())f->funcptr)();
         #endif
-        GC_Enable();
+        tgc_resume(&gc);
     }
     ReleaseFunction(f);
     RestoreCompilerState(old);
@@ -1123,10 +1136,10 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
                     if(!Compiler.tagsFile) {
                       COldFuncState olds=CreateCompilerState();
                       Compiler.returnType=decl.finalType;
-                      CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT,0);
+                      CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT,C_AST_IS_TMP_FUNCTION);
                       RestoreCompilerState(olds);
                       vec_deinit(&empty);
-                      GC_Disable();
+                      tgc_pause(&gc);
         #ifndef TARGET_WIN32
                       signal(SIGINT,SignalHandler);
                       stmt->funcptr(0);
@@ -1134,12 +1147,12 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
         #else
                       stmt->funcptr(0);
         #endif
-                      GC_Enable();
+                      tgc_resume(&gc);
                       ReleaseFunction(stmt);
                     } else {
                         COldFuncState olds=CreateCompilerState();
                         Compiler.returnType=decl.finalType;
-                        CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT,0);
+                        CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT,C_AST_IS_TMP_FUNCTION);
                         RestoreCompilerState(olds);
                         vec_deinit(&empty);
                     }
@@ -1201,11 +1214,6 @@ AST *CreateVarDecl(CType *type,AST *name,AST *dft) {
 }
 CCompiler Compiler;
 void ReleaseVariable(CVariable *var) {
-    if(!var) return;
-    if(--var->refCount<=0) {
-        TD_FREE(var->name);
-        TD_FREE(var);
-    }
 }
 CType *CreateMultiLvlPtr(CType *type,int lvl) {
     while(--lvl>=0) type=CreatePtrType(type);
@@ -1404,6 +1412,7 @@ void AddDeclsToScope(AST *tails) {
     CDeclTail decl;
     vec_foreach(&tails->declTail, decl, iter) {
         if(!decl.linkage) {
+          normal:;
             AddVariable(decl.name, decl.finalType);
             continue;
         }
@@ -1442,7 +1451,8 @@ EXT:
                 }
                 map_set(&Compiler.currentFuncStatics,stat->name,stat);
                 map_set(&Compiler.locals,stat->name,stat);
-            }
+            } else
+                goto normal;
             break;
         }
     }
@@ -5249,7 +5259,6 @@ reglabrefs:
 	    map_set(&Compiler.labelPtrs,fmted,NULL);
 	    jit_dump_ptr(Compiler.JIT,map_get(&Compiler.labelPtrs,fmted));
         }
-      TD_FREE(fmted);
       //All nodes return a value on the stack
       vec_push(&Compiler.valueStack, VALUE_INT(0));
       TD_FREE(fmted);
@@ -5331,6 +5340,7 @@ int IsVarRegCanidate(CVariable *var) {
     return ret;
 }
 void CompileBreakpoint(AST *at) {
+    #ifdef BOOTSTRAPED
     if(!at->fn) return;
     if(!Compiler.debugMode) return;
     char buffer[1024];
@@ -5351,14 +5361,14 @@ add:
     jit_prepare(Compiler.JIT);
     jit_putargi(Compiler.JIT,bp);
     jit_callr(Compiler.JIT, fr);
+    #endif
 }
-void ReleaseFunction(CFunction*func) {
+void ReleaseFunction(CFunction *func) {
     CFunction *f=func;
     //Should have a GC destructor to free JIT
     TD_FREE(func);
 }
 static void ReleaseFunction2(void *f,void *ul) {
-  jit_free(((CFunction *)f)->JIT);
 }
 AST* CreateReturn(AST *exp) {
     AST *r=TD_CALLOC(1,sizeof(AST));
@@ -5675,9 +5685,7 @@ noreg:
 	}
       }
         jit_disable_optimization(curjit, JIT_OPT_JOIN_ADDMUL); //Seems to mess things up
-        GC_Disable();
         jit_generate_code(curjit,func);
-        GC_Enable();
     }
     //if(Compiler.debugMode)
     //    jit_dump_ops(curjit,1);
@@ -5689,6 +5697,7 @@ noreg:
         //Register the unlinked stuff
         map_iter_t miter=map_iter(&func->relocations);
         const char *key;
+        if(!(C_AST_IS_TMP_FUNCTION &flags))
         while(key=map_next(&func->relocations,&miter)) {
             relocLoop:;
             vec_CFunction_t *funcs=map_get(&Compiler.unlinkedFuncsByRelocation,key);
@@ -5719,7 +5728,7 @@ noreg:
         vec_deinit(map_get(&Compiler.labelRefs,key));
     map_deinit(&Compiler.labelRefs);
     map_deinit(&Compiler.labels);
-    GC_SetDestroy(func, ReleaseFunction2, NULL);
+    tgc_set_dtor(&gc,func, ReleaseFunction2);
     return func;
 }
 void AddStringDataToFunc(CFunction *f) {
@@ -5815,14 +5824,12 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
     if(!Compiler.errorFlag) {
         func->relocations=Compiler.currentRelocations;
         jit_disable_optimization(curjit, JIT_OPT_ALL);
-        GC_Disable();
         jit_generate_code(curjit,func);
-        GC_Enable();
         FillFunctionRelocations(func);
         func->stringRelocations=Compiler.stringDatas;
         AddStringDataToFunc(func);
+        tgc_pause(&gc);
         func->funcptr=funcptr;
-	GC_Disable();
         #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
         func->funcptr(0);
@@ -5830,8 +5837,8 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         #else
         func->funcptr(0);
         #endif
-	GC_Enable();
-	t=AssignTypeToNode(exp);
+        tgc_resume(&gc);
+        t=AssignTypeToNode(exp);
         if(t->type==TYPE_ARRAY||t->type==TYPE_ARRAY_REF)
           DbgPrintVar(t, *(void**)buffer); //Arrays return pointer to self
         else
@@ -6340,10 +6347,12 @@ void RunStatement(AST *s) {
     AST *tnode =CreateTypeNode(t);
     Compiler.returnType=t;
     int oldflag=Compiler.errorFlag;
-    CFunction *stmt=CompileAST(NULL,s,empty,C_AST_FRAME_OFF_DFT,0);
+    CFunction *stmt=CompileAST(NULL,s,empty,C_AST_FRAME_OFF_DFT,C_AST_IS_TMP_FUNCTION);
     ApplyAsmPatchesAndFreeThem(stmt);
+    static int count;
+    count++;
     if(stmt&&!Compiler.errorFlag&&!Compiler.tagsFile) {
-      GC_Disable();
+      tgc_pause(&gc);
       #ifndef TARGET_WIN32
       signal(SIGINT,SignalHandler);
       ((void(*)())stmt->funcptr)();
@@ -6351,7 +6360,7 @@ void RunStatement(AST *s) {
       #else
       ((void(*)())stmt->funcptr)();
       #endif
-      GC_Enable();
+      tgc_resume(&gc);
         ReleaseFunction(stmt);
     }
     Compiler.errorFlag=oldflag;
@@ -6683,4 +6692,10 @@ char *ResolveLabelByName(char *label,LabelContext context) {
 }
 LabelContext NextLabelContext() {
   return ++Compiler.labelContext;
+}
+CVariable *GetHCRTVar(char *name) {
+  if(Compiler.hcrt)
+    if(map_get(&Compiler.hcrt->vars, name))
+      return *map_get(&Compiler.hcrt->vars, name);
+  return GetVariable(name);
 }

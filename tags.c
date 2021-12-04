@@ -3,11 +3,14 @@ void DumpTagsToFile(char *fn) {
   FILE *f=fopen(fn, "w");
   if(!f) return ;
   const char *key;
-  map_iter_t miter=map_iter(&Lexer.macros);
+  map_iter_t miter;
+  #ifndef BOOTSTRAPED
+  miter=map_iter(&Lexer.macros);
   while(key=map_next(&Lexer.macros, &miter)) {
     CMacro *macro=map_get(&Lexer.macros,key);
     fprintf(f,"%s\t%s\t%ld;\tkind:m\n",macro->name,macro->fn,macro->line);
   }
+  #endif
   miter=map_iter(&Compiler.types);
   while(key=map_next(&Compiler.types, &miter)) {
     CType **type=map_get(&Compiler.types,key);

@@ -9,3 +9,5 @@
 #include "QSORT.HC"
 #include "ASM.HC"
 #include "PRINT.HC"
+#include "LEXER.HC"
+#include "../HolyEd/EDITOR.HC"

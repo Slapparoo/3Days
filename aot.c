@@ -362,8 +362,9 @@ void SerializeModule(FILE *f,char *header) {
     //HEADER IDENT
     if(header) {
       fputc(2,f);
-      char *buf=PreprocessFile(header);
-      fwrite(buf, 1, strlen(buf), f);
+      int64_t len;
+      char *buf=FileRead(header,&len);
+      fwrite(buf, 1,len, f);
       TD_FREE(buf);
     }
 }
@@ -379,10 +380,11 @@ static int longCmp(const void *a,const void *b) {
     return *(long*)a-*(long*)b;
 }
 static void FuncCodeDestroy(void *mem,void *sz) {
+  CFunction *f=mem;
 #ifndef TARGET_WIN32
-	munmap(mem,(int64_t)sz);
+	munmap(f->funcptr,(int64_t)sz);
 #else
-	VirtualFree(mem,0,MEM_RELEASE);
+	VirtualFree(f->funcptr,0,MEM_RELEASE);
 #endif
 }
 #define LF_F_IS_ASMPATCH 1
@@ -510,7 +512,8 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
     v->func->name=strdup(buffer);
     v->func->funcInfo.funcSize=code_size;
     v->isInternal=1;
-    GCCreateExtPtr(mem,FuncCodeDestroy,(void*)code_size);
+    tgc_set_dtor(&gc, v->func, FuncCodeDestroy);
+    tgc_set_user_data(&gc,v->func,(void*)code_size);
     CBinPatch *pat;
     long iter;
     vec_foreach(&patches,pat,iter) {
@@ -629,6 +632,7 @@ CBinaryModule LoadAOTBin(FILE *f,int verbose) {
                     v->isInternal=1;
                     map_set(&Compiler.globals,buffer,v);
 
+                    vec_push(&loaded, v);
                     if(verbose) {
                         printf("VAR:%s(size %ld)\n",buffer,size);
                     }
@@ -678,14 +682,24 @@ CBinaryModule LoadAOTBin(FILE *f,int verbose) {
     vec_deinit(&loaded);
     if(aaMain)
         aaMain->func->funcptr(0);
-    CLexer old=ForkLexer(PARSER_HOLYC);
-    Lexer.replMode=0;
-    mrope_append_text(Lexer.source,strdup(header_text));
+    #ifndef BOOTSTRAPED
+        DisableREPL();
+        mrope_append_text(Lexer.source,strdup(header_text));
+    #else
+        if(!Lexer.HCLexer) CreateLexer(0);
+        DisableREPL();
+        void(*inc)(void*cc,char *fn,char *src,int64_t act_f)=(void*)GetVariable("LexIncludeStr")->func->funcptr;
+        inc(Lexer.HCLexer,"(nofile)",header_text,0);
+        //Reload the macros now that we have the HolyC Lexer laoded
+        RegisterBuiltins();
+    #endif
     Compiler.allowForwardAfterDefine=1;
     HC_parse();
     Compiler.allowForwardAfterDefine=0;
-    JoinWithOldLexer(old);
+    #ifdef BOOTSTRAPED
     //Remove all internal variables(they can be made external in the header.) Restore any old globals that share a name with an intenal variable
+    RegisterBuiltins();
+    #endif
     miter=map_iter(&module.vars);
     while(key=map_next(&module.vars,&miter)) {
       CVariable **find=map_get(&Compiler.globals, key);

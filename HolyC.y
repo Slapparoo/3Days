@@ -228,7 +228,7 @@ expr0[r]: DOUBLE_AT[d] INT[n] {
 expr0[r]: FLOAT {$r=SLE($1);};
 expr0[r]: INT {$r=SLE($1);};
 expr0[r]: CHAR {$r=SLE($1);};
-expr0[r]: STRING {$r=SLE($1);};
+expr0[r]: str {$r=$1;};
 expr0[r]: LASTCLASS {
   $r=SLE($1);
 };
@@ -1257,7 +1257,7 @@ global_stmt[r]: EXE scope[s] {
   YYACCEPT;
   $r=NULL;
 };
-global_stmt[r]: EVAL expr_comma[s] NL {
+global_stmt[r]: EVAL expr_comma[s] {
   RunPtr(CurFuncInfo,$s,CurFramePtr);
   YYACCEPT;
   $r=NULL;
@@ -1294,10 +1294,12 @@ _expr0[r]: DOUBLE_AT[d] INT[n] {
   $r=n;
   ReleaseAST($d);
 }
+str[r]: STRING {$r=SLE($1);};
+str[r]: str[a] STRING[b] {$r=JoinStrings($a,$b);};
 _expr0[r]: FLOAT {$r=SLE($1);};
 _expr0[r]: INT {$r=SLE($1);};
 _expr0[r]: CHAR {$r=SLE($1);};
-_expr0[r]: STRING {$r=SLE($1);};
+_expr0[r]: str {$r=$1;};
 _expr0[r]: LASTCLASS {
   $r=SLE($1);
 };
@@ -1572,18 +1574,15 @@ static void __EvalExprNoComma(CFuncInfo *dummy1,AST *node,void *fp) {
         double f;
         int64_t i;
     } ret;
-    ExceptBuf osp;
-    memcpy(&osp,&SigPad,sizeof(SigPad));
-    if(!HCSetJmp(&SigPad)) {
+    if(!HCSetJmp(EnterTry()))
+    {
         if(bt->type==TYPE_F64) {
             ret.f=EvaluateF64(node);
         } else {
             ret.i=EvaluateInt(node,0);
         }
-    } else {
-        ARM_SIGNALS;
+        PopTryFrame();
     }
-    memcpy(&SigPad,&osp,sizeof(SigPad));
     ReleaseType(bt);
     exprret=ret.i;
 }
@@ -1600,10 +1599,13 @@ static void __IsTrue(CFuncInfo *dummy1,AST *node,void *fp) {
   AST *retn =CreateReturn(node);
   CFunction *f=CompileAST(NULL,retn,args,C_AST_FRAME_OFF_DFT,0);
   int ret;
-  if(IsF64(rtype)) {
-    ret=0!=((double(*)())f->funcptr)();
-  } else if(IsIntegerType(rtype)) {
-    ret=0!=((int64_t(*)())f->funcptr)();
+  if(!HCSetJmp(EnterTry())) {
+    if(IsF64(rtype)) {
+      ret=0!=((double(*)())f->funcptr)();
+    } else if(IsIntegerType(rtype)) {
+      ret=0!=((int64_t(*)())f->funcptr)();
+    }
+    PopTryFrame();
   }
   ReleaseFunction(f);
   vec_deinit(&args);
@@ -1611,24 +1613,24 @@ static void __IsTrue(CFuncInfo *dummy1,AST *node,void *fp) {
   __IsTruePassed=ret;
 }
 int EvalConditionForPreproc() {
-  Lexer.stopAtNewline=1;
-  Lexer.isEvalMode=1;
   RunPtr=__IsTrue;
   __IsTruePassed=0;
   yyparse();
-  Lexer.stopAtNewline=0;
   return __IsTruePassed;
 }
 void
 yyerror (char const *s)
 {
   RaiseError(Lexer.lastToken,"Parsing stoped here.");
-  FlushLexer();
 }
 void DebugEvalExpr(void *frameptr,CFuncInfo *info,char *text) {
-  CLexer old=ForkLexer(PARSER_HOLYC);
-  Lexer.isDebugExpr=1;
-  mrope_append_text(Lexer.source,strdup(text));
+  CLexer old=ForkLexer(0);
+  #ifndef BOOTSTRAPED
+    mrope_append_text(Lexer.source,strdup(text));
+  #else
+    void(*inc)(void*cc,char *fn,char *src,int64_t act_f)=(void*)GetVariable("LexIncludeStr")->func->funcptr;
+    inc(Lexer.HCLexer,"(nofile)",text,0);
+  #endif
   CurFuncInfo=info;
   CurFramePtr=frameptr;
   RunPtr=&EvalDebugExpr;
@@ -1637,12 +1639,19 @@ void DebugEvalExpr(void *frameptr,CFuncInfo *info,char *text) {
   Lexer=old;
 }
 int64_t EvalExprNoComma(char *text,char **en) {
-    CLexer old=ForkLexer(PARSER_HOLYC);
-    mrope_append_text(Lexer.source,text);
-    Lexer.isEvalNoCommaMode=1;
+    CLexer old=ForkLexer(0);
+    #ifndef BOOTSTRAPED
+        mrope_append_text(Lexer.source,strdup(text));
+    #else
+        void(*inc)(void*cc,char *fn,char *src,int64_t act_f)=(void*)GetVariable("LexIncludeStr")->func->funcptr;
+        inc(Lexer.HCLexer,"(nofile)",text,0);
+        Lexer.isEvalExpr=1;
+    #endif
     RunPtr=__EvalExprNoComma;
     yyparse();
+    #ifndef BOOTSTRAPED
     if(en) *en=text+Lexer.cursor_pos;
+    #endif
     Lexer=old;
     return exprret;
 }

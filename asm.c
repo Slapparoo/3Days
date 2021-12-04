@@ -129,7 +129,7 @@ CFunction *CompileLabelExprFunc(CFunction *func,AST* a,LabelContext labContext) 
       Compiler.addrofFrameoffsetMode=1;
       vec_CVariable_t empty;
       vec_init(&empty);
-      CFunction *apply_func=CompileAST(&Compiler.locals,CreateReturn(a),empty,func->funcInfo.frameOffset,0);
+      CFunction *apply_func=CompileAST(&Compiler.locals,CreateReturn(a),empty,func->funcInfo.frameOffset,C_AST_IS_TMP_FUNCTION);
       Compiler.addrofFrameoffsetMode=oldf;
       Assembler.active = olda;
     RestoreCompilerState(old);
@@ -140,9 +140,9 @@ void* EvalLabelExpr(CFunction *func,AST* a,LabelContext labContext) {
     int err=0;
     CFunction *apply_func=CompileLabelExprFunc(func,a,labContext);
     if(apply_func) {
-      GC_Disable();
+      tgc_pause(&gc);
       ptr=((void*(*)())apply_func->funcptr)();
-      GC_Enable();
+      tgc_resume(&gc);
       if(!Compiler.AOTMode) ReleaseFunction(apply_func);
     }
  end:
@@ -153,10 +153,10 @@ void* AST2X64Mode(AST* a, int64_t* lab_offset) {
   if (lab_offset) *lab_offset = 0;
 
   if (a->type == AST_ASM_REG) {
-    CVariable* toreg = *map_get(&Compiler.globals, "X64ModeReg");
+    CVariable* toreg = GetHCRTVar( "X64ModeReg");
     return ((void* (*)(void*))toreg->func->funcptr)(a->asmReg);
   } else if (a->type == AST_ASM_ADDR) {
-    CVariable* toreg = *map_get(&Compiler.globals, "X64ModeMem");
+    CVariable* toreg = GetHCRTVar("X64ModeMem");
     int64_t scale = 0;
     Compiler.addrofFrameoffsetMode = 1;
 
@@ -188,10 +188,10 @@ void* AST2X64Mode(AST* a, int64_t* lab_offset) {
     //Segment scale,index,base,offset,width
     return ((void* (*)(void*,int64_t, void*, void*, int64_t, int64_t))toreg->func->funcptr)(segment,scale, index, base, disp, a->asmAddr.width);
   } else if (a->type == AST_INT) {
-    CVariable* toimm = *map_get(&Compiler.globals, "X64ModeImm");
+    CVariable* toimm = GetHCRTVar("X64ModeImm");
     return ((void* (*)(int64_t))toimm->func->funcptr)(a->integer);
   } else if (a->type == AST_FLOAT) {
-    CVariable* toimm = *map_get(&Compiler.globals, "X64ModeImm");
+    CVariable* toimm = GetHCRTVar("X64ModeImm");
     union {
       int64_t i;
       double d;
@@ -199,7 +199,7 @@ void* AST2X64Mode(AST* a, int64_t* lab_offset) {
     un.d = a->floating;
     return ((void* (*)(int64_t))toimm->func->funcptr)(un.i);
   } else {
-    CVariable* toimm = *map_get(&Compiler.globals, "X64ModeImm");
+    CVariable* toimm = GetHCRTVar("X64ModeImm");
 
     if (ExprRefsLabel(a)) {
       return ((void* (*)(int64_t))toimm->func->funcptr)(0xffFFffFF);
@@ -228,32 +228,32 @@ void* GetRegister(char* name) {
   if(Compiler.tagsFile) return NULL;
   if(!Compiler.loadedHCRT) return 0;
 
-  CVariable** enc = map_get(&Compiler.globals, "GetRegister");
+  CVariable* enc = GetHCRTVar("GetRegister");
 
   if (!enc) return NULL;
-  if(!enc[0]->func) return NULL;
-  if(!enc[0]->func->funcptr) return NULL;
+  if(!enc->func) return NULL;
+  if(!enc->func->funcptr) return NULL;
 
-  return ((void* (*)(char*))enc[0]->func->funcptr)(name);
+  return ((void* (*)(char*))enc->func->funcptr)(name);
 }
 int IsOpcode(char* name) {
   if(Compiler.tagsFile) return 0;
   if(!Compiler.loadedHCRT) return 0;
-  CVariable** enc = map_get(&Compiler.globals, "IsOpcode");
+  CVariable* enc = GetHCRTVar("IsOpcode");
 
   if (!enc) return 0;
-  if(!enc[0]->func) return 0;
-  if(!enc[0]->func->funcptr) return NULL;
+  if(!enc->func) return 0;
+  if(!enc->func->funcptr) return NULL;
 
-  return ((int(*)(char*))enc[0]->func->funcptr)(name);
+  return ((int(*)(char*))enc->func->funcptr)(name);
 }
 void AssembleOpcode(AST* at, char* name, vec_AST_t operands) {
   if(Compiler.tagsFile) return;
   int8_t isjmp = 0;
-  CVariable* f = *map_get(&Compiler.globals, "X64ModeFree");
+  CVariable* f = GetHCRTVar("X64ModeFree");
   Compiler.addrofFrameoffsetMode = 1;
   //Check if conditonal op
-  CVariable* enc = *map_get(&Compiler.globals, "EncodeOpcode");
+  CVariable* enc = GetHCRTVar( "EncodeOpcode");
   //Instptr,name,is_jmp,sib_off,imm_off,argc,args
   int8_t* (*enc_ptr)(int8_t* ip, char*, int8_t*, int64_t*, int64_t*, int64_t, void**) = (void*)enc->func->funcptr;
   char buffer[32], *end_ptr;
@@ -272,7 +272,7 @@ void AssembleOpcode(AST* at, char* name, vec_AST_t operands) {
       end_ptr = enc_ptr(buffer, name, &isjmp, &sibo, &immo, operands.length, args);
       PopTryFrame();
     } else {
-      CVariable* err = *map_get(&Compiler.globals, "AsmError");
+      CVariable* err = GetHCRTVar( "AsmError");
       RaiseError(at, *(char**)err->linkage.globalPtr);
     }
 

@@ -28,16 +28,13 @@ signal(SIGINT,oldhand);
 #else
 #include "linjmp.h"
 #define BLOCK_SIGS \
-sigset_t oldset; \
-sigset_t newset; \
-sigfillset(&newset); \
-sigdelset(&newset,SIGSEGV); \
-sigprocmask(SIG_BLOCK,&newset,&oldset);
+Compiler.blockSignals=1;
 #define UNBLOCK_SIGS \
-sigprocmask(SIG_SETMASK,&oldset,NULL);
+Compiler.blockSignals=1;
 #endif
 #ifndef TARGET_WIN32
 #define ARM_SIGNALS \
+{sigset_t full;sigfillset(&full);sigprocmask(SIG_UNBLOCK,&full,NULL);} \
 signal(SIGSEGV,SignalHandler); \
 signal(SIGABRT,SignalHandler); \
 signal(SIGBUS,SignalHandler); \
@@ -48,7 +45,6 @@ signal(SIGINT,SignalHandler);
 #define ARM_SIGNALS \
 signal(SIGSEGV,SignalHandler); \
 signal(SIGABRT,SignalHandler);
-
 #endif
 typedef vec_t(void***) vec_voidppp_t;
 typedef map_t(vec_voidppp_t) map_vec_voidppp_t;
@@ -472,6 +468,7 @@ void RaiseError(AST *at,...);
 void RaiseWarning(AST *at,...);
 CType *CreateClassForwardDecl(AST *linkage,AST *name);
 CType *CreateUnionForwardDecl(AST *linkage,AST *name);
+#ifndef BOOTSTRAPED
 typedef struct CMacro {
     char *name;
     char *expand;
@@ -496,6 +493,7 @@ typedef struct {
     char hasElse;
 } CPreprocIfState;
 typedef vec_t(CPreprocIfState) vec_CPreprocIfState_t;
+
 typedef struct CLexer {
     map_str_t filenames;
     map_vec_int_t_t fileLineStarts;
@@ -517,6 +515,7 @@ typedef struct CLexer {
     int isEvalNoCommaMode:1;
     //This is used generating a single header from some files.It will also not remove macros definitions
     int preprocessMode:1;
+    int useHolyCLexer:1;
     mrope_t *source;
     lexer_cb_t cb;
     /**
@@ -544,13 +543,26 @@ typedef struct CLexer {
     map_void_t __opcodes;
     //Same
     map_void_t __registers;
+    void *HCLexer;
 } CLexer;
+
+void RestoreLexerFileState(CLexerFileState backup) ;
+CLexerFileState CreateLexerFileState();
+void FreeMacro(CMacro *macro);
+#else
+typedef struct CLexer {
+    void *HCLexer;
+    AST *lastToken;
+    int isDebugExpr:1;
+    int isEvalExpr:1;
+    int isExeMode:1;
+} CLexer;
+#endif
 extern CLexer Lexer;
 #define LTF_EXPANSION 1
 char *LexExpandText(char*text) ;
 void ReleaseAST(AST *t);
 AST *CreateString(char *txt) ;
-void FreMacro(CMacro *macro);
 int LexExpandWord() ;
 void LexerSearch(char *text);
 AST * LexString() ;
@@ -558,9 +570,6 @@ AST * LexString() ;
 char *WordAtPoint(int expandMacro);
 #define SW_SKIP_STRING 1
 void SkipWhitespace(int flags);
-void RestoreLexerFileState(CLexerFileState backup) ;
-CLexerFileState CreateLexerFileState();
-void FreeMacro(CMacro *macro);
 void CreateLexer(int whichParser) ;
 int LexMacro();
 AST *CreateI64(uint64_t i);
@@ -676,6 +685,7 @@ typedef struct {
     int loadedHCRT:1;
     int allowRedeclarations:1;
     int allowForwardAfterDefine:1;
+    int blockSignals:1;
     //This is used for the code outside of the functions.
     struct jit *AOTMain;
     char *tagsFile;
@@ -710,6 +720,7 @@ typedef struct {
   long errorCount;
   map_CBinaryModule_t binModules;
   map_vec_CFunction_t unlinkedFuncsByRelocation;
+  CBinaryModule *hcrt;
 } CCompiler;
 #define LOCAL_LAB_FMT "@@(%li):%s"
 extern CCompiler Compiler;
@@ -775,6 +786,7 @@ AST *CreateExplicitTypecast(AST *a,AST *to_type);
 AST *CreateReturn(AST *exp);
 #define C_AST_FRAME_OFF_DFT -1
 #define C_AST_F_NO_COMPILE 1
+#define C_AST_IS_TMP_FUNCTION 2
 /**
  * Use C_AST_FRAME_OFF_DFT to compute the frame offset for you
  */
@@ -859,6 +871,7 @@ typedef struct CDebugger {
      */
     long prevStackDepth;
 } CDebugger;
+#ifdef BOOTSTRAPED
 extern CDebugger Debugger;
 void CallDebugger(void *rstack,long index);
 void VisitBreakpoint(CBreakpoint *bp);
@@ -866,6 +879,8 @@ void CompileBreakpoint(AST *at);
 void DbgLeaveFunction();
 void DbgEnterFunction(void *baseptr,CFunction *func);
 void EnterDebugger();
+void WhineOnOutOfBounds(void *ptr,int64_t size);
+#endif
 CLexer ForkLexer(int whichparser);
 void DbgPrintVar(CType *type,void *ptr);
 void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr);
@@ -904,7 +919,6 @@ extern CAssembler Assembler;
 void RestoreCompilerState(COldFuncState old);
 int DebugIsTrue(void *frameptr,CFuncInfo *info,char *text);
 void DebugEvalExpr(void *frameptr,CFuncInfo *info,char *text);
-void WhineOnOutOfBounds(void *ptr,int64_t size);
 void SignalHandler(int s);
 void StreamPrint(const char *fmt,int64_t argc,int64_t *argv);
 void Backtrace();
@@ -949,10 +963,16 @@ void SerializeFunction(FILE *f,CFunction *func);
 CBinaryModule LoadAOTBin(FILE *f,int verbose);
 void MakeHeaderForModule(FILE *f);
 void DestroyLexer();
-void JoinWithOldLexer(CLexer old);
 //Used for loading from binary file.
 void PatchLabelExprFunc(CAsmPatch *patch,CFunction *func);
 CVariable *LoadAOTFunction(FILE *f,int verbose,int flags);
 AST *CreateName(char *name);
 CVariable *UniqueGlblVar(CType *type);
 char *PreprocessFile(char *to_include);
+void* FileRead(char *fn,int64_t *sz);
+AST *JoinStrings(AST *a,AST *b);
+void __LexExe();
+void throw(uint64_t v);
+void PopTryFrame();
+struct ExceptFrame *EnterTry();
+CVariable *GetHCRTVar(char *name);

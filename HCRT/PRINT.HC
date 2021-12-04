@@ -263,7 +263,7 @@ U8 *StrPrintJoin(U8 *dst,U8 *fmt,I64 argc,I64 *argv)
   */
   I64 i,j,l,ch,k,k0,n,n0,len,dec_len,flags,old_flags,
       aux_fmt_num,comma_cnt,comma_fmt_cnt,cur_arg=0;
-  U64 m;
+  I64 m;
   F64 d,d1;
   U8 *ptr,**_buf,*buf,**_dst,tmp_buf[TMP_BUF_LEN],tmp_buf2[TMP_BUF_LEN*2];
   if (!fmt)
@@ -490,7 +490,7 @@ sp_out_dec:
           comma_fmt_cnt=comma_cnt=3;
           do
           {
-            tmp_buf[k++]=(m)(U64)%10+'0';
+            tmp_buf[k++]=(m)(I64)%10+'0';
             m/=10;
             if (!m) break;
             if (!--comma_cnt)
@@ -541,7 +541,7 @@ sp_out_comma_num:
         {
           do
           {
-            tmp_buf[k++]=(m)(U64)%10+'0';
+            tmp_buf[k++]=(m)(I64)%10+'0';
             m/=10;
             if (!m) break;
           }
@@ -656,7 +656,7 @@ sp_out_f:
               tmp_buf[k++]='0';
             }
             else {
-              tmp_buf[k++]=(m)(U64)%10+'0';
+              tmp_buf[k++]=(m)(I64)%10+'0';
                 m/=10;
             }
             if (!i) break;
@@ -672,7 +672,7 @@ sp_out_f:
               tmp_buf[k++]='0';
             }
             else {
-              tmp_buf[k++]=(m)(U64)%10+'0';
+              tmp_buf[k++]=(m)(I64)%10+'0';
                 m/=10;
             }
           }
@@ -690,7 +690,7 @@ sp_out_f:
               tmp_buf[k++]='0';
             }
             else {
-              tmp_buf[k++]=(m)(U64)%10+'0';
+              tmp_buf[k++]=(m)(I64)%10+'0';
                 m/=10;
             }
             if (!m) break;
@@ -712,7 +712,7 @@ sp_out_f:
               tmp_buf[k++]='0';
             }
             else {
-              tmp_buf[k++]=(m)(U64)%10+'0';
+              tmp_buf[k++]=(m)(I64)%10+'0';
                 m/=10;
             }
             if (!m) break;
@@ -751,7 +751,7 @@ sp_out_e:
             flags&=~PRTF_NEG_E;
           i=3;
           do {
-            tmp_buf[k++]=(n)(U64)%10+'0';
+            tmp_buf[k++]=(n)(I64)%10+'0';
             n/=10;
           } while (n && i--);
           if (flags&PRTF_NEG_E)
@@ -875,7 +875,7 @@ sp_out_eng: //Engineering notation
         {
           i=3;
           do {
-            tmp_buf[k++]=(n)(U64)%10+'0';
+            tmp_buf[k++]=(n)(I64)%10+'0';
             n/=10;
           } while (n && i--);
           if (flags&PRTF_NEG_E)

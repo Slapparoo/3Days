@@ -9,32 +9,34 @@
 #include <sys/syscall.h>
 #include "winjmp.h"
 #endif
-CDebugger Debugger;
-void Backtrace() {
-    CBacktrace *bt;
-    int iter;
-    vec_foreach_ptr_rev(&Debugger.callStack, bt, iter) {
-        if(bt->lastbp)
-            fprintf(stderr,"  [%i] %s:%li<%s>\n",iter,bt->lastbp->fn,bt->lastbp->ln,bt->func->name);
-        else
-            fprintf(stderr,"  [%i] ?:?<%s>\n",iter,bt->func->name);
+static const char* ListLines(const char *fn,long start,long end);
+void SignalHandler(int s) {
+    #ifdef BOOTSTRAPED
+    Backtrace();
+    #endif
+    printf("\n");
+    switch(s) {
+      case SIGINT:
+        if(Compiler.blockSignals) return ;
+    case SIGABRT:
+        printf("User abort.type \"Exit(0);\" to exit.\n");
+        break;
+    case SIGSEGV:
+        printf("Segmentation fault.\n");
+        break;
+    case SIGFPE:
+        printf("Arithmetic exception.\n");
+        break;
+    default:
+        printf("Strange signal %d.\n",s);
+        break;
     }
+    throw(0);
 }
-void WhineOnOutOfBounds(void *ptr,int64_t sz) {
-    if(!InBounds(ptr+sz)) {
-        Backtrace();
-    }
+#ifndef BOOTSTRAPED
+void DbgPrintVar(CType *type,void *ptr) {
 }
-static char *__SkipWhitespace(char *text) {
-    while(isblank(*text)) text++;
-    return text;
-}
-static char *__WordAtPoint(char *text) {
-    char *orig=text;
-    while(isalnum(*text)||*text=='_') text++;
-    if(text==orig) return NULL;
-    return strncpy(TD_MALLOC(1+text-orig),orig,text-orig);
-}
+#else
 void EnterDebugger() {
     if(!Compiler.debugMode) {
       fprintf(stderr, "Run with -d or -b to use the debugger.\n");
@@ -43,21 +45,9 @@ void EnterDebugger() {
     VisitBreakpoint(NULL);
 }
 void DbgPrintVar(CType *type,void *ptr) {
-    ExceptBuf old;
-    memcpy(&old,&SigPad,sizeof(SigPad));
     int code;
-    if(code=HCSetJmp(SigPad)) {
-        vec_truncate(&Debugger.callStack,0);
-#ifndef TARGET_WIN32
-        sigset_t empty;
-        sigfillset(&empty);
-        sigprocmask(SIG_UNBLOCK,&empty,NULL);
-#else
-        signal(SIGINT,SignalHandler);
-#endif
-        signal(SIGSEGV,SignalHandler);
-        signal(SIGABRT,SignalHandler);
-
+    if(HCSetJmp(EnterTry())) {
+        ARM_SIGNALS;
         if(code==SIGSEGV) {
             char *ts=TypeToString(type);
             if(type->type==TYPE_PTR)
@@ -159,90 +149,21 @@ void DbgPrintVar(CType *type,void *ptr) {
             break;
         }
         }
+        PopTryFrame();
     }
-    memcpy(&SigPad,&old,sizeof(SigPad));
 }
-static CBreakpoint *GetBreakInFile(char *filename,long line) {
-    char buffer[256];
-    sprintf(buffer,"%s:%ld",filename,line);
-    CBreakpoint *bp=map_get(&Compiler.breakpoints,buffer);
-    if(bp) return bp;
-    printf("Breakpoint %s,%ld doesn't exist(may not be Compiled yet).\nWould you like to pend on this location?.",filename,line);
-    char *res=rl("[Yn]: ");
-    if('Y'==toupper(res[0])) {
-        CBreakpoint bp;
-        bp.fn=*(char**)map_get(&Lexer.filenames,filename);
-        bp.ln=line;
-        bp.enabled=0;
-        map_set(&Compiler.breakpoints, buffer, bp);
-        return map_get(&Compiler.breakpoints, buffer);
-    }
-#ifndef TARGET_WIN32
-    TD_FREE(res);
-#endif
-    return NULL;
+CDebugger Debugger;
+static char *__SkipWhitespace(char *text) {
+    while(isblank(*text)) text++;
+    return text;
 }
-static int FilenameMatch(const char *_from,const char *_match) {
-    if(0==strcmp(_from,_match)) return 1;
-    char *from=strdup(_from);
-    char* match=strdup(_match);
-    char *of=from,*om=match;
-loop:
-    if(0==strcmp(basename(from),basename(match))) {
-        from=dirname(from);
-        match=dirname(match);
-        if(0==strcmp(".", from)||0==strcmp("/", from)) goto end;
-        if(0==strcmp(".", match)||0==strcmp("/", match)) goto end;
-        goto loop;
-    } else {
-        TD_FREE(of);
-        TD_FREE(om);
-        return 0;
-    }
-end:
-    TD_FREE(of);
-    TD_FREE(om);
-    return 1;
+static char *__WordAtPoint(char *text) {
+    char *orig=text;
+    while(isalnum(*text)||*text=='_') text++;
+    if(text==orig) return NULL;
+    return strncpy(TD_MALLOC(1+text-orig),orig,text-orig);
 }
-//Returns matched file
-static const char* ListLines(const char *fn,long start,long end) {
-    map_iter_t fiter=map_iter(&Lexer.filenames);
-    const char *key;
-    while(key=map_next(&Lexer.filenames, &fiter)) {
-        if(FilenameMatch(key,fn)) {
-            fn=key;
-            goto found;
-        }
-    }
-    printf("Coudln't find a match for file \"%s\"(may not be compiled yet).",fn);
-found:
-    ;
-    FILE *f=fopen(fn,"r");
-    if(!f) {
-        printf("Can't open \"%s\" for listing",fn);
-        return  NULL;
-    }
-    vec_int_t *lines=map_get(&Lexer.fileLineStarts,fn);
-    long ln=start;
-    for(; ln!=end; ln++) {
-        if(lines->length<=ln) break;
-        long pstart=lines->data[ln];
-        long pend;
-        if(lines->length>ln+1)
-            pend=lines->data[ln+1];
-        else {
-            fseek(f,0, SEEK_END);
-            pend=ftell(f);
-        }
-        fseek(f, pstart, SEEK_SET);
-        char buffer[pend-pstart+1];
-        fread(buffer, 1, pend-pstart, f);
-        buffer[pend-pstart]=0;
-        printf("[%li]:  %s",ln+1,buffer);
-    }
-    fclose(f);
-    return fn;
-}
+
 void VisitBreakpoint(CBreakpoint *bp) {
     if(!bp) goto dbg;
     int stksz=Debugger.callStack.length;
@@ -340,11 +261,12 @@ help:
         }
         int matched=0;
         //Match filename
-        map_iter_t fiter=map_iter(&Lexer.filenames);
-        const char *key;
-        while(key=map_next(&Lexer.filenames, &fiter)) {
-            if(FilenameMatch((char*)key,s)) {
-                CBreakpoint *bp=GetBreakInFile((char*)key,line);
+        if(GetVariable("LexMatchFile")) {
+            const char *fn=((const char*(*)(void*,char *))GetVariable("LexMatchFile")->func->funcptr)(Lexer.HCLexer,fn);
+            if(fn) {
+                char buffer[256];
+                sprintf(buffer,"%s:%ld",fn,line);
+                CBreakpoint *bp=map_get(&Compiler.breakpoints,buffer);
                 if(bp) {
                     matched++;
                     printf("Match at %s:%ld\n",bp->fn,bp->ln);
@@ -352,7 +274,6 @@ help:
                         printf("Breakpoint is already present at %s:%li\n",bp->fn,bp->ln);
                     } else {
                         bp->enabled=1;
-                        char buffer[256];
                         sprintf(buffer,"%ld",++Debugger.breakpointNumber);
                         map_set(&Debugger.activeBreakpoints,buffer,bp);
                     }
@@ -409,26 +330,11 @@ help:
         Debugger.fin=1;
         goto end;
     } else if(0==strcmp(word,"p")) {
-        ExceptBuf old;
-        memcpy(&old,&SigPad,sizeof(SigPad));
         int code;
-        if(code=HCSetJmp(SigPad)) {
-#ifndef TARGET_WIN32
-            sigset_t empty;
-            sigfillset(&empty);
-            sigprocmask(SIG_UNBLOCK,&empty,NULL);
-#else
-            signal(SIGINT,SignalHandler);
-#endif
-            signal(SIGSEGV,SignalHandler);
-            signal(SIGABRT,SignalHandler);
-        } else {
-            s+=strlen(word);
-            s=__SkipWhitespace(s);
-            CBacktrace cur=Debugger.callStack.data[stkpos];
-            DebugEvalExpr(cur.bp, &cur.func->funcInfo, s);
-        }
-        memcpy(&SigPad,&old,sizeof(old));
+        s+=strlen(word);
+        s=__SkipWhitespace(s);
+        CBacktrace cur=Debugger.callStack.data[stkpos];
+        DebugEvalExpr(cur.bp, &cur.func->funcInfo, s);
     } else if(0==strcmp(word,"n")) {
         Debugger.next=1;
         goto end;
@@ -486,6 +392,7 @@ end:
     TD_FREE(word);
     TD_FREE(_gcs);
 }
+
 void DbgEnterFunction(void *baseptr,CFunction *func) {
     CBacktrace bt;
     bt.bp=baseptr;
@@ -496,21 +403,60 @@ void DbgEnterFunction(void *baseptr,CFunction *func) {
 void DbgLeaveFunction() {
     vec_pop(&Debugger.callStack);
 }
-void SignalHandler(int s) {
-    Backtrace();
-    printf("\n");
-    switch(s) {
-      case SIGINT:
-    case SIGABRT:
-        printf("User abort.type \"Exit(0);\" to exit.\n");
-        break;
-    case SIGSEGV:
-        printf("Segmentation fault.\n");
-        break;
-    default:
-        printf("Strange signal %d.\n",s);
-        break;
+void Backtrace() {
+    CBacktrace *bt;
+    int iter;
+    vec_foreach_ptr_rev(&Debugger.callStack, bt, iter) {
+        if(bt->lastbp)
+            fprintf(stderr,"  [%i] %s:%li<%s>\n",iter,bt->lastbp->fn,bt->lastbp->ln,bt->func->name);
+        else
+            fprintf(stderr,"  [%i] ?:?<%s>\n",iter,bt->func->name);
+    }
+}
+void WhineOnOutOfBounds(void *ptr,int64_t sz) {
+    if(!InBounds(&gc,ptr+sz)) {
+        Backtrace();
+    }
+}
+//Returns matched file
+static const char* ListLines(const char *fn,long start,long end) {
+    if(!GetVariable("LexMatchFile")) return NULL;
+
+    fn=((const char*(*)(void*,const char *))GetVariable("LexMatchFile")->func->funcptr)(Lexer.HCLexer,fn);
+    if(!fn) {
+        printf("Coudln't find a match for file \"%s\"(may not be compiled yet).",fn);
+        return NULL;
     }
 
-    HCLongJmp(SigPad);
+    assert(GetVariable("LexFileLines"));
+    int64_t length;
+    int64_t *lines=((int64_t*(*)(void*,const char *,int64_t *))GetVariable("LexFileLines")->func->funcptr)(Lexer.HCLexer,fn,&length);
+found:
+    ;
+    FILE *f=fopen(fn,"r");
+    if(!f) {
+        printf("Can't open \"%s\" for listing",fn);
+        return  NULL;
+    }
+    long ln=start;
+    for(; ln!=end; ln++) {
+        if(length<=ln) break;
+        long pstart=lines[ln];
+        long pend;
+        if(length>ln+1)
+            pend=lines[ln+1];
+        else {
+            fseek(f,0, SEEK_END);
+            pend=ftell(f);
+        }
+        fseek(f, pstart, SEEK_SET);
+        char buffer[pend-pstart+1];
+        fread(buffer, 1, pend-pstart, f);
+        buffer[pend-pstart]=0;
+        printf("[%li]:  %s",ln+1,buffer);
+    }
+    fclose(f);
+    return fn;
 }
+
+#endif

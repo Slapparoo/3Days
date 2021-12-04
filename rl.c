@@ -7,7 +7,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "gc.h"
 #include "alloc.h"
 #ifdef BSD
 #include <readline/readline.h>

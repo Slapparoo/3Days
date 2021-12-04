@@ -350,7 +350,16 @@ static inline void jit_buf_expand(struct jit * jit)
 	jit->buf = JIT_REALLOC(jit->buf, jit->buf_capacity);
 	jit->ip = jit->buf + pos;
 }
-
+static void ReleaseFMem(void *_jit,void *data) {
+	struct jit *jit=_jit;
+	#ifndef TARGET_WIN32
+		munmap(jit->buf,jit->ip-jit->buf);
+	#else
+		VirtualFree(jit->buf,0,MEM_RELEASE);
+	#endif
+}
+static void free_labels(jit_label * lab);
+static void free_ops(jit_op * lab);
 #include "graphcoloring.h"
 void jit_generate_code(struct jit * jit,struct CFunction *func)
 {
@@ -458,6 +467,8 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 	memcpy(mem, jit->buf, code_size);
 	JIT_FREE(jit->buf);
 
+	tgc_set_dtor(&gc, jit, ReleaseFMem);
+
 	for (struct jit_op * op = jit->ops; op != NULL; op = op->next) {
 	  if(GET_OP(op)==JIT_DUMP_PTR) {
 	    *((void**)op->arg[0])=mem+op->arg[1];
@@ -478,6 +489,16 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 		if (GET_OP(op) == JIT_PROLOG)
 			*(void **)(op->arg[0]) = jit->buf + (int64_t)op->patch_addr;
 	}
+
+	//Free IR for more memory
+	jit_reg_allocator_free(jit->reg_al);
+	free_ops(jit_op_first(jit->ops));
+	free_labels(jit->labels);
+	struct jit oldj=*jit;
+	memset(jit, 0, sizeof(*jit));
+	jit->buf=oldj.buf;
+	jit->ip =oldj.ip;
+	jit->bin_size=pos;
 }
 
 static void free_ops(struct jit_op * op)
@@ -523,13 +544,12 @@ int64_t jit_bin_size(struct jit * jit) {
 void jit_free(struct jit * jit)
 {
     if(!jit) return;
-    jit_reg_allocator_free(jit->reg_al);
-    free_ops(jit_op_first(jit->ops));
-    free_labels(jit->labels);
+		/* Will be handled by destructor
 #ifndef TARGET_WIN32
 	munmap(jit->buf,jit->ip-jit->buf);
 #else
 	VirtualFree(jit->buf,0,MEM_RELEASE);
 #endif
+  */
 	JIT_FREE(jit);
 }

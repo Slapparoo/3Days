@@ -30,15 +30,15 @@
  */
 #include "../../../alloc.h"
 #ifndef JIT_MALLOC
-#define JIT_MALLOC	malloc
+#define JIT_MALLOC	TD_MALLOC
 #endif
 
 #ifndef JIT_REALLOC
-#define JIT_REALLOC	realloc
+#define JIT_REALLOC	TD_REALLOC
 #endif
 
 #ifndef JIT_FREE
-#define JIT_FREE	free
+#define JIT_FREE	TD_FREE
 #endif
 
 /*

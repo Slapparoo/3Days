@@ -101,7 +101,7 @@ CTrie *ReadTags(U8 *file) {
     CTrie *ret=MAlloc(sizeof(CTrie));
     I64 len;
     U8 *text=FileRead(file,&len);
-    U8 *en=text+len,*fullname;
+    U8 *en=text+len,*fullname,*orig=text;
     U8 buf1[256],buf2[256],buf3[256];
     U8 *_buf1=buf1,*_buf2=buf2,*_buf3=buf3;
     I64 ln;
@@ -182,7 +182,7 @@ ins:
         goto loop;
     }
 en:
-    Free(text);
+    Free(orig);
     return ret;
 }
 #define DIAG_WARN 0
@@ -284,12 +284,12 @@ CTrie **FuzzyMatch(CTrie *trie,U8 *name,I64 *cnt=NULL) {
     QSort(ents(U8*),cnt2,sizeof(CTrie*),&MatchCmp);
     return ents;
 }
-CHashTable *keywords=HashTableNew(1<<5);
+CHashTable *edkeywords=HashTableNew(1<<5);
 U0 AddKeyword(U8i *text) {
     CHash *h=MAlloc(sizeof(CHash));
     h->str=StrNew(text);
     h->type=1;
-    HashAdd(h,keywords);
+    HashAdd(h,edkeywords);
 }
 U8 *kws[]= {
     "union",
@@ -487,7 +487,6 @@ U0 SDL_DrawWin(...) {
         SDL_Rect sbox={w->begx*FONT_X2,w->begy*FONT_Y2,rx/FONT_X2*FONT_X2,ry/FONT_Y2*FONT_Y2};
         SDL_BlitSurface(w->text,NULL,winsurf,&sbox);
         if(rx/FONT_X2!=winx||ry/FONT_Y2!=winy) {
-            "RESETING\n";
             SDL_FreeSurface(w->text);
             w->text=SDL_CreateRGBSurface(0,winx*FONT_X2,winy*FONT_Y2,32,0,0,0,0);
             Free(w->char_cache);
@@ -930,7 +929,7 @@ loop:
         StrNCpy(buf,&text[ns],idx-ns);
         buf[idx-ns]=0;
         CHash *kw;
-        if(kw=HashFind(buf,keywords)) {
+        if(kw=HashFind(buf,edkeywords)) {
             ed->window->cur_cp=CP_KW;
         } else {
             ed->window->cur_cp=CP_WORD;
@@ -1675,8 +1674,8 @@ U0 EdBackspace(CEditor *ed) {
             //ed->curx=ed->_curx=StrLen(text);
         } else {
             EditorDelText(ed, eoff+orig-1, eoff+orig,TRUE);
+            Free(text);
         }
-        Free(text);
     }
 }
 U0 EdPageDown(CEditor *ed) {
@@ -2366,11 +2365,11 @@ U8 *FileDialog(CEditor *parent) {
   if(!fn) return fn;
   if(IsDir(fn)) {
     U8 *dir;
-    #if IsWindows
+    //#if IsWindows
     dir=MStrPrint("%s\\",fn);
-    #else
+    //#else
     dir=MStrPrint("%s/",fn);
-    #endif
+    //#endif
     Free(fn);
     fn=dir;
     goto loop;
@@ -2669,9 +2668,6 @@ EditorDelText(ed,1,2);
 EditorDelText(ed,1,15-1);
 DrawEditor(ed);
 */
-SDL_InitScr;
-CEditor *ed=EditorNew(TRUE);
-Edit(ed);
 U0 FreeBuffer(U0 *buf) {
     FreeEditor(buf(CBuffer*)->ed);
 }
@@ -2682,4 +2678,10 @@ U0 SDL_ExitScr() {
     SDL_StopTextInput;
     HashTableDel(buffers,(&FreeBuffer)(U0*));
 }
-SDL_ExitScr;
+U0 Ed(U8 *fn) {
+    SDL_InitScr;
+    OpenFile(fn,0);
+    SDL_ExitScr;
+}
+
+

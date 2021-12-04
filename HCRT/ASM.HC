@@ -146,7 +146,6 @@ U0 ParseOpcodes(U8 *text) {
         opc->type=HASH_TYPE_OPCODE;
         opc->str=StrNew(name);
         for(off=0;;off++) {
-            if(off>10) Debugger;
             text=SkipComment(text);
             if(*text==';'||*text==':') {
                 opc->bcnt=off;
@@ -310,7 +309,6 @@ U0 ParseOpcodes(U8 *text) {
                 opc.args[argument++].type=OPCA_STI,Free(name2);
                 goto attrloop;
             } else {
-                Debugger;
                 "%s\n",text;
                 throw('Asm');
             }
@@ -365,7 +363,6 @@ U0 ParseOpcodes(U8 *text) {
             text+=2;
             goto attrloop;
         } else {
-            Debugger;
             throw('asm');
         }
         oen:
@@ -401,15 +398,14 @@ U0 ParseOpcodes(U8 *text) {
             goto aloop;
         }
     } else {
-        Debugger;
         "%s\n",text;
         throw('Asm');
     }
     goto loop;
     en:
 }
-U8 *ops=#exe{StreamPrint("\"%q\";",FileRead("Opcodes.DD",NULL));};
-ParseOpcodes(ops);
+U8 *opcodesF=#include "Opcodes.STR.HC";
+ParseOpcodes(opcodesF);
 
 // See ext/x64.h
 Bool __X64RegIsIntExt(I64 code) {

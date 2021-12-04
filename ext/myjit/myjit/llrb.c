@@ -87,7 +87,7 @@ static inline jit_tree * fixup(jit_tree * h)
 
 static inline jit_tree * node_new(jit_tree_key key, jit_tree_value value)
 {
-	jit_tree * res = malloc(sizeof(jit_tree));
+	jit_tree * res = JIT_MALLOC(sizeof(jit_tree));
 	res->key = key;
 	res->value = value;
 	res->color = RED;
