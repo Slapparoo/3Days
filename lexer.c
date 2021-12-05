@@ -62,7 +62,14 @@ void HC_CreateLexer() {
 AST *HC_LexItem() {
     CVariable *li=GetHCRTVar("LexItem");
     void* (*fp)(void* ctrl)=li->func->funcptr;
-    return Lexer.lastToken=fp(Lexer.HCLexer);
+    if(!HCSetJmp(EnterTry())) {
+      Lexer.lastToken=fp(Lexer.HCLexer);
+      PopTryFrame();
+    } else {
+      FlushLexer();
+      throw('Lexer');
+    }
+    return Lexer.lastToken;
 }
 CLexer Lexer;
 AST *SetPosFromOther(AST *dst,AST *src) {
@@ -2088,5 +2095,9 @@ void EnableREPL() {
 void __LexExe() {
   Lexer.isExeMode=1;
   HC_parse();
+}
+void FlushLexer() {
+  DestroyLexer();
+  CreateLexer(0);
 }
 #endif

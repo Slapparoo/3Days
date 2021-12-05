@@ -4116,13 +4116,25 @@ to=vec_pop(&Compiler.valueStack); \
   op(Compiler.JIT,R(ir),ar,br);
 
         CType *r =AssignTypeToNode(exp->binop.a);
-        __CompileAST(exp->binop.a);
-        __CompileAST(exp->binop.b);
         CValue a AF_VALUE,b AF_VALUE;
+        //&&'s dont eval the right side if the left is false
+        int ir=GetIntTmpReg();
+        CValue ret;
+        vec_push(&Compiler.valueStack, ret=VALUE_VAR(CreateTmpRegVar(ir, CreatePrimType(TYPE_BOOL))));
+        CompileAssign(ret, VALUE_INT(0));
+        __CompileAST(exp->binop.a);
         if(IsF64(r)) {
-            F_LOGICAL(jit_andr);
+          struct jit_op *op=(void*)jit_fbeqi(Compiler.JIT, (jit_value)NULL, MoveValueToFltRegIfNeeded(vec_pop(&Compiler.valueStack), 0), 0.0);
+          __CompileAST(exp->binop.b);
+          CValue b;FBOOLIFY(b, vec_pop(&Compiler.valueStack));
+          CompileAssign(ret,b);
+          jit_patch(Compiler.JIT, (jit_value)op);
         } else {
-            INT_LOGICAL(jit_andr);
+          struct jit_op *op=(void*)jit_beqi(Compiler.JIT, (jit_value)NULL, MoveValueToIntRegIfNeeded(vec_pop(&Compiler.valueStack), 0), 0);
+          __CompileAST(exp->binop.b);
+          CValue b;BOOLIFY(b, vec_pop(&Compiler.valueStack));
+          CompileAssign(ret,b);
+          jit_patch(Compiler.JIT, (jit_value)op);
         }
         return;
     }
