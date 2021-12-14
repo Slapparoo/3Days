@@ -960,7 +960,9 @@ void AddStringDataToFunc(CFunction *func);
 void SerializeModule(FILE *f,char *header) ;
 void SerializeVar(FILE *f,CVariable *var) ;
 void SerializeFunction(FILE *f,CFunction *func);
-CBinaryModule LoadAOTBin(FILE *f,int verbose);
+//This will not load the symbols into global scope,it will only run
+#define AOT_F_NO_ADD_SYMBOLS 1
+CBinaryModule LoadAOTBin(FILE *f,int flags);
 void MakeHeaderForModule(FILE *f);
 void DestroyLexer();
 //Used for loading from binary file.
@@ -976,3 +978,16 @@ void throw(uint64_t v);
 void PopTryFrame();
 struct ExceptFrame *EnterTry();
 CVariable *GetHCRTVar(char *name);
+typedef struct TOS_Fs {
+    uint64_t except_ch;
+    uint64_t catch_except;
+    int64_t rand_seed;
+    void *last_cc;
+} TOS_Fs;
+extern TOS_Fs Fs;
+typedef struct ExceptFrame {
+    ExceptBuf pad;
+    struct ExceptFrame *parent;
+    long callStackSize;
+} ExceptFrame;
+extern ExceptFrame *curframe;

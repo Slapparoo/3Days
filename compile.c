@@ -914,7 +914,7 @@ double EvaluateF64(AST *exp) {
     ReleaseType(Compiler.returnType);
     double ret2=0;
     if(f&&!Compiler.tagsFile) {
-        tgc_pause(&gc);
+        GC_Disable();
         #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
         ret2=((double(*)())f->funcptr)();
@@ -923,7 +923,7 @@ double EvaluateF64(AST *exp) {
         ret2=((double(*)())f->funcptr)();
         #endif
     }
-    tgc_resume(&gc);
+    GC_Enable();
     ReleaseFunction(f);
     RestoreCompilerState(old);
     return ret2;
@@ -944,7 +944,7 @@ int64_t EvaluateInt(AST *exp,int flags) {
     vec_deinit(&args);
     int64_t ret2=0;
     if(f&&!Compiler.tagsFile) {
-        tgc_pause(&gc);
+        GC_Disable();
         #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
         ret2=((int64_t(*)())f->funcptr)();
@@ -952,7 +952,7 @@ int64_t EvaluateInt(AST *exp,int flags) {
         #else
         ret2=((int64_t(*)())f->funcptr)();
         #endif
-        tgc_resume(&gc);
+        GC_Enable();
     }
     ReleaseFunction(f);
     RestoreCompilerState(old);
@@ -1139,7 +1139,7 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
                       CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT,C_AST_IS_TMP_FUNCTION);
                       RestoreCompilerState(olds);
                       vec_deinit(&empty);
-                      tgc_pause(&gc);
+                      GC_Disable();
         #ifndef TARGET_WIN32
                       signal(SIGINT,SignalHandler);
                       stmt->funcptr(0);
@@ -1147,7 +1147,7 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
         #else
                       stmt->funcptr(0);
         #endif
-                      tgc_resume(&gc);
+                      GC_Enable();
                       ReleaseFunction(stmt);
                     } else {
                         COldFuncState olds=CreateCompilerState();
@@ -2139,7 +2139,7 @@ r02f:
                 jit_fstr(Compiler.JIT, in, i, TypeSize(deref1));
             }
         } else if(src.type==VALUE_FLOAT) {
-            jit_value f=MoveValueToIntRegIfNeeded(src,0);
+            jit_value f=MoveValueToFltRegIfNeeded(src,0);
             if(IsIntegerType(deref1))
                 jit_fstr(Compiler.JIT, in, f, TypeSize(deref1));
             else if(IsF64(deref1))
@@ -2272,6 +2272,15 @@ CValue RegisterString(char *string) {
         goto strloop;
   }
 }
+static int IsLogicalOp(AST *node) {
+    switch(node->type) {
+        case AST_LOR:
+        case AST_LAND:
+        case AST_LXOR:
+            return 1;
+    }
+    return 0;
+}
 CType *__AssignTypeToNode(AST *node) {
     CType *bt=NULL,*ret=NULL;
     if(node->type==AST_LASTCLASS) {
@@ -2314,6 +2323,8 @@ CType *__AssignTypeToNode(AST *node) {
             ret=CreatePrimType(TYPE_BOOL);
         } else if(IsModifyAssign(node)) {
             ret=left;
+        } else if(IsLogicalOp(node)) {
+            return CreatePrimType(TYPE_I64);
         } else if(IsF64(left)||IsF64(right))
             return CreatePrimType(TYPE_F64);
         else if(IsPtr(left)||IsPtr(right)) {
@@ -5740,7 +5751,7 @@ noreg:
         vec_deinit(map_get(&Compiler.labelRefs,key));
     map_deinit(&Compiler.labelRefs);
     map_deinit(&Compiler.labels);
-    tgc_set_dtor(&gc,func, ReleaseFunction2);
+    GC_SetDestroy(func, ReleaseFunction2,NULL);
     return func;
 }
 void AddStringDataToFunc(CFunction *f) {
@@ -5840,7 +5851,7 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         FillFunctionRelocations(func);
         func->stringRelocations=Compiler.stringDatas;
         AddStringDataToFunc(func);
-        tgc_pause(&gc);
+        GC_Disable();
         func->funcptr=funcptr;
         #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
@@ -5849,7 +5860,7 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         #else
         func->funcptr(0);
         #endif
-        tgc_resume(&gc);
+        GC_Enable();
         t=AssignTypeToNode(exp);
         if(t->type==TYPE_ARRAY||t->type==TYPE_ARRAY_REF)
           DbgPrintVar(t, *(void**)buffer); //Arrays return pointer to self
@@ -6364,7 +6375,7 @@ void RunStatement(AST *s) {
     static int count;
     count++;
     if(stmt&&!Compiler.errorFlag&&!Compiler.tagsFile) {
-      tgc_pause(&gc);
+      GC_Disable();
       #ifndef TARGET_WIN32
       signal(SIGINT,SignalHandler);
       ((void(*)())stmt->funcptr)();
@@ -6372,8 +6383,8 @@ void RunStatement(AST *s) {
       #else
       ((void(*)())stmt->funcptr)();
       #endif
-      tgc_resume(&gc);
-        ReleaseFunction(stmt);
+      GC_Enable();
+      ReleaseFunction(stmt);
     }
     Compiler.errorFlag=oldflag;
     vec_deinit(&empty);

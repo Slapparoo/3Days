@@ -54,8 +54,8 @@ tags.bootstrap.obj: tags.c
 	$(CC) $(CFLAGS) -c tags.c -g -o $@
 aot.bootstrap.obj: aot.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c aot.c -gdwarf -g -o $@
-gc.bootstrap.obj: ext/tgc/tgc.c ext/tgc/tgc.h  $(HEADERS)
-	$(CC) $(CFLAGS) -c ext/tgc/tgc.c -o $@
+gc.bootstrap.obj: gc.c gc.h  $(HEADERS)
+	$(CC) $(CFLAGS) -c gc.c -o $@
 clean:
 	del *.obj *.exe *.a HolyC.tab.c HolyC.tab.h
 sexy:
@@ -103,5 +103,5 @@ tags.obj: tags.c
 	$(CC) $(CFLAGS) -DBOOTSTRAPED -c tags.c -g -o $@
 aot.obj: aot.c  $(HEADERS)
 	$(CC) $(CFLAGS) -DBOOTSTRAPED -c aot.c -gdwarf -g -o aot.obj
-gc.obj: ext/tgc/tgc.c ext/tgc/tgc.h  $(HEADERS)
-	$(CC) $(CFLAGS) -DBOOTSTRAPED -c ext/tgc/tgc.c -o gc.obj
+gc.obj: gc.c gc.h  $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c gc.c -o gc.obj

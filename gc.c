@@ -32,10 +32,14 @@ typedef struct {
     uint8_t isRoot:1;
     uint8_t isNoFree:1;
     uint8_t isExtPtr:1;
-    int64_t size;
+    unsigned int size;
+    //8
     void *userData;
+    //16
     void(*destroy)(void*,void*);
+    //24
     void *rootPointer;
+    //32(Aligned to 16)
     //Data starts here
 } CPtrInfo ;
 #ifndef TARGET_WIN32
@@ -161,8 +165,6 @@ static int GCRehash(void **dst,long bucketcount) {
 static void GCScaleUp() {
     if(gc.collecting) return;
     BLOCK_SIGS;
-    int old=gc.collecting;
-    gc.collecting=1;
     long p;
     for(p=0; p!=sizeof(Primes)/sizeof(*Primes); p++) {
         if(Primes[p]==gc.bucketCount) break;
@@ -170,7 +172,6 @@ static void GCScaleUp() {
     p++;
     if(p>=sizeof(Primes)/sizeof(*Primes)) {
       GC_Collect();
-      gc.collecting=old;
       UNBLOCK_SIGS;
       return;
     }
@@ -196,7 +197,6 @@ loop:
     free(gc.buckets);
     gc.bucketCount=Primes[p];
     gc.buckets=buckets;
-    gc.collecting=old;
     UNBLOCK_SIGS;
 }
 static void GCScaleDown() {
@@ -423,9 +423,6 @@ static void __GC_Collect(jmp_buf *_regs) {
     gc.sinceLastCollect=0;
 }
 void GC_Collect() {
-#ifndef USEGC
-    return;
-#endif
     BLOCK_SIGS;
     if(!gc.enabled) return;
     gc.collecting=1;

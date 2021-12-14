@@ -512,8 +512,7 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
     v->func->name=strdup(buffer);
     v->func->funcInfo.funcSize=code_size;
     v->isInternal=1;
-    tgc_set_dtor(&gc, v->func, FuncCodeDestroy);
-    tgc_set_user_data(&gc,v->func,(void*)code_size);
+    GC_SetDestroy(v->func, FuncCodeDestroy,(void*)code_size);
     CBinPatch *pat;
     long iter;
     vec_foreach(&patches,pat,iter) {
@@ -592,7 +591,7 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
     }
     return v;
 }
-CBinaryModule LoadAOTBin(FILE *f,int verbose) {
+CBinaryModule LoadAOTBin(FILE *f,int flags) {
     char buffer[256];
     //We will remove any item not in the header. So if we have an intenrnal symbol that shares a name with a global,restore the previous global
     map_CVariable_t oldGlobals;
@@ -633,13 +632,10 @@ CBinaryModule LoadAOTBin(FILE *f,int verbose) {
                     map_set(&Compiler.globals,buffer,v);
 
                     vec_push(&loaded, v);
-                    if(verbose) {
-                        printf("VAR:%s(size %ld)\n",buffer,size);
-                    }
                     break;
                 }
                 case 1:; //Function
-                    CVariable *v=LoadAOTFunction(f,verbose,0);
+                    CVariable *v=LoadAOTFunction(f,0,0);
                     if(!strcmp("@@Main",v->name)) {
                         v->type=CreateFuncType(CreatePrimType(TYPE_U0),NULL,0);
                         aaMain=v;
@@ -655,7 +651,6 @@ CBinaryModule LoadAOTBin(FILE *f,int verbose) {
                     fseek(f,current,SEEK_SET);
                     header_text=TD_MALLOC(end-current+1);
                     fread(header_text,1,end-current,f);
-                    if(verbose) puts(header_text);
                     break;
                 }
                 default: abort();
@@ -694,7 +689,7 @@ CBinaryModule LoadAOTBin(FILE *f,int verbose) {
         RegisterBuiltins();
     #endif
     Compiler.allowForwardAfterDefine=1;
-    HC_parse();
+    if(!(flags&AOT_F_NO_ADD_SYMBOLS)) HC_parse();
     Compiler.allowForwardAfterDefine=0;
     #ifdef BOOTSTRAPED
     //Remove all internal variables(they can be made external in the header.) Restore any old globals that share a name with an intenal variable
@@ -714,6 +709,11 @@ CBinaryModule LoadAOTBin(FILE *f,int verbose) {
         }
       }
     }
-    map_deinit(&oldGlobals);
+    if(!(flags&AOT_F_NO_ADD_SYMBOLS))
+        map_deinit(&oldGlobals);
+    else {
+        map_deinit(&Compiler.globals);
+        Compiler.globals=oldGlobals;
+    }
     return module;
 }

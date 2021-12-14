@@ -112,8 +112,10 @@ int main(int argc,char **argv) {
     #endif
     if(silentArg->count)
       Compiler.silentMode=1;
-    tgc_start(&gc,__builtin_frame_address(0),Compiler.boundsCheckMode);
+    CreateGC(__builtin_frame_address(0),Compiler.boundsCheckMode);
     AddGCRoot(&Compiler, sizeof(Compiler));
+    AddGCRoot(&Fs, sizeof(Fs));
+    AddGCRoot(&curframe, sizeof(curframe));
     #ifdef  BOOTSTRAPED
     AddGCRoot(&Debugger, sizeof(Debugger));
     #endif
@@ -146,9 +148,9 @@ int main(int argc,char **argv) {
         }
         rp=realpath(binf,NULL);
         binf=strdup(rp);
-        free(rp);
         if(deleteDummy)
-          remove(buffer);
+          remove(rp);
+        free(rp);
         #else
         if(INVALID_FILE_ATTRIBUTES==GetFileAttributesA(binf)) {
           FILE *dummy=fopen(binf,"w");
@@ -178,17 +180,23 @@ int main(int argc,char **argv) {
         #endif
     }
     long iter;
-    if(!noRuntime->count) {
+    if(1) {
     #ifndef TARGET_WIN32
         if(0==access("HCRT/HCRT.BIN",F_OK)) {
             FILE *rt=fopen("HCRT/HCRT.BIN","rb");
-            map_set(&Compiler.binModules,"HCRT/HCRT.BIN",LoadAOTBin(rt,0));
+            if(noRuntime->count)
+                map_set(&Compiler.binModules,"HCRT/HCRT.BIN",LoadAOTBin(rt,AOT_F_NO_ADD_SYMBOLS));
+            else
+                map_set(&Compiler.binModules,"HCRT/HCRT.BIN",LoadAOTBin(rt,0));
             fclose(rt);
             Compiler.loadedHCRT=1;
             Compiler.hcrt=map_get(&Compiler.binModules, "HCRT/HCRT.BIN");
         } else if(0==access("/usr/local/include" HCRT_INSTALLTED_DIR,F_OK)) {
             FILE *rt=fopen("/usr/local/include" HCRT_INSTALLTED_DIR,"rb");
-            map_set(&Compiler.binModules,"/usr/local/include" HCRT_INSTALLTED_DIR,LoadAOTBin(rt,0));
+            if(noRuntime->count)
+                map_set(&Compiler.binModules,"HCRT/HCRT.BIN",LoadAOTBin(rt,AOT_F_NO_ADD_SYMBOLS));
+            else
+                map_set(&Compiler.binModules,"HCRT/HCRT.BIN",LoadAOTBin(rt,0));
             Compiler.hcrt=map_get(&Compiler.binModules, "/usr/local/include" HCRT_INSTALLTED_DIR);
             fclose(rt);
             Compiler.loadedHCRT=1;
@@ -208,7 +216,10 @@ int main(int argc,char **argv) {
       strcat(buffer,HCRT_INSTALLTED_DIR);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
         FILE *rt=fopen(buffer,"rb");
-        map_set(&Compiler.binModules,buffer,LoadAOTBin(rt,0));
+        if(noRuntime->count)
+                map_set(&Compiler.binModules,"HCRT/HCRT.BIN",LoadAOTBin(rt,AOT_F_NO_ADD_SYMBOLS));
+        else
+            map_set(&Compiler.binModules,"HCRT/HCRT.BIN",LoadAOTBin(rt,0));
         fclose(rt);
         Compiler.loadedHCRT=1;
         Compiler.hcrt=map_get(&Compiler.binModules, buffer);
@@ -233,7 +244,7 @@ int main(int argc,char **argv) {
     }
     vec_push(&includetext, 0);
     {
-      CVariable *is=GetVariable("LexIncludeStr");
+      CVariable *is=GetHCRTVar("LexIncludeStr");
       assert(is);
       void(*fp)(void*,char*,char*,int64_t)=((void(*)(void*,char*,char*,int64_t))is->func->funcptr);
       fp(Lexer.HCLexer,"@TMP",includetext.data,0);

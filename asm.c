@@ -140,9 +140,9 @@ void* EvalLabelExpr(CFunction *func,AST* a,LabelContext labContext) {
     int err=0;
     CFunction *apply_func=CompileLabelExprFunc(func,a,labContext);
     if(apply_func) {
-      tgc_pause(&gc);
+      GC_Disable();
       ptr=((void*(*)())apply_func->funcptr)();
-      tgc_resume(&gc);
+      GC_Enable();
       if(!Compiler.AOTMode) ReleaseFunction(apply_func);
     }
  end:
@@ -225,9 +225,11 @@ void* AST2X64Mode(AST* a, int64_t* lab_offset) {
   return NULL;
 }
 void* GetRegister(char* name) {
+#ifndef BOOTSTRAP
+  return NULL;
+#endif // BOOTSTRAP
   if(Compiler.tagsFile) return NULL;
   if(!Compiler.loadedHCRT) return 0;
-
   CVariable* enc = GetHCRTVar("GetRegister");
 
   if (!enc) return NULL;
@@ -237,6 +239,9 @@ void* GetRegister(char* name) {
   return ((void* (*)(char*))enc->func->funcptr)(name);
 }
 int IsOpcode(char* name) {
+#ifndef BOOTSTRAP
+  return NULL;
+#endif // BOOTSTRAP
   if(Compiler.tagsFile) return 0;
   if(!Compiler.loadedHCRT) return 0;
   CVariable* enc = GetHCRTVar("IsOpcode");

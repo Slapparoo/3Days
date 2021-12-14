@@ -52,6 +52,8 @@
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
+#include "../../../ext/vec/src/vec.h"
+
 
 typedef struct {
 	int id;
@@ -107,7 +109,6 @@ typedef struct jit_prepared_args {
 	} * args;
 } jit_prepared_args;
 
-#include "../../../ext/vec/src/vec.h"
 typedef struct jit_set {
 	vec_int_t vec;
 } jit_set;
@@ -137,7 +138,11 @@ struct jit_func_info {			// collection of information related to one function
 	int has_prolog;			// flag indicating if the function has a complete prologue and epilogue
 	struct jit_op *first_op;	// first operation of the function
 };
-
+typedef struct {
+    int64_t offset;
+    double val;
+} jit_flt_rip_relloc;
+typedef vec_t(jit_flt_rip_relloc) vec_jit_flt_rip_relloc_t;
 struct jit {
 	unsigned char * buf; 		// buffer used to store generated code
 	unsigned int buf_capacity; 	// its capacity
@@ -153,6 +158,7 @@ struct jit {
 	int push_count;			// number of values pushed on the stack; used by AMD64
 	unsigned int optimizations;
     int64_t bin_size;
+    vec_jit_flt_rip_relloc_t flt_rellocs;
 };
 
 struct jit_debug_info {

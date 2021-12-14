@@ -21,22 +21,11 @@
 #include <fileapi.h>
 #endif
 #include <curses.h>
-typedef struct TOS_Fs {
-    uint64_t except_ch;
-    uint64_t catch_except;
-    int64_t rand_seed;
-    void *last_cc;
-} TOS_Fs;
-static __thread TOS_Fs Fs;
+TOS_Fs Fs;
 void *GetFs() {
     return &Fs;
 }
-typedef struct ExceptFrame {
-    ExceptBuf pad;
-    struct ExceptFrame *parent;
-    long callStackSize;
-} ExceptFrame;
-static __thread ExceptFrame *curframe;
+ExceptFrame *curframe;
 ExceptFrame *EnterTry() {
     ExceptFrame *new=TD_MALLOC(sizeof(ExceptFrame));
     new->parent=curframe;
@@ -188,19 +177,10 @@ void PopTryFrame() {
     TD_FREE(curframe);
     curframe=par;
 }
-static void GC_Free(void *ptr) {
-    tgc_free(&gc,ptr);
-}
-static void *GC_Malloc(size_t sz) {
-    return TD_MALLOC(sz);
-}
-static size_t MSize2(void *ptr) {
-    return tgc_get_size(&gc,ptr);
-}
 static void GCollect() {
-  tgc_resume(&gc);
-  tgc_run(&gc);
-  tgc_pause(&gc);
+  GC_Enable();
+  GC_Collect();
+  GC_Disable();
 }
 void throw(uint64_t val) {
     assert(curframe); //TODO
@@ -573,9 +553,9 @@ static CType *CreateEmptyClass(char *name,long size,long align) {
     map_set(&Compiler.types,name,t);
     return t;
 }
-#define ADD_TYPED_MEMBER(hc,hct,t,mem) AddMemberToClass(hc,hct,#mem,offsetof(t,mem));
-#define ADD_PRIM_MEMBER(hc,t,mem) AddMemberToClassBySize(hc,sizeof(((t*)NULL)->mem),#mem,offsetof(t,mem));
-#define ADD_UPRIM_MEMBER(hc,t,mem) UAddMemberToClassBySize(hc,sizeof(((t*)NULL)->mem),#mem,offsetof(t,mem));
+#define ADD_TYPED_MEMBER(hc,hct,t,mem) if(hc) AddMemberToClass(hc,hct,#mem,offsetof(t,mem));
+#define ADD_PRIM_MEMBER(hc,t,mem) if(hc) AddMemberToClassBySize(hc,sizeof(((t*)NULL)->mem),#mem,offsetof(t,mem));
+#define ADD_UPRIM_MEMBER(hc,t,mem) if(hc) UAddMemberToClassBySize(hc,sizeof(((t*)NULL)->mem),#mem,offsetof(t,mem));
 #define IMPORT_CLASS_WO_MEMBERS(type) CreateEmptyClass(#type,sizeof(type),alignof(type))
 static char *hc_SDL_GetWindowTitle(SDL_Window *win) {
     return strdup(SDL_GetWindowTitle(win));
@@ -692,7 +672,7 @@ void RegisterBuiltins() {
     CreateBuiltin(&EvalExprNoComma,i64,"JIT_Eval",0,u8p,u8pp,NULL);
     CreateBuiltin(&GCollect,u0,"GC_Collect",0,NULL);
     CreateBuiltin(&CreateTagsAndErrorsFiles,u0,"CreateTagsAndErrorsFiles",0,u8p,u8p,u8p,NULL);
-    CreateBuiltin(&MSize2, i64, "MSize",0, u0p,NULL);
+    CreateBuiltin(&MSize, i64, "MSize",0, u0p,NULL);
     CreateBuiltin(&BFFS, i64, "Bsf",0, i64,NULL);
     CreateBuiltin(&BCLZ, i64, "Bsr",0, i64,NULL);
     CreateBuiltin(&nonl,u0,"nonl",0,NULL);
@@ -1032,6 +1012,7 @@ CreateMacroInt("ALT_Z",ALT_Z);
             ADD_PRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,xrel);
             ADD_PRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,yrel);
             ADD_TYPED_MEMBER(sdlevent_t,sdlevent_mousemot_t,SDL_Event,motion);
+            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_mousemot_t,SDL_Event,wheel);
         }
         {
             CreateMacroInt("SDL_MOUSEBUTTONUP",SDL_MOUSEBUTTONUP);
@@ -1044,21 +1025,8 @@ CreateMacroInt("ALT_Z",ALT_Z);
             CreateMacroInt("SDL_PRESSED",SDL_PRESSED);
             CreateMacroInt("SDL_RELEASED",SDL_RELEASED);
             ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,state);
-            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,clicks);
-            ADD_PRIM_MEMBER(sdlevent_mouse_t,SDL_MouseMotionEvent,x);
-            ADD_PRIM_MEMBER(sdlevent_mouse_t,SDL_MouseMotionEvent,y);
+            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,clicks);;
             ADD_TYPED_MEMBER(sdlevent_t,sdlevent_mouse_t,SDL_Event,button);
-        }
-        {
-            CreateMacroInt("SDL_MOUSEMOTION",SDL_MOUSEMOTION);
-            CType *sdlevent_wheel_t=IMPORT_CLASS_WO_MEMBERS(SDL_MouseMotionEvent);
-            ADD_UPRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,type);
-            ADD_UPRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,timestamp);
-            ADD_UPRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,which);
-            ADD_PRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,x);
-            ADD_PRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,y);
-            ADD_UPRIM_MEMBER(sdlevent_wheel_t,SDL_MouseWheelEvent,direction);
-            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_wheel_t,SDL_Event,wheel);
         }
         {
             CreateMacroInt("SDL_QUIT",SDL_QUIT);

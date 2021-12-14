@@ -1,8 +1,8 @@
-/* A Bison parser, made by GNU Bison 3.8.2.  */
+/* A Bison parser, made by GNU Bison 3.5.1.  */
 
 /* Bison implementation for Yacc-like parsers in C
 
-   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2021 Free Software Foundation,
+   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2020 Free Software Foundation,
    Inc.
 
    This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -34,10 +34,6 @@
 /* C LALR(1) parser skeleton written by Richard Stallman, by
    simplifying the original so-called "semantic" parser.  */
 
-/* DO NOT RELY ON FEATURES THAT ARE NOT DOCUMENTED in the manual,
-   especially those whose name start with YY_ or yy_.  They are
-   private implementation details that can be changed or removed.  */
-
 /* All symbols defined below should begin with yy or YY, to avoid
    infringing on user name space.  This should be done even for local
    variables, as they might otherwise be expanded by user macros.
@@ -45,11 +41,14 @@
    define necessary library symbols; they are noted "INFRINGES ON
    USER NAME SPACE" below.  */
 
-/* Identify Bison output, and Bison version.  */
-#define YYBISON 30802
+/* Undocumented macros, especially those whose name start with YY_,
+   are private implementation details.  Do not rely on them.  */
 
-/* Bison version string.  */
-#define YYBISON_VERSION "3.8.2"
+/* Identify Bison output.  */
+#define YYBISON 1
+
+/* Bison version.  */
+#define YYBISON_VERSION "3.5.1"
 
 /* Skeleton name.  */
 #define YYSKELETON_NAME "yacc.c"
@@ -87,7 +86,7 @@ static CFuncInfo *CurFuncInfo;
 static void *CurFramePtr;
 static void (*RunPtr)(CFuncInfo *info,AST *exp,void *framePtr);
 
-#line 91 "HolyC.tab.c"
+#line 90 "HolyC.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -110,210 +109,154 @@ static void (*RunPtr)(CFuncInfo *info,AST *exp,void *framePtr);
 #  endif
 # endif
 
-#include "HolyC.tab.h"
-/* Symbol kind.  */
-enum yysymbol_kind_t
-{
-  YYSYMBOL_YYEMPTY = -2,
-  YYSYMBOL_YYEOF = 0,                      /* "end of file"  */
-  YYSYMBOL_YYerror = 1,                    /* error  */
-  YYSYMBOL_YYUNDEF = 2,                    /* "invalid token"  */
-  YYSYMBOL_CHAR = 3,                       /* CHAR  */
-  YYSYMBOL_INT = 4,                        /* INT  */
-  YYSYMBOL_FLOAT = 5,                      /* FLOAT  */
-  YYSYMBOL_DOT = 6,                        /* DOT  */
-  YYSYMBOL_ARROW = 7,                      /* ARROW  */
-  YYSYMBOL_SIZEOF = 8,                     /* SIZEOF  */
-  YYSYMBOL_ADDR_OF = 9,                    /* ADDR_OF  */
-  YYSYMBOL_LNOT = 10,                      /* LNOT  */
-  YYSYMBOL_BNOT = 11,                      /* BNOT  */
-  YYSYMBOL_POW = 12,                       /* POW  */
-  YYSYMBOL_SHL = 13,                       /* SHL  */
-  YYSYMBOL_SHR = 14,                       /* SHR  */
-  YYSYMBOL_MUL = 15,                       /* MUL  */
-  YYSYMBOL_DIV = 16,                       /* DIV  */
-  YYSYMBOL_MOD = 17,                       /* MOD  */
-  YYSYMBOL_BAND = 18,                      /* BAND  */
-  YYSYMBOL_BOR = 19,                       /* BOR  */
-  YYSYMBOL_BXOR = 20,                      /* BXOR  */
-  YYSYMBOL_ADD = 21,                       /* ADD  */
-  YYSYMBOL_SUB = 22,                       /* SUB  */
-  YYSYMBOL_LT = 23,                        /* LT  */
-  YYSYMBOL_GT = 24,                        /* GT  */
-  YYSYMBOL_LE = 25,                        /* LE  */
-  YYSYMBOL_GE = 26,                        /* GE  */
-  YYSYMBOL_NE = 27,                        /* NE  */
-  YYSYMBOL_EQ = 28,                        /* EQ  */
-  YYSYMBOL_LAND = 29,                      /* LAND  */
-  YYSYMBOL_LXOR = 30,                      /* LXOR  */
-  YYSYMBOL_LOR = 31,                       /* LOR  */
-  YYSYMBOL_ASSIGN = 32,                    /* ASSIGN  */
-  YYSYMBOL_EQ_SHL = 33,                    /* EQ_SHL  */
-  YYSYMBOL_EQ_SHR = 34,                    /* EQ_SHR  */
-  YYSYMBOL_EQ_MUL = 35,                    /* EQ_MUL  */
-  YYSYMBOL_EQ_DIV = 36,                    /* EQ_DIV  */
-  YYSYMBOL_EQ_MOD = 37,                    /* EQ_MOD  */
-  YYSYMBOL_EQ_BAND = 38,                   /* EQ_BAND  */
-  YYSYMBOL_EQ_BXOR = 39,                   /* EQ_BXOR  */
-  YYSYMBOL_EQ_BOR = 40,                    /* EQ_BOR  */
-  YYSYMBOL_EQ_ADD = 41,                    /* EQ_ADD  */
-  YYSYMBOL_EQ_SUB = 42,                    /* EQ_SUB  */
-  YYSYMBOL_COMMA = 43,                     /* COMMA  */
-  YYSYMBOL_TRY = 44,                       /* TRY  */
-  YYSYMBOL_CATCH = 45,                     /* CATCH  */
-  YYSYMBOL_LASTCLASS = 46,                 /* LASTCLASS  */
-  YYSYMBOL_U0 = 47,                        /* U0  */
-  YYSYMBOL_LEFT_PAREN = 48,                /* LEFT_PAREN  */
-  YYSYMBOL_RIGHT_PAREN = 49,               /* RIGHT_PAREN  */
-  YYSYMBOL_INC = 50,                       /* INC  */
-  YYSYMBOL_DEC = 51,                       /* DEC  */
-  YYSYMBOL_NAME = 52,                      /* NAME  */
-  YYSYMBOL_LEFT_SQAURE = 53,               /* LEFT_SQAURE  */
-  YYSYMBOL_RIGHT_SQAURE = 54,              /* RIGHT_SQAURE  */
-  YYSYMBOL_SEMI = 55,                      /* SEMI  */
-  YYSYMBOL_IF = 56,                        /* IF  */
-  YYSYMBOL_ELSE = 57,                      /* ELSE  */
-  YYSYMBOL_DO = 58,                        /* DO  */
-  YYSYMBOL_WHILE = 59,                     /* WHILE  */
-  YYSYMBOL_FOR = 60,                       /* FOR  */
-  YYSYMBOL_LEFT_CURLY = 61,                /* LEFT_CURLY  */
-  YYSYMBOL_RIGHT_CURLY = 62,               /* RIGHT_CURLY  */
-  YYSYMBOL_CASE = 63,                      /* CASE  */
-  YYSYMBOL_COLON = 64,                     /* COLON  */
-  YYSYMBOL_DOT_DOT_DOT = 65,               /* DOT_DOT_DOT  */
-  YYSYMBOL_EXTERN2 = 66,                   /* EXTERN2  */
-  YYSYMBOL_LOCK = 67,                      /* LOCK  */
-  YYSYMBOL_EXTERN = 68,                    /* EXTERN  */
-  YYSYMBOL_IMPORT = 69,                    /* IMPORT  */
-  YYSYMBOL_IMPORT2 = 70,                   /* IMPORT2  */
-  YYSYMBOL_ASM_IMPORT = 71,                /* ASM_IMPORT  */
-  YYSYMBOL_STATIC = 72,                    /* STATIC  */
-  YYSYMBOL_PUBLIC = 73,                    /* PUBLIC  */
-  YYSYMBOL_CLASS = 74,                     /* CLASS  */
-  YYSYMBOL_UNION = 75,                     /* UNION  */
-  YYSYMBOL_INTERN = 76,                    /* INTERN  */
-  YYSYMBOL_START = 77,                     /* START  */
-  YYSYMBOL_END = 78,                       /* END  */
-  YYSYMBOL_DEFAULT = 79,                   /* DEFAULT  */
-  YYSYMBOL_BREAK = 80,                     /* BREAK  */
-  YYSYMBOL_RET = 81,                       /* RET  */
-  YYSYMBOL_GOTO = 82,                      /* GOTO  */
-  YYSYMBOL_SWITCH = 83,                    /* SWITCH  */
-  YYSYMBOL_EVAL_NOCOMMA = 84,              /* EVAL_NOCOMMA  */
-  YYSYMBOL_EXE = 85,                       /* EXE  */
-  YYSYMBOL_EVAL = 86,                      /* EVAL  */
-  YYSYMBOL_NL = 87,                        /* NL  */
-  YYSYMBOL_DBG = 88,                       /* DBG  */
-  YYSYMBOL_STRING = 89,                    /* STRING  */
-  YYSYMBOL_TYPENAME = 90,                  /* TYPENAME  */
-  YYSYMBOL_OPCODE = 91,                    /* OPCODE  */
-  YYSYMBOL_REGISTER = 92,                  /* REGISTER  */
-  YYSYMBOL_DOUBLE_COLON = 93,              /* DOUBLE_COLON  */
-  YYSYMBOL_DOUBLE_AT = 94,                 /* DOUBLE_AT  */
-  YYSYMBOL_DU8 = 95,                       /* DU8  */
-  YYSYMBOL_DU16 = 96,                      /* DU16  */
-  YYSYMBOL_DU32 = 97,                      /* DU32  */
-  YYSYMBOL_DU64 = 98,                      /* DU64  */
-  YYSYMBOL_ALIGN = 99,                     /* ALIGN  */
-  YYSYMBOL_BINFILE = 100,                  /* BINFILE  */
-  YYSYMBOL_ASM = 101,                      /* ASM  */
-  YYSYMBOL_YYACCEPT = 102,                 /* $accept  */
-  YYSYMBOL_sib_ib = 103,                   /* sib_ib  */
-  YYSYMBOL_sib_d = 104,                    /* sib_d  */
-  YYSYMBOL__sib = 105,                     /* _sib  */
-  YYSYMBOL_sib = 106,                      /* sib  */
-  YYSYMBOL_opc_operand = 107,              /* opc_operand  */
-  YYSYMBOL_opc_operands = 108,             /* opc_operands  */
-  YYSYMBOL_opcode = 109,                   /* opcode  */
-  YYSYMBOL_asm_blk_stmt = 110,             /* asm_blk_stmt  */
-  YYSYMBOL_data_exprs = 111,               /* data_exprs  */
-  YYSYMBOL_name_list = 112,                /* name_list  */
-  YYSYMBOL_asm_blk = 113,                  /* asm_blk  */
-  YYSYMBOL_asm_blk_stmts = 114,            /* asm_blk_stmts  */
-  YYSYMBOL_expr0 = 115,                    /* expr0  */
-  YYSYMBOL__callargs = 116,                /* _callargs  */
-  YYSYMBOL_callargs = 117,                 /* callargs  */
-  YYSYMBOL_expr1 = 118,                    /* expr1  */
-  YYSYMBOL_expr2 = 119,                    /* expr2  */
-  YYSYMBOL_sizeof_type = 120,              /* sizeof_type  */
-  YYSYMBOL_expr3 = 121,                    /* expr3  */
-  YYSYMBOL_expr4 = 122,                    /* expr4  */
-  YYSYMBOL_expr4_5 = 123,                  /* expr4_5  */
-  YYSYMBOL_expr5 = 124,                    /* expr5  */
-  YYSYMBOL_expr6 = 125,                    /* expr6  */
-  YYSYMBOL_expr7 = 126,                    /* expr7  */
-  YYSYMBOL_expr8 = 127,                    /* expr8  */
-  YYSYMBOL_expr9 = 128,                    /* expr9  */
-  YYSYMBOL_expr10 = 129,                   /* expr10  */
-  YYSYMBOL_expr11 = 130,                   /* expr11  */
-  YYSYMBOL_expr12 = 131,                   /* expr12  */
-  YYSYMBOL_expr13 = 132,                   /* expr13  */
-  YYSYMBOL_expr14 = 133,                   /* expr14  */
-  YYSYMBOL_expr = 134,                     /* expr  */
-  YYSYMBOL_expr_comma = 135,               /* expr_comma  */
-  YYSYMBOL_primtype0 = 136,                /* primtype0  */
-  YYSYMBOL__arrlit = 137,                  /* _arrlit  */
-  YYSYMBOL_arrlit = 138,                   /* arrlit  */
-  YYSYMBOL_metadata = 139,                 /* metadata  */
-  YYSYMBOL_cdecltail = 140,                /* cdecltail  */
-  YYSYMBOL__cdecltail = 141,               /* _cdecltail  */
-  YYSYMBOL_cdecl = 142,                    /* cdecl  */
-  YYSYMBOL_cbody = 143,                    /* cbody  */
-  YYSYMBOL__cheader = 144,                 /* _cheader  */
-  YYSYMBOL__uheader = 145,                 /* _uheader  */
-  YYSYMBOL_cheader = 146,                  /* cheader  */
-  YYSYMBOL_uheader = 147,                  /* uheader  */
-  YYSYMBOL__class = 148,                   /* _class  */
-  YYSYMBOL__union = 149,                   /* _union  */
-  YYSYMBOL_tryblock = 150,                 /* tryblock  */
-  YYSYMBOL_namewptrs = 151,                /* namewptrs  */
-  YYSYMBOL_vardecltail = 152,              /* vardecltail  */
-  YYSYMBOL___ptrcount = 153,               /* __ptrcount  */
-  YYSYMBOL_vardecltail_asn = 154,          /* vardecltail_asn  */
-  YYSYMBOL_single_decl = 155,              /* single_decl  */
-  YYSYMBOL_vardecltails = 156,             /* vardecltails  */
-  YYSYMBOL_multi_decl = 157,               /* multi_decl  */
-  YYSYMBOL_funcargs = 158,                 /* funcargs  */
-  YYSYMBOL_linkage = 159,                  /* linkage  */
-  YYSYMBOL_func = 160,                     /* func  */
-  YYSYMBOL_ocstmt = 161,                   /* ocstmt  */
-  YYSYMBOL_expr_opt = 162,                 /* expr_opt  */
-  YYSYMBOL_loop_header = 163,              /* loop_header  */
-  YYSYMBOL_ifcl = 164,                     /* ifcl  */
-  YYSYMBOL_ostmt = 165,                    /* ostmt  */
-  YYSYMBOL_cstmt = 166,                    /* cstmt  */
-  YYSYMBOL_dostmt = 167,                   /* dostmt  */
-  YYSYMBOL_subswit = 168,                  /* subswit  */
-  YYSYMBOL_swit_body_stmt = 169,           /* swit_body_stmt  */
-  YYSYMBOL_swit_body = 170,                /* swit_body  */
-  YYSYMBOL_swit = 171,                     /* swit  */
-  YYSYMBOL_simple_stmt = 172,              /* simple_stmt  */
-  YYSYMBOL_opcodes = 173,                  /* opcodes  */
-  YYSYMBOL_stmts = 174,                    /* stmts  */
-  YYSYMBOL_scope = 175,                    /* scope  */
-  YYSYMBOL_global_stmts = 176,             /* global_stmts  */
-  YYSYMBOL_global_stmt = 177,              /* global_stmt  */
-  YYSYMBOL__expr0 = 178,                   /* _expr0  */
-  YYSYMBOL_str = 179,                      /* str  */
-  YYSYMBOL__expr1 = 180,                   /* _expr1  */
-  YYSYMBOL__expr2 = 181,                   /* _expr2  */
-  YYSYMBOL__expr3 = 182,                   /* _expr3  */
-  YYSYMBOL__expr4 = 183,                   /* _expr4  */
-  YYSYMBOL__expr4_5 = 184,                 /* _expr4_5  */
-  YYSYMBOL__expr5 = 185,                   /* _expr5  */
-  YYSYMBOL__expr6 = 186,                   /* _expr6  */
-  YYSYMBOL__expr7 = 187,                   /* _expr7  */
-  YYSYMBOL__expr8 = 188,                   /* _expr8  */
-  YYSYMBOL__expr9 = 189,                   /* _expr9  */
-  YYSYMBOL__expr10 = 190,                  /* _expr10  */
-  YYSYMBOL__expr11 = 191,                  /* _expr11  */
-  YYSYMBOL__expr12 = 192,                  /* _expr12  */
-  YYSYMBOL__expr13 = 193,                  /* _expr13  */
-  YYSYMBOL__expr14 = 194,                  /* _expr14  */
-  YYSYMBOL__expr = 195                     /* _expr  */
-};
-typedef enum yysymbol_kind_t yysymbol_kind_t;
+/* Enabling verbose error messages.  */
+#ifdef YYERROR_VERBOSE
+# undef YYERROR_VERBOSE
+# define YYERROR_VERBOSE 1
+#else
+# define YYERROR_VERBOSE 0
+#endif
 
+/* Use api.header.include to #include this header
+   instead of duplicating it here.  */
+#ifndef YY_HC_HOLYC_TAB_H_INCLUDED
+# define YY_HC_HOLYC_TAB_H_INCLUDED
+/* Debug traces.  */
+#ifndef HC_DEBUG
+# if defined YYDEBUG
+#if YYDEBUG
+#   define HC_DEBUG 1
+#  else
+#   define HC_DEBUG 0
+#  endif
+# else /* ! defined YYDEBUG */
+#  define HC_DEBUG 0
+# endif /* ! defined YYDEBUG */
+#endif  /* ! defined HC_DEBUG */
+#if HC_DEBUG
+extern int HC_debug;
+#endif
+
+/* Token type.  */
+#ifndef HC_TOKENTYPE
+# define HC_TOKENTYPE
+  enum HC_tokentype
+  {
+    HC_CHAR = 258,
+    HC_INT = 259,
+    HC_FLOAT = 260,
+    HC_DOT = 261,
+    HC_ARROW = 262,
+    HC_SIZEOF = 263,
+    HC_ADDR_OF = 264,
+    HC_LNOT = 265,
+    HC_BNOT = 266,
+    HC_POW = 267,
+    HC_SHL = 268,
+    HC_SHR = 269,
+    HC_MUL = 270,
+    HC_DIV = 271,
+    HC_MOD = 272,
+    HC_BAND = 273,
+    HC_BOR = 274,
+    HC_BXOR = 275,
+    HC_ADD = 276,
+    HC_SUB = 277,
+    HC_LT = 278,
+    HC_GT = 279,
+    HC_LE = 280,
+    HC_GE = 281,
+    HC_NE = 282,
+    HC_EQ = 283,
+    HC_LAND = 284,
+    HC_LXOR = 285,
+    HC_LOR = 286,
+    HC_ASSIGN = 287,
+    HC_EQ_SHL = 288,
+    HC_EQ_SHR = 289,
+    HC_EQ_MUL = 290,
+    HC_EQ_DIV = 291,
+    HC_EQ_MOD = 292,
+    HC_EQ_BAND = 293,
+    HC_EQ_BXOR = 294,
+    HC_EQ_BOR = 295,
+    HC_EQ_ADD = 296,
+    HC_EQ_SUB = 297,
+    HC_COMMA = 298,
+    HC_TRY = 299,
+    HC_CATCH = 300,
+    HC_LASTCLASS = 301,
+    HC_U0 = 302,
+    HC_LEFT_PAREN = 303,
+    HC_RIGHT_PAREN = 304,
+    HC_INC = 305,
+    HC_DEC = 306,
+    HC_NAME = 307,
+    HC_LEFT_SQAURE = 308,
+    HC_RIGHT_SQAURE = 309,
+    HC_SEMI = 310,
+    HC_IF = 311,
+    HC_ELSE = 312,
+    HC_DO = 313,
+    HC_WHILE = 314,
+    HC_FOR = 315,
+    HC_LEFT_CURLY = 316,
+    HC_RIGHT_CURLY = 317,
+    HC_CASE = 318,
+    HC_COLON = 319,
+    HC_DOT_DOT_DOT = 320,
+    HC_EXTERN2 = 321,
+    HC_LOCK = 322,
+    HC_EXTERN = 323,
+    HC_IMPORT = 324,
+    HC_IMPORT2 = 325,
+    HC_ASM_IMPORT = 326,
+    HC_STATIC = 327,
+    HC_PUBLIC = 328,
+    HC_CLASS = 329,
+    HC_UNION = 330,
+    HC_INTERN = 331,
+    HC_START = 332,
+    HC_END = 333,
+    HC_DEFAULT = 334,
+    HC_BREAK = 335,
+    HC_RET = 336,
+    HC_GOTO = 337,
+    HC_SWITCH = 338,
+    HC_EVAL_NOCOMMA = 339,
+    HC_EXE = 340,
+    HC_EVAL = 341,
+    HC_NL = 342,
+    HC_DBG = 343,
+    HC_STRING = 344,
+    HC_TYPENAME = 345,
+    HC_OPCODE = 346,
+    HC_REGISTER = 347,
+    HC_DOUBLE_COLON = 348,
+    HC_DOUBLE_AT = 349,
+    HC_DU8 = 350,
+    HC_DU16 = 351,
+    HC_DU32 = 352,
+    HC_DU64 = 353,
+    HC_ALIGN = 354,
+    HC_BINFILE = 355,
+    HC_ASM = 356
+  };
+#endif
+
+/* Value type.  */
+#if ! defined HC_STYPE && ! defined HC_STYPE_IS_DECLARED
+typedef int HC_STYPE;
+# define HC_STYPE_IS_TRIVIAL 1
+# define HC_STYPE_IS_DECLARED 1
+#endif
+
+
+extern HC_STYPE HC_lval;
+
+int HC_parse (void);
+
+#endif /* !YY_HC_HOLYC_TAB_H_INCLUDED  */
 
 
 
@@ -352,18 +295,6 @@ typedef __INT_LEAST16_TYPE__ yytype_int16;
 typedef int_least16_t yytype_int16;
 #else
 typedef short yytype_int16;
-#endif
-
-/* Work around bug in HP-UX 11.23, which defines these macros
-   incorrectly for preprocessor constants.  This workaround can likely
-   be removed in 2023, as HPE has promised support for HP-UX 11.23
-   (aka HP-UX 11i v2) only through the end of 2022; see Table 2 of
-   <https://h20195.www2.hpe.com/V2/getpdf.aspx/4AA4-7673ENW.pdf>.  */
-#ifdef __hpux
-# undef UINT_LEAST8_MAX
-# undef UINT_LEAST16_MAX
-# define UINT_LEAST8_MAX 255
-# define UINT_LEAST16_MAX 65535
 #endif
 
 #if defined __UINT_LEAST8_MAX__ && __UINT_LEAST8_MAX__ <= __INT_MAX__
@@ -425,7 +356,6 @@ typedef int yytype_uint16;
 
 #define YYSIZEOF(X) YY_CAST (YYPTRDIFF_T, sizeof (X))
 
-
 /* Stored state numbers (used for stacks). */
 typedef yytype_int16 yy_state_t;
 
@@ -443,7 +373,6 @@ typedef int yy_state_fast_t;
 #  define YY_(Msgid) Msgid
 # endif
 #endif
-
 
 #ifndef YY_ATTRIBUTE_PURE
 # if defined __GNUC__ && 2 < __GNUC__ + (96 <= __GNUC_MINOR__)
@@ -463,23 +392,17 @@ typedef int yy_state_fast_t;
 
 /* Suppress unused-variable warnings by "using" E.  */
 #if ! defined lint || defined __GNUC__
-# define YY_USE(E) ((void) (E))
+# define YYUSE(E) ((void) (E))
 #else
-# define YY_USE(E) /* empty */
+# define YYUSE(E) /* empty */
 #endif
 
+#if defined __GNUC__ && ! defined __ICC && 407 <= __GNUC__ * 100 + __GNUC_MINOR__
 /* Suppress an incorrect diagnostic about yylval being uninitialized.  */
-#if defined __GNUC__ && ! defined __ICC && 406 <= __GNUC__ * 100 + __GNUC_MINOR__
-# if __GNUC__ * 100 + __GNUC_MINOR__ < 407
-#  define YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN                           \
-    _Pragma ("GCC diagnostic push")                                     \
-    _Pragma ("GCC diagnostic ignored \"-Wuninitialized\"")
-# else
-#  define YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN                           \
+# define YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN                            \
     _Pragma ("GCC diagnostic push")                                     \
     _Pragma ("GCC diagnostic ignored \"-Wuninitialized\"")              \
     _Pragma ("GCC diagnostic ignored \"-Wmaybe-uninitialized\"")
-# endif
 # define YY_IGNORE_MAYBE_UNINITIALIZED_END      \
     _Pragma ("GCC diagnostic pop")
 #else
@@ -508,7 +431,7 @@ typedef int yy_state_fast_t;
 
 #define YY_ASSERT(E) ((void) (0 && (E)))
 
-#if !defined yyoverflow
+#if ! defined yyoverflow || YYERROR_VERBOSE
 
 /* The parser invokes alloca or malloc; define the necessary symbols.  */
 
@@ -573,7 +496,8 @@ void free (void *); /* INFRINGES ON USER NAME SPACE */
 #   endif
 #  endif
 # endif
-#endif /* !defined yyoverflow */
+#endif /* ! defined yyoverflow || YYERROR_VERBOSE */
+
 
 #if (! defined yyoverflow \
      && (! defined __cplusplus \
@@ -649,16 +573,14 @@ union yyalloc
 /* YYNSTATES -- Number of states.  */
 #define YYNSTATES  620
 
-/* YYMAXUTOK -- Last valid token kind.  */
+#define YYUNDEFTOK  2
 #define YYMAXUTOK   356
 
 
 /* YYTRANSLATE(TOKEN-NUM) -- Symbol number corresponding to TOKEN-NUM
    as returned by yylex, with out-of-bounds checking.  */
-#define YYTRANSLATE(YYX)                                \
-  (0 <= (YYX) && (YYX) <= YYMAXUTOK                     \
-   ? YY_CAST (yysymbol_kind_t, yytranslate[YYX])        \
-   : YYSYMBOL_YYUNDEF)
+#define YYTRANSLATE(YYX)                                                \
+  (0 <= (YYX) && (YYX) <= YYMAXUTOK ? yytranslate[YYX] : YYUNDEFTOK)
 
 /* YYTRANSLATE[TOKEN-NUM] -- Symbol number corresponding to TOKEN-NUM
    as returned by yylex.  */
@@ -703,7 +625,7 @@ static const yytype_int8 yytranslate[] =
 };
 
 #if HC_DEBUG
-/* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
+  /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
        0,    59,    61,    62,    66,    70,    74,    77,    78,    82,
@@ -744,39 +666,32 @@ static const yytype_int16 yyrline[] =
 };
 #endif
 
-/** Accessing symbol of state STATE.  */
-#define YY_ACCESSING_SYMBOL(State) YY_CAST (yysymbol_kind_t, yystos[State])
-
-#if HC_DEBUG || 0
-/* The user-facing name of the symbol whose (internal) number is
-   YYSYMBOL.  No bounds checking.  */
-static const char *yysymbol_name (yysymbol_kind_t yysymbol) YY_ATTRIBUTE_UNUSED;
-
+#if HC_DEBUG || YYERROR_VERBOSE || 0
 /* YYTNAME[SYMBOL-NUM] -- String name of the symbol SYMBOL-NUM.
    First, the terminals, then, starting at YYNTOKENS, nonterminals.  */
 static const char *const yytname[] =
 {
-  "\"end of file\"", "error", "\"invalid token\"", "CHAR", "INT", "FLOAT",
-  "DOT", "ARROW", "SIZEOF", "ADDR_OF", "LNOT", "BNOT", "POW", "SHL", "SHR",
-  "MUL", "DIV", "MOD", "BAND", "BOR", "BXOR", "ADD", "SUB", "LT", "GT",
-  "LE", "GE", "NE", "EQ", "LAND", "LXOR", "LOR", "ASSIGN", "EQ_SHL",
-  "EQ_SHR", "EQ_MUL", "EQ_DIV", "EQ_MOD", "EQ_BAND", "EQ_BXOR", "EQ_BOR",
-  "EQ_ADD", "EQ_SUB", "COMMA", "TRY", "CATCH", "LASTCLASS", "U0",
-  "LEFT_PAREN", "RIGHT_PAREN", "INC", "DEC", "NAME", "LEFT_SQAURE",
-  "RIGHT_SQAURE", "SEMI", "IF", "ELSE", "DO", "WHILE", "FOR", "LEFT_CURLY",
-  "RIGHT_CURLY", "CASE", "COLON", "DOT_DOT_DOT", "EXTERN2", "LOCK",
-  "EXTERN", "IMPORT", "IMPORT2", "ASM_IMPORT", "STATIC", "PUBLIC", "CLASS",
-  "UNION", "INTERN", "START", "END", "DEFAULT", "BREAK", "RET", "GOTO",
-  "SWITCH", "EVAL_NOCOMMA", "EXE", "EVAL", "NL", "DBG", "STRING",
-  "TYPENAME", "OPCODE", "REGISTER", "DOUBLE_COLON", "DOUBLE_AT", "DU8",
-  "DU16", "DU32", "DU64", "ALIGN", "BINFILE", "ASM", "$accept", "sib_ib",
-  "sib_d", "_sib", "sib", "opc_operand", "opc_operands", "opcode",
-  "asm_blk_stmt", "data_exprs", "name_list", "asm_blk", "asm_blk_stmts",
-  "expr0", "_callargs", "callargs", "expr1", "expr2", "sizeof_type",
-  "expr3", "expr4", "expr4_5", "expr5", "expr6", "expr7", "expr8", "expr9",
-  "expr10", "expr11", "expr12", "expr13", "expr14", "expr", "expr_comma",
-  "primtype0", "_arrlit", "arrlit", "metadata", "cdecltail", "_cdecltail",
-  "cdecl", "cbody", "_cheader", "_uheader", "cheader", "uheader", "_class",
+  "$end", "error", "$undefined", "CHAR", "INT", "FLOAT", "DOT", "ARROW",
+  "SIZEOF", "ADDR_OF", "LNOT", "BNOT", "POW", "SHL", "SHR", "MUL", "DIV",
+  "MOD", "BAND", "BOR", "BXOR", "ADD", "SUB", "LT", "GT", "LE", "GE", "NE",
+  "EQ", "LAND", "LXOR", "LOR", "ASSIGN", "EQ_SHL", "EQ_SHR", "EQ_MUL",
+  "EQ_DIV", "EQ_MOD", "EQ_BAND", "EQ_BXOR", "EQ_BOR", "EQ_ADD", "EQ_SUB",
+  "COMMA", "TRY", "CATCH", "LASTCLASS", "U0", "LEFT_PAREN", "RIGHT_PAREN",
+  "INC", "DEC", "NAME", "LEFT_SQAURE", "RIGHT_SQAURE", "SEMI", "IF",
+  "ELSE", "DO", "WHILE", "FOR", "LEFT_CURLY", "RIGHT_CURLY", "CASE",
+  "COLON", "DOT_DOT_DOT", "EXTERN2", "LOCK", "EXTERN", "IMPORT", "IMPORT2",
+  "ASM_IMPORT", "STATIC", "PUBLIC", "CLASS", "UNION", "INTERN", "START",
+  "END", "DEFAULT", "BREAK", "RET", "GOTO", "SWITCH", "EVAL_NOCOMMA",
+  "EXE", "EVAL", "NL", "DBG", "STRING", "TYPENAME", "OPCODE", "REGISTER",
+  "DOUBLE_COLON", "DOUBLE_AT", "DU8", "DU16", "DU32", "DU64", "ALIGN",
+  "BINFILE", "ASM", "$accept", "sib_ib", "sib_d", "_sib", "sib",
+  "opc_operand", "opc_operands", "opcode", "asm_blk_stmt", "data_exprs",
+  "name_list", "asm_blk", "asm_blk_stmts", "expr0", "_callargs",
+  "callargs", "expr1", "expr2", "sizeof_type", "expr3", "expr4", "expr4_5",
+  "expr5", "expr6", "expr7", "expr8", "expr9", "expr10", "expr11",
+  "expr12", "expr13", "expr14", "expr", "expr_comma", "primtype0",
+  "_arrlit", "arrlit", "metadata", "cdecltail", "_cdecltail", "cdecl",
+  "cbody", "_cheader", "_uheader", "cheader", "uheader", "_class",
   "_union", "tryblock", "namewptrs", "vardecltail", "__ptrcount",
   "vardecltail_asn", "single_decl", "vardecltails", "multi_decl",
   "funcargs", "linkage", "func", "ocstmt", "expr_opt", "loop_header",
@@ -786,13 +701,26 @@ static const char *const yytname[] =
   "_expr3", "_expr4", "_expr4_5", "_expr5", "_expr6", "_expr7", "_expr8",
   "_expr9", "_expr10", "_expr11", "_expr12", "_expr13", "_expr14", "_expr", YY_NULLPTR
 };
-
-static const char *
-yysymbol_name (yysymbol_kind_t yysymbol)
-{
-  return yytname[yysymbol];
-}
 #endif
+
+# ifdef YYPRINT
+/* YYTOKNUM[NUM] -- (External) token number corresponding to the
+   (internal) symbol number NUM (which must be that of a token).  */
+static const yytype_int16 yytoknum[] =
+{
+       0,   256,   257,   258,   259,   260,   261,   262,   263,   264,
+     265,   266,   267,   268,   269,   270,   271,   272,   273,   274,
+     275,   276,   277,   278,   279,   280,   281,   282,   283,   284,
+     285,   286,   287,   288,   289,   290,   291,   292,   293,   294,
+     295,   296,   297,   298,   299,   300,   301,   302,   303,   304,
+     305,   306,   307,   308,   309,   310,   311,   312,   313,   314,
+     315,   316,   317,   318,   319,   320,   321,   322,   323,   324,
+     325,   326,   327,   328,   329,   330,   331,   332,   333,   334,
+     335,   336,   337,   338,   339,   340,   341,   342,   343,   344,
+     345,   346,   347,   348,   349,   350,   351,   352,   353,   354,
+     355,   356
+};
+# endif
 
 #define YYPACT_NINF (-527)
 
@@ -804,8 +732,8 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 #define yytable_value_is_error(Yyn) \
   0
 
-/* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
-   STATE-NUM.  */
+  /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
+     STATE-NUM.  */
 static const yytype_int16 yypact[] =
 {
      258,  1562,   -33,  1562,  1562,  1156,    50,  -527,  -527,  -527,
@@ -872,9 +800,9 @@ static const yytype_int16 yypact[] =
      462,   237,  -527,  -527,  -527,  -527,  -527,   469,  -527,  -527
 };
 
-/* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
-   Performed when YYTABLE does not specify something else to do.  Zero
-   means the default is an error.  */
+  /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
+     Performed when YYTABLE does not specify something else to do.  Zero
+     means the default is an error.  */
 static const yytype_int16 yydefact[] =
 {
      263,     0,     0,     0,     0,   265,     0,    47,    46,    45,
@@ -941,7 +869,7 @@ static const yytype_int16 yydefact[] =
        0,     0,   174,   202,   208,   229,   224,     0,   175,   176
 };
 
-/* YYPGOTO[NTERM-NUM].  */
+  /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int16 yypgoto[] =
 {
     -527,  -527,  -527,  -196,  -183,   432,  -527,   -78,   374,   243,
@@ -956,10 +884,10 @@ static const yytype_int16 yypgoto[] =
      451,   457,   364,   -60
 };
 
-/* YYDEFGOTO[NTERM-NUM].  */
+  /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int16 yydefgoto[] =
 {
-       0,   319,   320,   195,   196,   197,   198,    70,   378,   462,
+      -1,   319,   320,   195,   196,   197,   198,    70,   378,   462,
      459,    71,   379,    25,   255,   256,    26,    27,    98,    28,
       29,    30,    31,    32,    33,    34,    35,    36,    37,    38,
       39,    40,    45,    72,    73,   526,   478,   569,   532,   533,
@@ -971,9 +899,9 @@ static const yytype_int16 yydefgoto[] =
      213,   214,   215,   325
 };
 
-/* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
-   positive, shift that token.  If negative, reduce the rule whose
-   number is the opposite.  If YYTABLE_NINF, syntax error.  */
+  /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
+     positive, shift that token.  If negative, reduce the rule whose
+     number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int16 yytable[] =
 {
       44,    99,    76,   241,    77,    41,   242,   244,   216,   324,
@@ -1318,8 +1246,8 @@ static const yytype_int16 yycheck[] =
       -1,    89,    90,    -1,    -1,    -1,    94
 };
 
-/* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
-   state STATE-NUM.  */
+  /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
+     symbol of state STATE-NUM.  */
 static const yytype_uint8 yystos[] =
 {
        0,    84,    85,    86,    88,   176,   177,     3,     4,     5,
@@ -1386,7 +1314,7 @@ static const yytype_uint8 yystos[] =
      158,    43,    49,    55,   175,    64,    64,   158,    49,    49
 };
 
-/* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
+  /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const yytype_uint8 yyr1[] =
 {
        0,   102,   103,   103,   103,   103,   103,   104,   104,   104,
@@ -1426,7 +1354,7 @@ static const yytype_uint8 yyr1[] =
      194,   194,   194,   194,   194,   194,   194,   195
 };
 
-/* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
+  /* YYR2[YYN] -- Number of symbols on the right hand side of rule YYN.  */
 static const yytype_int8 yyr2[] =
 {
        0,     2,     1,     3,     5,     5,     1,     1,     3,     3,
@@ -1467,22 +1395,21 @@ static const yytype_int8 yyr2[] =
 };
 
 
-enum { YYENOMEM = -2 };
-
 #define yyerrok         (yyerrstatus = 0)
-#define yyclearin       (yychar = HC_HC_EMPTY)
+#define yyclearin       (yychar = YYEMPTY)
+#define YYEMPTY         (-2)
+#define YYEOF           0
 
 #define YYACCEPT        goto yyacceptlab
 #define YYABORT         goto yyabortlab
 #define YYERROR         goto yyerrorlab
-#define YYNOMEM         goto yyexhaustedlab
 
 
 #define YYRECOVERING()  (!!yyerrstatus)
 
 #define YYBACKUP(Token, Value)                                    \
   do                                                              \
-    if (yychar == HC_HC_EMPTY)                                        \
+    if (yychar == YYEMPTY)                                        \
       {                                                           \
         yychar = (Token);                                         \
         yylval = (Value);                                         \
@@ -1497,9 +1424,10 @@ enum { YYENOMEM = -2 };
       }                                                           \
   while (0)
 
-/* Backward compatibility with an undocumented macro.
-   Use HC_HC_error or HC_HC_UNDEF. */
-#define YYERRCODE HC_HC_UNDEF
+/* Error token number */
+#define YYTERROR        1
+#define YYERRCODE       256
+
 
 
 /* Enable debugging if requested.  */
@@ -1516,16 +1444,19 @@ do {                                            \
     YYFPRINTF Args;                             \
 } while (0)
 
+/* This macro is provided for backward compatibility. */
+#ifndef YY_LOCATION_PRINT
+# define YY_LOCATION_PRINT(File, Loc) ((void) 0)
+#endif
 
 
-
-# define YY_SYMBOL_PRINT(Title, Kind, Value, Location)                    \
+# define YY_SYMBOL_PRINT(Title, Type, Value, Location)                    \
 do {                                                                      \
   if (yydebug)                                                            \
     {                                                                     \
       YYFPRINTF (stderr, "%s ", Title);                                   \
       yy_symbol_print (stderr,                                            \
-                  Kind, Value); \
+                  Type, Value); \
       YYFPRINTF (stderr, "\n");                                           \
     }                                                                     \
 } while (0)
@@ -1536,15 +1467,18 @@ do {                                                                      \
 `-----------------------------------*/
 
 static void
-yy_symbol_value_print (FILE *yyo,
-                       yysymbol_kind_t yykind, YYSTYPE const * const yyvaluep)
+yy_symbol_value_print (FILE *yyo, int yytype, YYSTYPE const * const yyvaluep)
 {
   FILE *yyoutput = yyo;
-  YY_USE (yyoutput);
+  YYUSE (yyoutput);
   if (!yyvaluep)
     return;
+# ifdef YYPRINT
+  if (yytype < YYNTOKENS)
+    YYPRINT (yyo, yytoknum[yytype], *yyvaluep);
+# endif
   YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN
-  YY_USE (yykind);
+  YYUSE (yytype);
   YY_IGNORE_MAYBE_UNINITIALIZED_END
 }
 
@@ -1554,13 +1488,12 @@ yy_symbol_value_print (FILE *yyo,
 `---------------------------*/
 
 static void
-yy_symbol_print (FILE *yyo,
-                 yysymbol_kind_t yykind, YYSTYPE const * const yyvaluep)
+yy_symbol_print (FILE *yyo, int yytype, YYSTYPE const * const yyvaluep)
 {
   YYFPRINTF (yyo, "%s %s (",
-             yykind < YYNTOKENS ? "token" : "nterm", yysymbol_name (yykind));
+             yytype < YYNTOKENS ? "token" : "nterm", yytname[yytype]);
 
-  yy_symbol_value_print (yyo, yykind, yyvaluep);
+  yy_symbol_value_print (yyo, yytype, yyvaluep);
   YYFPRINTF (yyo, ")");
 }
 
@@ -1593,8 +1526,7 @@ do {                                                            \
 `------------------------------------------------*/
 
 static void
-yy_reduce_print (yy_state_t *yyssp, YYSTYPE *yyvsp,
-                 int yyrule)
+yy_reduce_print (yy_state_t *yyssp, YYSTYPE *yyvsp, int yyrule)
 {
   int yylno = yyrline[yyrule];
   int yynrhs = yyr2[yyrule];
@@ -1606,8 +1538,9 @@ yy_reduce_print (yy_state_t *yyssp, YYSTYPE *yyvsp,
     {
       YYFPRINTF (stderr, "   $%d = ", yyi + 1);
       yy_symbol_print (stderr,
-                       YY_ACCESSING_SYMBOL (+yyssp[yyi + 1 - yynrhs]),
-                       &yyvsp[(yyi + 1) - (yynrhs)]);
+                       yystos[+yyssp[yyi + 1 - yynrhs]],
+                       &yyvsp[(yyi + 1) - (yynrhs)]
+                                              );
       YYFPRINTF (stderr, "\n");
     }
 }
@@ -1622,8 +1555,8 @@ do {                                    \
    multiple parsers can coexist.  */
 int yydebug;
 #else /* !HC_DEBUG */
-# define YYDPRINTF(Args) ((void) 0)
-# define YY_SYMBOL_PRINT(Title, Kind, Value, Location)
+# define YYDPRINTF(Args)
+# define YY_SYMBOL_PRINT(Title, Type, Value, Location)
 # define YY_STACK_PRINT(Bottom, Top)
 # define YY_REDUCE_PRINT(Rule)
 #endif /* !HC_DEBUG */
@@ -1646,38 +1579,265 @@ int yydebug;
 #endif
 
 
+#if YYERROR_VERBOSE
 
+# ifndef yystrlen
+#  if defined __GLIBC__ && defined _STRING_H
+#   define yystrlen(S) (YY_CAST (YYPTRDIFF_T, strlen (S)))
+#  else
+/* Return the length of YYSTR.  */
+static YYPTRDIFF_T
+yystrlen (const char *yystr)
+{
+  YYPTRDIFF_T yylen;
+  for (yylen = 0; yystr[yylen]; yylen++)
+    continue;
+  return yylen;
+}
+#  endif
+# endif
 
+# ifndef yystpcpy
+#  if defined __GLIBC__ && defined _STRING_H && defined _GNU_SOURCE
+#   define yystpcpy stpcpy
+#  else
+/* Copy YYSRC to YYDEST, returning the address of the terminating '\0' in
+   YYDEST.  */
+static char *
+yystpcpy (char *yydest, const char *yysrc)
+{
+  char *yyd = yydest;
+  const char *yys = yysrc;
 
+  while ((*yyd++ = *yys++) != '\0')
+    continue;
+
+  return yyd - 1;
+}
+#  endif
+# endif
+
+# ifndef yytnamerr
+/* Copy to YYRES the contents of YYSTR after stripping away unnecessary
+   quotes and backslashes, so that it's suitable for yyerror.  The
+   heuristic is that double-quoting is unnecessary unless the string
+   contains an apostrophe, a comma, or backslash (other than
+   backslash-backslash).  YYSTR is taken from yytname.  If YYRES is
+   null, do not copy; instead, return the length of what the result
+   would have been.  */
+static YYPTRDIFF_T
+yytnamerr (char *yyres, const char *yystr)
+{
+  if (*yystr == '"')
+    {
+      YYPTRDIFF_T yyn = 0;
+      char const *yyp = yystr;
+
+      for (;;)
+        switch (*++yyp)
+          {
+          case '\'':
+          case ',':
+            goto do_not_strip_quotes;
+
+          case '\\':
+            if (*++yyp != '\\')
+              goto do_not_strip_quotes;
+            else
+              goto append;
+
+          append:
+          default:
+            if (yyres)
+              yyres[yyn] = *yyp;
+            yyn++;
+            break;
+
+          case '"':
+            if (yyres)
+              yyres[yyn] = '\0';
+            return yyn;
+          }
+    do_not_strip_quotes: ;
+    }
+
+  if (yyres)
+    return yystpcpy (yyres, yystr) - yyres;
+  else
+    return yystrlen (yystr);
+}
+# endif
+
+/* Copy into *YYMSG, which is of size *YYMSG_ALLOC, an error message
+   about the unexpected token YYTOKEN for the state stack whose top is
+   YYSSP.
+
+   Return 0 if *YYMSG was successfully written.  Return 1 if *YYMSG is
+   not large enough to hold the message.  In that case, also set
+   *YYMSG_ALLOC to the required number of bytes.  Return 2 if the
+   required number of bytes is too large to store.  */
+static int
+yysyntax_error (YYPTRDIFF_T *yymsg_alloc, char **yymsg,
+                yy_state_t *yyssp, int yytoken)
+{
+  enum { YYERROR_VERBOSE_ARGS_MAXIMUM = 5 };
+  /* Internationalized format string. */
+  const char *yyformat = YY_NULLPTR;
+  /* Arguments of yyformat: reported tokens (one for the "unexpected",
+     one per "expected"). */
+  char const *yyarg[YYERROR_VERBOSE_ARGS_MAXIMUM];
+  /* Actual size of YYARG. */
+  int yycount = 0;
+  /* Cumulated lengths of YYARG.  */
+  YYPTRDIFF_T yysize = 0;
+
+  /* There are many possibilities here to consider:
+     - If this state is a consistent state with a default action, then
+       the only way this function was invoked is if the default action
+       is an error action.  In that case, don't check for expected
+       tokens because there are none.
+     - The only way there can be no lookahead present (in yychar) is if
+       this state is a consistent state with a default action.  Thus,
+       detecting the absence of a lookahead is sufficient to determine
+       that there is no unexpected or expected token to report.  In that
+       case, just report a simple "syntax error".
+     - Don't assume there isn't a lookahead just because this state is a
+       consistent state with a default action.  There might have been a
+       previous inconsistent state, consistent state with a non-default
+       action, or user semantic action that manipulated yychar.
+     - Of course, the expected token list depends on states to have
+       correct lookahead information, and it depends on the parser not
+       to perform extra reductions after fetching a lookahead from the
+       scanner and before detecting a syntax error.  Thus, state merging
+       (from LALR or IELR) and default reductions corrupt the expected
+       token list.  However, the list is correct for canonical LR with
+       one exception: it will still contain any token that will not be
+       accepted due to an error action in a later state.
+  */
+  if (yytoken != YYEMPTY)
+    {
+      int yyn = yypact[+*yyssp];
+      YYPTRDIFF_T yysize0 = yytnamerr (YY_NULLPTR, yytname[yytoken]);
+      yysize = yysize0;
+      yyarg[yycount++] = yytname[yytoken];
+      if (!yypact_value_is_default (yyn))
+        {
+          /* Start YYX at -YYN if negative to avoid negative indexes in
+             YYCHECK.  In other words, skip the first -YYN actions for
+             this state because they are default actions.  */
+          int yyxbegin = yyn < 0 ? -yyn : 0;
+          /* Stay within bounds of both yycheck and yytname.  */
+          int yychecklim = YYLAST - yyn + 1;
+          int yyxend = yychecklim < YYNTOKENS ? yychecklim : YYNTOKENS;
+          int yyx;
+
+          for (yyx = yyxbegin; yyx < yyxend; ++yyx)
+            if (yycheck[yyx + yyn] == yyx && yyx != YYTERROR
+                && !yytable_value_is_error (yytable[yyx + yyn]))
+              {
+                if (yycount == YYERROR_VERBOSE_ARGS_MAXIMUM)
+                  {
+                    yycount = 1;
+                    yysize = yysize0;
+                    break;
+                  }
+                yyarg[yycount++] = yytname[yyx];
+                {
+                  YYPTRDIFF_T yysize1
+                    = yysize + yytnamerr (YY_NULLPTR, yytname[yyx]);
+                  if (yysize <= yysize1 && yysize1 <= YYSTACK_ALLOC_MAXIMUM)
+                    yysize = yysize1;
+                  else
+                    return 2;
+                }
+              }
+        }
+    }
+
+  switch (yycount)
+    {
+# define YYCASE_(N, S)                      \
+      case N:                               \
+        yyformat = S;                       \
+      break
+    default: /* Avoid compiler warnings. */
+      YYCASE_(0, YY_("syntax error"));
+      YYCASE_(1, YY_("syntax error, unexpected %s"));
+      YYCASE_(2, YY_("syntax error, unexpected %s, expecting %s"));
+      YYCASE_(3, YY_("syntax error, unexpected %s, expecting %s or %s"));
+      YYCASE_(4, YY_("syntax error, unexpected %s, expecting %s or %s or %s"));
+      YYCASE_(5, YY_("syntax error, unexpected %s, expecting %s or %s or %s or %s"));
+# undef YYCASE_
+    }
+
+  {
+    /* Don't count the "%s"s in the final size, but reserve room for
+       the terminator.  */
+    YYPTRDIFF_T yysize1 = yysize + (yystrlen (yyformat) - 2 * yycount) + 1;
+    if (yysize <= yysize1 && yysize1 <= YYSTACK_ALLOC_MAXIMUM)
+      yysize = yysize1;
+    else
+      return 2;
+  }
+
+  if (*yymsg_alloc < yysize)
+    {
+      *yymsg_alloc = 2 * yysize;
+      if (! (yysize <= *yymsg_alloc
+             && *yymsg_alloc <= YYSTACK_ALLOC_MAXIMUM))
+        *yymsg_alloc = YYSTACK_ALLOC_MAXIMUM;
+      return 1;
+    }
+
+  /* Avoid sprintf, as that infringes on the user's name space.
+     Don't have undefined behavior even if the translation
+     produced a string with the wrong number of "%s"s.  */
+  {
+    char *yyp = *yymsg;
+    int yyi = 0;
+    while ((*yyp = *yyformat) != '\0')
+      if (*yyp == '%' && yyformat[1] == 's' && yyi < yycount)
+        {
+          yyp += yytnamerr (yyp, yyarg[yyi++]);
+          yyformat += 2;
+        }
+      else
+        {
+          ++yyp;
+          ++yyformat;
+        }
+  }
+  return 0;
+}
+#endif /* YYERROR_VERBOSE */
 
 /*-----------------------------------------------.
 | Release the memory associated to this symbol.  |
 `-----------------------------------------------*/
 
 static void
-yydestruct (const char *yymsg,
-            yysymbol_kind_t yykind, YYSTYPE *yyvaluep)
+yydestruct (const char *yymsg, int yytype, YYSTYPE *yyvaluep)
 {
-  YY_USE (yyvaluep);
+  YYUSE (yyvaluep);
   if (!yymsg)
     yymsg = "Deleting";
-  YY_SYMBOL_PRINT (yymsg, yykind, yyvaluep, yylocationp);
+  YY_SYMBOL_PRINT (yymsg, yytype, yyvaluep, yylocationp);
 
   YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN
-  YY_USE (yykind);
+  YYUSE (yytype);
   YY_IGNORE_MAYBE_UNINITIALIZED_END
 }
 
 
-/* Lookahead token kind.  */
+
+
+/* The lookahead symbol.  */
 int yychar;
 
 /* The semantic value of the lookahead symbol.  */
 YYSTYPE yylval;
 /* Number of syntax errors so far.  */
 int yynerrs;
-
-
 
 
 /*----------.
@@ -1687,36 +1847,43 @@ int yynerrs;
 int
 yyparse (void)
 {
-    yy_state_fast_t yystate = 0;
+    yy_state_fast_t yystate;
     /* Number of tokens to shift before error messages enabled.  */
-    int yyerrstatus = 0;
+    int yyerrstatus;
 
-    /* Refer to the stacks through separate pointers, to allow yyoverflow
+    /* The stacks and their tools:
+       'yyss': related to states.
+       'yyvs': related to semantic values.
+
+       Refer to the stacks through separate pointers, to allow yyoverflow
        to reallocate them elsewhere.  */
 
-    /* Their size.  */
-    YYPTRDIFF_T yystacksize = YYINITDEPTH;
-
-    /* The state stack: array, bottom, top.  */
+    /* The state stack.  */
     yy_state_t yyssa[YYINITDEPTH];
-    yy_state_t *yyss = yyssa;
-    yy_state_t *yyssp = yyss;
+    yy_state_t *yyss;
+    yy_state_t *yyssp;
 
-    /* The semantic value stack: array, bottom, top.  */
+    /* The semantic value stack.  */
     YYSTYPE yyvsa[YYINITDEPTH];
-    YYSTYPE *yyvs = yyvsa;
-    YYSTYPE *yyvsp = yyvs;
+    YYSTYPE *yyvs;
+    YYSTYPE *yyvsp;
+
+    YYPTRDIFF_T yystacksize;
 
   int yyn;
-  /* The return value of yyparse.  */
   int yyresult;
-  /* Lookahead symbol kind.  */
-  yysymbol_kind_t yytoken = YYSYMBOL_YYEMPTY;
+  /* Lookahead token as an internal (translated) token number.  */
+  int yytoken = 0;
   /* The variables used to return semantic value and location from the
      action routines.  */
   YYSTYPE yyval;
 
-
+#if YYERROR_VERBOSE
+  /* Buffer for error messages, and its allocated size.  */
+  char yymsgbuf[128];
+  char *yymsg = yymsgbuf;
+  YYPTRDIFF_T yymsg_alloc = sizeof yymsgbuf;
+#endif
 
 #define YYPOPSTACK(N)   (yyvsp -= (N), yyssp -= (N))
 
@@ -1724,10 +1891,16 @@ yyparse (void)
      Keep to zero when no symbol should be popped.  */
   int yylen = 0;
 
+  yyssp = yyss = yyssa;
+  yyvsp = yyvs = yyvsa;
+  yystacksize = YYINITDEPTH;
+
   YYDPRINTF ((stderr, "Starting parse\n"));
 
-  yychar = HC_HC_EMPTY; /* Cause a token to be read.  */
-
+  yystate = 0;
+  yyerrstatus = 0;
+  yynerrs = 0;
+  yychar = YYEMPTY; /* Cause a token to be read.  */
   goto yysetstate;
 
 
@@ -1749,11 +1922,10 @@ yysetstate:
   YY_IGNORE_USELESS_CAST_BEGIN
   *yyssp = YY_CAST (yy_state_t, yystate);
   YY_IGNORE_USELESS_CAST_END
-  YY_STACK_PRINT (yyss, yyssp);
 
   if (yyss + yystacksize - 1 <= yyssp)
 #if !defined yyoverflow && !defined YYSTACK_RELOCATE
-    YYNOMEM;
+    goto yyexhaustedlab;
 #else
     {
       /* Get the current used size of the three stacks, in elements.  */
@@ -1781,7 +1953,7 @@ yysetstate:
 # else /* defined YYSTACK_RELOCATE */
       /* Extend the stack our own way.  */
       if (YYMAXDEPTH <= yystacksize)
-        YYNOMEM;
+        goto yyexhaustedlab;
       yystacksize *= 2;
       if (YYMAXDEPTH < yystacksize)
         yystacksize = YYMAXDEPTH;
@@ -1792,10 +1964,10 @@ yysetstate:
           YY_CAST (union yyalloc *,
                    YYSTACK_ALLOC (YY_CAST (YYSIZE_T, YYSTACK_BYTES (yystacksize))));
         if (! yyptr)
-          YYNOMEM;
+          goto yyexhaustedlab;
         YYSTACK_RELOCATE (yyss_alloc, yyss);
         YYSTACK_RELOCATE (yyvs_alloc, yyvs);
-#  undef YYSTACK_RELOCATE
+# undef YYSTACK_RELOCATE
         if (yyss1 != yyssa)
           YYSTACK_FREE (yyss1);
       }
@@ -1813,7 +1985,6 @@ yysetstate:
         YYABORT;
     }
 #endif /* !defined yyoverflow && !defined YYSTACK_RELOCATE */
-
 
   if (yystate == YYFINAL)
     YYACCEPT;
@@ -1835,28 +2006,17 @@ yybackup:
 
   /* Not known => get a lookahead token if don't already have one.  */
 
-  /* YYCHAR is either empty, or end-of-input, or a valid lookahead.  */
-  if (yychar == HC_HC_EMPTY)
+  /* YYCHAR is either YYEMPTY or YYEOF or a valid lookahead symbol.  */
+  if (yychar == YYEMPTY)
     {
-      YYDPRINTF ((stderr, "Reading a token\n"));
+      YYDPRINTF ((stderr, "Reading a token: "));
       yychar = yylex ();
     }
 
-  if (yychar <= HC_YYEOF)
+  if (yychar <= YYEOF)
     {
-      yychar = HC_YYEOF;
-      yytoken = YYSYMBOL_YYEOF;
+      yychar = yytoken = YYEOF;
       YYDPRINTF ((stderr, "Now at end of input.\n"));
-    }
-  else if (yychar == HC_HC_error)
-    {
-      /* The scanner already issued an error message, process directly
-         to error recovery.  But do not keep the error token as
-         lookahead, it is too special and may lead us to an endless
-         loop in error recovery. */
-      yychar = HC_HC_UNDEF;
-      yytoken = YYSYMBOL_YYerror;
-      goto yyerrlab1;
     }
   else
     {
@@ -1891,7 +2051,7 @@ yybackup:
   YY_IGNORE_MAYBE_UNINITIALIZED_END
 
   /* Discard the shifted token.  */
-  yychar = HC_HC_EMPTY;
+  yychar = YYEMPTY;
   goto yynewstate;
 
 
@@ -1926,93 +2086,93 @@ yyreduce:
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
-  case 2: /* sib_ib: REGISTER  */
+  case 2:
 #line 61 "HolyC.y"
                     {yyval=AppendToSIB(NULL,NULL,yyvsp[0],NULL);}
-#line 1933 "HolyC.tab.c"
+#line 2093 "HolyC.tab.c"
     break;
 
-  case 3: /* sib_ib: sib_ib ADD REGISTER  */
+  case 3:
 #line 62 "HolyC.y"
                                          {
   yyval=AppendToSIB(yyvsp[-2],NULL,yyvsp[0],NULL);
   ReleaseAST(yyvsp[-1]);
 }
-#line 1942 "HolyC.tab.c"
+#line 2102 "HolyC.tab.c"
     break;
 
-  case 4: /* sib_ib: sib_ib ADD INT MUL REGISTER  */
+  case 4:
 #line 66 "HolyC.y"
                                                         {
   yyval=AppendToSIB(yyvsp[-4],yyvsp[-2],yyvsp[0],NULL);
   ReleaseAST(yyvsp[-3]),ReleaseAST(yyvsp[-1]);
 }
-#line 1951 "HolyC.tab.c"
+#line 2111 "HolyC.tab.c"
     break;
 
-  case 5: /* sib_ib: sib_ib ADD REGISTER MUL INT  */
+  case 5:
 #line 70 "HolyC.y"
                                                          {
   yyval=AppendToSIB(yyvsp[-4],yyvsp[0],yyvsp[-2],NULL);
   ReleaseAST(yyvsp[-3]),ReleaseAST(yyvsp[-1]);
 }
-#line 1960 "HolyC.tab.c"
+#line 2120 "HolyC.tab.c"
     break;
 
-  case 6: /* sib_ib: INT  */
+  case 6:
 #line 74 "HolyC.y"
                   {
   yyval=AppendToSIB(NULL,NULL,NULL,yyvsp[0]);
  }
-#line 1968 "HolyC.tab.c"
+#line 2128 "HolyC.tab.c"
     break;
 
-  case 8: /* sib_d: sib_ib ADD expr  */
+  case 8:
 #line 78 "HolyC.y"
                                    {
   yyval=AppendToSIB(yyvsp[-2],NULL,NULL,yyvsp[0]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 1977 "HolyC.tab.c"
+#line 2137 "HolyC.tab.c"
     break;
 
-  case 9: /* sib_d: sib_ib SUB expr  */
+  case 9:
 #line 82 "HolyC.y"
                                     {
   yyval=AppendToSIB(yyvsp[-2],NULL,NULL,yyvsp[0]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 1986 "HolyC.tab.c"
+#line 2146 "HolyC.tab.c"
     break;
 
-  case 10: /* _sib: LEFT_SQAURE sib_d RIGHT_SQAURE  */
+  case 10:
 #line 86 "HolyC.y"
                                                       {
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
   yyval=yyvsp[-1];
 }
-#line 1995 "HolyC.tab.c"
+#line 2155 "HolyC.tab.c"
     break;
 
-  case 12: /* sib: _expr _sib  */
+  case 12:
 #line 91 "HolyC.y"
                             {
   yyval=AppendToSIB(yyvsp[0],NULL,NULL,yyvsp[-1]);
  }
-#line 2003 "HolyC.tab.c"
+#line 2163 "HolyC.tab.c"
     break;
 
-  case 16: /* opc_operand: TYPENAME sib  */
+  case 16:
 #line 97 "HolyC.y"
                                  {
   yyval=yyvsp[0];
   CType *t=*map_get(&Compiler.types,yyvsp[-1]->name);
   yyval->asmAddr.width=TypeSize(t);
 }
-#line 2013 "HolyC.tab.c"
+#line 2173 "HolyC.tab.c"
     break;
 
-  case 17: /* opc_operand: TYPENAME REGISTER COLON sib  */
+  case 17:
 #line 102 "HolyC.y"
                                                      {
   CType *t=*map_get(&Compiler.types,yyvsp[-3]->name);
@@ -2020,10 +2180,10 @@ yyreduce:
   yyvsp[0]->asmAddr.segment=yyvsp[-2];
   yyval=yyvsp[0];
 }
-#line 2024 "HolyC.tab.c"
+#line 2184 "HolyC.tab.c"
     break;
 
-  case 18: /* opc_operand: opc_operand COLON sib  */
+  case 18:
 #line 108 "HolyC.y"
                                             {
   if(yyvsp[-2]->type!=AST_ASM_REG) RaiseError(yyvsp[-1],"Expected register.");
@@ -2033,31 +2193,31 @@ yyreduce:
   yyval=yyvsp[0];
   ReleaseAST(yyvsp[-1]);
 }
-#line 2037 "HolyC.tab.c"
+#line 2197 "HolyC.tab.c"
     break;
 
-  case 19: /* opc_operands: opc_operand  */
+  case 19:
 #line 116 "HolyC.y"
                                 {yyval=yyvsp[0];}
-#line 2043 "HolyC.tab.c"
+#line 2203 "HolyC.tab.c"
     break;
 
-  case 20: /* opc_operands: opc_operands COMMA opc_operand  */
+  case 20:
 #line 117 "HolyC.y"
                                                             {
   yyval=CreateBinop(yyvsp[-2],yyvsp[0],AST_COMMA);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2052 "HolyC.tab.c"
+#line 2212 "HolyC.tab.c"
     break;
 
-  case 21: /* opc_operands: %empty  */
+  case 21:
 #line 121 "HolyC.y"
                  {yyval=NULL;}
-#line 2058 "HolyC.tab.c"
+#line 2218 "HolyC.tab.c"
     break;
 
-  case 22: /* opcode: OPCODE opc_operands  */
+  case 22:
 #line 122 "HolyC.y"
                                      {
   AST *r=TD_MALLOC(sizeof(AST));
@@ -2068,40 +2228,40 @@ yyreduce:
   r->labelContext=Compiler.labelContext;
   yyval=SOT(r,yyvsp[-1]);
 }
-#line 2072 "HolyC.tab.c"
+#line 2232 "HolyC.tab.c"
     break;
 
-  case 23: /* asm_blk_stmt: NAME DOUBLE_COLON  */
+  case 23:
 #line 131 "HolyC.y"
                                          {
   yyval=SOT(CreateExportedLabel(yyvsp[-1]),yyvsp[-1]);
   yyval->inAsmBlk=1;
   ReleaseAST(yyvsp[0]);
 }
-#line 2082 "HolyC.tab.c"
+#line 2242 "HolyC.tab.c"
     break;
 
-  case 24: /* asm_blk_stmt: NAME COLON  */
+  case 24:
 #line 136 "HolyC.y"
                                   {
   yyval=SOT(CreateLabel(yyvsp[-1]),yyvsp[-1]);
   yyval->inAsmBlk=1;
   ReleaseAST(yyvsp[0]);
  }
-#line 2092 "HolyC.tab.c"
+#line 2252 "HolyC.tab.c"
     break;
 
-  case 25: /* asm_blk_stmt: DOUBLE_AT NAME COLON  */
+  case 25:
 #line 141 "HolyC.y"
                                                 {
   yyval=SOT(CreateLocalLabel(yyvsp[-1]),yyvsp[-2]);
   yyval->inAsmBlk=1;
   ReleaseAST(yyvsp[0]),ReleaseAST(yyvsp[-2]);
 }
-#line 2102 "HolyC.tab.c"
+#line 2262 "HolyC.tab.c"
     break;
 
-  case 26: /* asm_blk_stmt: DOUBLE_AT INT COLON  */
+  case 26:
 #line 146 "HolyC.y"
                                                {
   //Make a name token out of $n
@@ -2114,118 +2274,118 @@ yyreduce:
   yyval->inAsmBlk=1;
   ReleaseAST(yyvsp[0]),ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[-1]);
 }
-#line 2118 "HolyC.tab.c"
+#line 2278 "HolyC.tab.c"
     break;
 
-  case 28: /* data_exprs: data_exprs COMMA expr  */
+  case 28:
 #line 159 "HolyC.y"
                                                 {
   yyval=CreateBinop(yyvsp[-2],yyvsp[0],AST_COMMA);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2127 "HolyC.tab.c"
+#line 2287 "HolyC.tab.c"
     break;
 
-  case 29: /* asm_blk_stmt: DU8 data_exprs SEMI  */
+  case 29:
 #line 163 "HolyC.y"
                                                 {
   yyval=SOT(CreateDU8(yyvsp[-1]),yyvsp[-2]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 2136 "HolyC.tab.c"
+#line 2296 "HolyC.tab.c"
     break;
 
-  case 30: /* asm_blk_stmt: DU16 data_exprs SEMI  */
+  case 30:
 #line 167 "HolyC.y"
                                                  {
   yyval=SOT(CreateDU16(yyvsp[-1]),yyvsp[-2]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 2145 "HolyC.tab.c"
+#line 2305 "HolyC.tab.c"
     break;
 
-  case 31: /* asm_blk_stmt: DU32 data_exprs SEMI  */
+  case 31:
 #line 171 "HolyC.y"
                                                  {
   yyval=SOT(CreateDU32(yyvsp[-1]),yyvsp[-2]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 2154 "HolyC.tab.c"
+#line 2314 "HolyC.tab.c"
     break;
 
-  case 32: /* asm_blk_stmt: DU64 data_exprs SEMI  */
+  case 32:
 #line 175 "HolyC.y"
                                                  {
   yyval=SOT(CreateDU64(yyvsp[-1]),yyvsp[-2]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 2163 "HolyC.tab.c"
+#line 2323 "HolyC.tab.c"
     break;
 
-  case 35: /* name_list: name_list COMMA NAME  */
+  case 35:
 #line 181 "HolyC.y"
                                              {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_COMMA),yyvsp[-2]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2172 "HolyC.tab.c"
+#line 2332 "HolyC.tab.c"
     break;
 
-  case 36: /* asm_blk_stmt: ASM_IMPORT name_list SEMI  */
+  case 36:
 #line 185 "HolyC.y"
                                                        {
   yyval=SOT(CreateAsmImport(yyvsp[-1]),yyvsp[-2]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 2181 "HolyC.tab.c"
+#line 2341 "HolyC.tab.c"
     break;
 
-  case 37: /* asm_blk_stmt: SEMI  */
+  case 37:
 #line 189 "HolyC.y"
                           {
   yyval=SOT(CreateNop(),yyvsp[0]);
   ReleaseAST(yyvsp[0]);
  }
-#line 2190 "HolyC.tab.c"
+#line 2350 "HolyC.tab.c"
     break;
 
-  case 38: /* asm_blk_stmt: ALIGN INT COMMA INT  */
+  case 38:
 #line 193 "HolyC.y"
                                                            {
   yyval=SOT(CreateAsmAlign(yyvsp[-2],yyvsp[0]),yyvsp[-3]);
   ReleaseAST(yyvsp[-3]),ReleaseAST(yyvsp[-3]);
 }
-#line 2199 "HolyC.tab.c"
+#line 2359 "HolyC.tab.c"
     break;
 
-  case 39: /* asm_blk: ASM LEFT_CURLY RIGHT_CURLY  */
+  case 39:
 #line 197 "HolyC.y"
                                                    {
   yyval=SOT(CreateNop(),yyvsp[-2]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[-1]),ReleaseAST(yyvsp[0]);
 }
-#line 2208 "HolyC.tab.c"
+#line 2368 "HolyC.tab.c"
     break;
 
-  case 41: /* asm_blk_stmts: asm_blk_stmts asm_blk_stmt  */
+  case 41:
 #line 202 "HolyC.y"
                                                    {
   yyval=AppendToStmts(yyvsp[-1],yyvsp[0]);
 }
-#line 2216 "HolyC.tab.c"
+#line 2376 "HolyC.tab.c"
     break;
 
-  case 42: /* asm_blk: ASM LEFT_CURLY asm_blk_stmts RIGHT_CURLY  */
+  case 42:
 #line 205 "HolyC.y"
                                                                     {
   yyval=yyvsp[-1];
   yyval->type=AST_ASM_BLK;
   ReleaseAST(yyvsp[-3]),ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 2226 "HolyC.tab.c"
+#line 2386 "HolyC.tab.c"
     break;
 
-  case 43: /* expr0: DOUBLE_AT NAME  */
+  case 43:
 #line 211 "HolyC.y"
                             {
   yyval=SOT(yyvsp[0],yyvsp[-1]);
@@ -2235,10 +2395,10 @@ yyreduce:
   yyval->name=strdup(buffer);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2239 "HolyC.tab.c"
+#line 2399 "HolyC.tab.c"
     break;
 
-  case 44: /* expr0: DOUBLE_AT INT  */
+  case 44:
 #line 219 "HolyC.y"
                               {
 //Make a name token out of $n
@@ -2249,230 +2409,230 @@ yyreduce:
   yyval=n;
   ReleaseAST(yyvsp[-1]);
 }
-#line 2253 "HolyC.tab.c"
+#line 2413 "HolyC.tab.c"
     break;
 
-  case 45: /* expr0: FLOAT  */
+  case 45:
 #line 228 "HolyC.y"
                 {yyval=SLE(yyvsp[0]);}
-#line 2259 "HolyC.tab.c"
+#line 2419 "HolyC.tab.c"
     break;
 
-  case 46: /* expr0: INT  */
+  case 46:
 #line 229 "HolyC.y"
               {yyval=SLE(yyvsp[0]);}
-#line 2265 "HolyC.tab.c"
+#line 2425 "HolyC.tab.c"
     break;
 
-  case 47: /* expr0: CHAR  */
+  case 47:
 #line 230 "HolyC.y"
                {yyval=SLE(yyvsp[0]);}
-#line 2271 "HolyC.tab.c"
+#line 2431 "HolyC.tab.c"
     break;
 
-  case 48: /* expr0: str  */
+  case 48:
 #line 231 "HolyC.y"
               {yyval=yyvsp[0];}
-#line 2277 "HolyC.tab.c"
+#line 2437 "HolyC.tab.c"
     break;
 
-  case 49: /* expr0: LASTCLASS  */
+  case 49:
 #line 232 "HolyC.y"
                     {
   yyval=SLE(yyvsp[0]);
 }
-#line 2285 "HolyC.tab.c"
+#line 2445 "HolyC.tab.c"
     break;
 
-  case 50: /* expr0: NAME  */
+  case 50:
 #line 235 "HolyC.y"
                {
   yyval=SLE(yyvsp[0]);
 }
-#line 2293 "HolyC.tab.c"
+#line 2453 "HolyC.tab.c"
     break;
 
-  case 51: /* _callargs: %empty  */
+  case 51:
 #line 238 "HolyC.y"
               {yyval=NULL;}
-#line 2299 "HolyC.tab.c"
+#line 2459 "HolyC.tab.c"
     break;
 
-  case 52: /* _callargs: expr  */
+  case 52:
 #line 239 "HolyC.y"
                       {yyval=yyvsp[0];}
-#line 2305 "HolyC.tab.c"
+#line 2465 "HolyC.tab.c"
     break;
 
-  case 53: /* callargs: callargs COMMA _callargs  */
+  case 53:
 #line 240 "HolyC.y"
                                                {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_COMMA),yyvsp[-1]);
 }
-#line 2313 "HolyC.tab.c"
+#line 2473 "HolyC.tab.c"
     break;
 
-  case 54: /* callargs: _callargs  */
+  case 54:
 #line 243 "HolyC.y"
                           {yyval=yyvsp[0];}
-#line 2319 "HolyC.tab.c"
+#line 2479 "HolyC.tab.c"
     break;
 
-  case 56: /* expr1: LEFT_PAREN expr_comma RIGHT_PAREN  */
+  case 56:
 #line 245 "HolyC.y"
                                                          {
   yyval=yyvsp[-1];
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 2328 "HolyC.tab.c"
+#line 2488 "HolyC.tab.c"
     break;
 
-  case 58: /* expr2: TYPENAME DOT NAME  */
+  case 58:
 #line 254 "HolyC.y"
                                      {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2337 "HolyC.tab.c"
+#line 2497 "HolyC.tab.c"
     break;
 
-  case 59: /* expr2: TYPENAME ARROW NAME  */
+  case 59:
 #line 258 "HolyC.y"
                                        {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2346 "HolyC.tab.c"
+#line 2506 "HolyC.tab.c"
     break;
 
-  case 60: /* expr2: expr2 DOT NAME  */
+  case 60:
 #line 262 "HolyC.y"
                                   {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2355 "HolyC.tab.c"
+#line 2515 "HolyC.tab.c"
     break;
 
-  case 61: /* expr2: expr2 ARROW NAME  */
+  case 61:
 #line 266 "HolyC.y"
                                     {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2364 "HolyC.tab.c"
+#line 2524 "HolyC.tab.c"
     break;
 
-  case 62: /* expr2: expr2 LEFT_SQAURE expr_comma RIGHT_SQAURE  */
+  case 62:
 #line 270 "HolyC.y"
                                                                     {
   yyval=SOT(CreateArrayAccess(yyvsp[-3],yyvsp[-1]),yyvsp[-3]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 2373 "HolyC.tab.c"
+#line 2533 "HolyC.tab.c"
     break;
 
-  case 63: /* expr2: expr2 DEC  */
+  case 63:
 #line 274 "HolyC.y"
                           {
   yyval=SOT(CreateUnop(yyvsp[-1],AST_POST_DEC),yyvsp[0]);
   ReleaseAST(yyvsp[0]);
 }
-#line 2382 "HolyC.tab.c"
+#line 2542 "HolyC.tab.c"
     break;
 
-  case 64: /* expr2: expr2 INC  */
+  case 64:
 #line 278 "HolyC.y"
                           {
   yyval=SOT(CreateUnop(yyvsp[-1],AST_POST_INC),yyvsp[0]);
   ReleaseAST(yyvsp[0]);
 }
-#line 2391 "HolyC.tab.c"
+#line 2551 "HolyC.tab.c"
     break;
 
-  case 65: /* expr2: expr2 LEFT_PAREN callargs RIGHT_PAREN  */
+  case 65:
 #line 282 "HolyC.y"
                                                                 {
   yyval=SOT(CreateFuncCall(yyvsp[-3],yyvsp[-1]),yyvsp[-3]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 2400 "HolyC.tab.c"
+#line 2560 "HolyC.tab.c"
     break;
 
-  case 66: /* expr2: expr2 LEFT_PAREN primtype0 RIGHT_PAREN  */
+  case 66:
 #line 286 "HolyC.y"
                                                                  {
   yyval=CreateExplicitTypecast(yyvsp[-3],yyvsp[-1]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 2409 "HolyC.tab.c"
+#line 2569 "HolyC.tab.c"
     break;
 
-  case 67: /* expr2: expr2 LEFT_PAREN primtype0 MUL RIGHT_PAREN  */
+  case 67:
 #line 290 "HolyC.y"
                                                                           {
   yyvsp[-2]->type2=CreateMultiLvlPtr(yyvsp[-2]->type2,1);
   yyval=CreateExplicitTypecast(yyvsp[-4],yyvsp[-2]);
   ReleaseAST(yyvsp[-3]),ReleaseAST(yyvsp[-1]),ReleaseAST(yyvsp[0]);
 }
-#line 2419 "HolyC.tab.c"
+#line 2579 "HolyC.tab.c"
     break;
 
-  case 68: /* expr2: expr2 LEFT_PAREN primtype0 MUL MUL RIGHT_PAREN  */
+  case 68:
 #line 295 "HolyC.y"
                                                                                    {
   yyvsp[-3]->type2=CreateMultiLvlPtr(yyvsp[-3]->type2,2);
   yyval=CreateExplicitTypecast(yyvsp[-5],yyvsp[-3]);
   ReleaseAST(yyvsp[-4]),ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[-1]),ReleaseAST(yyvsp[0]);
 }
-#line 2429 "HolyC.tab.c"
+#line 2589 "HolyC.tab.c"
     break;
 
-  case 69: /* expr2: expr2 LEFT_PAREN primtype0 MUL MUL MUL RIGHT_PAREN  */
+  case 69:
 #line 300 "HolyC.y"
                                                                                             {
   yyvsp[-4]->type2=CreateMultiLvlPtr(yyvsp[-4]->type2,3);
   yyval=CreateExplicitTypecast(yyvsp[-6],yyvsp[-4]);
   ReleaseAST(yyvsp[-5]),ReleaseAST(yyvsp[-3]),ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[-1]),ReleaseAST(yyvsp[0]);
 }
-#line 2439 "HolyC.tab.c"
+#line 2599 "HolyC.tab.c"
     break;
 
-  case 70: /* sizeof_type: primtype0  */
+  case 70:
 #line 308 "HolyC.y"
                              {yyval=yyvsp[0];}
-#line 2445 "HolyC.tab.c"
+#line 2605 "HolyC.tab.c"
     break;
 
-  case 71: /* sizeof_type: sizeof_type MUL  */
+  case 71:
 #line 309 "HolyC.y"
                                         {
   CType *ptr =CreateMultiLvlPtr(yyvsp[-1]->type2,1);
   yyval=CreateTypeNode(ptr);
   ReleaseAST(yyvsp[0]);
 }
-#line 2455 "HolyC.tab.c"
+#line 2615 "HolyC.tab.c"
     break;
 
-  case 73: /* expr3: SIZEOF NAME  */
+  case 73:
 #line 315 "HolyC.y"
                             {
   yyval=SOT(CreateSizeof(yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2464 "HolyC.tab.c"
+#line 2624 "HolyC.tab.c"
     break;
 
-  case 74: /* expr3: SIZEOF sizeof_type  */
+  case 74:
 #line 319 "HolyC.y"
                                    {
   yyval=SOT(CreateSizeof(yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2473 "HolyC.tab.c"
+#line 2633 "HolyC.tab.c"
     break;
 
-  case 75: /* expr3: SIZEOF LEFT_PAREN expr_comma RIGHT_PAREN  */
+  case 75:
 #line 323 "HolyC.y"
                                                                     {
   yyval=SOT(CreateSizeof(yyvsp[-1]),yyvsp[-3]);
@@ -2480,10 +2640,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 2484 "HolyC.tab.c"
+#line 2644 "HolyC.tab.c"
     break;
 
-  case 76: /* expr3: SIZEOF LEFT_PAREN sizeof_type RIGHT_PAREN  */
+  case 76:
 #line 329 "HolyC.y"
                                                                      {
   yyval=SOT(CreateSizeof(yyvsp[-1]),yyvsp[-3]);
@@ -2491,370 +2651,370 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 2495 "HolyC.tab.c"
+#line 2655 "HolyC.tab.c"
     break;
 
-  case 77: /* expr3: BAND expr3  */
+  case 77:
 #line 335 "HolyC.y"
                            {
   yyval=SOT(CreateUnop(yyvsp[0],AST_ADDROF),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2504 "HolyC.tab.c"
+#line 2664 "HolyC.tab.c"
     break;
 
-  case 78: /* expr3: MUL expr3  */
+  case 78:
 #line 339 "HolyC.y"
                           {
   yyval=SOT(CreateUnop(yyvsp[0],AST_DERREF),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2513 "HolyC.tab.c"
+#line 2673 "HolyC.tab.c"
     break;
 
-  case 79: /* expr3: DEC expr3  */
+  case 79:
 #line 344 "HolyC.y"
                           {
   yyval=SOT(CreateUnop(yyvsp[0],AST_PRE_DEC),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2522 "HolyC.tab.c"
+#line 2682 "HolyC.tab.c"
     break;
 
-  case 80: /* expr3: INC expr3  */
+  case 80:
 #line 348 "HolyC.y"
                           {
   yyval=SOT(CreateUnop(yyvsp[0],AST_PRE_INC),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2531 "HolyC.tab.c"
+#line 2691 "HolyC.tab.c"
     break;
 
-  case 81: /* expr3: ADD expr3  */
+  case 81:
 #line 352 "HolyC.y"
                           {
   yyval=SOT(CreateUnop(yyvsp[0],AST_POS),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2540 "HolyC.tab.c"
+#line 2700 "HolyC.tab.c"
     break;
 
-  case 82: /* expr3: SUB expr3  */
+  case 82:
 #line 356 "HolyC.y"
                           {
   yyval=SOT(CreateUnop(yyvsp[0],AST_NEG),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2549 "HolyC.tab.c"
+#line 2709 "HolyC.tab.c"
     break;
 
-  case 83: /* expr3: LNOT expr3  */
+  case 83:
 #line 360 "HolyC.y"
                            {
   yyval=SOT(CreateUnop(yyvsp[0],AST_LNOT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2558 "HolyC.tab.c"
+#line 2718 "HolyC.tab.c"
     break;
 
-  case 84: /* expr3: BNOT expr3  */
+  case 84:
 #line 364 "HolyC.y"
                            {
   yyval=SOT(CreateUnop(yyvsp[0],AST_BNOT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2567 "HolyC.tab.c"
+#line 2727 "HolyC.tab.c"
     break;
 
-  case 86: /* expr4: expr4 POW expr4  */
+  case 86:
 #line 371 "HolyC.y"
                                    {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_POW),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2576 "HolyC.tab.c"
+#line 2736 "HolyC.tab.c"
     break;
 
-  case 87: /* expr4: expr4 SHL expr4  */
+  case 87:
 #line 375 "HolyC.y"
                                    {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SHL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2585 "HolyC.tab.c"
+#line 2745 "HolyC.tab.c"
     break;
 
-  case 88: /* expr4: expr4 SHR expr4  */
+  case 88:
 #line 379 "HolyC.y"
                                    {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SHR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2594 "HolyC.tab.c"
+#line 2754 "HolyC.tab.c"
     break;
 
-  case 90: /* expr4_5: expr4_5 MUL expr4_5  */
+  case 90:
 #line 385 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_MUL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2603 "HolyC.tab.c"
+#line 2763 "HolyC.tab.c"
     break;
 
-  case 91: /* expr4_5: expr4_5 DIV expr4_5  */
+  case 91:
 #line 389 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_DIV),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2612 "HolyC.tab.c"
+#line 2772 "HolyC.tab.c"
     break;
 
-  case 92: /* expr4_5: expr4_5 MOD expr4_5  */
+  case 92:
 #line 393 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_MOD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2621 "HolyC.tab.c"
+#line 2781 "HolyC.tab.c"
     break;
 
-  case 94: /* expr5: expr5 BAND expr5  */
+  case 94:
 #line 399 "HolyC.y"
                                     {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BAND),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2630 "HolyC.tab.c"
+#line 2790 "HolyC.tab.c"
     break;
 
-  case 96: /* expr6: expr6 BXOR expr6  */
+  case 96:
 #line 405 "HolyC.y"
                                     {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BXOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2639 "HolyC.tab.c"
+#line 2799 "HolyC.tab.c"
     break;
 
-  case 98: /* expr7: expr7 BOR expr7  */
+  case 98:
 #line 411 "HolyC.y"
                                    {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2648 "HolyC.tab.c"
+#line 2808 "HolyC.tab.c"
     break;
 
-  case 100: /* expr8: expr8 ADD expr8  */
+  case 100:
 #line 417 "HolyC.y"
                                    {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ADD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2657 "HolyC.tab.c"
+#line 2817 "HolyC.tab.c"
     break;
 
-  case 101: /* expr8: expr8 SUB expr8  */
+  case 101:
 #line 421 "HolyC.y"
                                    {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SUB),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2666 "HolyC.tab.c"
+#line 2826 "HolyC.tab.c"
     break;
 
-  case 103: /* expr9: expr9 LT expr9  */
+  case 103:
 #line 427 "HolyC.y"
                                   {
   yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_LT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2675 "HolyC.tab.c"
+#line 2835 "HolyC.tab.c"
     break;
 
-  case 104: /* expr9: expr9 GT expr9  */
+  case 104:
 #line 431 "HolyC.y"
                                   {
   yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_GT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2684 "HolyC.tab.c"
+#line 2844 "HolyC.tab.c"
     break;
 
-  case 105: /* expr9: expr9 LE expr9  */
+  case 105:
 #line 435 "HolyC.y"
                                   {
   yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_LE),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2693 "HolyC.tab.c"
+#line 2853 "HolyC.tab.c"
     break;
 
-  case 106: /* expr9: expr9 GE expr9  */
+  case 106:
 #line 439 "HolyC.y"
                                   {
   yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_GE),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2702 "HolyC.tab.c"
+#line 2862 "HolyC.tab.c"
     break;
 
-  case 108: /* expr10: expr10 EQ expr10  */
+  case 108:
 #line 445 "HolyC.y"
                                      {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_EQ),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2711 "HolyC.tab.c"
+#line 2871 "HolyC.tab.c"
     break;
 
-  case 109: /* expr10: expr10 NE expr10  */
+  case 109:
 #line 449 "HolyC.y"
                                      {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_NE),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2720 "HolyC.tab.c"
+#line 2880 "HolyC.tab.c"
     break;
 
-  case 111: /* expr11: expr11 LAND expr11  */
+  case 111:
 #line 455 "HolyC.y"
                                        {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LAND),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2729 "HolyC.tab.c"
+#line 2889 "HolyC.tab.c"
     break;
 
-  case 113: /* expr12: expr12 LXOR expr12  */
+  case 113:
 #line 461 "HolyC.y"
                                        {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LXOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2738 "HolyC.tab.c"
+#line 2898 "HolyC.tab.c"
     break;
 
-  case 115: /* expr13: expr13 LOR expr13  */
+  case 115:
 #line 467 "HolyC.y"
                                       {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2747 "HolyC.tab.c"
+#line 2907 "HolyC.tab.c"
     break;
 
-  case 117: /* expr14: expr14 ASSIGN expr14  */
+  case 117:
 #line 473 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2756 "HolyC.tab.c"
+#line 2916 "HolyC.tab.c"
     break;
 
-  case 118: /* expr14: expr14 EQ_SHL expr14  */
+  case 118:
 #line 477 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SHL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2765 "HolyC.tab.c"
+#line 2925 "HolyC.tab.c"
     break;
 
-  case 119: /* expr14: expr14 EQ_SHR expr14  */
+  case 119:
 #line 481 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SHR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2774 "HolyC.tab.c"
+#line 2934 "HolyC.tab.c"
     break;
 
-  case 120: /* expr14: expr14 EQ_MUL expr14  */
+  case 120:
 #line 485 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_MUL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2783 "HolyC.tab.c"
+#line 2943 "HolyC.tab.c"
     break;
 
-  case 121: /* expr14: expr14 EQ_DIV expr14  */
+  case 121:
 #line 489 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_DIV),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2792 "HolyC.tab.c"
+#line 2952 "HolyC.tab.c"
     break;
 
-  case 122: /* expr14: expr14 EQ_MOD expr14  */
+  case 122:
 #line 493 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_MOD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2801 "HolyC.tab.c"
+#line 2961 "HolyC.tab.c"
     break;
 
-  case 123: /* expr14: expr14 EQ_BAND expr14  */
+  case 123:
 #line 497 "HolyC.y"
                                           {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BAND),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2810 "HolyC.tab.c"
+#line 2970 "HolyC.tab.c"
     break;
 
-  case 124: /* expr14: expr14 EQ_BXOR expr14  */
+  case 124:
 #line 501 "HolyC.y"
                                           {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BXOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2819 "HolyC.tab.c"
+#line 2979 "HolyC.tab.c"
     break;
 
-  case 125: /* expr14: expr14 EQ_BOR expr14  */
+  case 125:
 #line 505 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2828 "HolyC.tab.c"
+#line 2988 "HolyC.tab.c"
     break;
 
-  case 126: /* expr14: expr14 EQ_ADD expr14  */
+  case 126:
 #line 509 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_ADD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2837 "HolyC.tab.c"
+#line 2997 "HolyC.tab.c"
     break;
 
-  case 127: /* expr14: expr14 EQ_SUB expr14  */
+  case 127:
 #line 513 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SUB),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2846 "HolyC.tab.c"
+#line 3006 "HolyC.tab.c"
     break;
 
-  case 129: /* expr_comma: expr_comma COMMA expr  */
+  case 129:
 #line 520 "HolyC.y"
                                               {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_COMMA),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 2855 "HolyC.tab.c"
+#line 3015 "HolyC.tab.c"
     break;
 
-  case 131: /* primtype0: TYPENAME  */
+  case 131:
 #line 529 "HolyC.y"
                           {
   CType **cls=map_get(&Compiler.types,yyvsp[0]->name);
@@ -2866,74 +3026,74 @@ yyreduce:
   }
   yyval=CreateTypeNode(t);
 }
-#line 2870 "HolyC.tab.c"
+#line 3030 "HolyC.tab.c"
     break;
 
-  case 132: /* primtype0: _class  */
+  case 132:
 #line 539 "HolyC.y"
                         {yyval=yyvsp[0];}
-#line 2876 "HolyC.tab.c"
+#line 3036 "HolyC.tab.c"
     break;
 
-  case 133: /* primtype0: _union  */
+  case 133:
 #line 540 "HolyC.y"
                         {yyval=yyvsp[0];}
-#line 2882 "HolyC.tab.c"
+#line 3042 "HolyC.tab.c"
     break;
 
-  case 134: /* primtype0: primtype0 _union  */
+  case 134:
 #line 541 "HolyC.y"
                                       {
   yyval=yyvsp[0];
   AssignUnionBasetype(yyvsp[0],yyvsp[-1]);
 }
-#line 2891 "HolyC.tab.c"
+#line 3051 "HolyC.tab.c"
     break;
 
-  case 135: /* primtype0: primtype0 _class  */
+  case 135:
 #line 545 "HolyC.y"
                                       {
   yyval=yyvsp[0];
   AssignClassBasetype(yyvsp[0],yyvsp[-1]);
 }
-#line 2900 "HolyC.tab.c"
+#line 3060 "HolyC.tab.c"
     break;
 
-  case 136: /* _arrlit: _arrlit COMMA expr  */
+  case 136:
 #line 552 "HolyC.y"
                                           {yyval=AppendToArrLiteral(yyvsp[-2],yyvsp[0]);ReleaseAST(yyvsp[-1]);}
-#line 2906 "HolyC.tab.c"
+#line 3066 "HolyC.tab.c"
     break;
 
-  case 137: /* _arrlit: _arrlit COMMA arrlit  */
+  case 137:
 #line 553 "HolyC.y"
                                             {yyval=AppendToArrLiteral(yyvsp[-2],yyvsp[0]);ReleaseAST(yyvsp[-1]);}
-#line 2912 "HolyC.tab.c"
+#line 3072 "HolyC.tab.c"
     break;
 
-  case 138: /* _arrlit: expr  */
+  case 138:
 #line 554 "HolyC.y"
               {yyval=AppendToArrLiteral(NULL,yyvsp[0]);}
-#line 2918 "HolyC.tab.c"
+#line 3078 "HolyC.tab.c"
     break;
 
-  case 139: /* _arrlit: arrlit  */
+  case 139:
 #line 555 "HolyC.y"
                 {yyval=AppendToArrLiteral(NULL,yyvsp[0]);}
-#line 2924 "HolyC.tab.c"
+#line 3084 "HolyC.tab.c"
     break;
 
-  case 140: /* arrlit: LEFT_CURLY _arrlit RIGHT_CURLY  */
+  case 140:
 #line 556 "HolyC.y"
                                                        {
   yyval=SOT(yyvsp[-1],yyvsp[-2]);
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 2934 "HolyC.tab.c"
+#line 3094 "HolyC.tab.c"
     break;
 
-  case 141: /* arrlit: LEFT_CURLY _arrlit COMMA RIGHT_CURLY  */
+  case 141:
 #line 561 "HolyC.y"
                                                                  {
   yyval=SOT(yyvsp[-2],yyvsp[-3]);
@@ -2941,10 +3101,10 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 2945 "HolyC.tab.c"
+#line 3105 "HolyC.tab.c"
     break;
 
-  case 142: /* arrlit: LEFT_CURLY COMMA RIGHT_CURLY  */
+  case 142:
 #line 567 "HolyC.y"
                                                       {
   yyval=NULL;
@@ -2952,18 +3112,18 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 2956 "HolyC.tab.c"
+#line 3116 "HolyC.tab.c"
     break;
 
-  case 143: /* metadata: NAME expr  */
+  case 143:
 #line 576 "HolyC.y"
                              {
   yyval=AppendToMetaData(NULL,yyvsp[-1],yyvsp[0]);
 }
-#line 2964 "HolyC.tab.c"
+#line 3124 "HolyC.tab.c"
     break;
 
-  case 144: /* cdecltail: cdecltail COMMA _cdecltail  */
+  case 144:
 #line 579 "HolyC.y"
                                                     {
   assert(yyvsp[0]->type==__AST_DECL_TAILS);
@@ -2972,25 +3132,25 @@ yyreduce:
   yyval=yyvsp[-2];
   ReleaseAST(yyvsp[-1]);
 }
-#line 2976 "HolyC.tab.c"
+#line 3136 "HolyC.tab.c"
     break;
 
-  case 145: /* cdecltail: _cdecltail  */
+  case 145:
 #line 586 "HolyC.y"
                             {yyval=yyvsp[0];}
-#line 2982 "HolyC.tab.c"
+#line 3142 "HolyC.tab.c"
     break;
 
-  case 146: /* _cdecltail: vardecltail  */
+  case 146:
 #line 587 "HolyC.y"
                               {
   AST *t=yyvsp[0];
   yyval=yyvsp[0];
 }
-#line 2991 "HolyC.tab.c"
+#line 3151 "HolyC.tab.c"
     break;
 
-  case 147: /* _cdecltail: vardecltail metadata  */
+  case 147:
 #line 591 "HolyC.y"
                                           {
   AST *meta=yyvsp[-1]->declTail.data[0].metaData;
@@ -2998,114 +3158,114 @@ yyreduce:
   yyvsp[-1]->declTail.data[0].metaData=meta;
   yyval=yyvsp[-1];
 }
-#line 3002 "HolyC.tab.c"
+#line 3162 "HolyC.tab.c"
     break;
 
-  case 148: /* cdecl: primtype0 cdecltail  */
+  case 148:
 #line 597 "HolyC.y"
                                     {
   DeclsFillInBasetype(yyvsp[-1]->type2,yyvsp[0]);
   yyval=yyvsp[0];
 }
-#line 3011 "HolyC.tab.c"
+#line 3171 "HolyC.tab.c"
     break;
 
-  case 149: /* cbody: cbody cdecl SEMI  */
+  case 149:
 #line 601 "HolyC.y"
                                       {
  yyval=AppendToStmts(yyvsp[-2],yyvsp[-1]);
  ReleaseAST(yyvsp[0]);
 }
-#line 3020 "HolyC.tab.c"
+#line 3180 "HolyC.tab.c"
     break;
 
-  case 150: /* cbody: cbody primtype0 SEMI  */
+  case 150:
 #line 605 "HolyC.y"
                                          {
  yyval=AppendToStmts(yyvsp[-2],yyvsp[-1]);
  ReleaseAST(yyvsp[0]);
 }
-#line 3029 "HolyC.tab.c"
+#line 3189 "HolyC.tab.c"
     break;
 
-  case 151: /* cbody: %empty  */
+  case 151:
 #line 609 "HolyC.y"
        {yyval=NULL;}
-#line 3035 "HolyC.tab.c"
+#line 3195 "HolyC.tab.c"
     break;
 
-  case 152: /* _cheader: CLASS  */
+  case 152:
 #line 610 "HolyC.y"
                         {
   CType *t=CreateClassForwardDecl(NULL,NULL);
   yyval=CreateTypeNode(t);
   ReleaseAST(yyvsp[0]);
 }
-#line 3045 "HolyC.tab.c"
+#line 3205 "HolyC.tab.c"
     break;
 
-  case 153: /* _uheader: UNION  */
+  case 153:
 #line 615 "HolyC.y"
                         {
   CType *t=CreateUnionForwardDecl(NULL,NULL);
   yyval=CreateTypeNode(t);
   ReleaseAST(yyvsp[0]);
 }
-#line 3055 "HolyC.tab.c"
+#line 3215 "HolyC.tab.c"
     break;
 
-  case 154: /* _cheader: CLASS NAME  */
+  case 154:
 #line 620 "HolyC.y"
                                 {
   CType *t=CreateClassForwardDecl(NULL,yyvsp[0]);
   yyval=CreateTypeNode(t);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3065 "HolyC.tab.c"
+#line 3225 "HolyC.tab.c"
     break;
 
-  case 155: /* _uheader: UNION NAME  */
+  case 155:
 #line 625 "HolyC.y"
                                 {
   CType *t=CreateUnionForwardDecl(NULL,yyvsp[0]);
   yyval=CreateTypeNode(t);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3075 "HolyC.tab.c"
+#line 3235 "HolyC.tab.c"
     break;
 
-  case 156: /* _cheader: CLASS TYPENAME  */
+  case 156:
 #line 630 "HolyC.y"
                                     {
   CType *t=CreateClassForwardDecl(NULL,yyvsp[0]);
   yyval=CreateTypeNode(t);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3085 "HolyC.tab.c"
+#line 3245 "HolyC.tab.c"
     break;
 
-  case 157: /* _uheader: UNION TYPENAME  */
+  case 157:
 #line 635 "HolyC.y"
                                {
   CType *t=CreateUnionForwardDecl(NULL,yyvsp[0]);
   yyval=CreateTypeNode(t);
 }
-#line 3094 "HolyC.tab.c"
+#line 3254 "HolyC.tab.c"
     break;
 
-  case 158: /* cheader: _cheader  */
+  case 158:
 #line 639 "HolyC.y"
                         {yyval=yyvsp[0];}
-#line 3100 "HolyC.tab.c"
+#line 3260 "HolyC.tab.c"
     break;
 
-  case 159: /* uheader: _uheader  */
+  case 159:
 #line 640 "HolyC.y"
                         {yyval=yyvsp[0];}
-#line 3106 "HolyC.tab.c"
+#line 3266 "HolyC.tab.c"
     break;
 
-  case 160: /* cheader: _cheader COLON TYPENAME  */
+  case 160:
 #line 641 "HolyC.y"
                                                  {
   CType *t=*map_get(&Compiler.types,yyvsp[0]->name);
@@ -3113,10 +3273,10 @@ yyreduce:
   yyval=yyvsp[-2];
   ReleaseAST(yyvsp[-1]);
 }
-#line 3117 "HolyC.tab.c"
+#line 3277 "HolyC.tab.c"
     break;
 
-  case 161: /* uheader: _uheader COLON TYPENAME  */
+  case 161:
 #line 647 "HolyC.y"
                                                  {
   CType *t=*map_get(&Compiler.types,yyvsp[0]->name);
@@ -3124,10 +3284,10 @@ yyreduce:
   yyval=yyvsp[-2];
   ReleaseAST(yyvsp[-1]);
 }
-#line 3128 "HolyC.tab.c"
+#line 3288 "HolyC.tab.c"
     break;
 
-  case 162: /* _class: cheader LEFT_CURLY cbody RIGHT_CURLY  */
+  case 162:
 #line 653 "HolyC.y"
                                                                 {
   if(yyvsp[-1]) {
@@ -3144,10 +3304,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3148 "HolyC.tab.c"
+#line 3308 "HolyC.tab.c"
     break;
 
-  case 163: /* _union: uheader LEFT_CURLY cbody RIGHT_CURLY  */
+  case 163:
 #line 668 "HolyC.y"
                                                                 {
   if(yyvsp[-1]) {
@@ -3161,29 +3321,29 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3165 "HolyC.tab.c"
+#line 3325 "HolyC.tab.c"
     break;
 
-  case 164: /* tryblock: TRY scope CATCH scope  */
+  case 164:
 #line 684 "HolyC.y"
                                                    {
   yyval=CreateTry(yyvsp[-2],yyvsp[0]);
   ReleaseAST(yyvsp[-3]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3175 "HolyC.tab.c"
+#line 3335 "HolyC.tab.c"
     break;
 
-  case 165: /* namewptrs: NAME  */
+  case 165:
 #line 692 "HolyC.y"
                    {
   CType *t =CreatePrimType(TYPE_I64);
   yyval=SOT(AppendToDecls(NULL,t,t,yyvsp[0],NULL,NULL),yyvsp[0]);
 }
-#line 3184 "HolyC.tab.c"
+#line 3344 "HolyC.tab.c"
     break;
 
-  case 166: /* namewptrs: MUL NAME  */
+  case 166:
 #line 696 "HolyC.y"
                             {
   CType *t =CreatePrimType(TYPE_I64);
@@ -3191,10 +3351,10 @@ yyreduce:
   yyval=SOT(AppendToDecls(NULL,t,ptr,yyvsp[0],NULL,NULL),yyvsp[0]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3195 "HolyC.tab.c"
+#line 3355 "HolyC.tab.c"
     break;
 
-  case 167: /* namewptrs: MUL MUL NAME  */
+  case 167:
 #line 702 "HolyC.y"
                                      {
   CType *t =CreatePrimType(TYPE_I64);
@@ -3203,10 +3363,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3207 "HolyC.tab.c"
+#line 3367 "HolyC.tab.c"
     break;
 
-  case 168: /* namewptrs: MUL MUL MUL NAME  */
+  case 168:
 #line 709 "HolyC.y"
                                               {
   CType *t =CreatePrimType(TYPE_I64);
@@ -3216,45 +3376,45 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3220 "HolyC.tab.c"
+#line 3380 "HolyC.tab.c"
     break;
 
-  case 170: /* __ptrcount: %empty  */
+  case 170:
 #line 718 "HolyC.y"
             {
     yyval=CreateI64(0);
 }
-#line 3228 "HolyC.tab.c"
+#line 3388 "HolyC.tab.c"
     break;
 
-  case 171: /* __ptrcount: MUL  */
+  case 171:
 #line 721 "HolyC.y"
                      {
   yyval=CreateI64(1);
   ReleaseAST(yyvsp[0]);
 }
-#line 3237 "HolyC.tab.c"
+#line 3397 "HolyC.tab.c"
     break;
 
-  case 172: /* __ptrcount: MUL MUL  */
+  case 172:
 #line 725 "HolyC.y"
                               {
   yyval=CreateI64(2);
   ReleaseAST(yyvsp[-1]),ReleaseAST(yyvsp[0]);
 }
-#line 3246 "HolyC.tab.c"
+#line 3406 "HolyC.tab.c"
     break;
 
-  case 173: /* __ptrcount: MUL MUL MUL  */
+  case 173:
 #line 729 "HolyC.y"
                                        {
   yyval=CreateI64(3);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[-1]),ReleaseAST(yyvsp[0]);
 }
-#line 3255 "HolyC.tab.c"
+#line 3415 "HolyC.tab.c"
     break;
 
-  case 174: /* vardecltail: __ptrcount LEFT_PAREN MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN  */
+  case 174:
 #line 733 "HolyC.y"
                                                                                                                                {
   CType *bt =CreatePrimType(TYPE_I64);
@@ -3268,10 +3428,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3272 "HolyC.tab.c"
+#line 3432 "HolyC.tab.c"
     break;
 
-  case 175: /* vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN  */
+  case 175:
 #line 745 "HolyC.y"
                                                                                                                                         {
   CType *bt =CreatePrimType(TYPE_I64);
@@ -3286,10 +3446,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3290 "HolyC.tab.c"
+#line 3450 "HolyC.tab.c"
     break;
 
-  case 176: /* vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN  */
+  case 176:
 #line 758 "HolyC.y"
                                                                                                                                                  {
   CType *bt =CreatePrimType(TYPE_I64);
@@ -3305,10 +3465,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3309 "HolyC.tab.c"
+#line 3469 "HolyC.tab.c"
     break;
 
-  case 177: /* vardecltail: vardecltail LEFT_SQAURE expr_comma RIGHT_SQAURE  */
+  case 177:
 #line 772 "HolyC.y"
                                                                                      {
   assert(yyvsp[-3]->type==__AST_DECL_TAILS);
@@ -3318,10 +3478,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3322 "HolyC.tab.c"
+#line 3482 "HolyC.tab.c"
     break;
 
-  case 178: /* vardecltail: vardecltail LEFT_SQAURE RIGHT_SQAURE  */
+  case 178:
 #line 780 "HolyC.y"
                                                                      {
   assert(yyvsp[-2]->type==__AST_DECL_TAILS);
@@ -3331,10 +3491,10 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3335 "HolyC.tab.c"
+#line 3495 "HolyC.tab.c"
     break;
 
-  case 179: /* vardecltail_asn: vardecltail ASSIGN expr  */
+  case 179:
 #line 789 "HolyC.y"
                                                        {
   assert(yyvsp[-2]->type==__AST_DECL_TAILS);
@@ -3342,10 +3502,10 @@ yyreduce:
   yyval=yyvsp[-2];
   ReleaseAST(yyvsp[-1]);
 }
-#line 3346 "HolyC.tab.c"
+#line 3506 "HolyC.tab.c"
     break;
 
-  case 180: /* vardecltail_asn: vardecltail ASSIGN arrlit  */
+  case 180:
 #line 795 "HolyC.y"
                                                          {
   assert(yyvsp[-2]->type==__AST_DECL_TAILS);
@@ -3353,28 +3513,28 @@ yyreduce:
   yyval=yyvsp[-2];
   ReleaseAST(yyvsp[-1]);
 }
-#line 3357 "HolyC.tab.c"
+#line 3517 "HolyC.tab.c"
     break;
 
-  case 181: /* single_decl: primtype0 vardecltail  */
+  case 181:
 #line 802 "HolyC.y"
                                                 {
   DeclsFillInBasetype(yyvsp[-1]->type2,yyvsp[0]);
   yyval=yyvsp[0];
 }
-#line 3366 "HolyC.tab.c"
+#line 3526 "HolyC.tab.c"
     break;
 
-  case 182: /* single_decl: primtype0 vardecltail_asn  */
+  case 182:
 #line 806 "HolyC.y"
                                                     {
   DeclsFillInBasetype(yyvsp[-1]->type2,yyvsp[0]);
   yyval=yyvsp[0];
 }
-#line 3375 "HolyC.tab.c"
+#line 3535 "HolyC.tab.c"
     break;
 
-  case 183: /* vardecltails: vardecltails COMMA vardecltails  */
+  case 183:
 #line 811 "HolyC.y"
                                                             {
   assert(yyvsp[0]->type==__AST_DECL_TAILS);
@@ -3383,19 +3543,19 @@ yyreduce:
   yyval=yyvsp[-2];
   ReleaseAST(yyvsp[-1]);
 }
-#line 3387 "HolyC.tab.c"
+#line 3547 "HolyC.tab.c"
     break;
 
-  case 186: /* multi_decl: primtype0 vardecltails  */
+  case 186:
 #line 821 "HolyC.y"
                                                  {
   DeclsFillInBasetype(yyvsp[-1]->type2,yyvsp[0]);
   yyval=yyvsp[0];
 }
-#line 3396 "HolyC.tab.c"
+#line 3556 "HolyC.tab.c"
     break;
 
-  case 188: /* funcargs: funcargs COMMA single_decl  */
+  case 188:
 #line 827 "HolyC.y"
                                                    {
   assert(yyvsp[0]->type==__AST_DECL_TAILS);
@@ -3403,64 +3563,64 @@ yyreduce:
   yyval=AppendToDecls(yyvsp[-2],b2.basetype,b2.finalType,b2.name,b2.dft,NULL);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3407 "HolyC.tab.c"
+#line 3567 "HolyC.tab.c"
     break;
 
-  case 189: /* funcargs: %empty  */
+  case 189:
 #line 833 "HolyC.y"
           {yyval=NULL;}
-#line 3413 "HolyC.tab.c"
+#line 3573 "HolyC.tab.c"
     break;
 
-  case 190: /* linkage: EXTERN  */
+  case 190:
 #line 837 "HolyC.y"
                      {yyval=CreateExternLinkage(NULL);ReleaseAST(yyvsp[0]);}
-#line 3419 "HolyC.tab.c"
+#line 3579 "HolyC.tab.c"
     break;
 
-  case 191: /* linkage: IMPORT  */
+  case 191:
 #line 838 "HolyC.y"
                      {yyval=CreateImportLinkage(NULL);ReleaseAST(yyvsp[0]);}
-#line 3425 "HolyC.tab.c"
+#line 3585 "HolyC.tab.c"
     break;
 
-  case 192: /* linkage: PUBLIC  */
+  case 192:
 #line 839 "HolyC.y"
                      {yyval=NULL;}
-#line 3431 "HolyC.tab.c"
+#line 3591 "HolyC.tab.c"
     break;
 
-  case 193: /* linkage: STATIC  */
+  case 193:
 #line 840 "HolyC.y"
                      {yyval=CreateStaticLinkage();ReleaseAST(yyvsp[0]);}
-#line 3437 "HolyC.tab.c"
+#line 3597 "HolyC.tab.c"
     break;
 
-  case 194: /* linkage: EXTERN2 NAME  */
+  case 194:
 #line 841 "HolyC.y"
                               {yyval=CreateExternLinkage(yyvsp[0]);ReleaseAST(yyvsp[-1]);}
-#line 3443 "HolyC.tab.c"
+#line 3603 "HolyC.tab.c"
     break;
 
-  case 195: /* linkage: IMPORT2 NAME  */
+  case 195:
 #line 842 "HolyC.y"
                               {yyval=CreateImportLinkage(yyvsp[0]);ReleaseAST(yyvsp[-1]);}
-#line 3449 "HolyC.tab.c"
+#line 3609 "HolyC.tab.c"
     break;
 
-  case 196: /* linkage: EXTERN2 TYPENAME  */
+  case 196:
 #line 843 "HolyC.y"
                                   {yyval=CreateExternLinkage(yyvsp[0]);ReleaseAST(yyvsp[-1]);}
-#line 3455 "HolyC.tab.c"
+#line 3615 "HolyC.tab.c"
     break;
 
-  case 197: /* linkage: IMPORT2 TYPENAME  */
+  case 197:
 #line 844 "HolyC.y"
                                   {yyval=CreateImportLinkage(yyvsp[0]);ReleaseAST(yyvsp[-1]);}
-#line 3461 "HolyC.tab.c"
+#line 3621 "HolyC.tab.c"
     break;
 
-  case 198: /* func: primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI  */
+  case 198:
 #line 848 "HolyC.y"
                                                                                               {
   DeclsFillInBasetype(yyvsp[-5]->type2,yyvsp[-4]);
@@ -3475,10 +3635,10 @@ yyreduce:
  ReleaseAST(yyvsp[-1]);
  ReleaseAST(yyvsp[0]);
 }
-#line 3479 "HolyC.tab.c"
+#line 3639 "HolyC.tab.c"
     break;
 
-  case 199: /* func: primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI  */
+  case 199:
 #line 861 "HolyC.y"
                                                                                                                      {
   DeclsFillInBasetype(yyvsp[-7]->type2,yyvsp[-6]);
@@ -3494,10 +3654,10 @@ yyreduce:
  ReleaseAST(yyvsp[-1]);
  ReleaseAST(yyvsp[0]);
 }
-#line 3498 "HolyC.tab.c"
+#line 3658 "HolyC.tab.c"
     break;
 
-  case 200: /* func: primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI  */
+  case 200:
 #line 875 "HolyC.y"
                                                                                                 {
   DeclsFillInBasetype(yyvsp[-5]->type2,yyvsp[-4]);
@@ -3512,10 +3672,10 @@ yyreduce:
  ReleaseAST(yyvsp[-1]);
  ReleaseAST(yyvsp[0]);
 }
-#line 3516 "HolyC.tab.c"
+#line 3676 "HolyC.tab.c"
     break;
 
-  case 201: /* func: linkage primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI  */
+  case 201:
 #line 888 "HolyC.y"
                                                                                                          {
   DeclsFillInBasetype(yyvsp[-5]->type2,yyvsp[-4]);
@@ -3531,10 +3691,10 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3535 "HolyC.tab.c"
+#line 3695 "HolyC.tab.c"
     break;
 
-  case 202: /* func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI  */
+  case 202:
 #line 902 "HolyC.y"
                                                                                                                                      {
   DeclsFillInBasetype(yyvsp[-7]->type2,yyvsp[-6]);
@@ -3552,10 +3712,10 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3556 "HolyC.tab.c"
+#line 3716 "HolyC.tab.c"
     break;
 
-  case 203: /* func: linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI  */
+  case 203:
 #line 918 "HolyC.y"
                                                                                                            {
   DeclsFillInBasetype(yyvsp[-5]->type2,yyvsp[-4]);
@@ -3571,10 +3731,10 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3575 "HolyC.tab.c"
+#line 3735 "HolyC.tab.c"
     break;
 
-  case 204: /* func: primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope  */
+  case 204:
 #line 932 "HolyC.y"
                                                                                                      {
   DeclsFillInBasetype(yyvsp[-5]->type2,yyvsp[-4]);
@@ -3590,10 +3750,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3594 "HolyC.tab.c"
+#line 3754 "HolyC.tab.c"
     break;
 
-  case 205: /* func: primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope  */
+  case 205:
 #line 946 "HolyC.y"
                                                                                                                                {
   DeclsFillInBasetype(yyvsp[-7]->type2,yyvsp[-6]);
@@ -3610,10 +3770,10 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[-5]);
 }
-#line 3614 "HolyC.tab.c"
+#line 3774 "HolyC.tab.c"
     break;
 
-  case 206: /* func: primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope  */
+  case 206:
 #line 961 "HolyC.y"
                                                                                                    {
   DeclsFillInBasetype(yyvsp[-5]->type2,yyvsp[-4]);
@@ -3628,10 +3788,10 @@ yyreduce:
   ReleaseAST(yyvsp[-3]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3632 "HolyC.tab.c"
+#line 3792 "HolyC.tab.c"
     break;
 
-  case 207: /* func: linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope  */
+  case 207:
 #line 974 "HolyC.y"
                                                                                                                 {
   DeclsFillInBasetype(yyvsp[-5]->type2,yyvsp[-4]);
@@ -3647,10 +3807,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 3651 "HolyC.tab.c"
+#line 3811 "HolyC.tab.c"
     break;
 
-  case 208: /* func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope  */
+  case 208:
 #line 988 "HolyC.y"
                                                                                                                                           {
   DeclsFillInBasetype(yyvsp[-7]->type2,yyvsp[-6]);
@@ -3668,10 +3828,10 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   yyval=CreateNop();
 }
-#line 3672 "HolyC.tab.c"
+#line 3832 "HolyC.tab.c"
     break;
 
-  case 209: /* func: linkage primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope  */
+  case 209:
 #line 1004 "HolyC.y"
                                                                                                               {
   DeclsFillInBasetype(yyvsp[-5]->type2,yyvsp[-4]);
@@ -3686,38 +3846,38 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   yyval=CreateNop(yyvsp[0]);
 }
-#line 3690 "HolyC.tab.c"
+#line 3850 "HolyC.tab.c"
     break;
 
-  case 210: /* ocstmt: ostmt  */
+  case 210:
 #line 1022 "HolyC.y"
                     {yyval=yyvsp[0];}
-#line 3696 "HolyC.tab.c"
+#line 3856 "HolyC.tab.c"
     break;
 
-  case 211: /* ocstmt: cstmt  */
+  case 211:
 #line 1023 "HolyC.y"
                     {yyval=yyvsp[0];}
-#line 3702 "HolyC.tab.c"
+#line 3862 "HolyC.tab.c"
     break;
 
-  case 213: /* expr_opt: %empty  */
+  case 213:
 #line 1026 "HolyC.y"
           {yyval=NULL;}
-#line 3708 "HolyC.tab.c"
+#line 3868 "HolyC.tab.c"
     break;
 
-  case 214: /* loop_header: WHILE LEFT_PAREN expr_comma RIGHT_PAREN  */
+  case 214:
 #line 1029 "HolyC.y"
                                                                            {
   yyval=SOT(CreateWhile(yyvsp[-1],NULL),yyvsp[-3]);
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3718 "HolyC.tab.c"
+#line 3878 "HolyC.tab.c"
     break;
 
-  case 215: /* loop_header: FOR LEFT_PAREN expr_opt SEMI expr_opt SEMI expr_opt RIGHT_PAREN  */
+  case 215:
 #line 1035 "HolyC.y"
                                                                                                                          {
   yyval=SOT(CreateFor(yyvsp[-5],yyvsp[-3],yyvsp[-1],NULL),yyvsp[-7]);
@@ -3726,30 +3886,30 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3730 "HolyC.tab.c"
+#line 3890 "HolyC.tab.c"
     break;
 
-  case 216: /* ifcl: IF LEFT_PAREN expr_comma RIGHT_PAREN  */
+  case 216:
 #line 1043 "HolyC.y"
                                                               {
   yyval=SOT(CreateIf(yyvsp[-1],NULL,NULL),yyvsp[-3]);
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3740 "HolyC.tab.c"
+#line 3900 "HolyC.tab.c"
     break;
 
-  case 217: /* ostmt: ifcl ocstmt  */
+  case 217:
 #line 1049 "HolyC.y"
                             {
   assert(yyvsp[-1]->type==AST_IF);
   yyval=yyvsp[-1];
   yyvsp[-1]->ifStmt.body=yyvsp[0];
 }
-#line 3750 "HolyC.tab.c"
+#line 3910 "HolyC.tab.c"
     break;
 
-  case 218: /* ostmt: ifcl cstmt ELSE ostmt  */
+  case 218:
 #line 1054 "HolyC.y"
                                               {
   assert(yyvsp[-3]->type==AST_IF);
@@ -3758,10 +3918,10 @@ yyreduce:
   yyvsp[-3]->ifStmt.elseBody=yyvsp[0];
   ReleaseAST(yyvsp[-1]);
 }
-#line 3762 "HolyC.tab.c"
+#line 3922 "HolyC.tab.c"
     break;
 
-  case 219: /* ostmt: loop_header ostmt  */
+  case 219:
 #line 1061 "HolyC.y"
                                   {
   if(yyvsp[-1]->type==AST_FOR) {
@@ -3773,10 +3933,10 @@ yyreduce:
   }
   yyval=yyvsp[-1];
 }
-#line 3777 "HolyC.tab.c"
+#line 3937 "HolyC.tab.c"
     break;
 
-  case 221: /* cstmt: ifcl cstmt ELSE cstmt  */
+  case 221:
 #line 1073 "HolyC.y"
                                               {
   assert(yyvsp[-3]->type==AST_IF);
@@ -3785,10 +3945,10 @@ yyreduce:
   yyvsp[-3]->ifStmt.elseBody=yyvsp[0];
   ReleaseAST(yyvsp[-1]);
 }
-#line 3789 "HolyC.tab.c"
+#line 3949 "HolyC.tab.c"
     break;
 
-  case 222: /* cstmt: loop_header cstmt  */
+  case 222:
 #line 1080 "HolyC.y"
                                   {
   if(yyvsp[-1]->type==AST_FOR) {
@@ -3800,10 +3960,10 @@ yyreduce:
   }
   yyval=yyvsp[-1];
 }
-#line 3804 "HolyC.tab.c"
+#line 3964 "HolyC.tab.c"
     break;
 
-  case 223: /* dostmt: DO ocstmt WHILE LEFT_PAREN expr_comma RIGHT_PAREN  */
+  case 223:
 #line 1091 "HolyC.y"
                                                                                      {
   yyval=SOT(CreateDo(yyvsp[-1],yyvsp[-4]),yyvsp[-5]);
@@ -3811,10 +3971,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3815 "HolyC.tab.c"
+#line 3975 "HolyC.tab.c"
     break;
 
-  case 224: /* subswit: START COLON swit_body END COLON  */
+  case 224:
 #line 1097 "HolyC.y"
                                                                  {
   yyval=SOT(CreateSubswitch(yyvsp[-2]),yyvsp[-4]);
@@ -3822,43 +3982,43 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3826 "HolyC.tab.c"
+#line 3986 "HolyC.tab.c"
     break;
 
-  case 225: /* swit_body_stmt: ocstmt  */
+  case 225:
 #line 1104 "HolyC.y"
                        {yyval=yyvsp[0];}
-#line 3832 "HolyC.tab.c"
+#line 3992 "HolyC.tab.c"
     break;
 
-  case 226: /* swit_body_stmt: DEFAULT COLON  */
+  case 226:
 #line 1105 "HolyC.y"
                                          {
   yyval=SOT(CreateDefault(),yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3841 "HolyC.tab.c"
+#line 4001 "HolyC.tab.c"
     break;
 
-  case 227: /* swit_body_stmt: CASE expr COLON  */
+  case 227:
 #line 1109 "HolyC.y"
                                               {
   yyval=SOT(CreateCase(yyvsp[-1],NULL),yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3850 "HolyC.tab.c"
+#line 4010 "HolyC.tab.c"
     break;
 
-  case 228: /* swit_body_stmt: CASE COLON  */
+  case 228:
 #line 1113 "HolyC.y"
                                       {
   yyval=SOT(CreateCase(NULL,NULL),yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3859 "HolyC.tab.c"
+#line 4019 "HolyC.tab.c"
     break;
 
-  case 229: /* swit_body_stmt: CASE expr DOT_DOT_DOT expr COLON  */
+  case 229:
 #line 1117 "HolyC.y"
                                                                        {
   yyval=SOT(CreateCase(yyvsp[-3],yyvsp[-1]),yyvsp[-4]);
@@ -3866,28 +4026,28 @@ yyreduce:
   ReleaseAST(yyvsp[0]);
 
 }
-#line 3870 "HolyC.tab.c"
+#line 4030 "HolyC.tab.c"
     break;
 
-  case 230: /* swit_body_stmt: subswit  */
+  case 230:
 #line 1123 "HolyC.y"
                               {yyval=yyvsp[0];}
-#line 3876 "HolyC.tab.c"
+#line 4036 "HolyC.tab.c"
     break;
 
-  case 231: /* swit_body: swit_body swit_body_stmt  */
+  case 231:
 #line 1124 "HolyC.y"
                                              {yyval=AppendToStmts(yyvsp[-1],yyvsp[0]);}
-#line 3882 "HolyC.tab.c"
+#line 4042 "HolyC.tab.c"
     break;
 
-  case 232: /* swit_body: swit_body_stmt  */
+  case 232:
 #line 1125 "HolyC.y"
                                 {yyval=yyvsp[0];}
-#line 3888 "HolyC.tab.c"
+#line 4048 "HolyC.tab.c"
     break;
 
-  case 233: /* swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY swit_body RIGHT_CURLY  */
+  case 233:
 #line 1126 "HolyC.y"
                                                                                                                       {
   yyval=SOT(CreateSwitch(yyvsp[-4],yyvsp[-1]),yyvsp[-6]);
@@ -3896,10 +4056,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3900 "HolyC.tab.c"
+#line 4060 "HolyC.tab.c"
     break;
 
-  case 234: /* swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY RIGHT_CURLY  */
+  case 234:
 #line 1133 "HolyC.y"
                                                                                                        {
   yyval=SOT(CreateSwitch(yyvsp[-3],NULL),yyvsp[-5]);
@@ -3908,10 +4068,10 @@ yyreduce:
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3912 "HolyC.tab.c"
+#line 4072 "HolyC.tab.c"
     break;
 
-  case 236: /* opcodes: opcode SEMI  */
+  case 236:
 #line 1141 "HolyC.y"
                             {
   AST *r=TD_MALLOC(sizeof(AST));
@@ -3921,74 +4081,74 @@ yyreduce:
   yyval=r;
   ReleaseAST(yyvsp[0]);
 }
-#line 3925 "HolyC.tab.c"
+#line 4085 "HolyC.tab.c"
     break;
 
-  case 237: /* opcodes: opcodes opcode SEMI  */
+  case 237:
 #line 1149 "HolyC.y"
                                           {
   vec_push(&yyvsp[-2]->stmts,yyvsp[-1]);
   yyval=yyvsp[-2];
   ReleaseAST(yyvsp[0]);
 }
-#line 3935 "HolyC.tab.c"
+#line 4095 "HolyC.tab.c"
     break;
 
-  case 238: /* simple_stmt: cheader SEMI  */
+  case 238:
 #line 1154 "HolyC.y"
                                  {
     yyval=yyvsp[-1];
     ReleaseAST(yyvsp[0]);
 }
-#line 3944 "HolyC.tab.c"
+#line 4104 "HolyC.tab.c"
     break;
 
-  case 239: /* simple_stmt: uheader SEMI  */
+  case 239:
 #line 1158 "HolyC.y"
                                  {
     yyval=yyvsp[-1];
     ReleaseAST(yyvsp[0]);
 }
-#line 3953 "HolyC.tab.c"
+#line 4113 "HolyC.tab.c"
     break;
 
-  case 242: /* simple_stmt: multi_decl SEMI  */
+  case 242:
 #line 1164 "HolyC.y"
                                        {
   yyval=yyvsp[-1];
   ReleaseAST(yyvsp[0]);
 }
-#line 3962 "HolyC.tab.c"
+#line 4122 "HolyC.tab.c"
     break;
 
-  case 243: /* simple_stmt: linkage multi_decl SEMI  */
+  case 243:
 #line 1168 "HolyC.y"
                                                   {
   yyval=ApplyLinkageToDecls(yyvsp[-2],yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3971 "HolyC.tab.c"
+#line 4131 "HolyC.tab.c"
     break;
 
-  case 245: /* simple_stmt: GOTO NAME SEMI  */
+  case 245:
 #line 1173 "HolyC.y"
                                          {
   yyval=SOT(CreateGoto(yyvsp[-1]),yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 3980 "HolyC.tab.c"
+#line 4140 "HolyC.tab.c"
     break;
 
-  case 246: /* simple_stmt: dostmt SEMI  */
+  case 246:
 #line 1177 "HolyC.y"
                                    {
   yyval=yyvsp[-1];
   ReleaseAST(yyvsp[0]);
 }
-#line 3989 "HolyC.tab.c"
+#line 4149 "HolyC.tab.c"
     break;
 
-  case 247: /* simple_stmt: expr_comma SEMI  */
+  case 247:
 #line 1181 "HolyC.y"
                                        {
   yyval=yyvsp[-1];
@@ -3997,73 +4157,73 @@ yyreduce:
   }
   ReleaseAST(yyvsp[0]);
 }
-#line 4001 "HolyC.tab.c"
+#line 4161 "HolyC.tab.c"
     break;
 
-  case 248: /* simple_stmt: swit  */
+  case 248:
 #line 1188 "HolyC.y"
                         {yyval=yyvsp[0];}
-#line 4007 "HolyC.tab.c"
+#line 4167 "HolyC.tab.c"
     break;
 
-  case 249: /* simple_stmt: scope  */
+  case 249:
 #line 1189 "HolyC.y"
                          {yyval=yyvsp[0];}
-#line 4013 "HolyC.tab.c"
+#line 4173 "HolyC.tab.c"
     break;
 
-  case 250: /* simple_stmt: BREAK SEMI  */
+  case 250:
 #line 1190 "HolyC.y"
                                   {
   yyval=SOT(CreateBreak(),yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4022 "HolyC.tab.c"
+#line 4182 "HolyC.tab.c"
     break;
 
-  case 251: /* simple_stmt: SEMI  */
+  case 251:
 #line 1194 "HolyC.y"
                          {
   yyval=CreateNop();
   ReleaseAST(yyvsp[0]);
 }
-#line 4031 "HolyC.tab.c"
+#line 4191 "HolyC.tab.c"
     break;
 
-  case 252: /* simple_stmt: RET expr_comma SEMI  */
+  case 252:
 #line 1198 "HolyC.y"
                                            {
   yyval=SOT(CreateReturn(yyvsp[-1]),yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4040 "HolyC.tab.c"
+#line 4200 "HolyC.tab.c"
     break;
 
-  case 253: /* simple_stmt: RET SEMI  */
+  case 253:
 #line 1202 "HolyC.y"
                                  {
   yyval=SOT(CreateReturn(NULL),yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4049 "HolyC.tab.c"
+#line 4209 "HolyC.tab.c"
     break;
 
-  case 254: /* simple_stmt: NAME COLON  */
+  case 254:
 #line 1206 "HolyC.y"
                                   {
   yyval=SOT(CreateLabel(yyvsp[-1]),yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4058 "HolyC.tab.c"
+#line 4218 "HolyC.tab.c"
     break;
 
-  case 255: /* simple_stmt: primtype0 SEMI  */
+  case 255:
 #line 1210 "HolyC.y"
                                       {yyval=yyvsp[-1];ReleaseAST(yyvsp[0]);}
-#line 4064 "HolyC.tab.c"
+#line 4224 "HolyC.tab.c"
     break;
 
-  case 256: /* simple_stmt: linkage UNION NAME SEMI  */
+  case 256:
 #line 1211 "HolyC.y"
                                                         {
   CType *t=CreateUnionForwardDecl(yyvsp[-3],yyvsp[-1]);
@@ -4071,10 +4231,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4075 "HolyC.tab.c"
+#line 4235 "HolyC.tab.c"
     break;
 
-  case 257: /* simple_stmt: linkage CLASS NAME SEMI  */
+  case 257:
 #line 1217 "HolyC.y"
                                                         {
   CType *t=CreateClassForwardDecl(yyvsp[-3],yyvsp[-1]);
@@ -4082,54 +4242,54 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4086 "HolyC.tab.c"
+#line 4246 "HolyC.tab.c"
     break;
 
-  case 258: /* stmts: ocstmt  */
+  case 258:
 #line 1223 "HolyC.y"
                     {yyval=yyvsp[0];}
-#line 4092 "HolyC.tab.c"
+#line 4252 "HolyC.tab.c"
     break;
 
-  case 259: /* stmts: stmts ocstmt  */
+  case 259:
 #line 1224 "HolyC.y"
                              {yyval=AppendToStmts(yyvsp[-1],yyvsp[0]);}
-#line 4098 "HolyC.tab.c"
+#line 4258 "HolyC.tab.c"
     break;
 
-  case 260: /* stmts: stmts error  */
+  case 260:
 #line 1225 "HolyC.y"
                    {YYABORT;}
-#line 4104 "HolyC.tab.c"
+#line 4264 "HolyC.tab.c"
     break;
 
-  case 261: /* scope: LEFT_CURLY stmts RIGHT_CURLY  */
+  case 261:
 #line 1226 "HolyC.y"
                                                     {
   yyval=yyvsp[-1];
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4114 "HolyC.tab.c"
+#line 4274 "HolyC.tab.c"
     break;
 
-  case 262: /* scope: LEFT_CURLY RIGHT_CURLY  */
+  case 262:
 #line 1231 "HolyC.y"
                                            {
   yyval=CreateNop();
   ReleaseAST(yyvsp[-1]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4124 "HolyC.tab.c"
+#line 4284 "HolyC.tab.c"
     break;
 
-  case 263: /* global_stmts: %empty  */
+  case 263:
 #line 1236 "HolyC.y"
                 {yyval=NULL;}
-#line 4130 "HolyC.tab.c"
+#line 4290 "HolyC.tab.c"
     break;
 
-  case 264: /* global_stmts: global_stmts ocstmt  */
+  case 264:
 #line 1237 "HolyC.y"
                                         {
   if(!Compiler.AOTMode) {
@@ -4145,58 +4305,58 @@ yyreduce:
   }
   yyval=NULL;
 }
-#line 4149 "HolyC.tab.c"
+#line 4309 "HolyC.tab.c"
     break;
 
-  case 265: /* global_stmt: global_stmts  */
+  case 265:
 #line 1251 "HolyC.y"
                                 {
   yyval=NULL;
 }
-#line 4157 "HolyC.tab.c"
+#line 4317 "HolyC.tab.c"
     break;
 
-  case 266: /* global_stmt: EXE scope  */
+  case 266:
 #line 1255 "HolyC.y"
                              {
   RunStatement(yyvsp[0]);
   YYACCEPT;
   yyval=NULL;
 }
-#line 4167 "HolyC.tab.c"
+#line 4327 "HolyC.tab.c"
     break;
 
-  case 267: /* global_stmt: EVAL expr_comma  */
+  case 267:
 #line 1260 "HolyC.y"
                                    {
   RunPtr(CurFuncInfo,yyvsp[0],CurFramePtr);
   YYACCEPT;
   yyval=NULL;
 }
-#line 4177 "HolyC.tab.c"
+#line 4337 "HolyC.tab.c"
     break;
 
-  case 268: /* global_stmt: EVAL_NOCOMMA expr  */
+  case 268:
 #line 1265 "HolyC.y"
                                      {
   RunPtr(NULL,yyvsp[0],NULL);
   YYACCEPT;
   yyval=NULL;
 }
-#line 4187 "HolyC.tab.c"
+#line 4347 "HolyC.tab.c"
     break;
 
-  case 269: /* global_stmt: DBG expr_comma  */
+  case 269:
 #line 1271 "HolyC.y"
                                   {
   RunPtr(CurFuncInfo,yyvsp[0],CurFramePtr);
   YYACCEPT;
   yyval=NULL;
 }
-#line 4197 "HolyC.tab.c"
+#line 4357 "HolyC.tab.c"
     break;
 
-  case 270: /* _expr0: DOUBLE_AT NAME  */
+  case 270:
 #line 1280 "HolyC.y"
                              {
   yyval=SOT(yyvsp[0],yyvsp[-1]);
@@ -4206,10 +4366,10 @@ yyreduce:
   yyval->name=strdup(buffer);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4210 "HolyC.tab.c"
+#line 4370 "HolyC.tab.c"
     break;
 
-  case 271: /* _expr0: DOUBLE_AT INT  */
+  case 271:
 #line 1288 "HolyC.y"
                                {
  //Make a name token out of $n
@@ -4220,161 +4380,161 @@ yyreduce:
   yyval=n;
   ReleaseAST(yyvsp[-1]);
 }
-#line 4224 "HolyC.tab.c"
+#line 4384 "HolyC.tab.c"
     break;
 
-  case 272: /* str: STRING  */
+  case 272:
 #line 1297 "HolyC.y"
                {yyval=SLE(yyvsp[0]);}
-#line 4230 "HolyC.tab.c"
+#line 4390 "HolyC.tab.c"
     break;
 
-  case 273: /* str: str STRING  */
+  case 273:
 #line 1298 "HolyC.y"
                          {yyval=JoinStrings(yyvsp[-1],yyvsp[0]);}
-#line 4236 "HolyC.tab.c"
+#line 4396 "HolyC.tab.c"
     break;
 
-  case 274: /* _expr0: FLOAT  */
+  case 274:
 #line 1299 "HolyC.y"
                  {yyval=SLE(yyvsp[0]);}
-#line 4242 "HolyC.tab.c"
+#line 4402 "HolyC.tab.c"
     break;
 
-  case 275: /* _expr0: INT  */
+  case 275:
 #line 1300 "HolyC.y"
                {yyval=SLE(yyvsp[0]);}
-#line 4248 "HolyC.tab.c"
+#line 4408 "HolyC.tab.c"
     break;
 
-  case 276: /* _expr0: CHAR  */
+  case 276:
 #line 1301 "HolyC.y"
                 {yyval=SLE(yyvsp[0]);}
-#line 4254 "HolyC.tab.c"
+#line 4414 "HolyC.tab.c"
     break;
 
-  case 277: /* _expr0: str  */
+  case 277:
 #line 1302 "HolyC.y"
                {yyval=yyvsp[0];}
-#line 4260 "HolyC.tab.c"
+#line 4420 "HolyC.tab.c"
     break;
 
-  case 278: /* _expr0: LASTCLASS  */
+  case 278:
 #line 1303 "HolyC.y"
                      {
   yyval=SLE(yyvsp[0]);
 }
-#line 4268 "HolyC.tab.c"
+#line 4428 "HolyC.tab.c"
     break;
 
-  case 279: /* _expr0: NAME  */
+  case 279:
 #line 1306 "HolyC.y"
                 {
   yyval=SLE(yyvsp[0]);
 }
-#line 4276 "HolyC.tab.c"
+#line 4436 "HolyC.tab.c"
     break;
 
-  case 281: /* _expr1: LEFT_PAREN expr_comma RIGHT_PAREN  */
+  case 281:
 #line 1310 "HolyC.y"
                                                           {
   yyval=yyvsp[-1];
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 4285 "HolyC.tab.c"
+#line 4445 "HolyC.tab.c"
     break;
 
-  case 283: /* _expr2: TYPENAME DOT NAME  */
+  case 283:
 #line 1315 "HolyC.y"
                                      {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4294 "HolyC.tab.c"
+#line 4454 "HolyC.tab.c"
     break;
 
-  case 284: /* _expr2: TYPENAME ARROW NAME  */
+  case 284:
 #line 1319 "HolyC.y"
                                         {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4303 "HolyC.tab.c"
+#line 4463 "HolyC.tab.c"
     break;
 
-  case 285: /* _expr2: _expr2 DOT NAME  */
+  case 285:
 #line 1323 "HolyC.y"
                                     {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4312 "HolyC.tab.c"
+#line 4472 "HolyC.tab.c"
     break;
 
-  case 286: /* _expr2: _expr2 ARROW NAME  */
+  case 286:
 #line 1327 "HolyC.y"
                                       {
   yyval=SOT(CreateMemberAccess(yyvsp[-2],yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4321 "HolyC.tab.c"
+#line 4481 "HolyC.tab.c"
     break;
 
-  case 287: /* _expr2: _expr2 DEC  */
+  case 287:
 #line 1331 "HolyC.y"
                             {
   yyval=SOT(CreateUnop(yyvsp[-1],AST_POST_DEC),yyvsp[0]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4330 "HolyC.tab.c"
+#line 4490 "HolyC.tab.c"
     break;
 
-  case 288: /* _expr2: _expr2 INC  */
+  case 288:
 #line 1335 "HolyC.y"
                             {
   yyval=SOT(CreateUnop(yyvsp[-1],AST_POST_INC),yyvsp[0]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4339 "HolyC.tab.c"
+#line 4499 "HolyC.tab.c"
     break;
 
-  case 289: /* _expr2: _expr2 LEFT_PAREN callargs RIGHT_PAREN  */
+  case 289:
 #line 1339 "HolyC.y"
                                                                   {
   yyval=SOT(CreateFuncCall(yyvsp[-3],yyvsp[-1]),yyvsp[-3]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 4348 "HolyC.tab.c"
+#line 4508 "HolyC.tab.c"
     break;
 
-  case 290: /* _expr2: _expr2 LEFT_PAREN primtype0 RIGHT_PAREN  */
+  case 290:
 #line 1343 "HolyC.y"
                                                                    {
   yyval=CreateExplicitTypecast(yyvsp[-3],yyvsp[-1]);
   ReleaseAST(yyvsp[-2]),ReleaseAST(yyvsp[0]);
 }
-#line 4357 "HolyC.tab.c"
+#line 4517 "HolyC.tab.c"
     break;
 
-  case 292: /* _expr3: SIZEOF NAME  */
+  case 292:
 #line 1348 "HolyC.y"
                              {
   yyval=SOT(CreateSizeof(yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4366 "HolyC.tab.c"
+#line 4526 "HolyC.tab.c"
     break;
 
-  case 293: /* _expr3: SIZEOF sizeof_type  */
+  case 293:
 #line 1352 "HolyC.y"
                                     {
   yyval=SOT(CreateSizeof(yyvsp[0]),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4375 "HolyC.tab.c"
+#line 4535 "HolyC.tab.c"
     break;
 
-  case 294: /* _expr3: SIZEOF LEFT_PAREN expr_comma RIGHT_PAREN  */
+  case 294:
 #line 1356 "HolyC.y"
                                                                      {
   yyval=SOT(CreateSizeof(yyvsp[-1]),yyvsp[-3]);
@@ -4382,10 +4542,10 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4386 "HolyC.tab.c"
+#line 4546 "HolyC.tab.c"
     break;
 
-  case 295: /* _expr3: SIZEOF LEFT_PAREN sizeof_type RIGHT_PAREN  */
+  case 295:
 #line 1362 "HolyC.y"
                                                                       {
   yyval=SOT(CreateSizeof(yyvsp[-1]),yyvsp[-3]);
@@ -4393,362 +4553,362 @@ yyreduce:
   ReleaseAST(yyvsp[-2]);
   ReleaseAST(yyvsp[0]);
 }
-#line 4397 "HolyC.tab.c"
+#line 4557 "HolyC.tab.c"
     break;
 
-  case 296: /* _expr3: BAND _expr3  */
+  case 296:
 #line 1368 "HolyC.y"
                              {
   yyval=SOT(CreateUnop(yyvsp[0],AST_ADDROF),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4406 "HolyC.tab.c"
+#line 4566 "HolyC.tab.c"
     break;
 
-  case 297: /* _expr3: MUL _expr3  */
+  case 297:
 #line 1372 "HolyC.y"
                             {
   yyval=SOT(CreateUnop(yyvsp[0],AST_DERREF),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4415 "HolyC.tab.c"
+#line 4575 "HolyC.tab.c"
     break;
 
-  case 298: /* _expr3: DEC _expr3  */
+  case 298:
 #line 1377 "HolyC.y"
                             {
   yyval=SOT(CreateUnop(yyvsp[0],AST_PRE_DEC),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4424 "HolyC.tab.c"
+#line 4584 "HolyC.tab.c"
     break;
 
-  case 299: /* _expr3: INC _expr3  */
+  case 299:
 #line 1381 "HolyC.y"
                             {
   yyval=SOT(CreateUnop(yyvsp[0],AST_PRE_INC),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4433 "HolyC.tab.c"
+#line 4593 "HolyC.tab.c"
     break;
 
-  case 300: /* _expr3: ADD _expr3  */
+  case 300:
 #line 1385 "HolyC.y"
                             {
   yyval=SOT(CreateUnop(yyvsp[0],AST_POS),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4442 "HolyC.tab.c"
+#line 4602 "HolyC.tab.c"
     break;
 
-  case 301: /* _expr3: SUB _expr3  */
+  case 301:
 #line 1389 "HolyC.y"
                             {
   yyval=SOT(CreateUnop(yyvsp[0],AST_NEG),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4451 "HolyC.tab.c"
+#line 4611 "HolyC.tab.c"
     break;
 
-  case 302: /* _expr3: LNOT _expr3  */
+  case 302:
 #line 1393 "HolyC.y"
                              {
   yyval=SOT(CreateUnop(yyvsp[0],AST_LNOT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4460 "HolyC.tab.c"
+#line 4620 "HolyC.tab.c"
     break;
 
-  case 303: /* _expr3: BNOT _expr3  */
+  case 303:
 #line 1397 "HolyC.y"
                              {
   yyval=SOT(CreateUnop(yyvsp[0],AST_BNOT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4469 "HolyC.tab.c"
+#line 4629 "HolyC.tab.c"
     break;
 
-  case 305: /* _expr4: _expr4 POW _expr4  */
+  case 305:
 #line 1404 "HolyC.y"
                                       {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_POW),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4478 "HolyC.tab.c"
+#line 4638 "HolyC.tab.c"
     break;
 
-  case 306: /* _expr4: _expr4 SHL _expr4  */
+  case 306:
 #line 1408 "HolyC.y"
                                       {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SHL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4487 "HolyC.tab.c"
+#line 4647 "HolyC.tab.c"
     break;
 
-  case 307: /* _expr4: _expr4 SHR _expr4  */
+  case 307:
 #line 1412 "HolyC.y"
                                       {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SHR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4496 "HolyC.tab.c"
+#line 4656 "HolyC.tab.c"
     break;
 
-  case 309: /* _expr4_5: _expr4_5 MUL _expr4_5  */
+  case 309:
 #line 1418 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_MUL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4505 "HolyC.tab.c"
+#line 4665 "HolyC.tab.c"
     break;
 
-  case 310: /* _expr4_5: _expr4_5 DIV _expr4_5  */
+  case 310:
 #line 1422 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_DIV),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4514 "HolyC.tab.c"
+#line 4674 "HolyC.tab.c"
     break;
 
-  case 311: /* _expr4_5: _expr4_5 MOD _expr4_5  */
+  case 311:
 #line 1426 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_MOD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4523 "HolyC.tab.c"
+#line 4683 "HolyC.tab.c"
     break;
 
-  case 313: /* _expr5: _expr5 BAND _expr5  */
+  case 313:
 #line 1432 "HolyC.y"
                                        {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BAND),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4532 "HolyC.tab.c"
+#line 4692 "HolyC.tab.c"
     break;
 
-  case 315: /* _expr6: _expr6 BXOR _expr6  */
+  case 315:
 #line 1438 "HolyC.y"
                                        {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BXOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4541 "HolyC.tab.c"
+#line 4701 "HolyC.tab.c"
     break;
 
-  case 317: /* _expr7: _expr7 BOR _expr7  */
+  case 317:
 #line 1444 "HolyC.y"
                                       {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_BOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4550 "HolyC.tab.c"
+#line 4710 "HolyC.tab.c"
     break;
 
-  case 319: /* _expr8: _expr8 ADD _expr8  */
+  case 319:
 #line 1450 "HolyC.y"
                                       {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ADD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4559 "HolyC.tab.c"
+#line 4719 "HolyC.tab.c"
     break;
 
-  case 320: /* _expr8: _expr8 SUB _expr8  */
+  case 320:
 #line 1454 "HolyC.y"
                                       {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_SUB),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4568 "HolyC.tab.c"
+#line 4728 "HolyC.tab.c"
     break;
 
-  case 322: /* _expr9: _expr9 LT _expr9  */
+  case 322:
 #line 1460 "HolyC.y"
                                      {
   yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_LT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4577 "HolyC.tab.c"
+#line 4737 "HolyC.tab.c"
     break;
 
-  case 323: /* _expr9: _expr9 GT _expr9  */
+  case 323:
 #line 1464 "HolyC.y"
                                      {
   yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_GT),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4586 "HolyC.tab.c"
+#line 4746 "HolyC.tab.c"
     break;
 
-  case 324: /* _expr9: _expr9 LE _expr9  */
+  case 324:
 #line 1468 "HolyC.y"
                                      {
   yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_LE),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4595 "HolyC.tab.c"
+#line 4755 "HolyC.tab.c"
     break;
 
-  case 325: /* _expr9: _expr9 GE _expr9  */
+  case 325:
 #line 1472 "HolyC.y"
                                      {
   yyval=SOT(AppendToRange(yyvsp[-2],yyvsp[0],AST_GE),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4604 "HolyC.tab.c"
+#line 4764 "HolyC.tab.c"
     break;
 
-  case 327: /* _expr10: _expr10 EQ _expr10  */
+  case 327:
 #line 1478 "HolyC.y"
                                         {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_EQ),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4613 "HolyC.tab.c"
+#line 4773 "HolyC.tab.c"
     break;
 
-  case 328: /* _expr10: _expr10 NE _expr10  */
+  case 328:
 #line 1482 "HolyC.y"
                                         {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_NE),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4622 "HolyC.tab.c"
+#line 4782 "HolyC.tab.c"
     break;
 
-  case 330: /* _expr11: _expr11 LAND _expr11  */
+  case 330:
 #line 1488 "HolyC.y"
                                           {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LAND),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4631 "HolyC.tab.c"
+#line 4791 "HolyC.tab.c"
     break;
 
-  case 332: /* _expr12: _expr12 LXOR _expr12  */
+  case 332:
 #line 1494 "HolyC.y"
                                           {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LXOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4640 "HolyC.tab.c"
+#line 4800 "HolyC.tab.c"
     break;
 
-  case 334: /* _expr13: _expr13 LOR _expr13  */
+  case 334:
 #line 1500 "HolyC.y"
                                          {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_LOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4649 "HolyC.tab.c"
+#line 4809 "HolyC.tab.c"
     break;
 
-  case 336: /* _expr14: _expr14 ASSIGN _expr14  */
+  case 336:
 #line 1506 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4658 "HolyC.tab.c"
+#line 4818 "HolyC.tab.c"
     break;
 
-  case 337: /* _expr14: _expr14 EQ_SHL _expr14  */
+  case 337:
 #line 1510 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SHL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4667 "HolyC.tab.c"
+#line 4827 "HolyC.tab.c"
     break;
 
-  case 338: /* _expr14: _expr14 EQ_SHR _expr14  */
+  case 338:
 #line 1514 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SHR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4676 "HolyC.tab.c"
+#line 4836 "HolyC.tab.c"
     break;
 
-  case 339: /* _expr14: _expr14 EQ_MUL _expr14  */
+  case 339:
 #line 1518 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_MUL),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4685 "HolyC.tab.c"
+#line 4845 "HolyC.tab.c"
     break;
 
-  case 340: /* _expr14: _expr14 EQ_DIV _expr14  */
+  case 340:
 #line 1522 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_DIV),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4694 "HolyC.tab.c"
+#line 4854 "HolyC.tab.c"
     break;
 
-  case 341: /* _expr14: _expr14 EQ_MOD _expr14  */
+  case 341:
 #line 1526 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_MOD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4703 "HolyC.tab.c"
+#line 4863 "HolyC.tab.c"
     break;
 
-  case 342: /* _expr14: _expr14 EQ_BAND _expr14  */
+  case 342:
 #line 1530 "HolyC.y"
                                              {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BAND),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4712 "HolyC.tab.c"
+#line 4872 "HolyC.tab.c"
     break;
 
-  case 343: /* _expr14: _expr14 EQ_BXOR _expr14  */
+  case 343:
 #line 1534 "HolyC.y"
                                              {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BXOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4721 "HolyC.tab.c"
+#line 4881 "HolyC.tab.c"
     break;
 
-  case 344: /* _expr14: _expr14 EQ_BOR _expr14  */
+  case 344:
 #line 1538 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_BOR),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4730 "HolyC.tab.c"
+#line 4890 "HolyC.tab.c"
     break;
 
-  case 345: /* _expr14: _expr14 EQ_ADD _expr14  */
+  case 345:
 #line 1542 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_ADD),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4739 "HolyC.tab.c"
+#line 4899 "HolyC.tab.c"
     break;
 
-  case 346: /* _expr14: _expr14 EQ_SUB _expr14  */
+  case 346:
 #line 1546 "HolyC.y"
                                             {
   yyval=SOT(CreateBinop(yyvsp[-2],yyvsp[0],AST_ASSIGN_SUB),yyvsp[-1]);
   ReleaseAST(yyvsp[-1]);
 }
-#line 4748 "HolyC.tab.c"
+#line 4908 "HolyC.tab.c"
     break;
 
 
-#line 4752 "HolyC.tab.c"
+#line 4912 "HolyC.tab.c"
 
       default: break;
     }
@@ -4763,10 +4923,11 @@ yyreduce:
      case of YYERROR or YYBACKUP, subsequent parser actions might lead
      to an incorrect destructor call or verbose syntax error message
      before the lookahead is translated.  */
-  YY_SYMBOL_PRINT ("-> $$ =", YY_CAST (yysymbol_kind_t, yyr1[yyn]), &yyval, &yyloc);
+  YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
 
   YYPOPSTACK (yylen);
   yylen = 0;
+  YY_STACK_PRINT (yyss, yyssp);
 
   *++yyvsp = yyval;
 
@@ -4790,30 +4951,66 @@ yyreduce:
 yyerrlab:
   /* Make sure we have latest lookahead translation.  See comments at
      user semantic actions for why this is necessary.  */
-  yytoken = yychar == HC_HC_EMPTY ? YYSYMBOL_YYEMPTY : YYTRANSLATE (yychar);
+  yytoken = yychar == YYEMPTY ? YYEMPTY : YYTRANSLATE (yychar);
+
   /* If not already recovering from an error, report this error.  */
   if (!yyerrstatus)
     {
       ++yynerrs;
+#if ! YYERROR_VERBOSE
       yyerror (YY_("syntax error"));
+#else
+# define YYSYNTAX_ERROR yysyntax_error (&yymsg_alloc, &yymsg, \
+                                        yyssp, yytoken)
+      {
+        char const *yymsgp = YY_("syntax error");
+        int yysyntax_error_status;
+        yysyntax_error_status = YYSYNTAX_ERROR;
+        if (yysyntax_error_status == 0)
+          yymsgp = yymsg;
+        else if (yysyntax_error_status == 1)
+          {
+            if (yymsg != yymsgbuf)
+              YYSTACK_FREE (yymsg);
+            yymsg = YY_CAST (char *, YYSTACK_ALLOC (YY_CAST (YYSIZE_T, yymsg_alloc)));
+            if (!yymsg)
+              {
+                yymsg = yymsgbuf;
+                yymsg_alloc = sizeof yymsgbuf;
+                yysyntax_error_status = 2;
+              }
+            else
+              {
+                yysyntax_error_status = YYSYNTAX_ERROR;
+                yymsgp = yymsg;
+              }
+          }
+        yyerror (yymsgp);
+        if (yysyntax_error_status == 2)
+          goto yyexhaustedlab;
+      }
+# undef YYSYNTAX_ERROR
+#endif
     }
+
+
 
   if (yyerrstatus == 3)
     {
       /* If just tried and failed to reuse lookahead token after an
          error, discard it.  */
 
-      if (yychar <= HC_YYEOF)
+      if (yychar <= YYEOF)
         {
           /* Return failure if at end of input.  */
-          if (yychar == HC_YYEOF)
+          if (yychar == YYEOF)
             YYABORT;
         }
       else
         {
           yydestruct ("Error: discarding",
                       yytoken, &yylval);
-          yychar = HC_HC_EMPTY;
+          yychar = YYEMPTY;
         }
     }
 
@@ -4830,7 +5027,6 @@ yyerrorlab:
      label yyerrorlab therefore never appears in user code.  */
   if (0)
     YYERROR;
-  ++yynerrs;
 
   /* Do not reclaim the symbols of the rule whose action triggered
      this YYERROR.  */
@@ -4847,14 +5043,13 @@ yyerrorlab:
 yyerrlab1:
   yyerrstatus = 3;      /* Each real token shifted decrements this.  */
 
-  /* Pop stack until we find a state that shifts the error token.  */
   for (;;)
     {
       yyn = yypact[yystate];
       if (!yypact_value_is_default (yyn))
         {
-          yyn += YYSYMBOL_YYerror;
-          if (0 <= yyn && yyn <= YYLAST && yycheck[yyn] == YYSYMBOL_YYerror)
+          yyn += YYTERROR;
+          if (0 <= yyn && yyn <= YYLAST && yycheck[yyn] == YYTERROR)
             {
               yyn = yytable[yyn];
               if (0 < yyn)
@@ -4868,7 +5063,7 @@ yyerrlab1:
 
 
       yydestruct ("Error: popping",
-                  YY_ACCESSING_SYMBOL (yystate), yyvsp);
+                  yystos[yystate], yyvsp);
       YYPOPSTACK (1);
       yystate = *yyssp;
       YY_STACK_PRINT (yyss, yyssp);
@@ -4880,7 +5075,7 @@ yyerrlab1:
 
 
   /* Shift the error token.  */
-  YY_SYMBOL_PRINT ("Shifting", YY_ACCESSING_SYMBOL (yyn), yyvsp, yylsp);
+  YY_SYMBOL_PRINT ("Shifting", yystos[yyn], yyvsp, yylsp);
 
   yystate = yyn;
   goto yynewstate;
@@ -4891,7 +5086,7 @@ yyerrlab1:
 `-------------------------------------*/
 yyacceptlab:
   yyresult = 0;
-  goto yyreturnlab;
+  goto yyreturn;
 
 
 /*-----------------------------------.
@@ -4899,23 +5094,25 @@ yyacceptlab:
 `-----------------------------------*/
 yyabortlab:
   yyresult = 1;
-  goto yyreturnlab;
+  goto yyreturn;
 
 
-/*-----------------------------------------------------------.
-| yyexhaustedlab -- YYNOMEM (memory exhaustion) comes here.  |
-`-----------------------------------------------------------*/
+#if !defined yyoverflow || YYERROR_VERBOSE
+/*-------------------------------------------------.
+| yyexhaustedlab -- memory exhaustion comes here.  |
+`-------------------------------------------------*/
 yyexhaustedlab:
   yyerror (YY_("memory exhausted"));
   yyresult = 2;
-  goto yyreturnlab;
+  /* Fall through.  */
+#endif
 
 
-/*----------------------------------------------------------.
-| yyreturnlab -- parsing is finished, clean up and return.  |
-`----------------------------------------------------------*/
-yyreturnlab:
-  if (yychar != HC_HC_EMPTY)
+/*-----------------------------------------------------.
+| yyreturn -- parsing is finished, return the result.  |
+`-----------------------------------------------------*/
+yyreturn:
+  if (yychar != YYEMPTY)
     {
       /* Make sure we have latest lookahead translation.  See comments at
          user semantic actions for why this is necessary.  */
@@ -4930,17 +5127,19 @@ yyreturnlab:
   while (yyssp != yyss)
     {
       yydestruct ("Cleanup: popping",
-                  YY_ACCESSING_SYMBOL (+*yyssp), yyvsp);
+                  yystos[+*yyssp], yyvsp);
       YYPOPSTACK (1);
     }
 #ifndef yyoverflow
   if (yyss != yyssa)
     YYSTACK_FREE (yyss);
 #endif
-
+#if YYERROR_VERBOSE
+  if (yymsg != yymsgbuf)
+    YYSTACK_FREE (yymsg);
+#endif
   return yyresult;
 }
-
 #line 1552 "HolyC.y"
 
 static int code;
@@ -5022,13 +5221,17 @@ void DebugEvalExpr(void *frameptr,CFuncInfo *info,char *text) {
     mrope_append_text(Lexer.source,strdup(text));
   #else
     void(*inc)(void*cc,char *fn,char *src,int64_t act_f)=(void*)GetVariable("LexIncludeStr")->func->funcptr;
-    inc(Lexer.HCLexer,"(nofile)",text,0);
+    inc(Lexer.HCLexer,"(nofile)",strdup(text),0);
+    Lexer.isEvalExpr=1;
   #endif
   CurFuncInfo=info;
   CurFramePtr=frameptr;
   RunPtr=&EvalDebugExpr;
-  yyparse();
-  printf("\n");
+  if(!HCSetJmp(EnterTry())) {
+    yyparse();
+    printf("\n");
+    PopTryFrame();
+  }
   Lexer=old;
 }
 int64_t EvalExprNoComma(char *text,char **en) {

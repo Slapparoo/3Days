@@ -57,12 +57,6 @@ typedef struct jit_op {
         unsigned char fp;               // FP if it's a floating-point operation
 	unsigned char in_use;		// used be dead-code analyzer
         double flt_imm;                 // floating point immediate value
-        /**
-         * MyJIT(until i editied it) used to store flaoting points in pointer (pointing to flt_imm),but
-         * I made it so float immeditates are now stored at end of function. flt_imm_code_offset if the offset
-         * In the code which is RIP relative
-         */
-        long flt_imm_code_offset;
         jit_value arg[3];               // arguments passed by user
         jit_value r_arg[3];             // arguments transformed by register allocator
         int64_t patch_addr;

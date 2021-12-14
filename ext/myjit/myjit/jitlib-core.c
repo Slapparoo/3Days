@@ -447,15 +447,35 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 	}
 
 	//Add floating points to end of code as they are RIP relative
-	jit->ip+=16-(((int64_t)jit->ip)%16);
-	for (struct jit_op * op = jit->ops; op != NULL; op = op->next) {
-	    if(op->code!=(JIT_FMOV|IMM)) continue;
-	    if (jit->buf_capacity - (8+jit->ip - jit->buf) < MINIMAL_BUF_SPACE) jit_buf_expand(jit);
-	    *(int32_t*)((char*)jit->buf+op->flt_imm_code_offset)=(jit->ip-jit->buf)-op->flt_imm_code_offset-4; //-4 offset points to displacement,so bytes is subtraced as RIP displacemnets are 32bit here
-	    *(double*)(jit->ip)=op->flt_imm;
-	    jit->ip+=8;
-	}
+	jit->ip+=(16-(((int64_t)(jit->ip-jit->buf))%16))%16;
 
+	{
+		//These are used avoid repeat double values
+		vec_double_t values;
+		vec_int_t offsets;
+		vec_init(&offsets);vec_init(&values);
+
+
+		long fiter;
+		jit_flt_rip_relloc frelloc;
+		vec_foreach(&jit->flt_rellocs,frelloc,fiter) {
+				long idx=0,foffset;
+				vec_find(&values, frelloc.val, idx);
+				if(idx==-1) {
+					if (jit->buf_capacity - (16+jit->ip - jit->buf) < MINIMAL_BUF_SPACE) jit_buf_expand(jit);
+					assert(((int64_t)(jit->ip-jit->buf))%16==0);
+					*(double*)(jit->ip)=frelloc.val;
+					vec_push(&values, frelloc.val);
+					vec_push(&offsets, jit->ip-jit->buf);
+		    	jit->ip+=16;
+				}
+				vec_find(&values, frelloc.val, idx);
+				assert(idx!=-1);
+		    *(int32_t*)((char*)jit->buf+frelloc.offset)=offsets.data[idx]-frelloc.offset-4; //-4 offset points to displacement,so bytes is subtraced as RIP displacemnets are 32bit here
+		}
+		vec_deinit(&values);
+		vec_deinit(&offsets);
+	}
 	/* moves the code to its final destination */
 	int code_size = jit->ip - jit->buf;
 	void * mem;
@@ -467,7 +487,7 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 	memcpy(mem, jit->buf, code_size);
 	JIT_FREE(jit->buf);
 
-	tgc_set_dtor(&gc, jit, ReleaseFMem);
+	GC_SetDestroy(jit, ReleaseFMem,NULL);
 
 	for (struct jit_op * op = jit->ops; op != NULL; op = op->next) {
 	  if(GET_OP(op)==JIT_DUMP_PTR) {

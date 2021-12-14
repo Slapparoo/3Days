@@ -485,19 +485,24 @@ U0 SDL_DrawWin(...) {
         CSDL_TextWin *w=argv[idx];
         I32 rx=SDL_GetSurfaceWidth(w->text),ry=SDL_GetSurfaceHeight(w->text);
         SDL_Rect sbox={w->begx*FONT_X2,w->begy*FONT_Y2,rx/FONT_X2*FONT_X2,ry/FONT_Y2*FONT_Y2};
-        SDL_BlitSurface(w->text,NULL,winsurf,&sbox);
-        if(rx/FONT_X2!=winx||ry/FONT_Y2!=winy) {
-            SDL_FreeSurface(w->text);
-            w->text=SDL_CreateRGBSurface(0,winx*FONT_X2,winy*FONT_Y2,32,0,0,0,0);
-            Free(w->char_cache);
-            w->char_cache=MAlloc(sizeof(CSDL_ScrnChr)*winx*winy);
-        }
+        SDL_Rect wbox={0,0,rx/FONT_X2*FONT_X2,ry/FONT_Y2*FONT_Y2};
+        SDL_BlitScaled(w->text,&wbox,winsurf,&sbox);
         if(w->cur_enabled) {
             SDL_Rect crect={w->curx*FONT_X2,w->cury*FONT_Y2+FONT_Y2-2,FONT_X2,4};
             SDL_FillRect(winsurf,&crect,0xff000000);
         }
     }
     SDL_UpdateWindowSurface(global_window);
+    for(idx=0;idx!=argc;idx++) {
+        w=argv[idx];
+        SDL_GetSurfaceWidth(w->text),ry=SDL_GetSurfaceHeight(w->text);
+        if(rx/FONT_X2!=winx||ry/FONT_Y2!=winy) {
+            SDL_FreeSurface(w->text);
+            w->text=SDL_CreateRGBSurface(0,winx*FONT_X2,winy*FONT_Y2,32,0,0,0,0);
+            Free(w->char_cache);
+            w->char_cache=MAlloc(sizeof(CSDL_ScrnChr)*winx*winy);
+        }
+    }
 }
 U0 SDL_AddCh(CSDL_TextWin *win,U8 ch,Bool force_in_view=FALSE) {
     if(ch=='\t') ch=' ';
@@ -543,11 +548,6 @@ U0 SDL_Print(CSDL_TextWin *win,U8 *str) {
 }
 U0 SDL_ClrToEOL(CSDL_TextWin *w) {
     I64 width=SDL_WinX(w)-w->x;
-    U_RGBA8888 white=SOL_WHITE;
-    SDL_Rect r={w->x*FONT_X2,w->y*FONT_Y2,width*FONT_X2,FONT_Y2};
-    SDL_LockSurface(w->text);
-    SDL_FillRect(w->text,&r,SOL_WHITE);
-    SDL_UnlockSurface(w->text);
     I64 idx=w->y*SDL_WinX(w)+w->x;
     w->cur_cp=CP_WHITE;
     while(--width>=0)
@@ -1416,8 +1416,7 @@ U0 DrawLinumWithPad(CEditor *ed,I64 num,I64 barwidth) {
 #define ED_DRAW_DFT (ED_DRAW_LINUMS|ED_DRAW_MENUBAR)
 #define ED_DRAW_NO_RENDER 16
 U0 AddMenuBar(CEditor *ed,I64 active=-1);
-I64 DrawEditor(CEditor *ed,I64 flags=0,U8 *dialogtxt=NULL,I64 mb_active=-1) {
-    curs_set(0);
+I64 DrawEditor(CEditor *ed,I64 flags=ED_DRAW_DFT ,U8 *dialogtxt=NULL,I64 mb_active=-1) {
     CLine *diagln=NULL;
     //If we are at a line with a diagnostic,be sure to make a bottom margin
     if(flags&(ED_DRAW_DIALOG|ED_DRAW_SEARCH)) {
@@ -1430,6 +1429,8 @@ I64 DrawEditor(CEditor *ed,I64 flags=0,U8 *dialogtxt=NULL,I64 mb_active=-1) {
     if(flags&ED_DRAW_MENUBAR) {
         if(AddMenuBar(ed,mb_active)==ED_RET_QUIT) return ED_RET_QUIT;
         ed->margin_top=1;
+        if(mb_active!=-1)
+            AddMenuBar(ed,-1);
     }
     if(flags&ED_DRAW_LINUMS) {
         U8 *lnumtxt=MStrPrint("%d: ",ed->line_count);
@@ -1505,7 +1506,9 @@ I64 DrawEditor(CEditor *ed,I64 flags=0,U8 *dialogtxt=NULL,I64 mb_active=-1) {
     ed->window->curx=lnumlen+ed->curx-ed->x_scroll;
     ed->window->cury=ed->cury-ed->vp_start_line+ed->margin_top;
     if(flags&ED_DRAW_NO_RENDER);
-    else SDL_DrawWin(ed->window);
+    else {
+        SDL_DrawWin(ed->window);
+    }
     return ED_RET_OK;
 }
 U0 EdUp(CEditor *ed) {
@@ -1882,7 +1885,6 @@ free:
     Free(ents),Free(sub);
 fin:
     Free(text);
-    SDL_DrawWin(parent->window);
     return ret;
 }
 class CMenuEnt {
@@ -1965,7 +1967,6 @@ I64 SaveDoc(CEditor *ed) {
         SDL_DrawWin(msgs);
         GC_Collect();
         MarkLineColors(ed);
-        SDL_DrawWin(ed->window);
     }
     return ED_RET_OK;
 }
@@ -2117,7 +2118,6 @@ draw:
     }
     SDL_ClrToEOL(ed->window);
     if(sel_off!=-1) {
-      DrawEditor(ed, ED_DRAW_DFT&(~ED_DRAW_MENUBAR));
       if(DrawMenuDropdown(ed,cats[active].spec, off,active_sub)==ED_RET_QUIT) return ED_RET_QUIT;
     }
     if(active!=-1)
@@ -2613,19 +2613,15 @@ pagedown:
     goto mvsrncur;
     case 'b'&0x1f:
     BufferSelect(ed);
-    SDL_DrawWin(ed->window);
     goto mvsrncur;
     case 't'&0x1f:
     GotoSymbol(ed);
-    SDL_DrawWin(ed->window);
     goto mvsrncur;
     case 'o'&0x1f:
     OpenDoc(ed);
-    SDL_DrawWin(ed->window);
     goto mvsrncur;
     case 's'&0x1f:
     SaveDoc(ed);
-    SDL_DrawWin(ed->window);
     goto mvsrncur;
     default:
         if(key==('q'&0x1f)) {return ED_RET_QUIT;}
@@ -2676,7 +2672,6 @@ U0 SDL_ExitScr() {
     SDL_FreeSurface(global_font);
     global_window=NULL,global_font=NULL;
     SDL_StopTextInput;
-    HashTableDel(buffers,(&FreeBuffer)(U0*));
 }
 U0 Ed(U8 *fn) {
     SDL_InitScr;

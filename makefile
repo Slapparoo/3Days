@@ -1,6 +1,6 @@
 HEADERS := HolyC.tab.h 3d.h
 CC := gcc
-CFLAGS :=  -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC `pkg-config --libs --cflags readline` `sdl2-config --cflags --libs`
+CFLAGS :=  -g3 -Os -DUSEGC -Wformat=0 -Wreturn-type -DUSEGC `pkg-config --libs --cflags readline` `sdl2-config --cflags --libs`
 all: 3d_tests 3d
 	echo "Done"
 HCRT := HCRT/ASM.HC HCRT/COMPRESS.HC HCRT/FS.HC HCRT/Opcodes.DD HCRT/BITS.HC HCRT/FIFO.HC HCRT/HASH.HC HCRT/HCRT.HC HCRT/PRINT.HC HCRT/CHAR.HC HCRT/FILE.HC HCRT/MATH.HC HCRT/QSORT.HC HCRT/LEXER.HC
@@ -43,14 +43,14 @@ rl.o: rl.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c rl.c -o $@
 rt.o: runtime.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c runtime.c -o $@
-gc.o: ext/tgc/tgc.c ext/tgc/tgc.h  $(HEADERS)
-	$(CC) -O0 -g -c ext/tgc/tgc.c -o gc.o
+gc.o: gc.c gc.h  $(HEADERS)
+	$(CC) -O0 -g -c gc.c -o gc.o
 asm.o: asm.c $(HEADERS)
 	$(CC) $(CFLAGS) -c asm.c -o asm.o
 debugger.o: debugger.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c debugger.c -o $@
 clean:
-	rm *.o HolyC.tab.c HolyC.tab.h epm 3d 3d_tests || cd ext/epm-5.0.0 &&  make clean
+	rm *.o HolyC.tab.c HolyC.tab.h 3d.bootstrap 3d 3d_tests HCRT/HCRT.BIN
 exceptLin.o: exceptLin.yasm
 	yasm -f elf64 exceptLin.yasm -o $@
 tags.o: tags.c  $(HEADERS)
@@ -90,8 +90,8 @@ rl.cyborg.o: rl.c  $(HEADERS)
 	$(CC) $(CFLAGS) -DBOOTSTRAPED  -c rl.c -o $@
 rt.cyborg.o: runtime.c  $(HEADERS)
 	$(CC) $(CFLAGS) -DBOOTSTRAPED  -c runtime.c -o $@
-gc.cyborg.o: ext/tgc/tgc.c ext/tgc/tgc.h  $(HEADERS)
-	$(CC) -O0 -g3 -DBOOTSTRAPED  -c ext/tgc/tgc.c -o gc.cyborg.o
+gc.cyborg.o: gc.c gc.h  $(HEADERS)
+	$(CC) -O0 -g3 -DBOOTSTRAPED  -c gc.c -o gc.cyborg.o
 debugger.cyborg.o: debugger.c  $(HEADERS)
 	$(CC) $(CFLAGS) -DBOOTSTRAPED  -c debugger.c -o $@
 exceptLin.cyborg.o: exceptLin.yasm

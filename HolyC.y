@@ -1629,13 +1629,17 @@ void DebugEvalExpr(void *frameptr,CFuncInfo *info,char *text) {
     mrope_append_text(Lexer.source,strdup(text));
   #else
     void(*inc)(void*cc,char *fn,char *src,int64_t act_f)=(void*)GetVariable("LexIncludeStr")->func->funcptr;
-    inc(Lexer.HCLexer,"(nofile)",text,0);
+    inc(Lexer.HCLexer,"(nofile)",strdup(text),0);
+    Lexer.isEvalExpr=1;
   #endif
   CurFuncInfo=info;
   CurFramePtr=frameptr;
   RunPtr=&EvalDebugExpr;
-  yyparse();
-  printf("\n");
+  if(!HCSetJmp(EnterTry())) {
+    yyparse();
+    printf("\n");
+    PopTryFrame();
+  }
   Lexer=old;
 }
 int64_t EvalExprNoComma(char *text,char **en) {

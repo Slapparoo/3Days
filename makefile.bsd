@@ -1,8 +1,8 @@
 HEADERS := HolyC.tab.h 3d.h
 CC := gcc
-CFLAGS :=  `pkg-config --cflags --libs sdl2` -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC -DBSD -Wno-parentheses -Wno-switch
-OBJS := aot.o tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o at3.o exceptLin.o asm.o
-all: 3d_tests 3d.bootstrap
+B_CFLAGS :=  `pkg-config --cflags --libs sdl2` -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC -DBSD -Wno-parentheses -Wno-switch
+B_OBJS := aot.o tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o at3.o exceptLin.o asm.o
+all: 3d_tests 3d
 	echo "Done"
 HCRT := HCRT/ASM.HC  HCRT/BITS.HC  HCRT/CHAR.HC  HCRT/COMPRESS.HC  HCRT/FIFO.HC  HCRT/FILE.HC  HCRT/FS.HC  HCRT/HASH.HC  HCRT/HCRT.HC  HCRT/MATH.HC  HCRT/Opcodes.DD  HCRT/PRINT.HC  HCRT/QSORT.HC
 HCRT/HCRT.BIN: 3d.bootstrap $(HCRT)
@@ -10,50 +10,97 @@ HCRT/HCRT.BIN: 3d.bootstrap $(HCRT)
 package: HCRT/HCRT.BIN 3d FreeBSD_pkg.sh
 	tcsh FreeBSD_pkg.sh
 main.o: main.c
-	$(CC) $(CFLAGS) -c  main.c -o $@
-3d.bootstrap: $(OBJS) main.o
-	gcc $(CFLAGS) $(OBJS) main.o -lm -lncurses -ltinfo -lpthread -lreadline -o $@
-3d_tests: $(OBJS) tests.c
-	gcc $(CFLAGS) $(OBJS) tests.c -lm -lncurses -ltinfo -lpthread -lreadline -o $@
+	$(CC) $(B_CFLAGS) -c  main.c -o $@
+3d.bootstrap: $(B_OBJS) main.o
+	gcc $(B_CFLAGS) $(B_OBJS) main.o -lm -lncurses -ltinfo -lpthread -lreadline -o $@
+3d_tests: $(B_OBJS) tests.c
+	gcc $(B_CFLAGS) $(B_OBJS) tests.c -lm -lncurses -ltinfo -lpthread -lreadline -o $@
 HolyC.o: HolyC.tab.c $(HEADERS)
-	$(CC) $(CFLAGS) -g -c HolyC.tab.c -o $@
+	$(CC) $(B_CFLAGS) -g -c HolyC.tab.c -o $@
 HolyC.tab.c HolyC.tab.h: HolyC.y
 	bison -v -d -b HolyC HolyC.y
 vec.o: ext/vec/src/vec.c $(HEADERS)
-	$(CC) $(CFLAGS) -c ext/vec/src/vec.c  -o $@
+	$(CC) $(B_CFLAGS) -c ext/vec/src/vec.c  -o $@
 map.o: ext/map/src/map.c $(HEADERS)
-	$(CC) $(CFLAGS) -c ext/map/src/map.c -o $@
+	$(CC) $(B_CFLAGS) -c ext/map/src/map.c -o $@
 compile.o: compile.c 3d.h $(HEADERS)
-	$(CC) $(CFLAGS) -c compile.c -o $@
+	$(CC) $(B_CFLAGS) -c compile.c -o $@
 lexer.o: lexer.c 3d.h $(HEADERS)
-	$(CC) $(CFLAGS) -c lexer.c -o $@
+	$(CC) $(B_CFLAGS) -c lexer.c -o $@
 jitlib-core.o: ext/myjit/myjit/jitlib-core.c
-	$(CC) $(CFLAGS) -c ext/myjit/myjit/jitlib-core.c -o $@
+	$(CC) $(B_CFLAGS) -c ext/myjit/myjit/jitlib-core.c -o $@
 tosprn.o: TOSPrint.c $(HEADERS)
-	$(CC) $(CFLAGS) -c TOSPrint.c -o $@
+	$(CC) $(B_CFLAGS) -c TOSPrint.c -o $@
 unesc.o: ext/C_Unescaper/escaper.c  $(HEADERS)
-	$(CC) $(CFLAGS) -c ext/C_Unescaper/escaper.c -o unesc.o
+	$(CC) $(B_CFLAGS) -c ext/C_Unescaper/escaper.c -o unesc.o
 rope.o: ext/mropes/src/rope.c  $(HEADERS)
-	$(CC) $(CFLAGS) -c ext/mropes/src/rope.c -o $@
+	$(CC) $(B_CFLAGS) -c ext/mropes/src/rope.c -o $@
 at3.o: ext/argtable3/argtable3.c  $(HEADERS)
-	$(CC) $(CFLAGS) -c ext/argtable3/argtable3.c -o $@
+	$(CC) $(B_CFLAGS) -c ext/argtable3/argtable3.c -o $@
 rl.o: rl.c  $(HEADERS)
-	$(CC) $(CFLAGS) -c rl.c -o $@
+	$(CC) $(B_CFLAGS) -c rl.c -o $@
 rt.o: runtime.c  $(HEADERS)
-	$(CC) $(CFLAGS) -c runtime.c -o $@
-gc.o: ext/tgc/tgc.c ext/tgc/tgc.h  $(HEADERS)
-	$(CC) -Os -g -c ext/tgc/tgc.c -o gc.o
+	$(CC) $(B_CFLAGS) -c runtime.c -o $@
+gc.o: gc.c gc.h  $(HEADERS)
+	$(CC) -Os -g -c gc.c -o gc.o
 debugger.o: debugger.c  $(HEADERS)
-	$(CC) $(CFLAGS) -c debugger.c -o $@
+	$(CC) $(B_CFLAGS) -c debugger.c -o $@
 clean:
 	rm *.o HolyC.tab.c HolyC.tab.h epm 3d 3d_tests || cd ext/epm-5.0.0 &&  make clean
 exceptLin.o: exceptLin.yasm
 	yasm -f elf64 exceptLin.yasm -o $@
 tags.o: tags.c  $(HEADERS)
-	$(CC) $(CFLAGS) -c tags.c -o $@
+	$(CC) $(B_CFLAGS) -c tags.c -o $@
 asm.o: asm.c $(HEADERS)
-	$(CC) $(CFLAGS) -c asm.c -o asm.o
+	$(CC) $(B_CFLAGS) -c asm.c -o asm.o
 aot.o: aot.c $(HEADERS)
-	$(CC) $(CFLAGS) -c aot.c -o aot.o
+	$(CC) $(B_CFLAGS) -c aot.c -o aot.o
 sexy:
 	astyle *.c *.h
+
+OBJS := aot.cyborg.o tags.cyborg.o rl.cyborg.o vec.cyborg.o rt.cyborg.o jitlib-core.cyborg.o map.cyborg.o compile.cyborg.o lexer.cyborg.o HolyC.cyborg.o unesc.cyborg.o tosprn.cyborg.o gc.cyborg.o debugger.cyborg.o rope.cyborg.o at3.cyborg.o exceptLin.cyborg.o asm.cyborg.o
+CFLAGS :=  `pkg-config --cflags --libs sdl2` -DBOOTSTRAPED -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC -DBSD -Wno-parentheses -Wno-switch
+main.cyborg.o: main.c
+	$(CC) $(CFLAGS) -c  main.c -o $@
+3d: $(OBJS) main.cyborg.o HCRT/HCRT.BIN
+	gcc $(CFLAGS) $(OBJS) main.cyborg.o -lm -lncurses -ltinfo -lpthread -lreadline -o $@
+HolyC.cyborg.o: HolyC.tab.c $(HEADERS)
+	$(CC) $(CFLAGS) -g -c HolyC.tab.c -o $@
+HolyC.tab.c HolyC.tab.h: HolyC.y
+	bison -v -d -b HolyC HolyC.y
+vec.cyborg.o: ext/vec/src/vec.c $(HEADERS)
+	$(CC) $(CFLAGS) -c ext/vec/src/vec.c  -o $@
+map.cyborg.o: ext/map/src/map.c $(HEADERS)
+	$(CC) $(CFLAGS) -c ext/map/src/map.c -o $@
+compile.cyborg.o: compile.c 3d.h $(HEADERS)
+	$(CC) $(CFLAGS) -c compile.c -o $@
+lexer.cyborg.o: lexer.c 3d.h $(HEADERS)
+	$(CC) $(CFLAGS) -c lexer.c -o $@
+jitlib-core.cyborg.o: ext/myjit/myjit/jitlib-core.c
+	$(CC) $(CFLAGS) -c ext/myjit/myjit/jitlib-core.c -o $@
+tosprn.cyborg.o: TOSPrint.c $(HEADERS)
+	$(CC) $(CFLAGS) -c TOSPrint.c -o $@
+unesc.cyborg.o: ext/C_Unescaper/escaper.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c ext/C_Unescaper/escaper.c -o unesc.cyborg.o
+rope.cyborg.o: ext/mropes/src/rope.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c ext/mropes/src/rope.c -o $@
+at3.cyborg.o: ext/argtable3/argtable3.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c ext/argtable3/argtable3.c -o $@
+rl.cyborg.o: rl.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c rl.c -o $@
+rt.cyborg.o: runtime.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c runtime.c -o $@
+gc.cyborg.o: gc.c gc.h  $(HEADERS)
+	$(CC) $(CFLAGS) -c gc.c -o gc.cyborg.o
+debugger.cyborg.o: debugger.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c debugger.c -o $@
+clean:
+	rm *.o HolyC.tab.c HolyC.tab.h epm 3d 3d_tests || cd ext/epm-5.0.0 &&  make clean
+exceptLin.cyborg.o: exceptLin.yasm
+	yasm -f elf64 exceptLin.yasm -o $@
+tags.cyborg.o: tags.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c tags.c -o $@
+asm.cyborg.o: asm.c $(HEADERS)
+	$(CC) $(CFLAGS) -c asm.c -o asm.cyborg.o
+aot.cyborg.o: aot.c $(HEADERS)
+	$(CC) $(CFLAGS) -c aot.c -o aot.cyborg.o

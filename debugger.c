@@ -262,7 +262,7 @@ help:
         int matched=0;
         //Match filename
         if(GetVariable("LexMatchFile")) {
-            const char *fn=((const char*(*)(void*,char *))GetVariable("LexMatchFile")->func->funcptr)(Lexer.HCLexer,fn);
+            const char *fn=((const char*(*)(void*,char *))GetVariable("LexMatchFile")->func->funcptr)(Lexer.HCLexer,s);
             if(fn) {
                 char buffer[256];
                 sprintf(buffer,"%s:%ld",fn,line);
@@ -291,10 +291,12 @@ help:
             char *res=rl("[Yn]: ");
             if(toupper(*res)=='Y') {
                 const char *key;
+                remallloop:;
                 map_iter_t biter=map_iter(&Debugger.activeBreakpoints);
                 while(key=map_next(&Debugger.activeBreakpoints,&biter)) {
                     map_get(&Debugger.activeBreakpoints,key)[0]->enabled=0;
                     map_remove(&Debugger.activeBreakpoints,key);
+                    goto remallloop;
                 }
             }
 #ifndef TARGET_WIN32
@@ -414,7 +416,7 @@ void Backtrace() {
     }
 }
 void WhineOnOutOfBounds(void *ptr,int64_t sz) {
-    if(!InBounds(&gc,ptr+sz)) {
+    if(!InBounds(ptr+sz)) {
         Backtrace();
     }
 }

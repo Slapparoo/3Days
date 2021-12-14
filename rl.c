@@ -36,22 +36,24 @@ char* rl(char* prompt) {
   return r;
 }
 CCompletion* (*rlACGen)(const char *buffer,long srcoff,const char* text,long *length);
-static char *rlEntry(const char *text,int iter) {
+static CCompletion *tmp;
+static long tmp_length;
+static char *gen(const char *text,int iter) {
+  if(iter>=tmp_length) return NULL;
+  return strcpy(calloc(1,strlen(tmp[iter].completion)+1),tmp[iter].completion);
+}
+static char *rlEntry(const char *text,int start,int end) {
   long cnt,ocnt;
-  CCompletion *comps=rlACGen(text,0,text,&cnt);
-  ocnt=cnt;
-  char *ret=NULL;
-  while(--cnt>=0) {
-    if(cnt==iter)
-      ret=strcpy(calloc(1,strlen(comps[cnt].completion)+1),comps[cnt].completion);
-    TD_FREE(comps[cnt].displayText);
-    TD_FREE(comps[cnt].completion);
+  char buffer[end-start+1];
+  buffer[end-start]=0;
+  strncpy(buffer, text,start);
+  tmp=rlACGen(text,0,text,&tmp_length);
+  char **ret=rl_completion_matches(buffer,gen);
+  while(--tmp_length>=0) {
+    TD_FREE(tmp[cnt].displayText);
+    TD_FREE(tmp[cnt].completion);
   }
-  if(!ret) {
-    ret=rl_filename_completion_function(text,iter-ocnt);
-  }
-  end:
-  TD_FREE(comps);
+  TD_FREE(tmp);
   return ret;
 }
 void InitRL() {
@@ -60,5 +62,5 @@ void InitRL() {
   rl_completion_append_character='\x00';
   rl_initialize();
   #endif
-  rl_completion_entry_function=&rlEntry;
+  rl_attempted_completion_function=&rlEntry;
 }

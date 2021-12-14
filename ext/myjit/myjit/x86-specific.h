@@ -153,10 +153,12 @@ static void emit_prolog_op(struct jit * jit, jit_op * op)
 	jit->current_func = op;
 	struct jit_func_info * info = jit_current_func_info(jit);
 	int prolog = jit_current_func_info(jit)->has_prolog;
-	while ((int64_t)jit->ip % 8)
-		x86_nop(jit->ip);
+	//When serializing a function,keep it in it's raw form(to ensure aligment when saving to disk);dont prefix with nops
+	//while ((int64_t)jit->ip % 8)
+	//	x86_nop(jit->ip);
+	//op->patch_addr = JIT_BUFFER_OFFSET(jit);
+	op->patch_addr=0;
 
-	op->patch_addr = JIT_BUFFER_OFFSET(jit);
 	if (prolog) {
 		x86_push_reg(jit->ip, X86_EBP);
 		x86_mov_reg_reg(jit->ip, X86_EBP, X86_ESP, 4);
