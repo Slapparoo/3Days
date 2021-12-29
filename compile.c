@@ -1079,6 +1079,7 @@ static void FillInLastclasses(AST *at,CType *ftype,vec_AST_t *args) {
     int iter;
     vec_foreach(args, var, iter) {
         if(var) continue;
+        if(ftype->func.dftArgs.length<iter) continue;
         if(!ftype->func.dftArgs.data[iter]) continue;
         if(ftype->func.dftArgs.data[iter]->type!=AST_LASTCLASS) continue;
         if(iter==0) {

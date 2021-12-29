@@ -217,9 +217,9 @@ int main(int argc,char **argv) {
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
         FILE *rt=fopen(buffer,"rb");
         if(noRuntime->count)
-                map_set(&Compiler.binModules,"HCRT/HCRT.BIN",LoadAOTBin(rt,AOT_F_NO_ADD_SYMBOLS));
+                map_set(&Compiler.binModules,buffer,LoadAOTBin(rt,AOT_F_NO_ADD_SYMBOLS));
         else
-            map_set(&Compiler.binModules,"HCRT/HCRT.BIN",LoadAOTBin(rt,0));
+            map_set(&Compiler.binModules,buffer,LoadAOTBin(rt,0));
         fclose(rt);
         Compiler.loadedHCRT=1;
         Compiler.hcrt=map_get(&Compiler.binModules, buffer);

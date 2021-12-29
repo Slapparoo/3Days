@@ -488,7 +488,7 @@ U0 SDL_DrawWin(...) {
         SDL_Rect wbox={0,0,rx/FONT_X2*FONT_X2,ry/FONT_Y2*FONT_Y2};
         SDL_BlitScaled(w->text,&wbox,winsurf,&sbox);
         if(w->cur_enabled) {
-            SDL_Rect crect={w->curx*FONT_X2,w->cury*FONT_Y2+FONT_Y2-2,FONT_X2,4};
+            SDL_Rect crect={w->begx*FONT_X2+w->curx*FONT_X2,w->begy*FONT_Y2+w->cury*FONT_Y2+FONT_Y2-2,FONT_X2,4};
             SDL_FillRect(winsurf,&crect,0xff000000);
         }
     }
@@ -582,6 +582,7 @@ U8 *EdGetSelText(CEditor *ed);
 U0 EdDelSel(CEditor *ed);
 U0 MarkLineColors(CEditor *ed);
 U0 WriteWithinWin(CSDL_TextWin *win,U8 *text,I64 x_scroll=0);
+U0 FocusCursor(CEditor *ed,I64 lmargin=0);
 I64 OpenFile(U8 *name,I64 ln=0);
 I64 ShowDiagsWindow(CEditor *parent) {
     CDiag *first=parent->diags;
@@ -654,7 +655,10 @@ I64 ShowDiagsWindow(CEditor *parent) {
         case ED_KEY_DOWN: curln++; break;
         case '\n':
         if(curln<cnt) {
+            I64 oldy=parent->cury,oldx=parent->cury;
             ret=OpenFile(lines[curln]->fn,lines[curln]->ln);
+            parent->cury=oldy,parent->curx=oldx;
+            FocusCursor(parent);
             goto exit;
         } else {
             goto exit;
@@ -1792,7 +1796,9 @@ mvsrncur:
     DrawEditor(ed,ED_DRAW_DFT|ED_DRAW_NO_RENDER);
     sed->window->y=SDL_WinY(ed->window)-1;
     DrawEditor(sed,ED_DRAW_SEARCH|ED_DRAW_NO_RENDER);
+    ed.window->cur_enabled=FALSE,sed.window->cur_enabled=TRUE;
     SDL_DrawWin(ed.window,sed.window);
+    ed.window->cur_enabled=TRUE;
     goto loop;
 en:
     DrawEditor(ed,ED_DRAW_DFT);
@@ -1983,7 +1989,10 @@ I64 SaveDocAs(CEditor *ed) {
 I64 OpenDoc(CEditor *ed) {
     U8 *new=FileDialog(ed);
     if(new) {
+      I64 oldx=ed->curx,oldy=ed->cury;
       I64 ret=OpenFile(new);
+      ed->curx=oldx,ed->cury=oldy;
+      FocusCursor(ed);
       return ret;
     }
     return ED_RET_OK;
@@ -2354,8 +2363,13 @@ I64 GotoSymbol(CEditor *ed) {
     }
   }
   Free(orig);
-  if(tags)
-    return OpenFile(tags->fn, tags->ln);
+  if(tags) {
+    I64 oldy=ed->cury,oldx=ed->curx,code;
+    code=OpenFile(tags->fn, tags->ln);
+    ed->cury=oldy,ed->curx=oldx;
+    FocusCursor(ed);
+    return code;
+  }
   return ED_RET_OK;
 }
 U8 *FileDialog(CEditor *parent) {
@@ -2678,5 +2692,8 @@ U0 Ed(U8 *fn) {
     OpenFile(fn,0);
     SDL_ExitScr;
 }
+
+
+
 
 

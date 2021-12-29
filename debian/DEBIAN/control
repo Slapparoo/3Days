@@ -1,8 +1,8 @@
 Package: 3days
-Version: 0.0.3
+Version: 0.0.5
 Section: development
 Priority: optional
 Architecture: amd64
-Depends: libncurses-dev,libreadline-dev
+Depends: libncurses-dev,libreadline-dev,libsdl2-2.0-0
 Maintainer: nrootconauto@gmail.com
 Description: A HolyC Compiler.

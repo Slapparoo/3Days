@@ -21,6 +21,529 @@
 #include <fileapi.h>
 #endif
 #include <curses.h>
+static void *jit_INIT() {
+    return jit_init();
+}
+static void jit_GENERATE_CODE(void *jit) {
+	jit_generate_code(jit,NULL);
+}
+static int64_t jit_BINSIZE(void *jit) {
+    return jit_bin_size(jit);
+}
+static void jit_DUMP_OPS(void *jit,int l) {
+	jit_dump_ops(jit,l);
+}
+static int64_t jit_R(int64_t r) {
+    return R(r);
+}
+static int64_t jit_FR(int64_t r) {
+    return FR(r);
+}
+static int64_t jit_R_FP() {
+    return R_FP;
+}
+static void *jit_ANDR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_andr(jit,a,b,c);
+}
+static void *jit_ANDI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_andi(jit,a,b,c);
+}
+static void *jit_GET_LABEL(void *j) {
+    return jit_get_label(j);
+}
+static void *jit_PROLOG(void *jit,void *fp) {
+    return jit_prolog(jit,fp);
+}
+static void *jit_MOVR(void *jit,int64_t a,int64_t b) {
+    return jit_movr(jit,a,b);
+}
+static void *jit_MOVI(void *jit,int64_t a,int64_t b) {
+    return jit_movi(jit,a,b);
+}
+static void *jit_JMPR(void *jit,int64_t a) {
+    return jit_jmpr(jit,a);
+}
+static void *jit_JMPI(void *jit,int64_t a) {
+    return jit_jmpi(jit,a);
+}
+static void *jit_PATCH(void *jit,void *a) {
+    return jit_patch(jit,a);
+}
+static void *jit_PREPARE(void *jit) {
+    return jit_prepare(jit);
+}
+static void *jit_PUTARGI(void *jit,int64_t a) {
+    return jit_putargi(jit,a);
+}
+static void *jit_PUTARGR(void *jit,int64_t a) {
+    return jit_putargr(jit,a);
+}
+static void *jit_CALL(void *jit,int64_t a) {
+    return jit_call(jit,a);
+}
+static void *jit_CALLR(void *jit,int64_t a) {
+    return jit_callr(jit,a);
+}
+static void *jit_DECLARE_ARG(void *jit,int64_t a,int64_t b) {
+    return jit_declare_arg(jit,a,b);
+}
+static void *jit_RETR(void *jit,int64_t a) {
+    return jit_retr(jit,a);
+}
+static void *jit_RETI(void *jit,int64_t a) {
+    return jit_reti(jit,a);
+}
+static void *jit_RETVAL(void *jit,int64_t a) {
+    return jit_retval(jit,a);
+}
+static void *jit_GETARG(void *jit,int64_t a,int64_t b) {
+    return jit_getarg(jit,a,b);
+}
+static void *jit_ADDR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_addr(jit,a,b,c);
+}
+static void *jit_ADDI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_addi(jit,a,b,c);
+}
+static void *jit_SUBR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_subr(jit,a,b,c);
+}
+static void *jit_SUBI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_subi(jit,a,b,c);
+}
+static void *jit_NEGR(void *jit,int64_t a,int64_t b) {
+    return jit_negr(jit,a,b);
+}
+static void *jit_MULR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_mulr(jit,a,b,c);
+}
+static void *jit_MULI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_muli(jit,a,b,c);
+}
+static void *jit_MULR_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_mulr_u(jit,a,b,c);
+}
+static void *jit_MULI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_muli_u(jit,a,b,c);
+}
+static void *jit_DIVR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_divr(jit,a,b,c);
+}
+static void *jit_DIVI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_divi(jit,a,b,c);
+}
+static void *jit_DIVR_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_divr_u(jit,a,b,c);
+}
+static void *jit_DIVI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_divi_u(jit,a,b,c);
+}
+static void *jit_MODR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_modr(jit,a,b,c);
+}
+static void *jit_MODI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_modi(jit,a,b,c);
+}
+static void *jit_MODR_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_modr_u(jit,a,b,c);
+}
+static void *jit_MODI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_modi_u(jit,a,b,c);
+}
+static void *jit_ORR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_orr(jit,a,b,c);
+}
+static void *jit_ORI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ori(jit,a,b,c);
+}
+static void *jit_XORR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_xorr(jit,a,b,c);
+}
+static void *jit_XORI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_xori(jit,a,b,c);
+}
+static void *jit_LSHR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_lshr(jit,a,b,c);
+}
+static void *jit_LSHI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_lshi(jit,a,b,c);
+}
+static void *jit_RSHR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_rshr(jit,a,b,c);
+}
+static void *jit_RSHI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_rshi(jit,a,b,c);
+}
+static void *jit_RSHR_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_rshr_u(jit,a,b,c);
+}
+static void *jit_RSHI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_rshi_u(jit,a,b,c);
+}
+static void *jit_NOTR(void*jit,int64_t a,int64_t b) {
+    return jit_notr(jit,a,b);
+}
+static void *jit_BLTR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bltr(jit,a,b,c);
+}
+static void *jit_BLTI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_blti(jit,a,b,c);
+}
+static void *jit_BLTR_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bltr_u(jit,a,b,c);
+}
+static void *jit_BLTI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_blti_u(jit,a,b,c);
+}
+
+static void *jit_BLER(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bler(jit,a,b,c);
+}
+static void *jit_BLEI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_blei(jit,a,b,c);
+}
+static void *jit_BLER_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bler_u(jit,a,b,c);
+}
+static void *jit_BLEI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_blei_u(jit,a,b,c);
+}
+
+static void *jit_BGTR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bgtr(jit,a,b,c);
+}
+static void *jit_BGTI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bgti(jit,a,b,c);
+}
+static void *jit_BGTR_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bgtr_u(jit,a,b,c);
+}
+static void *jit_BGTI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bgti_u(jit,a,b,c);
+}
+
+static void *jit_BGER(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bger(jit,a,b,c);
+}
+static void *jit_BGEI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bgei(jit,a,b,c);
+}
+static void *jit_BGER_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bger_u(jit,a,b,c);
+}
+static void *jit_BGEI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bgei_u(jit,a,b,c);
+}
+
+static void*jit_BEQR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_beqr(jit,a,b,c);
+}
+static void*jit_BEQI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_beqi(jit,a,b,c);
+}
+
+static void*jit_BNER(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bner(jit,a,b,c);
+}
+static void*jit_BNEI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_bnei(jit,a,b,c);
+}
+
+static void *jit_LTR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ltr(jit,a,b,c);
+}
+static void *jit_LTI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_lti(jit,a,b,c);
+}
+static void *jit_LTR_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ltr_u(jit,a,b,c);
+}
+static void *jit_LTI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_lti_u(jit,a,b,c);
+}
+
+static void *jit_GTR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_gtr(jit,a,b,c);
+}
+static void *jit_GTI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_gti(jit,a,b,c);
+}
+static void *jit_GTR_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_gtr_u(jit,a,b,c);
+}
+static void *jit_GTI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_gti_u(jit,a,b,c);
+}
+
+static void *jit_GER(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ger(jit,a,b,c);
+}
+static void *jit_GEI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_gei(jit,a,b,c);
+}
+static void *jit_GER_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ger_u(jit,a,b,c);
+}
+static void *jit_GEI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_gei_u(jit,a,b,c);
+}
+
+static void *jit_LER(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ler(jit,a,b,c);
+}
+static void *jit_LEI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_lei(jit,a,b,c);
+}
+static void *jit_LER_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ler_u(jit,a,b,c);
+}
+static void *jit_LEI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_lei_u(jit,a,b,c);
+}
+
+static void *jit_EQR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_eqr(jit,a,b,c);
+}
+static void *jit_EQI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_eqi(jit,a,b,c);
+}
+
+static void *jit_NER(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ner(jit,a,b,c);
+}
+static void *jit_NEI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_nei(jit,a,b,c);
+}
+
+static void* jit_LDR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ldr(jit,a,b,c);
+}
+static void* jit_LDI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ldi(jit,a,b,c);
+}
+static void* jit_LDXR(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
+    return jit_ldxr(jit,a,b,c,d);
+}
+static void* jit_LDXI(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
+    return jit_ldxi(jit,a,b,c,d);
+}
+
+static void* jit_LDR_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ldr_u(jit,a,b,c);
+}
+static void* jit_LDI_U(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_ldi_u(jit,a,b,c);
+}
+static void* jit_LDXR_U(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
+    return jit_ldxr_u(jit,a,b,c,d);
+}
+static void* jit_LDXI_U(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
+    return jit_ldxi_u(jit,a,b,c,d);
+}
+
+static void* jit_STR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_str(jit,a,b,c);
+}
+static void* jit_STI(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_sti(jit,a,b,c);
+}
+
+static void* jit_STXR(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
+    return jit_stxr(jit,a,b,c,d);
+}
+static void* jit_STXI(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
+    return jit_stxi(jit,a,b,c,d);
+}
+
+static void* jit_FMOVR(void *jit,int64_t a,int64_t b) {
+    return jit_fmovr(jit,a,b);
+}
+static void* jit_FMOVI(void *jit,int64_t a,double b) {
+    return jit_fmovi(jit,a,b);
+}
+
+static void* jit_FADDR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_faddr(jit,a,b,c);
+}
+static void* jit_FADDI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_faddi(jit,a,b,c);
+}
+
+static void* jit_FSUBR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fsubr(jit,a,b,c);
+}
+static void* jit_FSUBI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fsubi(jit,a,b,c);
+}
+
+static void* jit_FMULR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fmulr(jit,a,b,c);
+}
+static void* jit_FMULI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fmuli(jit,a,b,c);
+}
+
+static void* jit_FDIVR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fdivr(jit,a,b,c);
+}
+static void* jit_FDIVI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fdivi(jit,a,b,c);
+}
+
+static void* jit_FNEGR(void *jit,int64_t a,int64_t b) {
+    return jit_fnegr(jit,a,b);
+}
+
+static void* jit_EXTR(void *jit,int64_t a,int64_t b) {
+    return jit_extr(jit,a,b);
+}
+static void* jit_TRUNCR(void *jit,int64_t a,int64_t b) {
+    return jit_truncr(jit,a,b);
+}
+static void* jit_FLOORR(void *jit,int64_t a,int64_t b) {
+    return jit_floorr(jit,a,b);
+}
+static void* jit_CEILR(void *jit,int64_t a,int64_t b) {
+    return jit_ceilr(jit,a,b);
+}
+static void* jit_ROUNDR(void *jit,int64_t a,int64_t b) {
+    return jit_roundr(jit,a,b);
+}
+
+static void* jit_FBLTR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fbltr(jit,a,b,c);
+}
+static void* jit_FBLTI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fblti(jit,a,b,c);
+}
+static void* jit_FBGTR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fbgtr(jit,a,b,c);
+}
+static void* jit_FBGTI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fbgti(jit,a,b,c);
+}
+
+static void* jit_FBLER(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fbler(jit,a,b,c);
+}
+static void* jit_FBLEI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fblei(jit,a,b,c);
+}
+static void* jit_FBGER(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fbger(jit,a,b,c);
+}
+static void* jit_FBGEI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fbgei(jit,a,b,c);
+}
+
+static void* jit_FBEQR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fbeqr(jit,a,b,c);
+}
+static void* jit_FBEQI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fbeqi(jit,a,b,c);
+}
+
+static void* jit_FBNER(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fbner(jit,a,b,c);
+}
+static void* jit_FBNEI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fbnei(jit,a,b,c);
+}
+
+static void* jit_FSTR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fstr(jit,a,b,c);
+}
+static void* jit_FSTI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fsti(jit,a,b,c);
+}
+static void* jit_FSTXR(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
+    return jit_fstxr(jit,a,b,c,d);
+}
+static void* jit_FSTXI(void *jit,int64_t a,int64_t b,int64_t c,double d) {
+    return jit_fstxi(jit,a,b,c,d);
+}
+
+static void* jit_FLDR(void *jit,int64_t a,int64_t b,int64_t c) {
+    return jit_fldr(jit,a,b,c);
+}
+static void* jit_FLDI(void *jit,int64_t a,int64_t b,double c) {
+    return jit_fldi(jit,a,b,c);
+}
+
+static void* jit_FLDXR(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
+    return jit_fldxr(jit,a,b,c,d);
+}
+static void* jit_FLDXI(void *jit,int64_t a,int64_t b,int64_t c,double d) {
+    return jit_fldxi(jit,a,b,c,d);
+}
+
+static void* jit_FPUTARGR(void *jit,int64_t a,int64_t b) {
+    return jit_fputargr(jit,a,b);
+}
+static void* jit_FPUTARGI(void *jit,int64_t a,double b) {
+    return jit_fputargi(jit,a,b);
+}
+
+static void* jit_FRETR(void *jit,int64_t a,int64_t b) {
+    return jit_fretr(jit,a,b);
+}
+static void* jit_FRETI(void *jit,int64_t a,double b) {
+    return jit_freti(jit,a,b);
+}
+static void* jit_FRETVAL(void *jit,int64_t a,int64_t b) {
+    return jit_fretval(jit,a,b);
+}
+
+static void *jit_REF_CODE(void *jit,int64_t a,int64_t b) {
+    return jit_ref_code(jit,a,b);
+}
+static void *jit_REF_DATA(void *jit,int64_t a,int64_t b) {
+    return jit_ref_data(jit,a,b);
+}
+static void *jit_TAINT_LABEL(void *jit,int64_t a) {
+    return jit_taint_label(jit,a);
+}
+static void *jit_END_ASM_BLK(void *jit) {
+    return jit_end_asm_blk(jit);
+}
+static void *jit_CODE_ALIGN(void *jit,int64_t a) {
+    return jit_code_align(jit,a);
+}
+static void *jit_CODE_ALIGN_FILL(void *jit,int64_t a,int64_t b) {
+    return jit_align_fill(jit,a,b);
+}
+static void *jit_DATA_STR(void *jit,void *a) {
+    jit_data_str(jit,a);
+    return NULL;
+}
+static void *jit_DATA_BYTE(void *jit,int64_t a) {
+    return jit_data_byte(jit,a);
+}
+static void *jit_DATA_WORD(void *jit,int64_t a) {
+    jit_data_word(jit,a);
+    return NULL;
+}
+static void *jit_DATA_DWORD(void *jit,int64_t a) {
+    jit_data_dword(jit,a);
+    return NULL;
+}
+static void *jit_DATA_QWORD(void *jit,int64_t a) {
+    jit_data_qword(jit,a);
+    return NULL;
+}
+
+static void *jit_DATA_REF_CODE(void *jit,int64_t a) {
+    return jit_data_ref_code(jit,a);
+}
+static void *jit_DATA_REF_DATA(void *jit,int64_t a) {
+    return jit_data_ref_data(jit,a);
+}
+static void *jit_DUMP_PTR(void *jit,void *a) {
+    return jit_dump_ptr(jit,a);
+}
+static void *jit_RELOCATION(void *jit,int64_t a,void *b) {
+    return jit_relocation(jit,a,b);
+}
 TOS_Fs Fs;
 void *GetFs() {
     return &Fs;
@@ -633,6 +1156,171 @@ void RegisterBuiltins() {
     CType *cfileptr =CreatePtrType(cfile);
     CType *wind =CreateClassForwardDecl(NULL, CreateDummyName("WINDOW"));
     CType *windp =CreatePtrType(wind);
+    //
+    CreateBuiltin(&jit_INIT,u0p,"jit_init",0,NULL);
+    CreateBuiltin(&jit_DUMP_OPS,u0,"jit_dump_ops",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_GENERATE_CODE,u0,"jit_generate_code",0,u8p,NULL);
+    CreateBuiltin(&jit_ANDR,u0p,"jit_andr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_ANDI,u0p,"jit_andi",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_R_FP,i64,"R_FP",0,NULL);
+    CreateBuiltin(&jit_BINSIZE,i64,"jit_bin_size",0,u0p,NULL);
+    CreateBuiltin(&jit_FR,i64,"jit_FR",0,i64,NULL);
+    CreateBuiltin(&jit_R,i64,"jit_R",0,i64,NULL);
+    CreateBuiltin(&jit_GET_LABEL,u0p,"jit_get_label",0,u0p,NULL);
+    CreateBuiltin(&jit_PROLOG,u0p,"jit_prolog",0,u0p,u8p,NULL);
+    CreateBuiltin(&jit_MOVR,u0p,"jit_movr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_MOVI,u0p,"jit_movi",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_JMPR,u0p,"jit_jmpr",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_JMPI,u0p,"jit_jmpi",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_PATCH,u0p,"jit_patch",0,u0p,u0p,NULL);
+    CreateBuiltin(&jit_PREPARE,u0p,"jit_prepare",0,u0p,NULL);
+    CreateBuiltin(&jit_PUTARGI,u0p,"jit_putargi",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_PUTARGR,u0p,"jit_putargr",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_CALL,u0p,"jit_call",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_CALLR,u0p,"jit_callr",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_DECLARE_ARG,u0p,"jit_declare_arg",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_RETR,u0p,"jit_retr",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_RETI,u0p,"jit_reti",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_RETVAL,u0p,"jit_retval",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_GETARG,u0p,"jit_getarg",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_ADDR,u0p,"jit_addr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_ADDI,u0p,"jit_addi",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_SUBR,u0p,"jit_subr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_SUBI,u0p,"jit_subi",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_NEGR,u0p,"jit_negr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_MULR,u0p,"jit_mulr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_MULI,u0p,"jit_muli",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_MULR_U,u0p,"jit_mulr_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_MULI_U,u0p,"jit_muli_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_DIVR,u0p,"jit_divr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_DIVI,u0p,"jit_divi",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_DIVR_U,u0p,"jit_divr_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_DIVI_U,u0p,"jit_divi_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_MODR,u0p,"jit_modr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_MODI,u0p,"jit_modi",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_MODR_U,u0p,"jit_modr_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_MODI_U,u0p,"jit_modi_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_ORR,u0p,"jit_orr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_ORI,u0p,"jit_ori",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_XORR,u0p,"jit_xorr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_XORI,u0p,"jit_xori",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LSHR,u0p,"jit_lshr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LSHI,u0p,"jit_lshi",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_RSHR,u0p,"jit_rshr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_RSHI,u0p,"jit_rshi",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_RSHR_U,u0p,"jit_rshr_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_RSHI_U,u0p,"jit_rshi_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_NOTR,u0p,"jit_notr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_BLTR,u0p,"jit_bltr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BLTI,u0p,"jit_blti",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BLTR_U,u0p,"jit_bltr_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BLTI_U,u0p,"jit_blti_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BLER,u0p,"jit_bler",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BLEI,u0p,"jit_blei",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BLER_U,u0p,"jit_bler_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BLEI_U,u0p,"jit_blei_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BGTR,u0p,"jit_bgtr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BGTI,u0p,"jit_bgti",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BGTR_U,u0p,"jit_bgtr_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BGTI_U,u0p,"jit_bgti_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BGER,u0p,"jit_bger",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BGEI,u0p,"jit_bgei",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BGER_U,u0p,"jit_bger_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BGEI_U,u0p,"jit_bgei_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BEQR,u0p,"jit_beqr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BEQI,u0p,"jit_beqi",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BNER,u0p,"jit_bner",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BNEI,u0p,"jit_bnei",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LTR,u0p,"jit_ltr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LTI,u0p,"jit_lti",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LTR_U,u0p,"jit_ltr_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LTI_U,u0p,"jit_lti_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_GTR,u0p,"jit_gtr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_GTI,u0p,"jit_gti",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_GTR_U,u0p,"jit_gtr_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_GTI_U,u0p,"jit_gti_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_GER,u0p,"jit_ger",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_GEI,u0p,"jit_gei",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_GER_U,u0p,"jit_ger_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_GEI_U,u0p,"jit_gei_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LER,u0p,"jit_ler",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LEI,u0p,"jit_lei",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LER_U,u0p,"jit_ler_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LEI_U,u0p,"jit_lei_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_EQR,u0p,"jit_eqr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_EQI,u0p,"jit_eqi",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_NER,u0p,"jit_ner",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_NEI,u0p,"jit_nei",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LDR,u0p,"jit_ldr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LDI,u0p,"jit_ldi",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LDXR,u0p,"jit_ldxr",0,u0p,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LDXI,u0p,"jit_ldxi",0,u0p,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LDR_U,u0p,"jit_ldr_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LDI_U,u0p,"jit_ldi_u",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LDXR_U,u0p,"jit_ldxr_u",0,u0p,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_LDXI_U,u0p,"jit_ldxi_u",0,u0p,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_STR,u0p,"jit_str",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_STI,u0p,"jit_sti",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_STXR,u0p,"jit_stxr",0,u0p,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_STXI,u0p,"jit_stxi",0,u0p,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FMOVR,u0p,"jit_fmovr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_FMOVI,u0p,"jit_fmovi",0,u0p,i64,f64,NULL);
+    CreateBuiltin(&jit_FADDR,u0p,"jit_faddr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FADDI,u0p,"jit_faddi",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FSUBR,u0p,"jit_fsubr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FSUBI,u0p,"jit_fsubi",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FMULR,u0p,"jit_fmulr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FMULI,u0p,"jit_fmuli",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FDIVR,u0p,"jit_fdivr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FDIVI,u0p,"jit_fdivi",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FNEGR,u0p,"jit_fnegr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_EXTR,u0p,"jit_extr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_TRUNCR,u0p,"jit_truncr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_FLOORR,u0p,"jit_floorr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_CEILR,u0p,"jit_ceilr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_ROUNDR,u0p,"jit_roundr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_FBLTR,u0p,"jit_fbltr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FBLTI,u0p,"jit_fblti",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FBGTR,u0p,"jit_fbgtr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FBGTI,u0p,"jit_fbgti",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FBLER,u0p,"jit_fbler",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FBLEI,u0p,"jit_fblei",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FBGER,u0p,"jit_fbger",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FBGEI,u0p,"jit_fbgei",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FBEQR,u0p,"jit_fbeqr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FBEQI,u0p,"jit_fbeqi",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FBEQR,u0p,"jit_fbeqr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FBEQI,u0p,"jit_fbeqi",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FBNER,u0p,"jit_fbner",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FBNEI,u0p,"jit_fbnei",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FSTR,u0p,"jit_fstr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FSTI,u0p,"jit_fsti",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FSTXR,u0p,"jit_fstxr",0,u0p,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FSTXI,u0p,"jit_fstxi",0,u0p,i64,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FLDR,u0p,"jit_fldr",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FLDI,u0p,"jit_fldi",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FLDXR,u0p,"jit_fldxr",0,u0p,i64,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_FLDXI,u0p,"jit_fldxi",0,u0p,i64,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FPUTARGR,u0p,"jit_fputargr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_FPUTARGI,u0p,"jit_fputargi",0,u0p,i64,f64,NULL);
+    CreateBuiltin(&jit_FRETR,u0p,"jit_fretr",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_FRETI,u0p,"jit_freti",0,u0p,i64,f64,NULL);
+    CreateBuiltin(&jit_FRETVAL,u0p,"jit_fretval",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_REF_CODE,u0p,"jit_ref_code",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_REF_DATA,u0p,"jit_ref_data",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_TAINT_LABEL,u0p,"jit_taint_label",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_END_ASM_BLK,u0p,"jit_end_asm_blk",0,u0p,NULL);
+    CreateBuiltin(&jit_CODE_ALIGN,u0p,"jit_code_align",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_CODE_ALIGN_FILL,u0p,"jit_code_align_fill",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_DATA_STR,u0p,"jit_data_str",0,u0p,u0p,NULL);
+    CreateBuiltin(&jit_DATA_BYTE,u0p,"jit_data_byte",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_DATA_WORD,u0p,"jit_data_word",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_DATA_DWORD,u0p,"jit_data_dword",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_DATA_QWORD,u0p,"jit_data_qword",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_DATA_REF_CODE,u0p,"jit_data_ref_code",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_DATA_REF_DATA,u0p,"jit_data_ref_data",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_DUMP_PTR,u0p,"jit_dump_ptr",0,u0p,u0p,NULL);
+    CreateBuiltin(&jit_RELOCATION,u0p,"jit_relocation",0,u0p,i64,u0p,NULL);
     //
     CreateBuiltin(&HC_CreateF64,u0p,"HC_CreateF64",0,f64,NULL);
     CreateBuiltin(&HC_CreateI64,u0p,"HC_CreateI64",0,i64,NULL);

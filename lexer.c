@@ -1592,6 +1592,7 @@ malformed:
             buffer[c]=LEXER_PEEK();
             LEXER_NEXT();
         }
+        buffer[c]=0;
         double d;
         sscanf(buffer,"%lf", &d);
         if(isf64)

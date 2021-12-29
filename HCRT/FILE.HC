@@ -60,10 +60,7 @@ static I64 __DirRecur(U8 *dir,U8 **retbuf,I64 max=1024) {
       U8 *buffer=MAlloc(StrLen(dir)+StrLen(ret[cnt])+1+1);
       I64 off=0;
       StrCpy(buffer+StrLen(buffer),dir);
-      if(!IsWindows())
-        StrCpy(buffer+StrLen(buffer),"/");
-      else
-        StrCpy(buffer+StrLen(buffer),"\\");
+      StrCpy(buffer+StrLen(buffer),"/");
       StrCpy(buffer+StrLen(buffer),ret[cnt]);
       I64 found2=__DirRecur(buffer,retbuf,max);
       found+=found2;
@@ -72,10 +69,7 @@ static I64 __DirRecur(U8 *dir,U8 **retbuf,I64 max=1024) {
       Free(buffer);
     } else {
       if(max-->=0) {
-        if(!IsWindows())
-            U8 *fmted=MStrPrint("%s/%s",dir,ret[cnt]);
-        else
-            fmted=MStrPrint("%s\\%s",dir,ret[cnt]);
+        U8 *fmted=MStrPrint("%s/%s",dir,ret[cnt]);
         found++,*retbuf++=fmted;
       }
     }
@@ -87,10 +81,12 @@ static I64 __DirRecur(U8 *dir,U8 **retbuf,I64 max=1024) {
   return found;
 }
 CDirEntry *FilesFind(U8 *mask,I64 flags=0) {
+  if(IsWindows) {
+    while(StrFirstOcc(mask,"\\"))
+      *StrFirstOcc(mask,"\\")='/';
+  }
   mask=StrNew(mask);
   U8 delim_chr='/';
-  if(IsWindows())
-  delim_chr='\\';
   //Find last unescaped "/"
   I64 idx=StrLen(mask);
   if(StrFirstOcc(mask,";"))
@@ -295,7 +291,6 @@ U0 Unzip(U8 *f,I64 flags=0) {
 }
 U0 Move(U8 *mask,U8 *to) {
   U8 delim='/';
-  if(IsWindows) delim='\\';
   CDirEntry *ents=FilesFind(mask);
   if(ents) {
     CDirEntry *orig=ents;
@@ -303,7 +298,6 @@ U0 Move(U8 *mask,U8 *to) {
     I64 ptr=StrLen(ents->name);
     while(--ptr>=0) if(ents->name[ptr]==delim) {ents->name[ptr]=0; break;}
     U8 *fn=MStrPrint("%s%c%s",to,delim,ents->name+ptr+1);
-    "%s\n",fn;
     __Move(ents->name,fn);
     Free(fn);
     if(ents=ents->next) goto loop;
