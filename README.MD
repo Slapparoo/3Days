@@ -1,7 +1,7 @@
 # Welcome to 3D,a HolyC compiler
 This compiler contains a bounds checker and a debugger,but in order to use these you will need to enable them at the command line by using "-d" for the debugger and "-b" for the bounds checker(which will also enable the debugger). It currently comes with a runtime with compression support,though the data structures used here are type-aligned so they are not compatible with native TempleOS archives. Press `TAB` to autocomplete. There is currently no assembler support(I would rather port to other architectures than hassle with assembler)
 
-This compiler is currently mostly a compiler,but it needs a better runtime. To get started,`#include "HolyEd/EDITOR.HC"` and use the goto-symbol function `Alt+c g or Ctrl-t` to explore the source.(you will need the compiler's source code for `HolyEd/EDITOR.HC`).
+This compiler is currently mostly a compiler,but it needs a better runtime. Take a peak at the runtime to get a good idea of what your working with. If something isnt in there,try adding it from TempleOS yourself and maybe share your port.
 
 There is a `Debian_pkg.sh` and `FreeBSD_pkg.sh` for building packages for those platforms. You can use `3Days.nsi` with NSIS to build an installer for windows.
 
@@ -9,10 +9,10 @@ There is a `Debian_pkg.sh` and `FreeBSD_pkg.sh` for building packages for those 
 Start the compiler with `-d`(or `-b` for bounds checking) and call `Debugger;`
 
 # Building
-You will need yasm,gnu bison,gcc and make and sdl2. Other than that all dependencies are included in `ext/`  A modified [Oregon trail port from TinkerOS ](https://github.com/tinkeros/OT1975) is provided in the source code. Do `make installer` to make an installer for linux via `ext/epm`. This will require fltk for a graphical installer.
+You will need yasm,gnu bison,gcc and make and sdl2. Other than that all dependencies are included in `ext/`  A modified [Oregon trail port from TinkerOS ](https://github.com/tinkeros/OT1975) is provided in the source code. Do `make package` on debian for a packaged deal. Likewise for FreeBSD do `make -f makefile.bsd package`. On windows do `make -f makefile.win installer.exe`(you will need NSIS to build the installer) .
 
 # Editor
-This comes with a barebones editor,you can run it using `#include "HolyEd/EDITOR.HC"` Press `alt+f` to access the file menu and `alt+c` to access the code menu(Which gives a fuzzy symbol select and compile check). If you are using windows terminal you may want to change the cursor shape to a block because the background is white
+This comes with a barebones editor,you can run it using `Ed("Filename.HC")` Press `alt+f` to access the file menu and `alt+c` to access the code menu(Which gives a fuzzy symbol select and compile check). If you are using windows terminal you may want to change the cursor shape to a block because the background is white. It operates on a "documet stack" and you pop the stack by pressing `ctrl+q`,so if you want to quit pop all of the stack items.
 ![Editor screenshot](ed_screenshot.png)
 
 # Features from TempleOS
@@ -102,6 +102,9 @@ You can contribute by adding to the runtime(see `runtime.c` and `HCRT/`).  Nice 
  - A Holy Bible API and such
  - Make a `Help` function.
 
+# Future!!!
+I am writing a HolyC parser in HolyC to complement the HCRT/LEXER.HC(which the compiler uses). So bugfixes in the current parser would be  nice but it a new parser will be rolled out soon.
+
 # Credits
  - https://github.com/martincohen/x64
  - https://github.com/ruimaciel/mropes
@@ -110,6 +113,5 @@ You can contribute by adding to the runtime(see `runtime.c` and `HCRT/`).  Nice 
  - https://github.com/rxi/vec
  - C_Unescaper(me nrootconauto@gmail.com)
  - https://github.com/argtable/argtable3
- - https://jimjag.github.io/epm/
  - https://pdcurses.org/
  - https://sourceforge.net/projects/mingweditline/
