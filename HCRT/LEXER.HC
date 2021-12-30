@@ -72,7 +72,7 @@ I64 LexGetChar(CCmpCtrl *cc) {
         cc->exe_stream=cc->exe_stream->last;
         if(cc->exe_stream) Free(cc->exe_stream->next);
     }
-    U8 *ptr,*src;
+    U8 *ptr,*src,*prompt,*cd;
     CLexFile *tmpf;
     if(!Btr(&cc->flags,CCf_USE_LAST_U16)) {
 lgc_start1:
@@ -102,7 +102,9 @@ lgc_done:
     }
     if(!cc->last_U16) {
         if(cc->flags&CCF_REPL_MODE) {
-            src=GetStr("HolyCC:>>> ");
+            prompt=MStrPrint("(%s):>>> ",cd=DirCur);
+            src=GetStr(prompt);
+            Free(prompt),Free(cd);
             LexIncludeStr(cc,"(nofile)",MStrPrint("%s\n",src),FALSE);
             Free(src);
             goto lgc_start1;

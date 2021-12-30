@@ -13,9 +13,9 @@ HCRT/HCRT.BIN: 3d.bootstrap.exe $(HCRT)
 main.bootstrap.obj: main.c
 	$(CC) $(CFLAGS) -c  main.c -g -o $@
 3d.bootstrap.exe:  main.bootstrap.obj $(B_OBJS)
-	$(CC) $(CFLAGS)   $^  -lm ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
+	$(CC) $(CFLAGS)   $^  -lShlwapi -lUserenv -lm ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
 3d_tests.exe: $(B_OBJS) tests.c
-	$(CC) $(CFLAGS)   $^  -lm  ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
+	$(CC) $(CFLAGS)   $^  -lShlwapi -lUserenv -lm  ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
 pdcurses.a:
 	cd ext/PDCurses-3.9/wincon && make CC=$(CC) && cp pdcurses.a ../../..
 HolyC.bootstrap.obj: HolyC.tab.c $(HEADERS)
@@ -66,7 +66,7 @@ OBJS := HolyC.obj vec.obj map.obj lexer.obj compile.obj jitlib-core.obj tosprn.o
 main.obj: main.c
 	$(CC) $(CFLAGS) -DBOOTSTRAPED -c  main.c -o $@
 3d.exe: $(OBJS) main.obj HCRT/HCRT.BIN
-	$(CC) $(CFLAGS) -DBOOTSTRAPED   $(OBJS) main.obj  -lm ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
+	$(CC) $(CFLAGS) -DBOOTSTRAPED   $(OBJS) main.obj  -lUserenv -lShlwapi -lm ext/wineditline-2.206/lib64/libedit_static.a ./SDL2.dll -o $@
 HolyC.obj: HolyC.tab.c $(HEADERS)
 	$(CC) $(CFLAGS) -DBOOTSTRAPED -c HolyC.tab.c -g -o $@
 HolyC.tab.c HolyC.tab.h: HolyC.y

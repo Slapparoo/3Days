@@ -19,6 +19,7 @@
 #ifdef TARGET_WIN32
 #include <windows.h>
 #include <fileapi.h>
+#include <shlwapi.h>
 #endif
 #include <curses.h>
 static void *jit_INIT() {
@@ -1003,20 +1004,59 @@ void CreateBinFile(char *bin,char *root) {
   }
   system(buffer);
 }
+#ifdef TARGET_WIN32
+static void EscapePathCat(char *buffer,char *path,DWORD  buf_sz) {
+#else
+static void EscapePathCat(char *buffer,char *path,size_t buf_sz) {
+#endif
+#ifdef TARGET_WIN32
+  char spaced[2048];
+  strcpy(spaced,path);
+  PathQuoteSpaces(spaced);
+  strcpy(buffer+strlen(buffer),spaced);
+  #else
+  //TODO escape for unix paths
+  strcpy(buffer+strlen(buffer),path);
+  #endif
+}
 void CreateTagsAndErrorsFiles(char *tags,char *errs,char *root) {
   char buffer[2048];
-  strcpy(buffer,CompilerPath);
+  buffer[0]=0;
+  #ifdef TARGET_WIN32
+  #else
+  EscapePathCat(buffer,CompilerPath,sizeof(buffer));
+  #endif
   strcat(buffer," -s");
   if(tags) {
-        sprintf(buffer+strlen(buffer)," -t %s ",tags);
+        sprintf(buffer+strlen(buffer)," -t ");
+        EscapePathCat(buffer,tags,sizeof(buffer));
   }
   if(errs) {
-        sprintf(buffer+strlen(buffer)," -e %s ",errs);
+        sprintf(buffer+strlen(buffer)," -e ");
+        EscapePathCat(buffer,errs,sizeof(buffer));
   }
   if(root) {
-      strcat(buffer,root);
+      sprintf(buffer+strlen(buffer)," ");
+      EscapePathCat(buffer,root,sizeof(buffer));
   }
+  #ifdef TARGET_WIN32
+  //https://www.codeproject.com/Articles/1842/A-newbie-s-elementary-guide-to-spawning-processes
+  SHELLEXECUTEINFO ShExecInfo = {0};
+  ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
+  ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+  ShExecInfo.hwnd = NULL;
+  ShExecInfo.lpVerb = NULL;
+  ShExecInfo.lpFile = CompilerPath;
+  ShExecInfo.lpParameters = buffer;
+  ShExecInfo.lpDirectory = NULL;
+  ShExecInfo.nShow = SW_HIDE;
+  ShExecInfo.hInstApp = NULL;
+  ShellExecuteEx(&ShExecInfo);
+  WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+  CloseHandle(ShExecInfo.hProcess);
+  #else
   system(buffer);
+  #endif
 }
 static void Test(int64_t a,int64_t b,int64_t c,int64_t d,int64_t e,int64_t f,int64_t  g) {
   printf("%lld,%lld,%lld,%lld,%lld,%lld,%lld\n",a,b,c,d,e,f,g);

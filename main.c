@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <libloaderapi.h>
 #include <fileapi.h>
+#include <userenv.h>
 #include <winnt.h>
 #define HCRT_INSTALLTED_DIR "\\HCRT\\HCRT.BIN"
 #endif
