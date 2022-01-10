@@ -62,7 +62,7 @@ void HC_CreateLexer() {
 AST *HC_LexItem() {
     CVariable *li=GetHCRTVar("LexItem");
     void* (*fp)(void* ctrl)=li->func->funcptr;
-    if(!HCSetJmp(EnterTry())) {
+    if(!HCSetJmp(EnterCTry())) {
       Lexer.lastToken=fp(Lexer.HCLexer);
       PopTryFrame();
     } else {

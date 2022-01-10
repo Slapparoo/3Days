@@ -270,7 +270,7 @@ void AssembleOpcode(AST* at, char* name, vec_AST_t operands) {
     vec_foreach(&operands, a, iter) {
       args[iter] = AST2X64Mode(a, NULL);
     }
-    struct ExceptFrame* exf = EnterTry();
+    struct ExceptFrame* exf = EnterCTry();
     int64_t sibo, immo;
 
     if (!HCSetJmp(exf)) {

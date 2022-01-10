@@ -140,7 +140,10 @@ struct jit_func_info {			// collection of information related to one function
 };
 typedef struct {
     int64_t offset;
-    double val;
+		union {
+			double val;
+			uint64_t hex;
+		};
 } jit_flt_rip_relloc;
 typedef vec_t(jit_flt_rip_relloc) vec_jit_flt_rip_relloc_t;
 struct jit {

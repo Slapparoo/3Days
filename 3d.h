@@ -870,6 +870,7 @@ typedef struct CDebugger {
      * It is used with next/fin to see if we have exited the function or not
      */
     long prevStackDepth;
+    long stackDepthAtThrow;
 } CDebugger;
 #ifdef BOOTSTRAPED
 extern CDebugger Debugger;
@@ -989,5 +990,7 @@ typedef struct ExceptFrame {
     ExceptBuf pad;
     struct ExceptFrame *parent;
     long callStackSize;
+    int isCRuntime:1;
 } ExceptFrame;
 extern ExceptFrame *curframe;
+ExceptFrame *EnterCTry();

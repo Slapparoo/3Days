@@ -46,7 +46,7 @@ void EnterDebugger() {
 }
 void DbgPrintVar(CType *type,void *ptr) {
     int code;
-    if(HCSetJmp(EnterTry())) {
+    if(HCSetJmp(EnterCTry())) {
         ARM_SIGNALS;
         if(code==SIGSEGV) {
             char *ts=TypeToString(type);

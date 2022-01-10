@@ -501,7 +501,7 @@ CVariable *LoadAOTFunction(FILE *f,int verbose,int flags) {
     v->func=TD_MALLOC(sizeof(CFunction));
     void * mem;
     #ifndef TARGET_WIN32
-    mem=mmap(NULL,code_size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_32BIT|MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    mem=mmap(NULL,code_size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     #else
     mem=VirtualAlloc(NULL,code_size,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
     #endif

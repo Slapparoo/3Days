@@ -1419,6 +1419,7 @@ U0 DrawLinumWithPad(CEditor *ed,I64 num,I64 barwidth) {
 #define ED_DRAW_MENUBAR 8
 #define ED_DRAW_DFT (ED_DRAW_LINUMS|ED_DRAW_MENUBAR)
 #define ED_DRAW_NO_RENDER 16
+#define ED_DRAW_GOTO_LINE 32
 U0 AddMenuBar(CEditor *ed,I64 active=-1);
 I64 DrawEditor(CEditor *ed,I64 flags=ED_DRAW_DFT ,U8 *dialogtxt=NULL,I64 mb_active=-1) {
     CLine *diagln=NULL;
@@ -1443,6 +1444,13 @@ I64 DrawEditor(CEditor *ed,I64 flags=ED_DRAW_DFT ,U8 *dialogtxt=NULL,I64 mb_acti
     } else if(flags&ED_DRAW_SEARCH) {
         ed->window->cur_cp=CP_LINUM;
         lnumtxt=MStrPrint("Search: ");
+        lnumlen=StrLen(lnumtxt);
+        ed->window->y=ed->window->x=0;
+        SDL_Print(ed->window,lnumtxt);
+        Free(lnumtxt);
+    } else if(flags&ED_DRAW_GOTO_LINE) {
+        ed->window->cur_cp=CP_LINUM;
+        lnumtxt=MStrPrint("Goto Line: ");
         lnumlen=StrLen(lnumtxt);
         ed->window->y=ed->window->x=0;
         SDL_Print(ed->window,lnumtxt);
@@ -1707,6 +1715,82 @@ U0 EdPageUp(CEditor *ed) {
     if(RopeLength(lline->text)>=ed->_curx) ed->curx=RopeLength(lline->text);
 }
 U0 FreeEditor(CEditor *ed);
+I64 GotoLine(CEditor *ed) {
+    I64 origy=ed->cury,origx=ed->curx;
+    I64 to_ln=0;
+    U8 *buf;
+    CEditor *sed=EditorNew();
+    goto resize;
+    loop:
+    I64 key=GetKey;
+    switch(key) {
+        case ERR:
+        goto loop;
+        case ED_KEY_RESIZE:
+        "RESIZE\n";
+        resize:
+        SDL_DrawWin(ed->window);
+        sed->window->begy=SDL_WinY(ed->window)-1;
+        goto mvsrncur;
+        case ED_KEY_UP:
+        goto mvsrncur;
+        case ED_KEY_DOWN:
+        goto mvsrncur;
+        case ED_KEY_CTRL_RIGHT:
+        EdWordRight(sed);
+        goto mvsrncur;
+        case ED_KEY_CTRL_LEFT:
+        EdWordLeft(sed);
+        goto mvsrncur;
+        case ED_KEY_LEFT:
+        EdLeft(sed);
+        goto mvsrncur;
+        case ED_KEY_RIGHT:
+        EdRight(sed);
+        goto mvsrncur;
+        case ED_KEY_BACKSPACE:
+        EdBackspace(sed);
+        goto mvsrncur;
+        case ED_KEY_REDRAW:
+        goto mvsrncur;
+        case 'q'&0x1f:
+        ed->cury=origy,ed->curx=origx;
+        FocusCursor(ed);
+        FreeEditor(sed);
+        DrawEditor(ed);
+        return ED_RET_OK;
+        break;
+        default:
+        I64 soff=GetLineOffset(sed, sed->cury)+sed->curx++;
+        U8 buffer[2]= {key,0};
+        EditorInsText(sed,buffer,soff,TRUE);
+        buf=Rope2Str(sed->lines->text);
+        to_ln=Str2I64(buf);
+        if(to_ln<0)
+            to_ln=0;
+        else if(to_ln>=ed->line_count)
+            to_ln=ed->line_count-1;
+        Free(buf);
+        if(key=='\n')
+            goto ex;
+        ed->cury=to_ln,ed->curx=0;
+        FocusCursor(ed);
+        mvsrncur:
+        DrawEditor(ed,ED_DRAW_DFT|ED_DRAW_NO_RENDER);
+        sed->window->y=SDL_WinY(ed->window)-1;
+        DrawEditor(sed,ED_DRAW_GOTO_LINE|ED_DRAW_NO_RENDER);
+        ed.window->cur_enabled=TRUE,sed.window->cur_enabled=TRUE;
+        SDL_DrawWin(ed.window,sed.window);
+        ed.window->cur_enabled=TRUE;
+        goto loop;
+    }
+    ex:
+    ed->cury=to_ln,ed->curx=0;
+    FocusCursor(ed);
+    FreeEditor(sed);
+    DrawEditor(ed);
+    return ED_RET_OK;
+}
 I64 EdSearch(CEditor *ed) {
     static U8 prevs[1024];
     CEditor *sed=EditorNew();
@@ -1749,6 +1833,11 @@ left:
         goto mvsrncur;
     case ED_KEY_DELETE: //TODO
         goto mvsrncur;
+    case 'q'&0x1f:
+        FocusCursor(ed);
+        FreeEditor(sed);
+        DrawEditor(ed);
+        return ED_RET_OK;
     default:
         if(key=='\n') {
             U8 *needle=Rope2Str(sed->lines->text); //Only one line
@@ -2057,6 +2146,7 @@ U0 AddMenuBar(CEditor *ed,I64 active=-1) {
         {"[C]opy",'c',&EdCopy},
         {"Cu[t]",'t',&EdCut},
         {"[P]aste",'p',&EdPaste},
+        {"[G]oto Line",'g',&GotoLine},
         {NULL,0,NULL},
     };
     CMenuEnt Code[]= {
@@ -2512,8 +2602,12 @@ loop:
     break;
       /**
        * [F]ile
+       * [E]dit
        * [C]ode
        */
+    case 'g'&0x1f:
+    GotoLine(ed);
+    goto mvsrncur;
     case 'x'&0x1f:
     U8 *clip=EdGetSelText(ed);
     EdDelSel(ed);
@@ -2692,6 +2786,8 @@ U0 Ed(U8 *fn) {
     OpenFile(fn,0);
     SDL_ExitScr;
 }
+
+
 
 
 

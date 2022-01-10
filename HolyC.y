@@ -1574,7 +1574,7 @@ static void __EvalExprNoComma(CFuncInfo *dummy1,AST *node,void *fp) {
         double f;
         int64_t i;
     } ret;
-    if(!HCSetJmp(EnterTry()))
+    if(!HCSetJmp(EnterCTry()))
     {
         if(bt->type==TYPE_F64) {
             ret.f=EvaluateF64(node);
@@ -1599,7 +1599,7 @@ static void __IsTrue(CFuncInfo *dummy1,AST *node,void *fp) {
   AST *retn =CreateReturn(node);
   CFunction *f=CompileAST(NULL,retn,args,C_AST_FRAME_OFF_DFT,0);
   int ret;
-  if(!HCSetJmp(EnterTry())) {
+  if(!HCSetJmp(EnterCTry())) {
     if(IsF64(rtype)) {
       ret=0!=((double(*)())f->funcptr)();
     } else if(IsIntegerType(rtype)) {
@@ -1635,7 +1635,7 @@ void DebugEvalExpr(void *frameptr,CFuncInfo *info,char *text) {
   CurFuncInfo=info;
   CurFramePtr=frameptr;
   RunPtr=&EvalDebugExpr;
-  if(!HCSetJmp(EnterTry())) {
+  if(!HCSetJmp(EnterCTry())) {
     yyparse();
     printf("\n");
     PopTryFrame();

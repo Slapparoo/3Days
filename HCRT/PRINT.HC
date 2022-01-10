@@ -491,7 +491,7 @@ sp_out_dec:
           do
           {
             tmp_buf[k++]=(m)(I64)%10+'0';
-            m/=10;
+            m=m(I64)/10;
             if (!m) break;
             if (!--comma_cnt)
             {
@@ -542,7 +542,7 @@ sp_out_comma_num:
           do
           {
             tmp_buf[k++]=(m)(I64)%10+'0';
-            m/=10;
+            m=m(I64)/10;
             if (!m) break;
           }
           while (k<TMP_BUF_LEN-SLOP);
@@ -657,7 +657,7 @@ sp_out_f:
             }
             else {
               tmp_buf[k++]=(m)(I64)%10+'0';
-                m/=10;
+                m=m(I64)/10;
             }
             if (!i) break;
           }
@@ -673,7 +673,7 @@ sp_out_f:
             }
             else {
               tmp_buf[k++]=(m)(I64)%10+'0';
-                m/=10;
+                m=m(I64)/10;
             }
           }
         }
@@ -691,7 +691,7 @@ sp_out_f:
             }
             else {
               tmp_buf[k++]=(m)(I64)%10+'0';
-                m/=10;
+                m=m(I64)/10;
             }
             if (!m) break;
             if (!--comma_cnt)
@@ -713,7 +713,7 @@ sp_out_f:
             }
             else {
               tmp_buf[k++]=(m)(I64)%10+'0';
-                m/=10;
+              m=m(I64)/10;
             }
             if (!m) break;
           }
@@ -915,7 +915,7 @@ sp_out_eng: //Engineering notation
             tmp_buf[k]= m&15 +'0';
             if (tmp_buf[k]>'9') tmp_buf[k]+='A'-0x3A;
             k++;
-            m>>=4;
+            m=m(U64)>>4;
             if (!m) break;
             if (!--comma_cnt)
             {
@@ -933,7 +933,7 @@ sp_out_eng: //Engineering notation
             tmp_buf[k]= m&15 +'0';
             if (tmp_buf[k]>'9') tmp_buf[k]+='A'-0x3A;
             k++;
-            m>>=4;
+            m=m(U64)>>4;
           }
           while (m && k<TMP_BUF_LEN-SLOP);
           goto sp_out_num;
@@ -950,7 +950,7 @@ sp_out_eng: //Engineering notation
             tmp_buf[k]= m&15 +'0';
             if (tmp_buf[k]>'9') tmp_buf[k]+='a'-0x3A;
             k++;
-            m>>=4;
+            m=m(U64)>>4;
             if (!m) break;
             if (!--comma_cnt)
             {
@@ -968,7 +968,7 @@ sp_out_eng: //Engineering notation
             tmp_buf[k]= m&15 +'0';
             if (tmp_buf[k]>'9') tmp_buf[k]+='a'-0x3A;
             k++;
-            m>>=4;
+            m=m(U64)>>4;
           }
           while (m && k<TMP_BUF_LEN-SLOP);
           goto sp_out_num;
@@ -984,7 +984,7 @@ sp_out_eng: //Engineering notation
           do
           {
             tmp_buf[k++]= m&1 +'0';
-            m>>=1;
+            m=m(U64)>>1;
             if (!m) break;
             if (!--comma_cnt)
             {
@@ -1000,7 +1000,7 @@ sp_out_eng: //Engineering notation
           do
           {
             tmp_buf[k++]= m&1 +'0';
-            m>>=1;
+            m=m(U64)>>1;
           }
           while (m && k<TMP_BUF_LEN-SLOP);
           goto sp_out_num;
@@ -1048,3 +1048,4 @@ U8 *MStrPrint(U8 *fmt,...)
   Free(buf);
   return res;
 }
+

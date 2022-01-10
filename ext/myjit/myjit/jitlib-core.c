@@ -13,7 +13,7 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License aint64_t with this library; if not, write to the Free Software
+ * License ain't with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 #include <stdio.h>
@@ -25,6 +25,7 @@
 #include "set.h"
 #ifdef TARGET_WIN32
 #include "memoryapi.h"
+#else
 #endif
 
 #ifdef JIT_ARCH_COMMON86
@@ -451,7 +452,8 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 
 	{
 		//These are used avoid repeat double values
-		vec_double_t values;
+		typedef vec_t(uint64_t) vec_uint64_t;
+		vec_uint64_t values;
 		vec_int_t offsets;
 		vec_init(&offsets);vec_init(&values);
 
@@ -460,16 +462,16 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 		jit_flt_rip_relloc frelloc;
 		vec_foreach(&jit->flt_rellocs,frelloc,fiter) {
 				long idx=0,foffset;
-				vec_find(&values, frelloc.val, idx);
+				vec_find(&values, frelloc.hex, idx);
 				if(idx==-1) {
 					if (jit->buf_capacity - (16+jit->ip - jit->buf) < MINIMAL_BUF_SPACE) jit_buf_expand(jit);
 					assert(((int64_t)(jit->ip-jit->buf))%16==0);
-					*(double*)(jit->ip)=frelloc.val;
-					vec_push(&values, frelloc.val);
+					*(uint64_t*)(jit->ip)=frelloc.hex;
+					vec_push(&values, frelloc.hex);
 					vec_push(&offsets, jit->ip-jit->buf);
 		    	jit->ip+=16;
 				}
-				vec_find(&values, frelloc.val, idx);
+				vec_find(&values, frelloc.hex, idx);
 				assert(idx!=-1);
 		    *(int32_t*)((char*)jit->buf+frelloc.offset)=offsets.data[idx]-frelloc.offset-4; //-4 offset points to displacement,so bytes is subtraced as RIP displacemnets are 32bit here
 		}
@@ -480,7 +482,7 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 	int code_size = jit->ip - jit->buf;
 	void * mem;
 	#ifndef TARGET_WIN32
-	mem=mmap(NULL,code_size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_32BIT|MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+	mem=mmap(NULL,code_size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
         #else
 	mem=VirtualAlloc(NULL,code_size,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
 	#endif
@@ -515,7 +517,6 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 	free_ops(jit_op_first(jit->ops));
 	free_labels(jit->labels);
 	struct jit oldj=*jit;
-	memset(jit, 0, sizeof(*jit));
 	jit->buf=oldj.buf;
 	jit->ip =oldj.ip;
 	jit->bin_size=pos;
@@ -571,5 +572,6 @@ void jit_free(struct jit * jit)
 	VirtualFree(jit->buf,0,MEM_RELEASE);
 #endif
   */
+	free_ops(jit_op_first(jit->ops));
 	JIT_FREE(jit);
 }

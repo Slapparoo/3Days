@@ -8,12 +8,21 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
+#ifndef MACOS
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_video.h>
 #include <SDL2/SDL_render.h>
 #include <SDL2/SDL_rect.h>
 #include <SDL2/SDL_clipboard.h>
 #include <SDL2/SDL_events.h>
+#else
+#include <SDL.h>
+#include <SDL_video.h>
+#include <SDL_render.h>
+#include <SDL_rect.h>
+#include <SDL_clipboard.h>
+#include <SDL_events.h>
+#endif
 #include <stddef.h>
 #include <stdalign.h>
 #ifdef TARGET_WIN32
@@ -454,41 +463,41 @@ static void* jit_FBNEI(void *jit,int64_t a,int64_t b,double c) {
 static void* jit_FSTR(void *jit,int64_t a,int64_t b,int64_t c) {
     return jit_fstr(jit,a,b,c);
 }
-static void* jit_FSTI(void *jit,int64_t a,int64_t b,double c) {
+static void* jit_FSTI(void *jit,int64_t a,int64_t b,int64_t c) {
     return jit_fsti(jit,a,b,c);
 }
 static void* jit_FSTXR(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
     return jit_fstxr(jit,a,b,c,d);
 }
-static void* jit_FSTXI(void *jit,int64_t a,int64_t b,int64_t c,double d) {
+static void* jit_FSTXI(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
     return jit_fstxi(jit,a,b,c,d);
 }
 
 static void* jit_FLDR(void *jit,int64_t a,int64_t b,int64_t c) {
     return jit_fldr(jit,a,b,c);
 }
-static void* jit_FLDI(void *jit,int64_t a,int64_t b,double c) {
+static void* jit_FLDI(void *jit,int64_t a,int64_t b,int64_t c) {
     return jit_fldi(jit,a,b,c);
 }
 
 static void* jit_FLDXR(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
     return jit_fldxr(jit,a,b,c,d);
 }
-static void* jit_FLDXI(void *jit,int64_t a,int64_t b,int64_t c,double d) {
+static void* jit_FLDXI(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
     return jit_fldxi(jit,a,b,c,d);
 }
 
 static void* jit_FPUTARGR(void *jit,int64_t a,int64_t b) {
     return jit_fputargr(jit,a,b);
 }
-static void* jit_FPUTARGI(void *jit,int64_t a,double b) {
+static void* jit_FPUTARGI(void *jit,double a,int64_t b) {
     return jit_fputargi(jit,a,b);
 }
 
 static void* jit_FRETR(void *jit,int64_t a,int64_t b) {
     return jit_fretr(jit,a,b);
 }
-static void* jit_FRETI(void *jit,int64_t a,double b) {
+static void* jit_FRETI(void *jit,double a,int64_t b) {
     return jit_freti(jit,a,b);
 }
 static void* jit_FRETVAL(void *jit,int64_t a,int64_t b) {
@@ -545,6 +554,9 @@ static void *jit_DUMP_PTR(void *jit,void *a) {
 static void *jit_RELOCATION(void *jit,int64_t a,void *b) {
     return jit_relocation(jit,a,b);
 }
+static void *jit_ALLOCAI(void *jit,int64_t a) {
+    return jit_allocai(jit,a);
+}
 TOS_Fs Fs;
 void *GetFs() {
     return &Fs;
@@ -553,6 +565,16 @@ ExceptFrame *curframe;
 ExceptFrame *EnterTry() {
     ExceptFrame *new=TD_MALLOC(sizeof(ExceptFrame));
     new->parent=curframe;
+    curframe=new;
+    #ifdef BOOTSTRAPED
+    new->callStackSize=Debugger.callStack.length;
+    #endif
+    return new;
+}
+ExceptFrame *EnterCTry() {
+    ExceptFrame *new=TD_MALLOC(sizeof(ExceptFrame));
+    new->parent=curframe;
+    new->isCRuntime=1;
     curframe=new;
     #ifdef BOOTSTRAPED
     new->callStackSize=Debugger.callStack.length;
@@ -707,14 +729,30 @@ static void GCollect() {
   GC_Disable();
 }
 void throw(uint64_t val) {
-    assert(curframe); //TODO
+    if(!curframe)
+      exit(0);
     Fs.except_ch=val;
-    Fs.catch_except=0;
+    if(curframe->isCRuntime)
+      Fs.catch_except=1;
+    else
+      Fs.catch_except=0;
     ExceptFrame old=*curframe;
     #ifdef BOOTSTRAPED
+    Debugger.stackDepthAtThrow=Debugger.callStack.length;
     vec_truncate(&Debugger.callStack,curframe->callStackSize);
     #endif
     PopTryFrame();
+    if(!curframe) {
+      fail:;
+      #ifdef BOOTSTRAPED
+      char code[9];
+      *(uint64_t*)code=Fs.except_ch;
+      code[8]=0;
+      fprintf(stderr,"Uncaught exception('%s'):\n",code);
+      Debugger.callStack.length=Debugger.stackDepthAtThrow;
+      Backtrace();
+      #endif
+    }
     HCLongJmp(old.pad);
 }
 /**
@@ -722,11 +760,24 @@ void throw(uint64_t val) {
  */
 static void ExitCatch() {
     if(!Fs.catch_except) {
-        assert(curframe); //TODO
+        if(!curframe) {
+          #ifdef BOOTSTRAPED
+          char code[9];
+          *(uint64_t*)code=Fs.except_ch;
+          code[8]=0;
+          fprintf(stderr,"Uncaught exception('%s'):\n",code);
+          Debugger.callStack.length=Debugger.stackDepthAtThrow;
+          Backtrace();
+          #endif
+        }
         ExceptFrame old=*curframe;
         PopTryFrame();
         HCLongJmp(old.pad);
     }
+    #ifdef BOOTSTRAPED
+    else
+      Debugger.stackDepthAtThrow=0;
+    #endif
 }
 static struct jit_op *CompileEnterTry() {
     jit_value fr=MoveGlobalPtrToReg(GetVariable("EnterTry"), 2);
@@ -833,6 +884,7 @@ static void CreateBuiltin(void *fptr,CType *rtype,char *name,int hasvargs,...) {
     var->func=func;
     var->type=ftype;
     var->name=strdup(name);
+    var->linkage.type=LINK_NORMAL;
     map_set(&Compiler.globals, name, var);
 }
 static AST *CreateDummyName(char *text) {
@@ -933,6 +985,13 @@ static char **__Dir(char *fn) {
 }
 static int64_t IsWindows() {
 #ifdef TARGET_WIN32
+    return 1;
+#else
+    return 0;
+#endif
+}
+static int64_t IsMac() {
+#ifdef MACOS
     return 1;
 #else
     return 0;
@@ -1160,6 +1219,18 @@ static double F64Shl(double a,int64_t b) {
 static double F64Shr(double a,int64_t b) {
     return (*(uint64_t*)&a)>>b;
 }
+static void ForeachFunc(void(*func)(const char *name,void *ptr)) {
+  map_iter_t iter=map_iter(&Compiler.globals);
+  const char *key;
+  while(key=map_next(&Compiler.globals,&iter)) {
+    CVariable *var=*map_get(&Compiler.globals, key);
+    if(var->isBuiltin&&GetGlobalPtr(var))
+      func(key,GetGlobalPtr(var));
+  }
+}
+static void jit_DATA_BYTES(struct jit *j,int64_t count,void *d) {
+  jit_data_bytes(j,count,d);
+}
 void RegisterBuiltins() {
     //Primitive types
   CType *u0 =CreatePrimType(TYPE_U0);
@@ -1197,6 +1268,18 @@ void RegisterBuiltins() {
     CType *wind =CreateClassForwardDecl(NULL, CreateDummyName("WINDOW"));
     CType *windp =CreatePtrType(wind);
     //
+    CreateMacroInt("JIT_SIGNED_NUM", JIT_SIGNED_NUM);
+    CreateMacroInt("JIT_UNSIGNED_NUM", JIT_UNSIGNED_NUM);
+    CreateMacroInt("JIT_FLOAT_NUM", JIT_FLOAT_NUM);
+    CreateMacroInt("JIT_PTR", JIT_PTR);
+
+    CreateBuiltin(&jit_disable_optimization,u0,"jit_disable_optimization",0,u0p,i64,NULL);
+    CreateBuiltin(&jit_enable_optimization,u0,"jit_enable_optimization",0,u0p,i64,NULL);
+    CreateMacroInt("JIT_OPT_ALL",JIT_OPT_ALL);
+    CreateMacroInt("JIT_OPT_JOIN_ADDMUL",JIT_OPT_JOIN_ADDMUL);
+    CreateMacroInt("JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS",JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS);
+    CreateMacroInt("JIT_OPT_OMIT_FRAME_PTR",JIT_OPT_OMIT_FRAME_PTR);
+    CreateBuiltin(&ForeachFunc, u0, "ForeachFuncInTable", 0, u0p,NULL);
     CreateBuiltin(&jit_INIT,u0p,"jit_init",0,NULL);
     CreateBuiltin(&jit_DUMP_OPS,u0,"jit_dump_ops",0,u0p,i64,NULL);
     CreateBuiltin(&jit_GENERATE_CODE,u0,"jit_generate_code",0,u8p,NULL);
@@ -1205,6 +1288,7 @@ void RegisterBuiltins() {
     CreateBuiltin(&jit_R_FP,i64,"R_FP",0,NULL);
     CreateBuiltin(&jit_BINSIZE,i64,"jit_bin_size",0,u0p,NULL);
     CreateBuiltin(&jit_FR,i64,"jit_FR",0,i64,NULL);
+    CreateBuiltin(&jit_ALLOCAI,i64,"jit_allocai",0,u0p,i64,NULL);
     CreateBuiltin(&jit_R,i64,"jit_R",0,i64,NULL);
     CreateBuiltin(&jit_GET_LABEL,u0p,"jit_get_label",0,u0p,NULL);
     CreateBuiltin(&jit_PROLOG,u0p,"jit_prolog",0,u0p,u8p,NULL);
@@ -1218,11 +1302,11 @@ void RegisterBuiltins() {
     CreateBuiltin(&jit_PUTARGR,u0p,"jit_putargr",0,u0p,i64,NULL);
     CreateBuiltin(&jit_CALL,u0p,"jit_call",0,u0p,i64,NULL);
     CreateBuiltin(&jit_CALLR,u0p,"jit_callr",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_DECLARE_ARG,u0p,"jit_declare_arg",0,u0p,i64,i64,NULL);
     CreateBuiltin(&jit_RETR,u0p,"jit_retr",0,u0p,i64,NULL);
     CreateBuiltin(&jit_RETI,u0p,"jit_reti",0,u0p,i64,NULL);
     CreateBuiltin(&jit_RETVAL,u0p,"jit_retval",0,u0p,i64,NULL);
     CreateBuiltin(&jit_GETARG,u0p,"jit_getarg",0,u0p,i64,i64,NULL);
+    CreateBuiltin(&jit_DECLARE_ARG,u0p,"jit_declare_arg",0,u0p,i64,i64,NULL);
     CreateBuiltin(&jit_ADDR,u0p,"jit_addr",0,u0p,i64,i64,i64,NULL);
     CreateBuiltin(&jit_ADDI,u0p,"jit_addi",0,u0p,i64,i64,i64,NULL);
     CreateBuiltin(&jit_SUBR,u0p,"jit_subr",0,u0p,i64,i64,i64,NULL);
@@ -1270,7 +1354,7 @@ void RegisterBuiltins() {
     CreateBuiltin(&jit_BEQR,u0p,"jit_beqr",0,u0p,i64,i64,i64,NULL);
     CreateBuiltin(&jit_BEQI,u0p,"jit_beqi",0,u0p,i64,i64,i64,NULL);
     CreateBuiltin(&jit_BNER,u0p,"jit_bner",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BNEI,u0p,"jit_bnei",0,u0p,i64,i64,i64,NULL);
+    CreateBuiltin(&jit_BNEI,u0p,"jit_bnei",0,u0p,i64,i64,i64,NULL); //HERE
     CreateBuiltin(&jit_LTR,u0p,"jit_ltr",0,u0p,i64,i64,i64,NULL);
     CreateBuiltin(&jit_LTI,u0p,"jit_lti",0,u0p,i64,i64,i64,NULL);
     CreateBuiltin(&jit_LTR_U,u0p,"jit_ltr_u",0,u0p,i64,i64,i64,NULL);
@@ -1338,11 +1422,11 @@ void RegisterBuiltins() {
     CreateBuiltin(&jit_FSTXR,u0p,"jit_fstxr",0,u0p,i64,i64,i64,i64,NULL);
     CreateBuiltin(&jit_FSTXI,u0p,"jit_fstxi",0,u0p,i64,i64,i64,f64,NULL);
     CreateBuiltin(&jit_FLDR,u0p,"jit_fldr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FLDI,u0p,"jit_fldi",0,u0p,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FLDI,u0p,"jit_fldi",0,u0p,i64,i64,i64,NULL);
     CreateBuiltin(&jit_FLDXR,u0p,"jit_fldxr",0,u0p,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FLDXI,u0p,"jit_fldxi",0,u0p,i64,i64,i64,f64,NULL);
+    CreateBuiltin(&jit_FLDXI,u0p,"jit_fldxi",0,u0p,i64,i64,i64,i64,NULL);
     CreateBuiltin(&jit_FPUTARGR,u0p,"jit_fputargr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_FPUTARGI,u0p,"jit_fputargi",0,u0p,i64,f64,NULL);
+    CreateBuiltin(&jit_FPUTARGI,u0p,"jit_fputargi",0,u0p,f64,i64,NULL);
     CreateBuiltin(&jit_FRETR,u0p,"jit_fretr",0,u0p,i64,i64,NULL);
     CreateBuiltin(&jit_FRETI,u0p,"jit_freti",0,u0p,i64,f64,NULL);
     CreateBuiltin(&jit_FRETVAL,u0p,"jit_fretval",0,u0p,i64,i64,NULL);
@@ -1361,6 +1445,7 @@ void RegisterBuiltins() {
     CreateBuiltin(&jit_DATA_REF_DATA,u0p,"jit_data_ref_data",0,u0p,i64,NULL);
     CreateBuiltin(&jit_DUMP_PTR,u0p,"jit_dump_ptr",0,u0p,u0p,NULL);
     CreateBuiltin(&jit_RELOCATION,u0p,"jit_relocation",0,u0p,i64,u0p,NULL);
+    CreateBuiltin(&jit_DATA_BYTES,u8p,"jit_data_bytes",0,u8p,i64,u0p,NULL);
     //
     CreateBuiltin(&HC_CreateF64,u0p,"HC_CreateF64",0,f64,NULL);
     CreateBuiltin(&HC_CreateI64,u0p,"HC_CreateI64",0,i64,NULL);
@@ -1446,6 +1531,7 @@ void RegisterBuiltins() {
     CreateBuiltin(&abort, u0, "abort",0,NULL);
     CreateBuiltin(&__Dir, u8pp, "__Dir",0,u8p,NULL);
     CreateBuiltin(&IsWindows, i64, "IsWindows",0,NULL);
+    CreateBuiltin(&IsMac, i64, "IsMac",0,NULL);
     CreateBuiltin(&MStrPrint, u8p, "MStrPrint",1,u8p,NULL);
     CreateBuiltin(&StreamPrint, u0, "StreamPrint",1,u8p,NULL);
     CreateBuiltin(&memset, u0p, "MemSet",0,u8p,u8,i64,NULL);
@@ -1669,6 +1755,7 @@ CreateMacroInt("ALT_Z",ALT_Z);
         ADD_PRIM_MEMBER(sdlevent_t,SDL_Event,type);
         {
             CreateMacroInt("SDL_WINDOWEVENT",SDL_WINDOWEVENT);
+            CreateMacroInt("SDL_WINDOWEVENT_RESIZED",SDL_WINDOWEVENT_RESIZED);
             CType *sdlevent_wind_t=IMPORT_CLASS_WO_MEMBERS(SDL_WindowEvent);
             ADD_UPRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,type);
             ADD_UPRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,timestamp);

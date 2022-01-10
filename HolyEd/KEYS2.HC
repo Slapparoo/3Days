@@ -278,6 +278,14 @@ I64 ALT_KEY(U8 chr) {return ToUpper(chr)+256;}
 #define SDL_SCANCODE_KBDILLUMUP 0x118
 #define SDL_SCANCODE_EJECT 0x119
 #define SDL_SCANCODE_SLEEP 0x11A
+
+if(IsMac) {
+	I64 vKMOD_ALT=KMOD_ALT;
+	I64 vKMOD_CTRL= KMOD_GUI;
+} else {
+	vKMOD_ALT=KMOD_ALT;
+	vKMOD_CTRL=KMOD_CTRL;
+}
 U8 ibuffer[129];
 I64 ibufferi=0;
 I64 GetKey() {
@@ -291,6 +299,8 @@ I64 GetKey() {
     SDL_WaitEvent(&e);
     switch(e.type) {
         case SDL_WINDOWEVENT: {
+            if(e.window.event==SDL_WINDOWEVENT_RESIZED)
+                return ED_KEY_RESIZE;
             return ED_KEY_REDRAW;
         }
         case SDL_KEYDOWN:
@@ -299,51 +309,51 @@ I64 GetKey() {
             case SDL_SCANCODE_TAB: return '\t';
             case SDL_SCANCODE_RETURN: return '\n';
             case SDL_SCANCODE_BACKSPACE:
- 	    if(e.key.keysym.mod&KMOD_CTRL) {
+ 	    if(e.key.keysym.mod&vKMOD_CTRL) {
                 return ED_KEY_CTRL_BACKSPACE;
             } else
                 return ED_KEY_BACKSPACE;
             case SDL_SCANCODE_A...SDL_SCANCODE_Z:
-            if(e.key.keysym.mod&KMOD_ALT) {
+            if(e.key.keysym.mod&vKMOD_ALT) {
                 SDL_FlushEvent(SDL_TEXTINPUT);
                 return ALT_KEY(sc-SDL_SCANCODE_A+'a');
-            } else if(e.key.keysym.mod&KMOD_CTRL) {
+            } else if(e.key.keysym.mod&vKMOD_CTRL) {
                 SDL_FlushEvent(SDL_TEXTINPUT);
                 return(sc-SDL_SCANCODE_A+'a')&0x1f;
             }
             //Leave it to text input
             break;
             case SDL_SCANCODE_LEFT:
-            if(e.key.keysym.mod&KMOD_ALT) {
+            if(e.key.keysym.mod&vKMOD_ALT) {
                 return ED_KEY_CTRL_LEFT;
-            } else if(e.key.keysym.mod&KMOD_CTRL) {
+            } else if(e.key.keysym.mod&vKMOD_CTRL) {
                 return ED_KEY_CTRL_LEFT;
             } else if(e.key.keysym.mod&KMOD_SHIFT) {
                 return ED_KEY_SHIFT_LEFT;
             }
             return ED_KEY_LEFT;
             case SDL_SCANCODE_RIGHT:
-            if(e.key.keysym.mod&KMOD_ALT) {
+            if(e.key.keysym.mod&vKMOD_ALT) {
                 return ED_KEY_CTRL_RIGHT;
-            } else if(e.key.keysym.mod&KMOD_CTRL) {
+            } else if(e.key.keysym.mod&vKMOD_CTRL) {
                 return ED_KEY_CTRL_RIGHT;
             } else if(e.key.keysym.mod&KMOD_SHIFT) {
                 return ED_KEY_SHIFT_RIGHT;
             }
             return ED_KEY_RIGHT;
             case SDL_SCANCODE_UP:
-            if(e.key.keysym.mod&KMOD_ALT) {
+            if(e.key.keysym.mod&vKMOD_ALT) {
                 return ED_KEY_CTRL_UP;
-            } else if(e.key.keysym.mod&KMOD_CTRL) {
+            } else if(e.key.keysym.mod&vKMOD_CTRL) {
                 return ED_KEY_CTRL_UP;
             } else if(e.key.keysym.mod&KMOD_SHIFT) {
                 return ED_KEY_SHIFT_UP;
             }
             return ED_KEY_UP;
             case SDL_SCANCODE_DOWN:
-            if(e.key.keysym.mod&KMOD_ALT) {
+            if(e.key.keysym.mod&vKMOD_ALT) {
                 return ED_KEY_CTRL_DOWN;
-            } else if(e.key.keysym.mod&KMOD_CTRL) {
+            } else if(e.key.keysym.mod&vKMOD_CTRL) {
                 return ED_KEY_CTRL_DOWN;
             } else if(e.key.keysym.mod&KMOD_SHIFT) {
                 return ED_KEY_SHIFT_DOWN;
@@ -367,3 +377,4 @@ I64 GetKey() {
     }
     return ERR;
 }
+

@@ -32,31 +32,17 @@ U0 HashAdd(CHash* tmp, CHashTable* t) {
     t->body[hash & t->mask] = tmp;
     return;
   }
-
-  CHash dummy;
-  dummy.next = bucket;
-  CHash* prev = &dummy;
-loop:
-
-  if (!bucket) goto insafter;
-
-  I64 cmp = StrCmp(tmp->str, bucket->str);
-
-  if (cmp > 0) {
-    prev = bucket;
-    bucket = bucket->next;
-    goto loop;
-  } else if (cmp < 0) {
-    goto insafter;
+  CHash *prev=NULL;
+  for(;bucket;bucket=bucket->next) {
+    if(!StrCmp(bucket->str,tmp->str)) {
+      tmp->next=bucket->next;
+      if(prev) prev->next=tmp;
+      else t->body[hash & t->mask] = tmp;
+      return;
+    }
+    prev=bucket;
   }
-
-insafter:
-  tmp->next = prev->next;
-  prev->next = tmp;
-
-  if (prev == &dummy)
-    t->body[hash & t->mask] = tmp;
-
+  prev->next=tmp;
   return;
 }
 CHash* HashFind(U8* needle, CHashTable* table) {
@@ -94,3 +80,4 @@ loop:
   Free(table->body);
   Free(table);
 }
+

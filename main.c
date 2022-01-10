@@ -262,7 +262,7 @@ set:
             #ifdef TARGET_WIN32
             HANDLE h=AddVectoredExceptionHandler(1,VectorHandler);
             #endif
-            if(HCSetJmp(EnterTry())) {
+            if(HCSetJmp(EnterCTry())) {
               err:
                 #ifdef TARGET_WIN32
                 RemoveVectoredExceptionHandler(h);

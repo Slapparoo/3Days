@@ -40,8 +40,8 @@ rope.bootstrap.obj: ext/mropes/src/rope.c
 		$(CC) $(CFLAGS) -c ext/mropes/src/rope.c -g -o $@
 at3.bootstrap.obj: ext/argtable3/argtable3.c
 	$(CC) $(CFLAGS) -c ext/argtable3/argtable3.c -g -o $@
-rl.bootstrap.obj: rl.c  $(HEADERS)
-	$(CC) $(CFLAGS) -c rl.c -g -o $@
+rl.bootstrap.obj: rl.win.c  $(HEADERS)
+	$(CC) $(CFLAGS) -c rl.win.c -g -o $@
 rt.bootstrap.obj: runtime.c  $(HEADERS)
 	$(CC) $(CFLAGS) -c runtime.c -g -o $@
 debugger.bootstrap.obj: debugger.c  $(HEADERS)
@@ -89,8 +89,8 @@ rope.obj: ext/mropes/src/rope.c
 		$(CC) $(CFLAGS) -DBOOTSTRAPED -c ext/mropes/src/rope.c -g -o $@
 at3.obj: ext/argtable3/argtable3.c
 	$(CC) $(CFLAGS) -DBOOTSTRAPED -c ext/argtable3/argtable3.c -g -o $@
-rl.obj: rl.c  $(HEADERS)
-	$(CC) $(CFLAGS) -DBOOTSTRAPED -c rl.c -g -o $@
+rl.obj: rl.win.c  $(HEADERS)
+	$(CC) $(CFLAGS) -DBOOTSTRAPED -c rl.win.c -g -o $@
 rt.obj: runtime.c  $(HEADERS)
 	$(CC) $(CFLAGS) -DBOOTSTRAPED -c runtime.c -g -o $@
 debugger.obj: debugger.c  $(HEADERS)

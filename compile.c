@@ -1295,7 +1295,7 @@ remext:
 static void __AddFunctionVar(AST *name,CType *type,CFunction *func) {
     CType *bt=BaseType(type);
     CVariable *var=TD_CALLOC(1,sizeof(CVariable));
-    var->isFunc=bt->type==TYPE_FUNC;
+    var->isFunc=1,bt->type==TYPE_FUNC;
     assert(var->isFunc);
     var->name=strdup(name->name);
     var->func=func;
@@ -2694,7 +2694,10 @@ static jit_value MoveValueToIntRegIfNeeded(CValue v,int r) {
         CType *deref =DerrefedType(v.var->type);
         //Arrays are flat
         if(deref->type!=TYPE_ARRAY&&deref->type!=TYPE_ARRAY_REF) {
-            if(TypeIsSigned(deref))
+            if(IsF64(deref)) {
+                MoveValueToFltRegIfNeeded(v,0);
+                jit_truncr(Compiler.JIT, R(r), FR(0));
+            } else if(TypeIsSigned(deref))
                 jit_ldr(Compiler.JIT, R(r), value, TypeSize(deref));
             else
                 jit_ldr_u(Compiler.JIT, R(r), value, TypeSize(deref));
@@ -2738,8 +2741,13 @@ static jit_value MoveValueToFltRegIfNeeded(CValue v,int r) {
     }
     case VALUE_INDIR_VAR: {
         CValue varv AF_VALUE=VALUE_VAR(v.var);
-        jit_value value=MoveValueToIntRegIfNeeded(varv,1);
-        jit_fldr(Compiler.JIT, FR(r), value,8);
+        if(IsF64(DerrefedType(v.var->type))) {
+          jit_value value=MoveValueToIntRegIfNeeded(varv,1);
+          jit_fldr(Compiler.JIT, FR(r), value,8);
+        } else {
+          jit_value value=MoveValueToIntRegIfNeeded(v,1);
+          jit_extr(Compiler.JIT, FR(r), value);
+        }
         return FR(r);
     }
     default:

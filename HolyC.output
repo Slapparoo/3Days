@@ -50,7 +50,7 @@ Grammar
 
    18 opc_operands: opc_operand
    19             | opc_operands COMMA opc_operand
-   20             | %empty
+   20             | ε
 
    21 opcode: OPCODE opc_operands
 
@@ -91,7 +91,7 @@ Grammar
    48      | LASTCLASS
    49      | NAME
 
-   50 _callargs: %empty
+   50 _callargs: ε
    51          | expr
 
    52 callargs: callargs COMMA _callargs
@@ -218,7 +218,7 @@ Grammar
 
   148 cbody: cbody cdecl SEMI
   149      | cbody primtype0 SEMI
-  150      | %empty
+  150      | ε
 
   151 _cheader: CLASS
 
@@ -253,7 +253,7 @@ Grammar
 
   168 vardecltail: namewptrs
 
-  169 __ptrcount: %empty
+  169 __ptrcount: ε
   170           | MUL
   171           | MUL MUL
   172           | MUL MUL MUL
@@ -278,7 +278,7 @@ Grammar
 
   186 funcargs: single_decl
   187         | funcargs COMMA single_decl
-  188         | %empty
+  188         | ε
 
   189 linkage: EXTERN
   190        | IMPORT
@@ -306,7 +306,7 @@ Grammar
   210       | cstmt
 
   211 expr_opt: expr_comma
-  212         | %empty
+  212         | ε
 
   213 loop_header: WHILE LEFT_PAREN expr_comma RIGHT_PAREN
   214            | FOR LEFT_PAREN expr_opt SEMI expr_opt SEMI expr_opt RIGHT_PAREN
@@ -371,7 +371,7 @@ Grammar
   260 scope: LEFT_CURLY stmts RIGHT_CURLY
   261      | LEFT_CURLY RIGHT_CURLY
 
-  262 global_stmts: %empty
+  262 global_stmts: ε
   263             | global_stmts ocstmt
 
   264 global_stmt: global_stmts
@@ -870,7 +870,7 @@ Nonterminals, with rules where they appear
 
 State 0
 
-    0 $accept: . global_stmt $end
+    0 $accept: • global_stmt $end
 
     EVAL_NOCOMMA  shift, and go to state 1
     EXE           shift, and go to state 2
@@ -885,7 +885,7 @@ State 0
 
 State 1
 
-  267 global_stmt: EVAL_NOCOMMA . expr
+  267 global_stmt: EVAL_NOCOMMA • expr
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -928,7 +928,7 @@ State 1
 
 State 2
 
-  265 global_stmt: EXE . scope
+  265 global_stmt: EXE • scope
 
     LEFT_CURLY  shift, and go to state 43
 
@@ -937,7 +937,7 @@ State 2
 
 State 3
 
-  266 global_stmt: EVAL . expr_comma
+  266 global_stmt: EVAL • expr_comma
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -981,7 +981,7 @@ State 3
 
 State 4
 
-  268 global_stmt: DBG . expr_comma
+  268 global_stmt: DBG • expr_comma
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1025,8 +1025,8 @@ State 4
 
 State 5
 
-  263 global_stmts: global_stmts . ocstmt
-  264 global_stmt: global_stmts .
+  263 global_stmts: global_stmts • ocstmt
+  264 global_stmt: global_stmts •
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1116,38 +1116,38 @@ State 5
 
 State 6
 
-    0 $accept: global_stmt . $end
+    0 $accept: global_stmt • $end
 
     $end  shift, and go to state 94
 
 
 State 7
 
-   46 expr0: CHAR .
+   46 expr0: CHAR •
 
     $default  reduce using rule 46 (expr0)
 
 
 State 8
 
-   45 expr0: INT .
+   45 expr0: INT •
 
     $default  reduce using rule 45 (expr0)
 
 
 State 9
 
-   44 expr0: FLOAT .
+   44 expr0: FLOAT •
 
     $default  reduce using rule 44 (expr0)
 
 
 State 10
 
-   72 expr3: SIZEOF . NAME
-   73      | SIZEOF . sizeof_type
-   74      | SIZEOF . LEFT_PAREN expr_comma RIGHT_PAREN
-   75      | SIZEOF . LEFT_PAREN sizeof_type RIGHT_PAREN
+   72 expr3: SIZEOF • NAME
+   73      | SIZEOF • sizeof_type
+   74      | SIZEOF • LEFT_PAREN expr_comma RIGHT_PAREN
+   75      | SIZEOF • LEFT_PAREN sizeof_type RIGHT_PAREN
 
     LEFT_PAREN  shift, and go to state 95
     NAME        shift, and go to state 96
@@ -1167,7 +1167,7 @@ State 10
 
 State 11
 
-   82 expr3: LNOT . expr3
+   82 expr3: LNOT • expr3
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1197,7 +1197,7 @@ State 11
 
 State 12
 
-   83 expr3: BNOT . expr3
+   83 expr3: BNOT • expr3
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1227,7 +1227,7 @@ State 12
 
 State 13
 
-   77 expr3: MUL . expr3
+   77 expr3: MUL • expr3
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1257,7 +1257,7 @@ State 13
 
 State 14
 
-   76 expr3: BAND . expr3
+   76 expr3: BAND • expr3
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1287,7 +1287,7 @@ State 14
 
 State 15
 
-   80 expr3: ADD . expr3
+   80 expr3: ADD • expr3
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1317,7 +1317,7 @@ State 15
 
 State 16
 
-   81 expr3: SUB . expr3
+   81 expr3: SUB • expr3
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1347,14 +1347,14 @@ State 16
 
 State 17
 
-   48 expr0: LASTCLASS .
+   48 expr0: LASTCLASS •
 
     $default  reduce using rule 48 (expr0)
 
 
 State 18
 
-   55 expr1: LEFT_PAREN . expr_comma RIGHT_PAREN
+   55 expr1: LEFT_PAREN • expr_comma RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1398,7 +1398,7 @@ State 18
 
 State 19
 
-   79 expr3: INC . expr3
+   79 expr3: INC • expr3
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1428,7 +1428,7 @@ State 19
 
 State 20
 
-   78 expr3: DEC . expr3
+   78 expr3: DEC • expr3
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1458,22 +1458,22 @@ State 20
 
 State 21
 
-   49 expr0: NAME .
+   49 expr0: NAME •
 
     $default  reduce using rule 49 (expr0)
 
 
 State 22
 
-  271 str: STRING .
+  271 str: STRING •
 
     $default  reduce using rule 271 (str)
 
 
 State 23
 
-   57 expr2: TYPENAME . DOT NAME
-   58      | TYPENAME . ARROW NAME
+   57 expr2: TYPENAME • DOT NAME
+   58      | TYPENAME • ARROW NAME
 
     DOT    shift, and go to state 111
     ARROW  shift, and go to state 112
@@ -1481,8 +1481,8 @@ State 23
 
 State 24
 
-   42 expr0: DOUBLE_AT . NAME
-   43      | DOUBLE_AT . INT
+   42 expr0: DOUBLE_AT • NAME
+   43      | DOUBLE_AT • INT
 
     INT   shift, and go to state 113
     NAME  shift, and go to state 114
@@ -1490,31 +1490,31 @@ State 24
 
 State 25
 
-   54 expr1: expr0 .
+   54 expr1: expr0 •
 
     $default  reduce using rule 54 (expr1)
 
 
 State 26
 
-   56 expr2: expr1 .
+   56 expr2: expr1 •
 
     $default  reduce using rule 56 (expr2)
 
 
 State 27
 
-   59 expr2: expr2 . DOT NAME
-   60      | expr2 . ARROW NAME
-   61      | expr2 . LEFT_SQAURE expr_comma RIGHT_SQAURE
-   62      | expr2 . DEC
-   63      | expr2 . INC
-   64      | expr2 . LEFT_PAREN callargs RIGHT_PAREN
-   65      | expr2 . LEFT_PAREN primtype0 RIGHT_PAREN
-   66      | expr2 . LEFT_PAREN primtype0 MUL RIGHT_PAREN
-   67      | expr2 . LEFT_PAREN primtype0 MUL MUL RIGHT_PAREN
-   68      | expr2 . LEFT_PAREN primtype0 MUL MUL MUL RIGHT_PAREN
-   71 expr3: expr2 .
+   59 expr2: expr2 • DOT NAME
+   60      | expr2 • ARROW NAME
+   61      | expr2 • LEFT_SQAURE expr_comma RIGHT_SQAURE
+   62      | expr2 • DEC
+   63      | expr2 • INC
+   64      | expr2 • LEFT_PAREN callargs RIGHT_PAREN
+   65      | expr2 • LEFT_PAREN primtype0 RIGHT_PAREN
+   66      | expr2 • LEFT_PAREN primtype0 MUL RIGHT_PAREN
+   67      | expr2 • LEFT_PAREN primtype0 MUL MUL RIGHT_PAREN
+   68      | expr2 • LEFT_PAREN primtype0 MUL MUL MUL RIGHT_PAREN
+   71 expr3: expr2 •
 
     DOT          shift, and go to state 115
     ARROW        shift, and go to state 116
@@ -1528,17 +1528,17 @@ State 27
 
 State 28
 
-   84 expr4: expr3 .
+   84 expr4: expr3 •
 
     $default  reduce using rule 84 (expr4)
 
 
 State 29
 
-   85 expr4: expr4 . POW expr4
-   86      | expr4 . SHL expr4
-   87      | expr4 . SHR expr4
-   88 expr4_5: expr4 .
+   85 expr4: expr4 • POW expr4
+   86      | expr4 • SHL expr4
+   87      | expr4 • SHR expr4
+   88 expr4_5: expr4 •
 
     POW  shift, and go to state 121
     SHL  shift, and go to state 122
@@ -1549,10 +1549,10 @@ State 29
 
 State 30
 
-   89 expr4_5: expr4_5 . MUL expr4_5
-   90        | expr4_5 . DIV expr4_5
-   91        | expr4_5 . MOD expr4_5
-   92 expr5: expr4_5 .
+   89 expr4_5: expr4_5 • MUL expr4_5
+   90        | expr4_5 • DIV expr4_5
+   91        | expr4_5 • MOD expr4_5
+   92 expr5: expr4_5 •
 
     MUL  shift, and go to state 124
     DIV  shift, and go to state 125
@@ -1563,8 +1563,8 @@ State 30
 
 State 31
 
-   93 expr5: expr5 . BAND expr5
-   94 expr6: expr5 .
+   93 expr5: expr5 • BAND expr5
+   94 expr6: expr5 •
 
     BAND  shift, and go to state 127
 
@@ -1573,8 +1573,8 @@ State 31
 
 State 32
 
-   95 expr6: expr6 . BXOR expr6
-   96 expr7: expr6 .
+   95 expr6: expr6 • BXOR expr6
+   96 expr7: expr6 •
 
     BXOR  shift, and go to state 128
 
@@ -1583,8 +1583,8 @@ State 32
 
 State 33
 
-   97 expr7: expr7 . BOR expr7
-   98 expr8: expr7 .
+   97 expr7: expr7 • BOR expr7
+   98 expr8: expr7 •
 
     BOR  shift, and go to state 129
 
@@ -1593,9 +1593,9 @@ State 33
 
 State 34
 
-   99 expr8: expr8 . ADD expr8
-  100      | expr8 . SUB expr8
-  101 expr9: expr8 .
+   99 expr8: expr8 • ADD expr8
+  100      | expr8 • SUB expr8
+  101 expr9: expr8 •
 
     ADD  shift, and go to state 130
     SUB  shift, and go to state 131
@@ -1605,11 +1605,11 @@ State 34
 
 State 35
 
-  102 expr9: expr9 . LT expr9
-  103      | expr9 . GT expr9
-  104      | expr9 . LE expr9
-  105      | expr9 . GE expr9
-  106 expr10: expr9 .
+  102 expr9: expr9 • LT expr9
+  103      | expr9 • GT expr9
+  104      | expr9 • LE expr9
+  105      | expr9 • GE expr9
+  106 expr10: expr9 •
 
     LT  shift, and go to state 132
     GT  shift, and go to state 133
@@ -1621,9 +1621,9 @@ State 35
 
 State 36
 
-  107 expr10: expr10 . EQ expr10
-  108       | expr10 . NE expr10
-  109 expr11: expr10 .
+  107 expr10: expr10 • EQ expr10
+  108       | expr10 • NE expr10
+  109 expr11: expr10 •
 
     NE  shift, and go to state 136
     EQ  shift, and go to state 137
@@ -1633,8 +1633,8 @@ State 36
 
 State 37
 
-  110 expr11: expr11 . LAND expr11
-  111 expr12: expr11 .
+  110 expr11: expr11 • LAND expr11
+  111 expr12: expr11 •
 
     LAND  shift, and go to state 138
 
@@ -1643,8 +1643,8 @@ State 37
 
 State 38
 
-  112 expr12: expr12 . LXOR expr12
-  113 expr13: expr12 .
+  112 expr12: expr12 • LXOR expr12
+  113 expr13: expr12 •
 
     LXOR  shift, and go to state 139
 
@@ -1653,8 +1653,8 @@ State 38
 
 State 39
 
-  114 expr13: expr13 . LOR expr13
-  115 expr14: expr13 .
+  114 expr13: expr13 • LOR expr13
+  115 expr14: expr13 •
 
     LOR  shift, and go to state 140
 
@@ -1663,18 +1663,18 @@ State 39
 
 State 40
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
-  127 expr: expr14 .
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
+  127 expr: expr14 •
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -1693,15 +1693,15 @@ State 40
 
 State 41
 
-  267 global_stmt: EVAL_NOCOMMA expr .
+  267 global_stmt: EVAL_NOCOMMA expr •
 
     $default  reduce using rule 267 (global_stmt)
 
 
 State 42
 
-   47 expr0: str .
-  272 str: str . STRING
+   47 expr0: str •
+  272 str: str • STRING
 
     STRING  shift, and go to state 152
 
@@ -1710,8 +1710,8 @@ State 42
 
 State 43
 
-  260 scope: LEFT_CURLY . stmts RIGHT_CURLY
-  261      | LEFT_CURLY . RIGHT_CURLY
+  260 scope: LEFT_CURLY • stmts RIGHT_CURLY
+  261      | LEFT_CURLY • RIGHT_CURLY
 
     CHAR         shift, and go to state 7
     INT          shift, and go to state 8
@@ -1801,22 +1801,22 @@ State 43
 
 State 44
 
-  265 global_stmt: EXE scope .
+  265 global_stmt: EXE scope •
 
     $default  reduce using rule 265 (global_stmt)
 
 
 State 45
 
-  129 expr_comma: expr .
+  129 expr_comma: expr •
 
     $default  reduce using rule 129 (expr_comma)
 
 
 State 46
 
-  128 expr_comma: expr_comma . COMMA expr
-  266 global_stmt: EVAL expr_comma .
+  128 expr_comma: expr_comma • COMMA expr
+  266 global_stmt: EVAL expr_comma •
 
     COMMA  shift, and go to state 156
 
@@ -1825,8 +1825,8 @@ State 46
 
 State 47
 
-  128 expr_comma: expr_comma . COMMA expr
-  268 global_stmt: DBG expr_comma .
+  128 expr_comma: expr_comma • COMMA expr
+  268 global_stmt: DBG expr_comma •
 
     COMMA  shift, and go to state 156
 
@@ -1835,7 +1835,7 @@ State 47
 
 State 48
 
-  163 tryblock: TRY . scope CATCH scope
+  163 tryblock: TRY • scope CATCH scope
 
     LEFT_CURLY  shift, and go to state 43
 
@@ -1844,8 +1844,8 @@ State 48
 
 State 49
 
-   49 expr0: NAME .
-  253 simple_stmt: NAME . COLON
+   49 expr0: NAME •
+  253 simple_stmt: NAME • COLON
 
     COLON  shift, and go to state 158
 
@@ -1854,21 +1854,21 @@ State 49
 
 State 50
 
-  250 simple_stmt: SEMI .
+  250 simple_stmt: SEMI •
 
     $default  reduce using rule 250 (simple_stmt)
 
 
 State 51
 
-  215 ifcl: IF . LEFT_PAREN expr_comma RIGHT_PAREN
+  215 ifcl: IF • LEFT_PAREN expr_comma RIGHT_PAREN
 
     LEFT_PAREN  shift, and go to state 159
 
 
 State 52
 
-  222 dostmt: DO . ocstmt WHILE LEFT_PAREN expr_comma RIGHT_PAREN
+  222 dostmt: DO • ocstmt WHILE LEFT_PAREN expr_comma RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -1956,22 +1956,22 @@ State 52
 
 State 53
 
-  213 loop_header: WHILE . LEFT_PAREN expr_comma RIGHT_PAREN
+  213 loop_header: WHILE • LEFT_PAREN expr_comma RIGHT_PAREN
 
     LEFT_PAREN  shift, and go to state 161
 
 
 State 54
 
-  214 loop_header: FOR . LEFT_PAREN expr_opt SEMI expr_opt SEMI expr_opt RIGHT_PAREN
+  214 loop_header: FOR • LEFT_PAREN expr_opt SEMI expr_opt SEMI expr_opt RIGHT_PAREN
 
     LEFT_PAREN  shift, and go to state 162
 
 
 State 55
 
-  193 linkage: EXTERN2 . NAME
-  195        | EXTERN2 . TYPENAME
+  193 linkage: EXTERN2 • NAME
+  195        | EXTERN2 • TYPENAME
 
     NAME      shift, and go to state 163
     TYPENAME  shift, and go to state 164
@@ -1979,22 +1979,22 @@ State 55
 
 State 56
 
-  189 linkage: EXTERN .
+  189 linkage: EXTERN •
 
     $default  reduce using rule 189 (linkage)
 
 
 State 57
 
-  190 linkage: IMPORT .
+  190 linkage: IMPORT •
 
     $default  reduce using rule 190 (linkage)
 
 
 State 58
 
-  194 linkage: IMPORT2 . NAME
-  196        | IMPORT2 . TYPENAME
+  194 linkage: IMPORT2 • NAME
+  196        | IMPORT2 • TYPENAME
 
     NAME      shift, and go to state 165
     TYPENAME  shift, and go to state 166
@@ -2002,23 +2002,23 @@ State 58
 
 State 59
 
-  192 linkage: STATIC .
+  192 linkage: STATIC •
 
     $default  reduce using rule 192 (linkage)
 
 
 State 60
 
-  191 linkage: PUBLIC .
+  191 linkage: PUBLIC •
 
     $default  reduce using rule 191 (linkage)
 
 
 State 61
 
-  151 _cheader: CLASS .
-  153         | CLASS . NAME
-  155         | CLASS . TYPENAME
+  151 _cheader: CLASS •
+  153         | CLASS • NAME
+  155         | CLASS • TYPENAME
 
     NAME      shift, and go to state 167
     TYPENAME  shift, and go to state 168
@@ -2028,9 +2028,9 @@ State 61
 
 State 62
 
-  152 _uheader: UNION .
-  154         | UNION . NAME
-  156         | UNION . TYPENAME
+  152 _uheader: UNION •
+  154         | UNION • NAME
+  156         | UNION • TYPENAME
 
     NAME      shift, and go to state 169
     TYPENAME  shift, and go to state 170
@@ -2040,15 +2040,15 @@ State 62
 
 State 63
 
-  249 simple_stmt: BREAK . SEMI
+  249 simple_stmt: BREAK • SEMI
 
     SEMI  shift, and go to state 171
 
 
 State 64
 
-  251 simple_stmt: RET . expr_comma SEMI
-  252            | RET . SEMI
+  251 simple_stmt: RET • expr_comma SEMI
+  252            | RET • SEMI
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -2093,24 +2093,24 @@ State 64
 
 State 65
 
-  244 simple_stmt: GOTO . NAME SEMI
+  244 simple_stmt: GOTO • NAME SEMI
 
     NAME  shift, and go to state 174
 
 
 State 66
 
-  232 swit: SWITCH . LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY swit_body RIGHT_CURLY
-  233     | SWITCH . LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY RIGHT_CURLY
+  232 swit: SWITCH • LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY swit_body RIGHT_CURLY
+  233     | SWITCH • LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY RIGHT_CURLY
 
     LEFT_PAREN  shift, and go to state 175
 
 
 State 67
 
-   57 expr2: TYPENAME . DOT NAME
-   58      | TYPENAME . ARROW NAME
-  130 primtype0: TYPENAME .
+   57 expr2: TYPENAME • DOT NAME
+   58      | TYPENAME • ARROW NAME
+  130 primtype0: TYPENAME •
 
     DOT    shift, and go to state 111
     ARROW  shift, and go to state 112
@@ -2120,7 +2120,7 @@ State 67
 
 State 68
 
-   21 opcode: OPCODE . opc_operands
+   21 opcode: OPCODE • opc_operands
 
     CHAR         shift, and go to state 176
     INT          shift, and go to state 177
@@ -2173,30 +2173,30 @@ State 68
 
 State 69
 
-   38 asm_blk: ASM . LEFT_CURLY RIGHT_CURLY
-   41        | ASM . LEFT_CURLY asm_blk_stmts RIGHT_CURLY
+   38 asm_blk: ASM • LEFT_CURLY RIGHT_CURLY
+   41        | ASM • LEFT_CURLY asm_blk_stmts RIGHT_CURLY
 
     LEFT_CURLY  shift, and go to state 217
 
 
 State 70
 
-  235 opcodes: opcode . SEMI
+  235 opcodes: opcode • SEMI
 
     SEMI  shift, and go to state 218
 
 
 State 71
 
-  240 simple_stmt: asm_blk .
+  240 simple_stmt: asm_blk •
 
     $default  reduce using rule 240 (simple_stmt)
 
 
 State 72
 
-  128 expr_comma: expr_comma . COMMA expr
-  246 simple_stmt: expr_comma . SEMI
+  128 expr_comma: expr_comma • COMMA expr
+  246 simple_stmt: expr_comma • SEMI
 
     COMMA  shift, and go to state 156
     SEMI   shift, and go to state 219
@@ -2204,16 +2204,16 @@ State 72
 
 State 73
 
-  133 primtype0: primtype0 . _union
-  134          | primtype0 . _class
-  185 multi_decl: primtype0 . vardecltails
-  197 func: primtype0 . namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI
-  198     | primtype0 . namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
-  199     | primtype0 . namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI
-  203     | primtype0 . namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope
-  204     | primtype0 . namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
-  205     | primtype0 . namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope
-  254 simple_stmt: primtype0 . SEMI
+  133 primtype0: primtype0 • _union
+  134          | primtype0 • _class
+  185 multi_decl: primtype0 • vardecltails
+  197 func: primtype0 • namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI
+  198     | primtype0 • namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
+  199     | primtype0 • namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI
+  203     | primtype0 • namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope
+  204     | primtype0 • namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
+  205     | primtype0 • namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope
+  254 simple_stmt: primtype0 • SEMI
 
     MUL    shift, and go to state 220
     NAME   shift, and go to state 221
@@ -2238,8 +2238,8 @@ State 73
 
 State 74
 
-  157 cheader: _cheader .
-  159        | _cheader . COLON TYPENAME
+  157 cheader: _cheader •
+  159        | _cheader • COLON TYPENAME
 
     COLON  shift, and go to state 230
 
@@ -2248,8 +2248,8 @@ State 74
 
 State 75
 
-  158 uheader: _uheader .
-  160        | _uheader . COLON TYPENAME
+  158 uheader: _uheader •
+  160        | _uheader • COLON TYPENAME
 
     COLON  shift, and go to state 231
 
@@ -2258,8 +2258,8 @@ State 75
 
 State 76
 
-  161 _class: cheader . LEFT_CURLY cbody RIGHT_CURLY
-  237 simple_stmt: cheader . SEMI
+  161 _class: cheader • LEFT_CURLY cbody RIGHT_CURLY
+  237 simple_stmt: cheader • SEMI
 
     SEMI        shift, and go to state 232
     LEFT_CURLY  shift, and go to state 233
@@ -2267,8 +2267,8 @@ State 76
 
 State 77
 
-  162 _union: uheader . LEFT_CURLY cbody RIGHT_CURLY
-  238 simple_stmt: uheader . SEMI
+  162 _union: uheader • LEFT_CURLY cbody RIGHT_CURLY
+  238 simple_stmt: uheader • SEMI
 
     SEMI        shift, and go to state 234
     LEFT_CURLY  shift, and go to state 235
@@ -2276,43 +2276,43 @@ State 77
 
 State 78
 
-  131 primtype0: _class .
+  131 primtype0: _class •
 
     $default  reduce using rule 131 (primtype0)
 
 
 State 79
 
-  132 primtype0: _union .
+  132 primtype0: _union •
 
     $default  reduce using rule 132 (primtype0)
 
 
 State 80
 
-  234 simple_stmt: tryblock .
+  234 simple_stmt: tryblock •
 
     $default  reduce using rule 234 (simple_stmt)
 
 
 State 81
 
-  241 simple_stmt: multi_decl . SEMI
+  241 simple_stmt: multi_decl • SEMI
 
     SEMI  shift, and go to state 236
 
 
 State 82
 
-  200 func: linkage . primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI
-  201     | linkage . primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
-  202     | linkage . primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI
-  206     | linkage . primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope
-  207     | linkage . primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
-  208     | linkage . primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope
-  242 simple_stmt: linkage . multi_decl SEMI
-  255            | linkage . UNION NAME SEMI
-  256            | linkage . CLASS NAME SEMI
+  200 func: linkage • primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI
+  201     | linkage • primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
+  202     | linkage • primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI
+  206     | linkage • primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope
+  207     | linkage • primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
+  208     | linkage • primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope
+  242 simple_stmt: linkage • multi_decl SEMI
+  255            | linkage • UNION NAME SEMI
+  256            | linkage • CLASS NAME SEMI
 
     CLASS     shift, and go to state 237
     UNION     shift, and go to state 238
@@ -2330,22 +2330,22 @@ State 82
 
 State 83
 
-  243 simple_stmt: func .
+  243 simple_stmt: func •
 
     $default  reduce using rule 243 (simple_stmt)
 
 
 State 84
 
-  263 global_stmts: global_stmts ocstmt .
+  263 global_stmts: global_stmts ocstmt •
 
     $default  reduce using rule 263 (global_stmts)
 
 
 State 85
 
-  218 ostmt: loop_header . ostmt
-  221 cstmt: loop_header . cstmt
+  218 ostmt: loop_header • ostmt
+  221 cstmt: loop_header • cstmt
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -2432,9 +2432,9 @@ State 85
 
 State 86
 
-  216 ostmt: ifcl . ocstmt
-  217      | ifcl . cstmt ELSE ostmt
-  220 cstmt: ifcl . cstmt ELSE cstmt
+  216 ostmt: ifcl • ocstmt
+  217      | ifcl • cstmt ELSE ostmt
+  220 cstmt: ifcl • cstmt ELSE cstmt
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -2522,43 +2522,43 @@ State 86
 
 State 87
 
-  209 ocstmt: ostmt .
+  209 ocstmt: ostmt •
 
     $default  reduce using rule 209 (ocstmt)
 
 
 State 88
 
-  210 ocstmt: cstmt .
+  210 ocstmt: cstmt •
 
     $default  reduce using rule 210 (ocstmt)
 
 
 State 89
 
-  245 simple_stmt: dostmt . SEMI
+  245 simple_stmt: dostmt • SEMI
 
     SEMI  shift, and go to state 245
 
 
 State 90
 
-  247 simple_stmt: swit .
+  247 simple_stmt: swit •
 
     $default  reduce using rule 247 (simple_stmt)
 
 
 State 91
 
-  219 cstmt: simple_stmt .
+  219 cstmt: simple_stmt •
 
     $default  reduce using rule 219 (cstmt)
 
 
 State 92
 
-  236 opcodes: opcodes . opcode SEMI
-  239 simple_stmt: opcodes .
+  236 opcodes: opcodes • opcode SEMI
+  239 simple_stmt: opcodes •
 
     OPCODE  shift, and go to state 68
 
@@ -2570,22 +2570,22 @@ State 92
 
 State 93
 
-  248 simple_stmt: scope .
+  248 simple_stmt: scope •
 
     $default  reduce using rule 248 (simple_stmt)
 
 
 State 94
 
-    0 $accept: global_stmt $end .
+    0 $accept: global_stmt $end •
 
     $default  accept
 
 
 State 95
 
-   74 expr3: SIZEOF LEFT_PAREN . expr_comma RIGHT_PAREN
-   75      | SIZEOF LEFT_PAREN . sizeof_type RIGHT_PAREN
+   74 expr3: SIZEOF LEFT_PAREN • expr_comma RIGHT_PAREN
+   75      | SIZEOF LEFT_PAREN • sizeof_type RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -2639,22 +2639,22 @@ State 95
 
 State 96
 
-   72 expr3: SIZEOF NAME .
+   72 expr3: SIZEOF NAME •
 
     $default  reduce using rule 72 (expr3)
 
 
 State 97
 
-  130 primtype0: TYPENAME .
+  130 primtype0: TYPENAME •
 
     $default  reduce using rule 130 (primtype0)
 
 
 State 98
 
-   70 sizeof_type: sizeof_type . MUL
-   73 expr3: SIZEOF sizeof_type .
+   70 sizeof_type: sizeof_type • MUL
+   73 expr3: SIZEOF sizeof_type •
 
     MUL  shift, and go to state 249
 
@@ -2663,9 +2663,9 @@ State 98
 
 State 99
 
-   69 sizeof_type: primtype0 .
-  133 primtype0: primtype0 . _union
-  134          | primtype0 . _class
+   69 sizeof_type: primtype0 •
+  133 primtype0: primtype0 • _union
+  134          | primtype0 • _class
 
     CLASS  shift, and go to state 61
     UNION  shift, and go to state 62
@@ -2682,64 +2682,64 @@ State 99
 
 State 100
 
-  161 _class: cheader . LEFT_CURLY cbody RIGHT_CURLY
+  161 _class: cheader • LEFT_CURLY cbody RIGHT_CURLY
 
     LEFT_CURLY  shift, and go to state 233
 
 
 State 101
 
-  162 _union: uheader . LEFT_CURLY cbody RIGHT_CURLY
+  162 _union: uheader • LEFT_CURLY cbody RIGHT_CURLY
 
     LEFT_CURLY  shift, and go to state 235
 
 
 State 102
 
-   82 expr3: LNOT expr3 .
+   82 expr3: LNOT expr3 •
 
     $default  reduce using rule 82 (expr3)
 
 
 State 103
 
-   83 expr3: BNOT expr3 .
+   83 expr3: BNOT expr3 •
 
     $default  reduce using rule 83 (expr3)
 
 
 State 104
 
-   77 expr3: MUL expr3 .
+   77 expr3: MUL expr3 •
 
     $default  reduce using rule 77 (expr3)
 
 
 State 105
 
-   76 expr3: BAND expr3 .
+   76 expr3: BAND expr3 •
 
     $default  reduce using rule 76 (expr3)
 
 
 State 106
 
-   80 expr3: ADD expr3 .
+   80 expr3: ADD expr3 •
 
     $default  reduce using rule 80 (expr3)
 
 
 State 107
 
-   81 expr3: SUB expr3 .
+   81 expr3: SUB expr3 •
 
     $default  reduce using rule 81 (expr3)
 
 
 State 108
 
-   55 expr1: LEFT_PAREN expr_comma . RIGHT_PAREN
-  128 expr_comma: expr_comma . COMMA expr
+   55 expr1: LEFT_PAREN expr_comma • RIGHT_PAREN
+  128 expr_comma: expr_comma • COMMA expr
 
     COMMA        shift, and go to state 156
     RIGHT_PAREN  shift, and go to state 250
@@ -2747,67 +2747,67 @@ State 108
 
 State 109
 
-   79 expr3: INC expr3 .
+   79 expr3: INC expr3 •
 
     $default  reduce using rule 79 (expr3)
 
 
 State 110
 
-   78 expr3: DEC expr3 .
+   78 expr3: DEC expr3 •
 
     $default  reduce using rule 78 (expr3)
 
 
 State 111
 
-   57 expr2: TYPENAME DOT . NAME
+   57 expr2: TYPENAME DOT • NAME
 
     NAME  shift, and go to state 251
 
 
 State 112
 
-   58 expr2: TYPENAME ARROW . NAME
+   58 expr2: TYPENAME ARROW • NAME
 
     NAME  shift, and go to state 252
 
 
 State 113
 
-   43 expr0: DOUBLE_AT INT .
+   43 expr0: DOUBLE_AT INT •
 
     $default  reduce using rule 43 (expr0)
 
 
 State 114
 
-   42 expr0: DOUBLE_AT NAME .
+   42 expr0: DOUBLE_AT NAME •
 
     $default  reduce using rule 42 (expr0)
 
 
 State 115
 
-   59 expr2: expr2 DOT . NAME
+   59 expr2: expr2 DOT • NAME
 
     NAME  shift, and go to state 253
 
 
 State 116
 
-   60 expr2: expr2 ARROW . NAME
+   60 expr2: expr2 ARROW • NAME
 
     NAME  shift, and go to state 254
 
 
 State 117
 
-   64 expr2: expr2 LEFT_PAREN . callargs RIGHT_PAREN
-   65      | expr2 LEFT_PAREN . primtype0 RIGHT_PAREN
-   66      | expr2 LEFT_PAREN . primtype0 MUL RIGHT_PAREN
-   67      | expr2 LEFT_PAREN . primtype0 MUL MUL RIGHT_PAREN
-   68      | expr2 LEFT_PAREN . primtype0 MUL MUL MUL RIGHT_PAREN
+   64 expr2: expr2 LEFT_PAREN • callargs RIGHT_PAREN
+   65      | expr2 LEFT_PAREN • primtype0 RIGHT_PAREN
+   66      | expr2 LEFT_PAREN • primtype0 MUL RIGHT_PAREN
+   67      | expr2 LEFT_PAREN • primtype0 MUL MUL RIGHT_PAREN
+   68      | expr2 LEFT_PAREN • primtype0 MUL MUL MUL RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -2863,21 +2863,21 @@ State 117
 
 State 118
 
-   63 expr2: expr2 INC .
+   63 expr2: expr2 INC •
 
     $default  reduce using rule 63 (expr2)
 
 
 State 119
 
-   62 expr2: expr2 DEC .
+   62 expr2: expr2 DEC •
 
     $default  reduce using rule 62 (expr2)
 
 
 State 120
 
-   61 expr2: expr2 LEFT_SQAURE . expr_comma RIGHT_SQAURE
+   61 expr2: expr2 LEFT_SQAURE • expr_comma RIGHT_SQAURE
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -2921,7 +2921,7 @@ State 120
 
 State 121
 
-   85 expr4: expr4 POW . expr4
+   85 expr4: expr4 POW • expr4
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -2952,7 +2952,7 @@ State 121
 
 State 122
 
-   86 expr4: expr4 SHL . expr4
+   86 expr4: expr4 SHL • expr4
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -2983,7 +2983,7 @@ State 122
 
 State 123
 
-   87 expr4: expr4 SHR . expr4
+   87 expr4: expr4 SHR • expr4
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3014,7 +3014,7 @@ State 123
 
 State 124
 
-   89 expr4_5: expr4_5 MUL . expr4_5
+   89 expr4_5: expr4_5 MUL • expr4_5
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3046,7 +3046,7 @@ State 124
 
 State 125
 
-   90 expr4_5: expr4_5 DIV . expr4_5
+   90 expr4_5: expr4_5 DIV • expr4_5
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3078,7 +3078,7 @@ State 125
 
 State 126
 
-   91 expr4_5: expr4_5 MOD . expr4_5
+   91 expr4_5: expr4_5 MOD • expr4_5
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3110,7 +3110,7 @@ State 126
 
 State 127
 
-   93 expr5: expr5 BAND . expr5
+   93 expr5: expr5 BAND • expr5
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3143,7 +3143,7 @@ State 127
 
 State 128
 
-   95 expr6: expr6 BXOR . expr6
+   95 expr6: expr6 BXOR • expr6
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3177,7 +3177,7 @@ State 128
 
 State 129
 
-   97 expr7: expr7 BOR . expr7
+   97 expr7: expr7 BOR • expr7
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3212,7 +3212,7 @@ State 129
 
 State 130
 
-   99 expr8: expr8 ADD . expr8
+   99 expr8: expr8 ADD • expr8
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3248,7 +3248,7 @@ State 130
 
 State 131
 
-  100 expr8: expr8 SUB . expr8
+  100 expr8: expr8 SUB • expr8
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3284,7 +3284,7 @@ State 131
 
 State 132
 
-  102 expr9: expr9 LT . expr9
+  102 expr9: expr9 LT • expr9
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3321,7 +3321,7 @@ State 132
 
 State 133
 
-  103 expr9: expr9 GT . expr9
+  103 expr9: expr9 GT • expr9
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3358,7 +3358,7 @@ State 133
 
 State 134
 
-  104 expr9: expr9 LE . expr9
+  104 expr9: expr9 LE • expr9
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3395,7 +3395,7 @@ State 134
 
 State 135
 
-  105 expr9: expr9 GE . expr9
+  105 expr9: expr9 GE • expr9
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3432,7 +3432,7 @@ State 135
 
 State 136
 
-  108 expr10: expr10 NE . expr10
+  108 expr10: expr10 NE • expr10
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3470,7 +3470,7 @@ State 136
 
 State 137
 
-  107 expr10: expr10 EQ . expr10
+  107 expr10: expr10 EQ • expr10
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3508,7 +3508,7 @@ State 137
 
 State 138
 
-  110 expr11: expr11 LAND . expr11
+  110 expr11: expr11 LAND • expr11
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3547,7 +3547,7 @@ State 138
 
 State 139
 
-  112 expr12: expr12 LXOR . expr12
+  112 expr12: expr12 LXOR • expr12
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3587,7 +3587,7 @@ State 139
 
 State 140
 
-  114 expr13: expr13 LOR . expr13
+  114 expr13: expr13 LOR • expr13
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3628,7 +3628,7 @@ State 140
 
 State 141
 
-  116 expr14: expr14 ASSIGN . expr14
+  116 expr14: expr14 ASSIGN • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3670,7 +3670,7 @@ State 141
 
 State 142
 
-  117 expr14: expr14 EQ_SHL . expr14
+  117 expr14: expr14 EQ_SHL • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3712,7 +3712,7 @@ State 142
 
 State 143
 
-  118 expr14: expr14 EQ_SHR . expr14
+  118 expr14: expr14 EQ_SHR • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3754,7 +3754,7 @@ State 143
 
 State 144
 
-  119 expr14: expr14 EQ_MUL . expr14
+  119 expr14: expr14 EQ_MUL • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3796,7 +3796,7 @@ State 144
 
 State 145
 
-  120 expr14: expr14 EQ_DIV . expr14
+  120 expr14: expr14 EQ_DIV • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3838,7 +3838,7 @@ State 145
 
 State 146
 
-  121 expr14: expr14 EQ_MOD . expr14
+  121 expr14: expr14 EQ_MOD • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3880,7 +3880,7 @@ State 146
 
 State 147
 
-  122 expr14: expr14 EQ_BAND . expr14
+  122 expr14: expr14 EQ_BAND • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3922,7 +3922,7 @@ State 147
 
 State 148
 
-  123 expr14: expr14 EQ_BXOR . expr14
+  123 expr14: expr14 EQ_BXOR • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -3964,7 +3964,7 @@ State 148
 
 State 149
 
-  124 expr14: expr14 EQ_BOR . expr14
+  124 expr14: expr14 EQ_BOR • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -4006,7 +4006,7 @@ State 149
 
 State 150
 
-  125 expr14: expr14 EQ_ADD . expr14
+  125 expr14: expr14 EQ_ADD • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -4048,7 +4048,7 @@ State 150
 
 State 151
 
-  126 expr14: expr14 EQ_SUB . expr14
+  126 expr14: expr14 EQ_SUB • expr14
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -4090,30 +4090,30 @@ State 151
 
 State 152
 
-  272 str: str STRING .
+  272 str: str STRING •
 
     $default  reduce using rule 272 (str)
 
 
 State 153
 
-  261 scope: LEFT_CURLY RIGHT_CURLY .
+  261 scope: LEFT_CURLY RIGHT_CURLY •
 
     $default  reduce using rule 261 (scope)
 
 
 State 154
 
-  257 stmts: ocstmt .
+  257 stmts: ocstmt •
 
     $default  reduce using rule 257 (stmts)
 
 
 State 155
 
-  258 stmts: stmts . ocstmt
-  259      | stmts . error
-  260 scope: LEFT_CURLY stmts . RIGHT_CURLY
+  258 stmts: stmts • ocstmt
+  259      | stmts • error
+  260 scope: LEFT_CURLY stmts • RIGHT_CURLY
 
     error        shift, and go to state 291
     CHAR         shift, and go to state 7
@@ -4203,7 +4203,7 @@ State 155
 
 State 156
 
-  128 expr_comma: expr_comma COMMA . expr
+  128 expr_comma: expr_comma COMMA • expr
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -4246,21 +4246,21 @@ State 156
 
 State 157
 
-  163 tryblock: TRY scope . CATCH scope
+  163 tryblock: TRY scope • CATCH scope
 
     CATCH  shift, and go to state 295
 
 
 State 158
 
-  253 simple_stmt: NAME COLON .
+  253 simple_stmt: NAME COLON •
 
     $default  reduce using rule 253 (simple_stmt)
 
 
 State 159
 
-  215 ifcl: IF LEFT_PAREN . expr_comma RIGHT_PAREN
+  215 ifcl: IF LEFT_PAREN • expr_comma RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -4304,14 +4304,14 @@ State 159
 
 State 160
 
-  222 dostmt: DO ocstmt . WHILE LEFT_PAREN expr_comma RIGHT_PAREN
+  222 dostmt: DO ocstmt • WHILE LEFT_PAREN expr_comma RIGHT_PAREN
 
     WHILE  shift, and go to state 297
 
 
 State 161
 
-  213 loop_header: WHILE LEFT_PAREN . expr_comma RIGHT_PAREN
+  213 loop_header: WHILE LEFT_PAREN • expr_comma RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -4355,7 +4355,7 @@ State 161
 
 State 162
 
-  214 loop_header: FOR LEFT_PAREN . expr_opt SEMI expr_opt SEMI expr_opt RIGHT_PAREN
+  214 loop_header: FOR LEFT_PAREN • expr_opt SEMI expr_opt SEMI expr_opt RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -4402,78 +4402,78 @@ State 162
 
 State 163
 
-  193 linkage: EXTERN2 NAME .
+  193 linkage: EXTERN2 NAME •
 
     $default  reduce using rule 193 (linkage)
 
 
 State 164
 
-  195 linkage: EXTERN2 TYPENAME .
+  195 linkage: EXTERN2 TYPENAME •
 
     $default  reduce using rule 195 (linkage)
 
 
 State 165
 
-  194 linkage: IMPORT2 NAME .
+  194 linkage: IMPORT2 NAME •
 
     $default  reduce using rule 194 (linkage)
 
 
 State 166
 
-  196 linkage: IMPORT2 TYPENAME .
+  196 linkage: IMPORT2 TYPENAME •
 
     $default  reduce using rule 196 (linkage)
 
 
 State 167
 
-  153 _cheader: CLASS NAME .
+  153 _cheader: CLASS NAME •
 
     $default  reduce using rule 153 (_cheader)
 
 
 State 168
 
-  155 _cheader: CLASS TYPENAME .
+  155 _cheader: CLASS TYPENAME •
 
     $default  reduce using rule 155 (_cheader)
 
 
 State 169
 
-  154 _uheader: UNION NAME .
+  154 _uheader: UNION NAME •
 
     $default  reduce using rule 154 (_uheader)
 
 
 State 170
 
-  156 _uheader: UNION TYPENAME .
+  156 _uheader: UNION TYPENAME •
 
     $default  reduce using rule 156 (_uheader)
 
 
 State 171
 
-  249 simple_stmt: BREAK SEMI .
+  249 simple_stmt: BREAK SEMI •
 
     $default  reduce using rule 249 (simple_stmt)
 
 
 State 172
 
-  252 simple_stmt: RET SEMI .
+  252 simple_stmt: RET SEMI •
 
     $default  reduce using rule 252 (simple_stmt)
 
 
 State 173
 
-  128 expr_comma: expr_comma . COMMA expr
-  251 simple_stmt: RET expr_comma . SEMI
+  128 expr_comma: expr_comma • COMMA expr
+  251 simple_stmt: RET expr_comma • SEMI
 
     COMMA  shift, and go to state 156
     SEMI   shift, and go to state 301
@@ -4481,15 +4481,15 @@ State 173
 
 State 174
 
-  244 simple_stmt: GOTO NAME . SEMI
+  244 simple_stmt: GOTO NAME • SEMI
 
     SEMI  shift, and go to state 302
 
 
 State 175
 
-  232 swit: SWITCH LEFT_PAREN . expr_comma RIGHT_PAREN LEFT_CURLY swit_body RIGHT_CURLY
-  233     | SWITCH LEFT_PAREN . expr_comma RIGHT_PAREN LEFT_CURLY RIGHT_CURLY
+  232 swit: SWITCH LEFT_PAREN • expr_comma RIGHT_PAREN LEFT_CURLY swit_body RIGHT_CURLY
+  233     | SWITCH LEFT_PAREN • expr_comma RIGHT_PAREN LEFT_CURLY RIGHT_CURLY
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -4533,31 +4533,31 @@ State 175
 
 State 176
 
-  275 _expr0: CHAR .
+  275 _expr0: CHAR •
 
     $default  reduce using rule 275 (_expr0)
 
 
 State 177
 
-  274 _expr0: INT .
+  274 _expr0: INT •
 
     $default  reduce using rule 274 (_expr0)
 
 
 State 178
 
-  273 _expr0: FLOAT .
+  273 _expr0: FLOAT •
 
     $default  reduce using rule 273 (_expr0)
 
 
 State 179
 
-  291 _expr3: SIZEOF . NAME
-  292       | SIZEOF . sizeof_type
-  293       | SIZEOF . LEFT_PAREN expr_comma RIGHT_PAREN
-  294       | SIZEOF . LEFT_PAREN sizeof_type RIGHT_PAREN
+  291 _expr3: SIZEOF • NAME
+  292       | SIZEOF • sizeof_type
+  293       | SIZEOF • LEFT_PAREN expr_comma RIGHT_PAREN
+  294       | SIZEOF • LEFT_PAREN sizeof_type RIGHT_PAREN
 
     LEFT_PAREN  shift, and go to state 304
     NAME        shift, and go to state 305
@@ -4577,7 +4577,7 @@ State 179
 
 State 180
 
-  301 _expr3: LNOT . _expr3
+  301 _expr3: LNOT • _expr3
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -4607,7 +4607,7 @@ State 180
 
 State 181
 
-  302 _expr3: BNOT . _expr3
+  302 _expr3: BNOT • _expr3
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -4637,7 +4637,7 @@ State 181
 
 State 182
 
-  296 _expr3: MUL . _expr3
+  296 _expr3: MUL • _expr3
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -4667,7 +4667,7 @@ State 182
 
 State 183
 
-  295 _expr3: BAND . _expr3
+  295 _expr3: BAND • _expr3
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -4697,7 +4697,7 @@ State 183
 
 State 184
 
-  299 _expr3: ADD . _expr3
+  299 _expr3: ADD • _expr3
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -4727,7 +4727,7 @@ State 184
 
 State 185
 
-  300 _expr3: SUB . _expr3
+  300 _expr3: SUB • _expr3
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -4757,14 +4757,14 @@ State 185
 
 State 186
 
-  277 _expr0: LASTCLASS .
+  277 _expr0: LASTCLASS •
 
     $default  reduce using rule 277 (_expr0)
 
 
 State 187
 
-  280 _expr1: LEFT_PAREN . expr_comma RIGHT_PAREN
+  280 _expr1: LEFT_PAREN • expr_comma RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -4808,7 +4808,7 @@ State 187
 
 State 188
 
-  298 _expr3: INC . _expr3
+  298 _expr3: INC • _expr3
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -4838,7 +4838,7 @@ State 188
 
 State 189
 
-  297 _expr3: DEC . _expr3
+  297 _expr3: DEC • _expr3
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -4868,14 +4868,14 @@ State 189
 
 State 190
 
-  278 _expr0: NAME .
+  278 _expr0: NAME •
 
     $default  reduce using rule 278 (_expr0)
 
 
 State 191
 
-    9 _sib: LEFT_SQAURE . sib_d RIGHT_SQAURE
+    9 _sib: LEFT_SQAURE • sib_d RIGHT_SQAURE
 
     INT       shift, and go to state 317
     REGISTER  shift, and go to state 318
@@ -4886,10 +4886,10 @@ State 191
 
 State 192
 
-   15 opc_operand: TYPENAME . sib
-   16            | TYPENAME . REGISTER COLON sib
-  282 _expr2: TYPENAME . DOT NAME
-  283       | TYPENAME . ARROW NAME
+   15 opc_operand: TYPENAME • sib
+   16            | TYPENAME • REGISTER COLON sib
+  282 _expr2: TYPENAME • DOT NAME
+  283       | TYPENAME • ARROW NAME
 
     CHAR         shift, and go to state 176
     INT          shift, and go to state 177
@@ -4938,15 +4938,15 @@ State 192
 
 State 193
 
-   13 opc_operand: REGISTER .
+   13 opc_operand: REGISTER •
 
     $default  reduce using rule 13 (opc_operand)
 
 
 State 194
 
-  269 _expr0: DOUBLE_AT . NAME
-  270       | DOUBLE_AT . INT
+  269 _expr0: DOUBLE_AT • NAME
+  270       | DOUBLE_AT • INT
 
     INT   shift, and go to state 326
     NAME  shift, and go to state 327
@@ -4954,22 +4954,22 @@ State 194
 
 State 195
 
-   10 sib: _sib .
+   10 sib: _sib •
 
     $default  reduce using rule 10 (sib)
 
 
 State 196
 
-   12 opc_operand: sib .
+   12 opc_operand: sib •
 
     $default  reduce using rule 12 (opc_operand)
 
 
 State 197
 
-   17 opc_operand: opc_operand . COLON sib
-   18 opc_operands: opc_operand .
+   17 opc_operand: opc_operand • COLON sib
+   18 opc_operands: opc_operand •
 
     COLON  shift, and go to state 328
 
@@ -4978,8 +4978,8 @@ State 197
 
 State 198
 
-   19 opc_operands: opc_operands . COMMA opc_operand
-   21 opcode: OPCODE opc_operands .
+   19 opc_operands: opc_operands • COMMA opc_operand
+   21 opcode: OPCODE opc_operands •
 
     COMMA  shift, and go to state 329
 
@@ -4988,15 +4988,15 @@ State 198
 
 State 199
 
-  279 _expr1: _expr0 .
+  279 _expr1: _expr0 •
 
     $default  reduce using rule 279 (_expr1)
 
 
 State 200
 
-  272 str: str . STRING
-  276 _expr0: str .
+  272 str: str • STRING
+  276 _expr0: str •
 
     STRING  shift, and go to state 152
 
@@ -5005,20 +5005,20 @@ State 200
 
 State 201
 
-  281 _expr2: _expr1 .
+  281 _expr2: _expr1 •
 
     $default  reduce using rule 281 (_expr2)
 
 
 State 202
 
-  284 _expr2: _expr2 . DOT NAME
-  285       | _expr2 . ARROW NAME
-  286       | _expr2 . DEC
-  287       | _expr2 . INC
-  288       | _expr2 . LEFT_PAREN callargs RIGHT_PAREN
-  289       | _expr2 . LEFT_PAREN primtype0 RIGHT_PAREN
-  290 _expr3: _expr2 .
+  284 _expr2: _expr2 • DOT NAME
+  285       | _expr2 • ARROW NAME
+  286       | _expr2 • DEC
+  287       | _expr2 • INC
+  288       | _expr2 • LEFT_PAREN callargs RIGHT_PAREN
+  289       | _expr2 • LEFT_PAREN primtype0 RIGHT_PAREN
+  290 _expr3: _expr2 •
 
     DOT         shift, and go to state 330
     ARROW       shift, and go to state 331
@@ -5031,17 +5031,17 @@ State 202
 
 State 203
 
-  303 _expr4: _expr3 .
+  303 _expr4: _expr3 •
 
     $default  reduce using rule 303 (_expr4)
 
 
 State 204
 
-  304 _expr4: _expr4 . POW _expr4
-  305       | _expr4 . SHL _expr4
-  306       | _expr4 . SHR _expr4
-  307 _expr4_5: _expr4 .
+  304 _expr4: _expr4 • POW _expr4
+  305       | _expr4 • SHL _expr4
+  306       | _expr4 • SHR _expr4
+  307 _expr4_5: _expr4 •
 
     POW  shift, and go to state 335
     SHL  shift, and go to state 336
@@ -5052,10 +5052,10 @@ State 204
 
 State 205
 
-  308 _expr4_5: _expr4_5 . MUL _expr4_5
-  309         | _expr4_5 . DIV _expr4_5
-  310         | _expr4_5 . MOD _expr4_5
-  311 _expr5: _expr4_5 .
+  308 _expr4_5: _expr4_5 • MUL _expr4_5
+  309         | _expr4_5 • DIV _expr4_5
+  310         | _expr4_5 • MOD _expr4_5
+  311 _expr5: _expr4_5 •
 
     MUL  shift, and go to state 338
     DIV  shift, and go to state 339
@@ -5066,8 +5066,8 @@ State 205
 
 State 206
 
-  312 _expr5: _expr5 . BAND _expr5
-  313 _expr6: _expr5 .
+  312 _expr5: _expr5 • BAND _expr5
+  313 _expr6: _expr5 •
 
     BAND  shift, and go to state 341
 
@@ -5076,8 +5076,8 @@ State 206
 
 State 207
 
-  314 _expr6: _expr6 . BXOR _expr6
-  315 _expr7: _expr6 .
+  314 _expr6: _expr6 • BXOR _expr6
+  315 _expr7: _expr6 •
 
     BXOR  shift, and go to state 342
 
@@ -5086,8 +5086,8 @@ State 207
 
 State 208
 
-  316 _expr7: _expr7 . BOR _expr7
-  317 _expr8: _expr7 .
+  316 _expr7: _expr7 • BOR _expr7
+  317 _expr8: _expr7 •
 
     BOR  shift, and go to state 343
 
@@ -5096,9 +5096,9 @@ State 208
 
 State 209
 
-  318 _expr8: _expr8 . ADD _expr8
-  319       | _expr8 . SUB _expr8
-  320 _expr9: _expr8 .
+  318 _expr8: _expr8 • ADD _expr8
+  319       | _expr8 • SUB _expr8
+  320 _expr9: _expr8 •
 
     ADD  shift, and go to state 344
     SUB  shift, and go to state 345
@@ -5108,11 +5108,11 @@ State 209
 
 State 210
 
-  321 _expr9: _expr9 . LT _expr9
-  322       | _expr9 . GT _expr9
-  323       | _expr9 . LE _expr9
-  324       | _expr9 . GE _expr9
-  325 _expr10: _expr9 .
+  321 _expr9: _expr9 • LT _expr9
+  322       | _expr9 • GT _expr9
+  323       | _expr9 • LE _expr9
+  324       | _expr9 • GE _expr9
+  325 _expr10: _expr9 •
 
     LT  shift, and go to state 346
     GT  shift, and go to state 347
@@ -5124,9 +5124,9 @@ State 210
 
 State 211
 
-  326 _expr10: _expr10 . EQ _expr10
-  327        | _expr10 . NE _expr10
-  328 _expr11: _expr10 .
+  326 _expr10: _expr10 • EQ _expr10
+  327        | _expr10 • NE _expr10
+  328 _expr11: _expr10 •
 
     NE  shift, and go to state 350
     EQ  shift, and go to state 351
@@ -5136,8 +5136,8 @@ State 211
 
 State 212
 
-  329 _expr11: _expr11 . LAND _expr11
-  330 _expr12: _expr11 .
+  329 _expr11: _expr11 • LAND _expr11
+  330 _expr12: _expr11 •
 
     LAND  shift, and go to state 352
 
@@ -5146,8 +5146,8 @@ State 212
 
 State 213
 
-  331 _expr12: _expr12 . LXOR _expr12
-  332 _expr13: _expr12 .
+  331 _expr12: _expr12 • LXOR _expr12
+  332 _expr13: _expr12 •
 
     LXOR  shift, and go to state 353
 
@@ -5156,8 +5156,8 @@ State 213
 
 State 214
 
-  333 _expr13: _expr13 . LOR _expr13
-  334 _expr14: _expr13 .
+  333 _expr13: _expr13 • LOR _expr13
+  334 _expr14: _expr13 •
 
     LOR  shift, and go to state 354
 
@@ -5166,18 +5166,18 @@ State 214
 
 State 215
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
-  346 _expr: _expr14 .
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
+  346 _expr: _expr14 •
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -5196,8 +5196,8 @@ State 215
 
 State 216
 
-   11 sib: _expr . _sib
-   14 opc_operand: _expr .
+   11 sib: _expr • _sib
+   14 opc_operand: _expr •
 
     LEFT_SQAURE  shift, and go to state 191
 
@@ -5208,8 +5208,8 @@ State 216
 
 State 217
 
-   38 asm_blk: ASM LEFT_CURLY . RIGHT_CURLY
-   41        | ASM LEFT_CURLY . asm_blk_stmts RIGHT_CURLY
+   38 asm_blk: ASM LEFT_CURLY • RIGHT_CURLY
+   41        | ASM LEFT_CURLY • asm_blk_stmts RIGHT_CURLY
 
     NAME         shift, and go to state 367
     SEMI         shift, and go to state 368
@@ -5230,26 +5230,26 @@ State 217
 
 State 218
 
-  235 opcodes: opcode SEMI .
+  235 opcodes: opcode SEMI •
 
     $default  reduce using rule 235 (opcodes)
 
 
 State 219
 
-  246 simple_stmt: expr_comma SEMI .
+  246 simple_stmt: expr_comma SEMI •
 
     $default  reduce using rule 246 (simple_stmt)
 
 
 State 220
 
-  165 namewptrs: MUL . NAME
-  166          | MUL . MUL NAME
-  167          | MUL . MUL MUL NAME
-  170 __ptrcount: MUL .
-  171           | MUL . MUL
-  172           | MUL . MUL MUL
+  165 namewptrs: MUL • NAME
+  166          | MUL • MUL NAME
+  167          | MUL • MUL MUL NAME
+  170 __ptrcount: MUL •
+  171           | MUL • MUL
+  172           | MUL • MUL MUL
 
     MUL   shift, and go to state 380
     NAME  shift, and go to state 381
@@ -5259,41 +5259,41 @@ State 220
 
 State 221
 
-  164 namewptrs: NAME .
+  164 namewptrs: NAME •
 
     $default  reduce using rule 164 (namewptrs)
 
 
 State 222
 
-  254 simple_stmt: primtype0 SEMI .
+  254 simple_stmt: primtype0 SEMI •
 
     $default  reduce using rule 254 (simple_stmt)
 
 
 State 223
 
-  134 primtype0: primtype0 _class .
+  134 primtype0: primtype0 _class •
 
     $default  reduce using rule 134 (primtype0)
 
 
 State 224
 
-  133 primtype0: primtype0 _union .
+  133 primtype0: primtype0 _union •
 
     $default  reduce using rule 133 (primtype0)
 
 
 State 225
 
-  168 vardecltail: namewptrs .
-  197 func: primtype0 namewptrs . LEFT_PAREN funcargs RIGHT_PAREN SEMI
-  198     | primtype0 namewptrs . LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
-  199     | primtype0 namewptrs . LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI
-  203     | primtype0 namewptrs . LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope
-  204     | primtype0 namewptrs . LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
-  205     | primtype0 namewptrs . LEFT_PAREN funcargs RIGHT_PAREN scope
+  168 vardecltail: namewptrs •
+  197 func: primtype0 namewptrs • LEFT_PAREN funcargs RIGHT_PAREN SEMI
+  198     | primtype0 namewptrs • LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
+  199     | primtype0 namewptrs • LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI
+  203     | primtype0 namewptrs • LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope
+  204     | primtype0 namewptrs • LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
+  205     | primtype0 namewptrs • LEFT_PAREN funcargs RIGHT_PAREN scope
 
     LEFT_PAREN  shift, and go to state 382
 
@@ -5302,11 +5302,11 @@ State 225
 
 State 226
 
-  176 vardecltail: vardecltail . LEFT_SQAURE expr_comma RIGHT_SQAURE
-  177            | vardecltail . LEFT_SQAURE RIGHT_SQAURE
-  178 vardecltail_asn: vardecltail . ASSIGN expr
-  179                | vardecltail . ASSIGN arrlit
-  184 vardecltails: vardecltail .
+  176 vardecltail: vardecltail • LEFT_SQAURE expr_comma RIGHT_SQAURE
+  177            | vardecltail • LEFT_SQAURE RIGHT_SQAURE
+  178 vardecltail_asn: vardecltail • ASSIGN expr
+  179                | vardecltail • ASSIGN arrlit
+  184 vardecltails: vardecltail •
 
     ASSIGN       shift, and go to state 383
     LEFT_SQAURE  shift, and go to state 384
@@ -5316,24 +5316,24 @@ State 226
 
 State 227
 
-  173 vardecltail: __ptrcount . LEFT_PAREN MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
-  174            | __ptrcount . LEFT_PAREN MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
-  175            | __ptrcount . LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  173 vardecltail: __ptrcount • LEFT_PAREN MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  174            | __ptrcount • LEFT_PAREN MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  175            | __ptrcount • LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
 
     LEFT_PAREN  shift, and go to state 385
 
 
 State 228
 
-  183 vardecltails: vardecltail_asn .
+  183 vardecltails: vardecltail_asn •
 
     $default  reduce using rule 183 (vardecltails)
 
 
 State 229
 
-  182 vardecltails: vardecltails . COMMA vardecltails
-  185 multi_decl: primtype0 vardecltails .
+  182 vardecltails: vardecltails • COMMA vardecltails
+  185 multi_decl: primtype0 vardecltails •
 
     COMMA  shift, and go to state 386
 
@@ -5342,28 +5342,28 @@ State 229
 
 State 230
 
-  159 cheader: _cheader COLON . TYPENAME
+  159 cheader: _cheader COLON • TYPENAME
 
     TYPENAME  shift, and go to state 387
 
 
 State 231
 
-  160 uheader: _uheader COLON . TYPENAME
+  160 uheader: _uheader COLON • TYPENAME
 
     TYPENAME  shift, and go to state 388
 
 
 State 232
 
-  237 simple_stmt: cheader SEMI .
+  237 simple_stmt: cheader SEMI •
 
     $default  reduce using rule 237 (simple_stmt)
 
 
 State 233
 
-  161 _class: cheader LEFT_CURLY . cbody RIGHT_CURLY
+  161 _class: cheader LEFT_CURLY • cbody RIGHT_CURLY
 
     $default  reduce using rule 150 (cbody)
 
@@ -5372,14 +5372,14 @@ State 233
 
 State 234
 
-  238 simple_stmt: uheader SEMI .
+  238 simple_stmt: uheader SEMI •
 
     $default  reduce using rule 238 (simple_stmt)
 
 
 State 235
 
-  162 _union: uheader LEFT_CURLY . cbody RIGHT_CURLY
+  162 _union: uheader LEFT_CURLY • cbody RIGHT_CURLY
 
     $default  reduce using rule 150 (cbody)
 
@@ -5388,17 +5388,17 @@ State 235
 
 State 236
 
-  241 simple_stmt: multi_decl SEMI .
+  241 simple_stmt: multi_decl SEMI •
 
     $default  reduce using rule 241 (simple_stmt)
 
 
 State 237
 
-  151 _cheader: CLASS .
-  153         | CLASS . NAME
-  155         | CLASS . TYPENAME
-  256 simple_stmt: linkage CLASS . NAME SEMI
+  151 _cheader: CLASS •
+  153         | CLASS • NAME
+  155         | CLASS • TYPENAME
+  256 simple_stmt: linkage CLASS • NAME SEMI
 
     NAME      shift, and go to state 391
     TYPENAME  shift, and go to state 168
@@ -5408,10 +5408,10 @@ State 237
 
 State 238
 
-  152 _uheader: UNION .
-  154         | UNION . NAME
-  156         | UNION . TYPENAME
-  255 simple_stmt: linkage UNION . NAME SEMI
+  152 _uheader: UNION •
+  154         | UNION • NAME
+  156         | UNION • TYPENAME
+  255 simple_stmt: linkage UNION • NAME SEMI
 
     NAME      shift, and go to state 392
     TYPENAME  shift, and go to state 170
@@ -5421,15 +5421,15 @@ State 238
 
 State 239
 
-  133 primtype0: primtype0 . _union
-  134          | primtype0 . _class
-  185 multi_decl: primtype0 . vardecltails
-  200 func: linkage primtype0 . namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI
-  201     | linkage primtype0 . namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
-  202     | linkage primtype0 . namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI
-  206     | linkage primtype0 . namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope
-  207     | linkage primtype0 . namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
-  208     | linkage primtype0 . namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope
+  133 primtype0: primtype0 • _union
+  134          | primtype0 • _class
+  185 multi_decl: primtype0 • vardecltails
+  200 func: linkage primtype0 • namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI
+  201     | linkage primtype0 • namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
+  202     | linkage primtype0 • namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI
+  206     | linkage primtype0 • namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope
+  207     | linkage primtype0 • namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
+  208     | linkage primtype0 • namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope
 
     MUL    shift, and go to state 220
     NAME   shift, and go to state 221
@@ -5453,37 +5453,37 @@ State 239
 
 State 240
 
-  242 simple_stmt: linkage multi_decl . SEMI
+  242 simple_stmt: linkage multi_decl • SEMI
 
     SEMI  shift, and go to state 394
 
 
 State 241
 
-  218 ostmt: loop_header ostmt .
+  218 ostmt: loop_header ostmt •
 
     $default  reduce using rule 218 (ostmt)
 
 
 State 242
 
-  221 cstmt: loop_header cstmt .
+  221 cstmt: loop_header cstmt •
 
     $default  reduce using rule 221 (cstmt)
 
 
 State 243
 
-  216 ostmt: ifcl ocstmt .
+  216 ostmt: ifcl ocstmt •
 
     $default  reduce using rule 216 (ostmt)
 
 
 State 244
 
-  210 ocstmt: cstmt .
-  217 ostmt: ifcl cstmt . ELSE ostmt
-  220 cstmt: ifcl cstmt . ELSE cstmt
+  210 ocstmt: cstmt •
+  217 ostmt: ifcl cstmt • ELSE ostmt
+  220 cstmt: ifcl cstmt • ELSE cstmt
 
     ELSE  shift, and go to state 395
 
@@ -5492,22 +5492,22 @@ State 244
 
 State 245
 
-  245 simple_stmt: dostmt SEMI .
+  245 simple_stmt: dostmt SEMI •
 
     $default  reduce using rule 245 (simple_stmt)
 
 
 State 246
 
-  236 opcodes: opcodes opcode . SEMI
+  236 opcodes: opcodes opcode • SEMI
 
     SEMI  shift, and go to state 396
 
 
 State 247
 
-   70 sizeof_type: sizeof_type . MUL
-   75 expr3: SIZEOF LEFT_PAREN sizeof_type . RIGHT_PAREN
+   70 sizeof_type: sizeof_type • MUL
+   75 expr3: SIZEOF LEFT_PAREN sizeof_type • RIGHT_PAREN
 
     MUL          shift, and go to state 249
     RIGHT_PAREN  shift, and go to state 397
@@ -5515,8 +5515,8 @@ State 247
 
 State 248
 
-   74 expr3: SIZEOF LEFT_PAREN expr_comma . RIGHT_PAREN
-  128 expr_comma: expr_comma . COMMA expr
+   74 expr3: SIZEOF LEFT_PAREN expr_comma • RIGHT_PAREN
+  128 expr_comma: expr_comma • COMMA expr
 
     COMMA        shift, and go to state 156
     RIGHT_PAREN  shift, and go to state 398
@@ -5524,57 +5524,57 @@ State 248
 
 State 249
 
-   70 sizeof_type: sizeof_type MUL .
+   70 sizeof_type: sizeof_type MUL •
 
     $default  reduce using rule 70 (sizeof_type)
 
 
 State 250
 
-   55 expr1: LEFT_PAREN expr_comma RIGHT_PAREN .
+   55 expr1: LEFT_PAREN expr_comma RIGHT_PAREN •
 
     $default  reduce using rule 55 (expr1)
 
 
 State 251
 
-   57 expr2: TYPENAME DOT NAME .
+   57 expr2: TYPENAME DOT NAME •
 
     $default  reduce using rule 57 (expr2)
 
 
 State 252
 
-   58 expr2: TYPENAME ARROW NAME .
+   58 expr2: TYPENAME ARROW NAME •
 
     $default  reduce using rule 58 (expr2)
 
 
 State 253
 
-   59 expr2: expr2 DOT NAME .
+   59 expr2: expr2 DOT NAME •
 
     $default  reduce using rule 59 (expr2)
 
 
 State 254
 
-   60 expr2: expr2 ARROW NAME .
+   60 expr2: expr2 ARROW NAME •
 
     $default  reduce using rule 60 (expr2)
 
 
 State 255
 
-   53 callargs: _callargs .
+   53 callargs: _callargs •
 
     $default  reduce using rule 53 (callargs)
 
 
 State 256
 
-   52 callargs: callargs . COMMA _callargs
-   64 expr2: expr2 LEFT_PAREN callargs . RIGHT_PAREN
+   52 callargs: callargs • COMMA _callargs
+   64 expr2: expr2 LEFT_PAREN callargs • RIGHT_PAREN
 
     COMMA        shift, and go to state 399
     RIGHT_PAREN  shift, and go to state 400
@@ -5582,19 +5582,19 @@ State 256
 
 State 257
 
-   51 _callargs: expr .
+   51 _callargs: expr •
 
     $default  reduce using rule 51 (_callargs)
 
 
 State 258
 
-   65 expr2: expr2 LEFT_PAREN primtype0 . RIGHT_PAREN
-   66      | expr2 LEFT_PAREN primtype0 . MUL RIGHT_PAREN
-   67      | expr2 LEFT_PAREN primtype0 . MUL MUL RIGHT_PAREN
-   68      | expr2 LEFT_PAREN primtype0 . MUL MUL MUL RIGHT_PAREN
-  133 primtype0: primtype0 . _union
-  134          | primtype0 . _class
+   65 expr2: expr2 LEFT_PAREN primtype0 • RIGHT_PAREN
+   66      | expr2 LEFT_PAREN primtype0 • MUL RIGHT_PAREN
+   67      | expr2 LEFT_PAREN primtype0 • MUL MUL RIGHT_PAREN
+   68      | expr2 LEFT_PAREN primtype0 • MUL MUL MUL RIGHT_PAREN
+  133 primtype0: primtype0 • _union
+  134          | primtype0 • _class
 
     MUL          shift, and go to state 401
     RIGHT_PAREN  shift, and go to state 402
@@ -5611,8 +5611,8 @@ State 258
 
 State 259
 
-   61 expr2: expr2 LEFT_SQAURE expr_comma . RIGHT_SQAURE
-  128 expr_comma: expr_comma . COMMA expr
+   61 expr2: expr2 LEFT_SQAURE expr_comma • RIGHT_SQAURE
+  128 expr_comma: expr_comma • COMMA expr
 
     COMMA         shift, and go to state 156
     RIGHT_SQAURE  shift, and go to state 403
@@ -5620,206 +5620,206 @@ State 259
 
 State 260
 
-   85 expr4: expr4 . POW expr4
-   85      | expr4 POW expr4 .
-   86      | expr4 . SHL expr4
-   87      | expr4 . SHR expr4
+   85 expr4: expr4 • POW expr4
+   85      | expr4 POW expr4 •
+   86      | expr4 • SHL expr4
+   87      | expr4 • SHR expr4
 
     $default  reduce using rule 85 (expr4)
 
 
 State 261
 
-   85 expr4: expr4 . POW expr4
-   86      | expr4 . SHL expr4
-   86      | expr4 SHL expr4 .
-   87      | expr4 . SHR expr4
+   85 expr4: expr4 • POW expr4
+   86      | expr4 • SHL expr4
+   86      | expr4 SHL expr4 •
+   87      | expr4 • SHR expr4
 
     $default  reduce using rule 86 (expr4)
 
 
 State 262
 
-   85 expr4: expr4 . POW expr4
-   86      | expr4 . SHL expr4
-   87      | expr4 . SHR expr4
-   87      | expr4 SHR expr4 .
+   85 expr4: expr4 • POW expr4
+   86      | expr4 • SHL expr4
+   87      | expr4 • SHR expr4
+   87      | expr4 SHR expr4 •
 
     $default  reduce using rule 87 (expr4)
 
 
 State 263
 
-   89 expr4_5: expr4_5 . MUL expr4_5
-   89        | expr4_5 MUL expr4_5 .
-   90        | expr4_5 . DIV expr4_5
-   91        | expr4_5 . MOD expr4_5
+   89 expr4_5: expr4_5 • MUL expr4_5
+   89        | expr4_5 MUL expr4_5 •
+   90        | expr4_5 • DIV expr4_5
+   91        | expr4_5 • MOD expr4_5
 
     $default  reduce using rule 89 (expr4_5)
 
 
 State 264
 
-   89 expr4_5: expr4_5 . MUL expr4_5
-   90        | expr4_5 . DIV expr4_5
-   90        | expr4_5 DIV expr4_5 .
-   91        | expr4_5 . MOD expr4_5
+   89 expr4_5: expr4_5 • MUL expr4_5
+   90        | expr4_5 • DIV expr4_5
+   90        | expr4_5 DIV expr4_5 •
+   91        | expr4_5 • MOD expr4_5
 
     $default  reduce using rule 90 (expr4_5)
 
 
 State 265
 
-   89 expr4_5: expr4_5 . MUL expr4_5
-   90        | expr4_5 . DIV expr4_5
-   91        | expr4_5 . MOD expr4_5
-   91        | expr4_5 MOD expr4_5 .
+   89 expr4_5: expr4_5 • MUL expr4_5
+   90        | expr4_5 • DIV expr4_5
+   91        | expr4_5 • MOD expr4_5
+   91        | expr4_5 MOD expr4_5 •
 
     $default  reduce using rule 91 (expr4_5)
 
 
 State 266
 
-   93 expr5: expr5 . BAND expr5
-   93      | expr5 BAND expr5 .
+   93 expr5: expr5 • BAND expr5
+   93      | expr5 BAND expr5 •
 
     $default  reduce using rule 93 (expr5)
 
 
 State 267
 
-   95 expr6: expr6 . BXOR expr6
-   95      | expr6 BXOR expr6 .
+   95 expr6: expr6 • BXOR expr6
+   95      | expr6 BXOR expr6 •
 
     $default  reduce using rule 95 (expr6)
 
 
 State 268
 
-   97 expr7: expr7 . BOR expr7
-   97      | expr7 BOR expr7 .
+   97 expr7: expr7 • BOR expr7
+   97      | expr7 BOR expr7 •
 
     $default  reduce using rule 97 (expr7)
 
 
 State 269
 
-   99 expr8: expr8 . ADD expr8
-   99      | expr8 ADD expr8 .
-  100      | expr8 . SUB expr8
+   99 expr8: expr8 • ADD expr8
+   99      | expr8 ADD expr8 •
+  100      | expr8 • SUB expr8
 
     $default  reduce using rule 99 (expr8)
 
 
 State 270
 
-   99 expr8: expr8 . ADD expr8
-  100      | expr8 . SUB expr8
-  100      | expr8 SUB expr8 .
+   99 expr8: expr8 • ADD expr8
+  100      | expr8 • SUB expr8
+  100      | expr8 SUB expr8 •
 
     $default  reduce using rule 100 (expr8)
 
 
 State 271
 
-  102 expr9: expr9 . LT expr9
-  102      | expr9 LT expr9 .
-  103      | expr9 . GT expr9
-  104      | expr9 . LE expr9
-  105      | expr9 . GE expr9
+  102 expr9: expr9 • LT expr9
+  102      | expr9 LT expr9 •
+  103      | expr9 • GT expr9
+  104      | expr9 • LE expr9
+  105      | expr9 • GE expr9
 
     $default  reduce using rule 102 (expr9)
 
 
 State 272
 
-  102 expr9: expr9 . LT expr9
-  103      | expr9 . GT expr9
-  103      | expr9 GT expr9 .
-  104      | expr9 . LE expr9
-  105      | expr9 . GE expr9
+  102 expr9: expr9 • LT expr9
+  103      | expr9 • GT expr9
+  103      | expr9 GT expr9 •
+  104      | expr9 • LE expr9
+  105      | expr9 • GE expr9
 
     $default  reduce using rule 103 (expr9)
 
 
 State 273
 
-  102 expr9: expr9 . LT expr9
-  103      | expr9 . GT expr9
-  104      | expr9 . LE expr9
-  104      | expr9 LE expr9 .
-  105      | expr9 . GE expr9
+  102 expr9: expr9 • LT expr9
+  103      | expr9 • GT expr9
+  104      | expr9 • LE expr9
+  104      | expr9 LE expr9 •
+  105      | expr9 • GE expr9
 
     $default  reduce using rule 104 (expr9)
 
 
 State 274
 
-  102 expr9: expr9 . LT expr9
-  103      | expr9 . GT expr9
-  104      | expr9 . LE expr9
-  105      | expr9 . GE expr9
-  105      | expr9 GE expr9 .
+  102 expr9: expr9 • LT expr9
+  103      | expr9 • GT expr9
+  104      | expr9 • LE expr9
+  105      | expr9 • GE expr9
+  105      | expr9 GE expr9 •
 
     $default  reduce using rule 105 (expr9)
 
 
 State 275
 
-  107 expr10: expr10 . EQ expr10
-  108       | expr10 . NE expr10
-  108       | expr10 NE expr10 .
+  107 expr10: expr10 • EQ expr10
+  108       | expr10 • NE expr10
+  108       | expr10 NE expr10 •
 
     $default  reduce using rule 108 (expr10)
 
 
 State 276
 
-  107 expr10: expr10 . EQ expr10
-  107       | expr10 EQ expr10 .
-  108       | expr10 . NE expr10
+  107 expr10: expr10 • EQ expr10
+  107       | expr10 EQ expr10 •
+  108       | expr10 • NE expr10
 
     $default  reduce using rule 107 (expr10)
 
 
 State 277
 
-  110 expr11: expr11 . LAND expr11
-  110       | expr11 LAND expr11 .
+  110 expr11: expr11 • LAND expr11
+  110       | expr11 LAND expr11 •
 
     $default  reduce using rule 110 (expr11)
 
 
 State 278
 
-  112 expr12: expr12 . LXOR expr12
-  112       | expr12 LXOR expr12 .
+  112 expr12: expr12 • LXOR expr12
+  112       | expr12 LXOR expr12 •
 
     $default  reduce using rule 112 (expr12)
 
 
 State 279
 
-  114 expr13: expr13 . LOR expr13
-  114       | expr13 LOR expr13 .
+  114 expr13: expr13 • LOR expr13
+  114       | expr13 LOR expr13 •
 
     $default  reduce using rule 114 (expr13)
 
 
 State 280
 
-  116 expr14: expr14 . ASSIGN expr14
-  116       | expr14 ASSIGN expr14 .
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
+  116 expr14: expr14 • ASSIGN expr14
+  116       | expr14 ASSIGN expr14 •
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -5838,18 +5838,18 @@ State 280
 
 State 281
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  117       | expr14 EQ_SHL expr14 .
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  117       | expr14 EQ_SHL expr14 •
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -5868,18 +5868,18 @@ State 281
 
 State 282
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  118       | expr14 EQ_SHR expr14 .
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  118       | expr14 EQ_SHR expr14 •
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -5898,18 +5898,18 @@ State 282
 
 State 283
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  119       | expr14 EQ_MUL expr14 .
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  119       | expr14 EQ_MUL expr14 •
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -5928,18 +5928,18 @@ State 283
 
 State 284
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  120       | expr14 EQ_DIV expr14 .
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  120       | expr14 EQ_DIV expr14 •
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -5958,18 +5958,18 @@ State 284
 
 State 285
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  121       | expr14 EQ_MOD expr14 .
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  121       | expr14 EQ_MOD expr14 •
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -5988,18 +5988,18 @@ State 285
 
 State 286
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  122       | expr14 EQ_BAND expr14 .
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  122       | expr14 EQ_BAND expr14 •
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -6018,18 +6018,18 @@ State 286
 
 State 287
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  123       | expr14 EQ_BXOR expr14 .
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  123       | expr14 EQ_BXOR expr14 •
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -6048,18 +6048,18 @@ State 287
 
 State 288
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  124       | expr14 EQ_BOR expr14 .
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  124       | expr14 EQ_BOR expr14 •
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -6078,18 +6078,18 @@ State 288
 
 State 289
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  125       | expr14 EQ_ADD expr14 .
-  126       | expr14 . EQ_SUB expr14
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  125       | expr14 EQ_ADD expr14 •
+  126       | expr14 • EQ_SUB expr14
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -6108,18 +6108,18 @@ State 289
 
 State 290
 
-  116 expr14: expr14 . ASSIGN expr14
-  117       | expr14 . EQ_SHL expr14
-  118       | expr14 . EQ_SHR expr14
-  119       | expr14 . EQ_MUL expr14
-  120       | expr14 . EQ_DIV expr14
-  121       | expr14 . EQ_MOD expr14
-  122       | expr14 . EQ_BAND expr14
-  123       | expr14 . EQ_BXOR expr14
-  124       | expr14 . EQ_BOR expr14
-  125       | expr14 . EQ_ADD expr14
-  126       | expr14 . EQ_SUB expr14
-  126       | expr14 EQ_SUB expr14 .
+  116 expr14: expr14 • ASSIGN expr14
+  117       | expr14 • EQ_SHL expr14
+  118       | expr14 • EQ_SHR expr14
+  119       | expr14 • EQ_MUL expr14
+  120       | expr14 • EQ_DIV expr14
+  121       | expr14 • EQ_MOD expr14
+  122       | expr14 • EQ_BAND expr14
+  123       | expr14 • EQ_BXOR expr14
+  124       | expr14 • EQ_BOR expr14
+  125       | expr14 • EQ_ADD expr14
+  126       | expr14 • EQ_SUB expr14
+  126       | expr14 EQ_SUB expr14 •
 
     ASSIGN   shift, and go to state 141
     EQ_SHL   shift, and go to state 142
@@ -6138,35 +6138,35 @@ State 290
 
 State 291
 
-  259 stmts: stmts error .
+  259 stmts: stmts error •
 
     $default  reduce using rule 259 (stmts)
 
 
 State 292
 
-  260 scope: LEFT_CURLY stmts RIGHT_CURLY .
+  260 scope: LEFT_CURLY stmts RIGHT_CURLY •
 
     $default  reduce using rule 260 (scope)
 
 
 State 293
 
-  258 stmts: stmts ocstmt .
+  258 stmts: stmts ocstmt •
 
     $default  reduce using rule 258 (stmts)
 
 
 State 294
 
-  128 expr_comma: expr_comma COMMA expr .
+  128 expr_comma: expr_comma COMMA expr •
 
     $default  reduce using rule 128 (expr_comma)
 
 
 State 295
 
-  163 tryblock: TRY scope CATCH . scope
+  163 tryblock: TRY scope CATCH • scope
 
     LEFT_CURLY  shift, and go to state 43
 
@@ -6175,8 +6175,8 @@ State 295
 
 State 296
 
-  128 expr_comma: expr_comma . COMMA expr
-  215 ifcl: IF LEFT_PAREN expr_comma . RIGHT_PAREN
+  128 expr_comma: expr_comma • COMMA expr
+  215 ifcl: IF LEFT_PAREN expr_comma • RIGHT_PAREN
 
     COMMA        shift, and go to state 156
     RIGHT_PAREN  shift, and go to state 405
@@ -6184,15 +6184,15 @@ State 296
 
 State 297
 
-  222 dostmt: DO ocstmt WHILE . LEFT_PAREN expr_comma RIGHT_PAREN
+  222 dostmt: DO ocstmt WHILE • LEFT_PAREN expr_comma RIGHT_PAREN
 
     LEFT_PAREN  shift, and go to state 406
 
 
 State 298
 
-  128 expr_comma: expr_comma . COMMA expr
-  213 loop_header: WHILE LEFT_PAREN expr_comma . RIGHT_PAREN
+  128 expr_comma: expr_comma • COMMA expr
+  213 loop_header: WHILE LEFT_PAREN expr_comma • RIGHT_PAREN
 
     COMMA        shift, and go to state 156
     RIGHT_PAREN  shift, and go to state 407
@@ -6200,8 +6200,8 @@ State 298
 
 State 299
 
-  128 expr_comma: expr_comma . COMMA expr
-  211 expr_opt: expr_comma .
+  128 expr_comma: expr_comma • COMMA expr
+  211 expr_opt: expr_comma •
 
     COMMA  shift, and go to state 156
 
@@ -6210,30 +6210,30 @@ State 299
 
 State 300
 
-  214 loop_header: FOR LEFT_PAREN expr_opt . SEMI expr_opt SEMI expr_opt RIGHT_PAREN
+  214 loop_header: FOR LEFT_PAREN expr_opt • SEMI expr_opt SEMI expr_opt RIGHT_PAREN
 
     SEMI  shift, and go to state 408
 
 
 State 301
 
-  251 simple_stmt: RET expr_comma SEMI .
+  251 simple_stmt: RET expr_comma SEMI •
 
     $default  reduce using rule 251 (simple_stmt)
 
 
 State 302
 
-  244 simple_stmt: GOTO NAME SEMI .
+  244 simple_stmt: GOTO NAME SEMI •
 
     $default  reduce using rule 244 (simple_stmt)
 
 
 State 303
 
-  128 expr_comma: expr_comma . COMMA expr
-  232 swit: SWITCH LEFT_PAREN expr_comma . RIGHT_PAREN LEFT_CURLY swit_body RIGHT_CURLY
-  233     | SWITCH LEFT_PAREN expr_comma . RIGHT_PAREN LEFT_CURLY RIGHT_CURLY
+  128 expr_comma: expr_comma • COMMA expr
+  232 swit: SWITCH LEFT_PAREN expr_comma • RIGHT_PAREN LEFT_CURLY swit_body RIGHT_CURLY
+  233     | SWITCH LEFT_PAREN expr_comma • RIGHT_PAREN LEFT_CURLY RIGHT_CURLY
 
     COMMA        shift, and go to state 156
     RIGHT_PAREN  shift, and go to state 409
@@ -6241,8 +6241,8 @@ State 303
 
 State 304
 
-  293 _expr3: SIZEOF LEFT_PAREN . expr_comma RIGHT_PAREN
-  294       | SIZEOF LEFT_PAREN . sizeof_type RIGHT_PAREN
+  293 _expr3: SIZEOF LEFT_PAREN • expr_comma RIGHT_PAREN
+  294       | SIZEOF LEFT_PAREN • sizeof_type RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -6296,15 +6296,15 @@ State 304
 
 State 305
 
-  291 _expr3: SIZEOF NAME .
+  291 _expr3: SIZEOF NAME •
 
     $default  reduce using rule 291 (_expr3)
 
 
 State 306
 
-   70 sizeof_type: sizeof_type . MUL
-  292 _expr3: SIZEOF sizeof_type .
+   70 sizeof_type: sizeof_type • MUL
+  292 _expr3: SIZEOF sizeof_type •
 
     MUL  shift, and go to state 249
 
@@ -6313,8 +6313,8 @@ State 306
 
 State 307
 
-  282 _expr2: TYPENAME . DOT NAME
-  283       | TYPENAME . ARROW NAME
+  282 _expr2: TYPENAME • DOT NAME
+  283       | TYPENAME • ARROW NAME
 
     DOT    shift, and go to state 321
     ARROW  shift, and go to state 322
@@ -6322,50 +6322,50 @@ State 307
 
 State 308
 
-  301 _expr3: LNOT _expr3 .
+  301 _expr3: LNOT _expr3 •
 
     $default  reduce using rule 301 (_expr3)
 
 
 State 309
 
-  302 _expr3: BNOT _expr3 .
+  302 _expr3: BNOT _expr3 •
 
     $default  reduce using rule 302 (_expr3)
 
 
 State 310
 
-  296 _expr3: MUL _expr3 .
+  296 _expr3: MUL _expr3 •
 
     $default  reduce using rule 296 (_expr3)
 
 
 State 311
 
-  295 _expr3: BAND _expr3 .
+  295 _expr3: BAND _expr3 •
 
     $default  reduce using rule 295 (_expr3)
 
 
 State 312
 
-  299 _expr3: ADD _expr3 .
+  299 _expr3: ADD _expr3 •
 
     $default  reduce using rule 299 (_expr3)
 
 
 State 313
 
-  300 _expr3: SUB _expr3 .
+  300 _expr3: SUB _expr3 •
 
     $default  reduce using rule 300 (_expr3)
 
 
 State 314
 
-  128 expr_comma: expr_comma . COMMA expr
-  280 _expr1: LEFT_PAREN expr_comma . RIGHT_PAREN
+  128 expr_comma: expr_comma • COMMA expr
+  280 _expr1: LEFT_PAREN expr_comma • RIGHT_PAREN
 
     COMMA        shift, and go to state 156
     RIGHT_PAREN  shift, and go to state 412
@@ -6373,40 +6373,40 @@ State 314
 
 State 315
 
-  298 _expr3: INC _expr3 .
+  298 _expr3: INC _expr3 •
 
     $default  reduce using rule 298 (_expr3)
 
 
 State 316
 
-  297 _expr3: DEC _expr3 .
+  297 _expr3: DEC _expr3 •
 
     $default  reduce using rule 297 (_expr3)
 
 
 State 317
 
-    5 sib_ib: INT .
+    5 sib_ib: INT •
 
     $default  reduce using rule 5 (sib_ib)
 
 
 State 318
 
-    1 sib_ib: REGISTER .
+    1 sib_ib: REGISTER •
 
     $default  reduce using rule 1 (sib_ib)
 
 
 State 319
 
-    2 sib_ib: sib_ib . ADD REGISTER
-    3       | sib_ib . ADD INT MUL REGISTER
-    4       | sib_ib . ADD REGISTER MUL INT
-    6 sib_d: sib_ib .
-    7      | sib_ib . ADD expr
-    8      | sib_ib . SUB expr
+    2 sib_ib: sib_ib • ADD REGISTER
+    3       | sib_ib • ADD INT MUL REGISTER
+    4       | sib_ib • ADD REGISTER MUL INT
+    6 sib_d: sib_ib •
+    7      | sib_ib • ADD expr
+    8      | sib_ib • SUB expr
 
     ADD  shift, and go to state 413
     SUB  shift, and go to state 414
@@ -6416,42 +6416,42 @@ State 319
 
 State 320
 
-    9 _sib: LEFT_SQAURE sib_d . RIGHT_SQAURE
+    9 _sib: LEFT_SQAURE sib_d • RIGHT_SQAURE
 
     RIGHT_SQAURE  shift, and go to state 415
 
 
 State 321
 
-  282 _expr2: TYPENAME DOT . NAME
+  282 _expr2: TYPENAME DOT • NAME
 
     NAME  shift, and go to state 416
 
 
 State 322
 
-  283 _expr2: TYPENAME ARROW . NAME
+  283 _expr2: TYPENAME ARROW • NAME
 
     NAME  shift, and go to state 417
 
 
 State 323
 
-   16 opc_operand: TYPENAME REGISTER . COLON sib
+   16 opc_operand: TYPENAME REGISTER • COLON sib
 
     COLON  shift, and go to state 418
 
 
 State 324
 
-   15 opc_operand: TYPENAME sib .
+   15 opc_operand: TYPENAME sib •
 
     $default  reduce using rule 15 (opc_operand)
 
 
 State 325
 
-   11 sib: _expr . _sib
+   11 sib: _expr • _sib
 
     LEFT_SQAURE  shift, and go to state 191
 
@@ -6460,21 +6460,21 @@ State 325
 
 State 326
 
-  270 _expr0: DOUBLE_AT INT .
+  270 _expr0: DOUBLE_AT INT •
 
     $default  reduce using rule 270 (_expr0)
 
 
 State 327
 
-  269 _expr0: DOUBLE_AT NAME .
+  269 _expr0: DOUBLE_AT NAME •
 
     $default  reduce using rule 269 (_expr0)
 
 
 State 328
 
-   17 opc_operand: opc_operand COLON . sib
+   17 opc_operand: opc_operand COLON • sib
 
     CHAR         shift, and go to state 176
     INT          shift, and go to state 177
@@ -6520,7 +6520,7 @@ State 328
 
 State 329
 
-   19 opc_operands: opc_operands COMMA . opc_operand
+   19 opc_operands: opc_operands COMMA • opc_operand
 
     CHAR         shift, and go to state 176
     INT          shift, and go to state 177
@@ -6568,22 +6568,22 @@ State 329
 
 State 330
 
-  284 _expr2: _expr2 DOT . NAME
+  284 _expr2: _expr2 DOT • NAME
 
     NAME  shift, and go to state 421
 
 
 State 331
 
-  285 _expr2: _expr2 ARROW . NAME
+  285 _expr2: _expr2 ARROW • NAME
 
     NAME  shift, and go to state 422
 
 
 State 332
 
-  288 _expr2: _expr2 LEFT_PAREN . callargs RIGHT_PAREN
-  289       | _expr2 LEFT_PAREN . primtype0 RIGHT_PAREN
+  288 _expr2: _expr2 LEFT_PAREN • callargs RIGHT_PAREN
+  289       | _expr2 LEFT_PAREN • primtype0 RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -6639,21 +6639,21 @@ State 332
 
 State 333
 
-  287 _expr2: _expr2 INC .
+  287 _expr2: _expr2 INC •
 
     $default  reduce using rule 287 (_expr2)
 
 
 State 334
 
-  286 _expr2: _expr2 DEC .
+  286 _expr2: _expr2 DEC •
 
     $default  reduce using rule 286 (_expr2)
 
 
 State 335
 
-  304 _expr4: _expr4 POW . _expr4
+  304 _expr4: _expr4 POW • _expr4
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -6684,7 +6684,7 @@ State 335
 
 State 336
 
-  305 _expr4: _expr4 SHL . _expr4
+  305 _expr4: _expr4 SHL • _expr4
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -6715,7 +6715,7 @@ State 336
 
 State 337
 
-  306 _expr4: _expr4 SHR . _expr4
+  306 _expr4: _expr4 SHR • _expr4
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -6746,7 +6746,7 @@ State 337
 
 State 338
 
-  308 _expr4_5: _expr4_5 MUL . _expr4_5
+  308 _expr4_5: _expr4_5 MUL • _expr4_5
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -6778,7 +6778,7 @@ State 338
 
 State 339
 
-  309 _expr4_5: _expr4_5 DIV . _expr4_5
+  309 _expr4_5: _expr4_5 DIV • _expr4_5
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -6810,7 +6810,7 @@ State 339
 
 State 340
 
-  310 _expr4_5: _expr4_5 MOD . _expr4_5
+  310 _expr4_5: _expr4_5 MOD • _expr4_5
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -6842,7 +6842,7 @@ State 340
 
 State 341
 
-  312 _expr5: _expr5 BAND . _expr5
+  312 _expr5: _expr5 BAND • _expr5
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -6875,7 +6875,7 @@ State 341
 
 State 342
 
-  314 _expr6: _expr6 BXOR . _expr6
+  314 _expr6: _expr6 BXOR • _expr6
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -6909,7 +6909,7 @@ State 342
 
 State 343
 
-  316 _expr7: _expr7 BOR . _expr7
+  316 _expr7: _expr7 BOR • _expr7
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -6944,7 +6944,7 @@ State 343
 
 State 344
 
-  318 _expr8: _expr8 ADD . _expr8
+  318 _expr8: _expr8 ADD • _expr8
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -6980,7 +6980,7 @@ State 344
 
 State 345
 
-  319 _expr8: _expr8 SUB . _expr8
+  319 _expr8: _expr8 SUB • _expr8
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7016,7 +7016,7 @@ State 345
 
 State 346
 
-  321 _expr9: _expr9 LT . _expr9
+  321 _expr9: _expr9 LT • _expr9
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7053,7 +7053,7 @@ State 346
 
 State 347
 
-  322 _expr9: _expr9 GT . _expr9
+  322 _expr9: _expr9 GT • _expr9
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7090,7 +7090,7 @@ State 347
 
 State 348
 
-  323 _expr9: _expr9 LE . _expr9
+  323 _expr9: _expr9 LE • _expr9
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7127,7 +7127,7 @@ State 348
 
 State 349
 
-  324 _expr9: _expr9 GE . _expr9
+  324 _expr9: _expr9 GE • _expr9
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7164,7 +7164,7 @@ State 349
 
 State 350
 
-  327 _expr10: _expr10 NE . _expr10
+  327 _expr10: _expr10 NE • _expr10
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7202,7 +7202,7 @@ State 350
 
 State 351
 
-  326 _expr10: _expr10 EQ . _expr10
+  326 _expr10: _expr10 EQ • _expr10
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7240,7 +7240,7 @@ State 351
 
 State 352
 
-  329 _expr11: _expr11 LAND . _expr11
+  329 _expr11: _expr11 LAND • _expr11
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7279,7 +7279,7 @@ State 352
 
 State 353
 
-  331 _expr12: _expr12 LXOR . _expr12
+  331 _expr12: _expr12 LXOR • _expr12
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7319,7 +7319,7 @@ State 353
 
 State 354
 
-  333 _expr13: _expr13 LOR . _expr13
+  333 _expr13: _expr13 LOR • _expr13
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7360,7 +7360,7 @@ State 354
 
 State 355
 
-  335 _expr14: _expr14 ASSIGN . _expr14
+  335 _expr14: _expr14 ASSIGN • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7402,7 +7402,7 @@ State 355
 
 State 356
 
-  336 _expr14: _expr14 EQ_SHL . _expr14
+  336 _expr14: _expr14 EQ_SHL • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7444,7 +7444,7 @@ State 356
 
 State 357
 
-  337 _expr14: _expr14 EQ_SHR . _expr14
+  337 _expr14: _expr14 EQ_SHR • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7486,7 +7486,7 @@ State 357
 
 State 358
 
-  338 _expr14: _expr14 EQ_MUL . _expr14
+  338 _expr14: _expr14 EQ_MUL • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7528,7 +7528,7 @@ State 358
 
 State 359
 
-  339 _expr14: _expr14 EQ_DIV . _expr14
+  339 _expr14: _expr14 EQ_DIV • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7570,7 +7570,7 @@ State 359
 
 State 360
 
-  340 _expr14: _expr14 EQ_MOD . _expr14
+  340 _expr14: _expr14 EQ_MOD • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7612,7 +7612,7 @@ State 360
 
 State 361
 
-  341 _expr14: _expr14 EQ_BAND . _expr14
+  341 _expr14: _expr14 EQ_BAND • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7654,7 +7654,7 @@ State 361
 
 State 362
 
-  342 _expr14: _expr14 EQ_BXOR . _expr14
+  342 _expr14: _expr14 EQ_BXOR • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7696,7 +7696,7 @@ State 362
 
 State 363
 
-  343 _expr14: _expr14 EQ_BOR . _expr14
+  343 _expr14: _expr14 EQ_BOR • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7738,7 +7738,7 @@ State 363
 
 State 364
 
-  344 _expr14: _expr14 EQ_ADD . _expr14
+  344 _expr14: _expr14 EQ_ADD • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7780,7 +7780,7 @@ State 364
 
 State 365
 
-  345 _expr14: _expr14 EQ_SUB . _expr14
+  345 _expr14: _expr14 EQ_SUB • _expr14
 
     CHAR        shift, and go to state 176
     INT         shift, and go to state 177
@@ -7822,15 +7822,15 @@ State 365
 
 State 366
 
-   11 sib: _expr _sib .
+   11 sib: _expr _sib •
 
     $default  reduce using rule 11 (sib)
 
 
 State 367
 
-   22 asm_blk_stmt: NAME . DOUBLE_COLON
-   23             | NAME . COLON
+   22 asm_blk_stmt: NAME • DOUBLE_COLON
+   23             | NAME • COLON
 
     COLON         shift, and go to state 456
     DOUBLE_COLON  shift, and go to state 457
@@ -7838,21 +7838,21 @@ State 367
 
 State 368
 
-   36 asm_blk_stmt: SEMI .
+   36 asm_blk_stmt: SEMI •
 
     $default  reduce using rule 36 (asm_blk_stmt)
 
 
 State 369
 
-   38 asm_blk: ASM LEFT_CURLY RIGHT_CURLY .
+   38 asm_blk: ASM LEFT_CURLY RIGHT_CURLY •
 
     $default  reduce using rule 38 (asm_blk)
 
 
 State 370
 
-   35 asm_blk_stmt: ASM_IMPORT . name_list SEMI
+   35 asm_blk_stmt: ASM_IMPORT • name_list SEMI
 
     NAME  shift, and go to state 458
 
@@ -7861,8 +7861,8 @@ State 370
 
 State 371
 
-   24 asm_blk_stmt: DOUBLE_AT . NAME COLON
-   25             | DOUBLE_AT . INT COLON
+   24 asm_blk_stmt: DOUBLE_AT • NAME COLON
+   25             | DOUBLE_AT • INT COLON
 
     INT   shift, and go to state 460
     NAME  shift, and go to state 461
@@ -7870,7 +7870,7 @@ State 371
 
 State 372
 
-   28 asm_blk_stmt: DU8 . data_exprs SEMI
+   28 asm_blk_stmt: DU8 • data_exprs SEMI
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -7914,7 +7914,7 @@ State 372
 
 State 373
 
-   29 asm_blk_stmt: DU16 . data_exprs SEMI
+   29 asm_blk_stmt: DU16 • data_exprs SEMI
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -7958,7 +7958,7 @@ State 373
 
 State 374
 
-   30 asm_blk_stmt: DU32 . data_exprs SEMI
+   30 asm_blk_stmt: DU32 • data_exprs SEMI
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -8002,7 +8002,7 @@ State 374
 
 State 375
 
-   31 asm_blk_stmt: DU64 . data_exprs SEMI
+   31 asm_blk_stmt: DU64 • data_exprs SEMI
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -8046,29 +8046,29 @@ State 375
 
 State 376
 
-   37 asm_blk_stmt: ALIGN . INT COMMA INT
+   37 asm_blk_stmt: ALIGN • INT COMMA INT
 
     INT  shift, and go to state 467
 
 
 State 377
 
-   32 asm_blk_stmt: opcode .
+   32 asm_blk_stmt: opcode •
 
     $default  reduce using rule 32 (asm_blk_stmt)
 
 
 State 378
 
-   39 asm_blk_stmts: asm_blk_stmt .
+   39 asm_blk_stmts: asm_blk_stmt •
 
     $default  reduce using rule 39 (asm_blk_stmts)
 
 
 State 379
 
-   40 asm_blk_stmts: asm_blk_stmts . asm_blk_stmt
-   41 asm_blk: ASM LEFT_CURLY asm_blk_stmts . RIGHT_CURLY
+   40 asm_blk_stmts: asm_blk_stmts • asm_blk_stmt
+   41 asm_blk: ASM LEFT_CURLY asm_blk_stmts • RIGHT_CURLY
 
     NAME         shift, and go to state 367
     SEMI         shift, and go to state 368
@@ -8088,10 +8088,10 @@ State 379
 
 State 380
 
-  166 namewptrs: MUL MUL . NAME
-  167          | MUL MUL . MUL NAME
-  171 __ptrcount: MUL MUL .
-  172           | MUL MUL . MUL
+  166 namewptrs: MUL MUL • NAME
+  167          | MUL MUL • MUL NAME
+  171 __ptrcount: MUL MUL •
+  172           | MUL MUL • MUL
 
     MUL   shift, and go to state 470
     NAME  shift, and go to state 471
@@ -8101,19 +8101,19 @@ State 380
 
 State 381
 
-  165 namewptrs: MUL NAME .
+  165 namewptrs: MUL NAME •
 
     $default  reduce using rule 165 (namewptrs)
 
 
 State 382
 
-  197 func: primtype0 namewptrs LEFT_PAREN . funcargs RIGHT_PAREN SEMI
-  198     | primtype0 namewptrs LEFT_PAREN . funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
-  199     | primtype0 namewptrs LEFT_PAREN . DOT_DOT_DOT RIGHT_PAREN SEMI
-  203     | primtype0 namewptrs LEFT_PAREN . DOT_DOT_DOT RIGHT_PAREN scope
-  204     | primtype0 namewptrs LEFT_PAREN . funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
-  205     | primtype0 namewptrs LEFT_PAREN . funcargs RIGHT_PAREN scope
+  197 func: primtype0 namewptrs LEFT_PAREN • funcargs RIGHT_PAREN SEMI
+  198     | primtype0 namewptrs LEFT_PAREN • funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
+  199     | primtype0 namewptrs LEFT_PAREN • DOT_DOT_DOT RIGHT_PAREN SEMI
+  203     | primtype0 namewptrs LEFT_PAREN • DOT_DOT_DOT RIGHT_PAREN scope
+  204     | primtype0 namewptrs LEFT_PAREN • funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
+  205     | primtype0 namewptrs LEFT_PAREN • funcargs RIGHT_PAREN scope
 
     DOT_DOT_DOT  shift, and go to state 472
     CLASS        shift, and go to state 61
@@ -8135,8 +8135,8 @@ State 382
 
 State 383
 
-  178 vardecltail_asn: vardecltail ASSIGN . expr
-  179                | vardecltail ASSIGN . arrlit
+  178 vardecltail_asn: vardecltail ASSIGN • expr
+  179                | vardecltail ASSIGN • arrlit
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -8181,8 +8181,8 @@ State 383
 
 State 384
 
-  176 vardecltail: vardecltail LEFT_SQAURE . expr_comma RIGHT_SQAURE
-  177            | vardecltail LEFT_SQAURE . RIGHT_SQAURE
+  176 vardecltail: vardecltail LEFT_SQAURE • expr_comma RIGHT_SQAURE
+  177            | vardecltail LEFT_SQAURE • RIGHT_SQAURE
 
     CHAR          shift, and go to state 7
     INT           shift, and go to state 8
@@ -8227,16 +8227,16 @@ State 384
 
 State 385
 
-  173 vardecltail: __ptrcount LEFT_PAREN . MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
-  174            | __ptrcount LEFT_PAREN . MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
-  175            | __ptrcount LEFT_PAREN . MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  173 vardecltail: __ptrcount LEFT_PAREN • MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  174            | __ptrcount LEFT_PAREN • MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  175            | __ptrcount LEFT_PAREN • MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
 
     MUL  shift, and go to state 481
 
 
 State 386
 
-  182 vardecltails: vardecltails COMMA . vardecltails
+  182 vardecltails: vardecltails COMMA • vardecltails
 
     MUL   shift, and go to state 220
     NAME  shift, and go to state 221
@@ -8252,23 +8252,23 @@ State 386
 
 State 387
 
-  159 cheader: _cheader COLON TYPENAME .
+  159 cheader: _cheader COLON TYPENAME •
 
     $default  reduce using rule 159 (cheader)
 
 
 State 388
 
-  160 uheader: _uheader COLON TYPENAME .
+  160 uheader: _uheader COLON TYPENAME •
 
     $default  reduce using rule 160 (uheader)
 
 
 State 389
 
-  148 cbody: cbody . cdecl SEMI
-  149      | cbody . primtype0 SEMI
-  161 _class: cheader LEFT_CURLY cbody . RIGHT_CURLY
+  148 cbody: cbody • cdecl SEMI
+  149      | cbody • primtype0 SEMI
+  161 _class: cheader LEFT_CURLY cbody • RIGHT_CURLY
 
     RIGHT_CURLY  shift, and go to state 484
     CLASS        shift, and go to state 61
@@ -8287,9 +8287,9 @@ State 389
 
 State 390
 
-  148 cbody: cbody . cdecl SEMI
-  149      | cbody . primtype0 SEMI
-  162 _union: uheader LEFT_CURLY cbody . RIGHT_CURLY
+  148 cbody: cbody • cdecl SEMI
+  149      | cbody • primtype0 SEMI
+  162 _union: uheader LEFT_CURLY cbody • RIGHT_CURLY
 
     RIGHT_CURLY  shift, and go to state 487
     CLASS        shift, and go to state 61
@@ -8308,8 +8308,8 @@ State 390
 
 State 391
 
-  153 _cheader: CLASS NAME .
-  256 simple_stmt: linkage CLASS NAME . SEMI
+  153 _cheader: CLASS NAME •
+  256 simple_stmt: linkage CLASS NAME • SEMI
 
     SEMI  shift, and go to state 488
 
@@ -8318,8 +8318,8 @@ State 391
 
 State 392
 
-  154 _uheader: UNION NAME .
-  255 simple_stmt: linkage UNION NAME . SEMI
+  154 _uheader: UNION NAME •
+  255 simple_stmt: linkage UNION NAME • SEMI
 
     SEMI  shift, and go to state 489
 
@@ -8328,13 +8328,13 @@ State 392
 
 State 393
 
-  168 vardecltail: namewptrs .
-  200 func: linkage primtype0 namewptrs . LEFT_PAREN funcargs RIGHT_PAREN SEMI
-  201     | linkage primtype0 namewptrs . LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
-  202     | linkage primtype0 namewptrs . LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI
-  206     | linkage primtype0 namewptrs . LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope
-  207     | linkage primtype0 namewptrs . LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
-  208     | linkage primtype0 namewptrs . LEFT_PAREN funcargs RIGHT_PAREN scope
+  168 vardecltail: namewptrs •
+  200 func: linkage primtype0 namewptrs • LEFT_PAREN funcargs RIGHT_PAREN SEMI
+  201     | linkage primtype0 namewptrs • LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
+  202     | linkage primtype0 namewptrs • LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI
+  206     | linkage primtype0 namewptrs • LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope
+  207     | linkage primtype0 namewptrs • LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
+  208     | linkage primtype0 namewptrs • LEFT_PAREN funcargs RIGHT_PAREN scope
 
     LEFT_PAREN  shift, and go to state 490
 
@@ -8343,15 +8343,15 @@ State 393
 
 State 394
 
-  242 simple_stmt: linkage multi_decl SEMI .
+  242 simple_stmt: linkage multi_decl SEMI •
 
     $default  reduce using rule 242 (simple_stmt)
 
 
 State 395
 
-  217 ostmt: ifcl cstmt ELSE . ostmt
-  220 cstmt: ifcl cstmt ELSE . cstmt
+  217 ostmt: ifcl cstmt ELSE • ostmt
+  220 cstmt: ifcl cstmt ELSE • cstmt
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -8438,28 +8438,28 @@ State 395
 
 State 396
 
-  236 opcodes: opcodes opcode SEMI .
+  236 opcodes: opcodes opcode SEMI •
 
     $default  reduce using rule 236 (opcodes)
 
 
 State 397
 
-   75 expr3: SIZEOF LEFT_PAREN sizeof_type RIGHT_PAREN .
+   75 expr3: SIZEOF LEFT_PAREN sizeof_type RIGHT_PAREN •
 
     $default  reduce using rule 75 (expr3)
 
 
 State 398
 
-   74 expr3: SIZEOF LEFT_PAREN expr_comma RIGHT_PAREN .
+   74 expr3: SIZEOF LEFT_PAREN expr_comma RIGHT_PAREN •
 
     $default  reduce using rule 74 (expr3)
 
 
 State 399
 
-   52 callargs: callargs COMMA . _callargs
+   52 callargs: callargs COMMA • _callargs
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -8505,16 +8505,16 @@ State 399
 
 State 400
 
-   64 expr2: expr2 LEFT_PAREN callargs RIGHT_PAREN .
+   64 expr2: expr2 LEFT_PAREN callargs RIGHT_PAREN •
 
     $default  reduce using rule 64 (expr2)
 
 
 State 401
 
-   66 expr2: expr2 LEFT_PAREN primtype0 MUL . RIGHT_PAREN
-   67      | expr2 LEFT_PAREN primtype0 MUL . MUL RIGHT_PAREN
-   68      | expr2 LEFT_PAREN primtype0 MUL . MUL MUL RIGHT_PAREN
+   66 expr2: expr2 LEFT_PAREN primtype0 MUL • RIGHT_PAREN
+   67      | expr2 LEFT_PAREN primtype0 MUL • MUL RIGHT_PAREN
+   68      | expr2 LEFT_PAREN primtype0 MUL • MUL MUL RIGHT_PAREN
 
     MUL          shift, and go to state 494
     RIGHT_PAREN  shift, and go to state 495
@@ -8522,35 +8522,35 @@ State 401
 
 State 402
 
-   65 expr2: expr2 LEFT_PAREN primtype0 RIGHT_PAREN .
+   65 expr2: expr2 LEFT_PAREN primtype0 RIGHT_PAREN •
 
     $default  reduce using rule 65 (expr2)
 
 
 State 403
 
-   61 expr2: expr2 LEFT_SQAURE expr_comma RIGHT_SQAURE .
+   61 expr2: expr2 LEFT_SQAURE expr_comma RIGHT_SQAURE •
 
     $default  reduce using rule 61 (expr2)
 
 
 State 404
 
-  163 tryblock: TRY scope CATCH scope .
+  163 tryblock: TRY scope CATCH scope •
 
     $default  reduce using rule 163 (tryblock)
 
 
 State 405
 
-  215 ifcl: IF LEFT_PAREN expr_comma RIGHT_PAREN .
+  215 ifcl: IF LEFT_PAREN expr_comma RIGHT_PAREN •
 
     $default  reduce using rule 215 (ifcl)
 
 
 State 406
 
-  222 dostmt: DO ocstmt WHILE LEFT_PAREN . expr_comma RIGHT_PAREN
+  222 dostmt: DO ocstmt WHILE LEFT_PAREN • expr_comma RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -8594,14 +8594,14 @@ State 406
 
 State 407
 
-  213 loop_header: WHILE LEFT_PAREN expr_comma RIGHT_PAREN .
+  213 loop_header: WHILE LEFT_PAREN expr_comma RIGHT_PAREN •
 
     $default  reduce using rule 213 (loop_header)
 
 
 State 408
 
-  214 loop_header: FOR LEFT_PAREN expr_opt SEMI . expr_opt SEMI expr_opt RIGHT_PAREN
+  214 loop_header: FOR LEFT_PAREN expr_opt SEMI • expr_opt SEMI expr_opt RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -8648,16 +8648,16 @@ State 408
 
 State 409
 
-  232 swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN . LEFT_CURLY swit_body RIGHT_CURLY
-  233     | SWITCH LEFT_PAREN expr_comma RIGHT_PAREN . LEFT_CURLY RIGHT_CURLY
+  232 swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN • LEFT_CURLY swit_body RIGHT_CURLY
+  233     | SWITCH LEFT_PAREN expr_comma RIGHT_PAREN • LEFT_CURLY RIGHT_CURLY
 
     LEFT_CURLY  shift, and go to state 498
 
 
 State 410
 
-   70 sizeof_type: sizeof_type . MUL
-  294 _expr3: SIZEOF LEFT_PAREN sizeof_type . RIGHT_PAREN
+   70 sizeof_type: sizeof_type • MUL
+  294 _expr3: SIZEOF LEFT_PAREN sizeof_type • RIGHT_PAREN
 
     MUL          shift, and go to state 249
     RIGHT_PAREN  shift, and go to state 499
@@ -8665,8 +8665,8 @@ State 410
 
 State 411
 
-  128 expr_comma: expr_comma . COMMA expr
-  293 _expr3: SIZEOF LEFT_PAREN expr_comma . RIGHT_PAREN
+  128 expr_comma: expr_comma • COMMA expr
+  293 _expr3: SIZEOF LEFT_PAREN expr_comma • RIGHT_PAREN
 
     COMMA        shift, and go to state 156
     RIGHT_PAREN  shift, and go to state 500
@@ -8674,17 +8674,17 @@ State 411
 
 State 412
 
-  280 _expr1: LEFT_PAREN expr_comma RIGHT_PAREN .
+  280 _expr1: LEFT_PAREN expr_comma RIGHT_PAREN •
 
     $default  reduce using rule 280 (_expr1)
 
 
 State 413
 
-    2 sib_ib: sib_ib ADD . REGISTER
-    3       | sib_ib ADD . INT MUL REGISTER
-    4       | sib_ib ADD . REGISTER MUL INT
-    7 sib_d: sib_ib ADD . expr
+    2 sib_ib: sib_ib ADD • REGISTER
+    3       | sib_ib ADD • INT MUL REGISTER
+    4       | sib_ib ADD • REGISTER MUL INT
+    7 sib_d: sib_ib ADD • expr
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 501
@@ -8728,7 +8728,7 @@ State 413
 
 State 414
 
-    8 sib_d: sib_ib SUB . expr
+    8 sib_d: sib_ib SUB • expr
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -8771,28 +8771,28 @@ State 414
 
 State 415
 
-    9 _sib: LEFT_SQAURE sib_d RIGHT_SQAURE .
+    9 _sib: LEFT_SQAURE sib_d RIGHT_SQAURE •
 
     $default  reduce using rule 9 (_sib)
 
 
 State 416
 
-  282 _expr2: TYPENAME DOT NAME .
+  282 _expr2: TYPENAME DOT NAME •
 
     $default  reduce using rule 282 (_expr2)
 
 
 State 417
 
-  283 _expr2: TYPENAME ARROW NAME .
+  283 _expr2: TYPENAME ARROW NAME •
 
     $default  reduce using rule 283 (_expr2)
 
 
 State 418
 
-   16 opc_operand: TYPENAME REGISTER COLON . sib
+   16 opc_operand: TYPENAME REGISTER COLON • sib
 
     CHAR         shift, and go to state 176
     INT          shift, and go to state 177
@@ -8838,15 +8838,15 @@ State 418
 
 State 419
 
-   17 opc_operand: opc_operand COLON sib .
+   17 opc_operand: opc_operand COLON sib •
 
     $default  reduce using rule 17 (opc_operand)
 
 
 State 420
 
-   17 opc_operand: opc_operand . COLON sib
-   19 opc_operands: opc_operands COMMA opc_operand .
+   17 opc_operand: opc_operand • COLON sib
+   19 opc_operands: opc_operands COMMA opc_operand •
 
     COLON  shift, and go to state 328
 
@@ -8855,22 +8855,22 @@ State 420
 
 State 421
 
-  284 _expr2: _expr2 DOT NAME .
+  284 _expr2: _expr2 DOT NAME •
 
     $default  reduce using rule 284 (_expr2)
 
 
 State 422
 
-  285 _expr2: _expr2 ARROW NAME .
+  285 _expr2: _expr2 ARROW NAME •
 
     $default  reduce using rule 285 (_expr2)
 
 
 State 423
 
-   52 callargs: callargs . COMMA _callargs
-  288 _expr2: _expr2 LEFT_PAREN callargs . RIGHT_PAREN
+   52 callargs: callargs • COMMA _callargs
+  288 _expr2: _expr2 LEFT_PAREN callargs • RIGHT_PAREN
 
     COMMA        shift, and go to state 399
     RIGHT_PAREN  shift, and go to state 506
@@ -8878,9 +8878,9 @@ State 423
 
 State 424
 
-  133 primtype0: primtype0 . _union
-  134          | primtype0 . _class
-  289 _expr2: _expr2 LEFT_PAREN primtype0 . RIGHT_PAREN
+  133 primtype0: primtype0 • _union
+  134          | primtype0 • _class
+  289 _expr2: _expr2 LEFT_PAREN primtype0 • RIGHT_PAREN
 
     RIGHT_PAREN  shift, and go to state 507
     CLASS        shift, and go to state 61
@@ -8896,206 +8896,206 @@ State 424
 
 State 425
 
-  304 _expr4: _expr4 . POW _expr4
-  304       | _expr4 POW _expr4 .
-  305       | _expr4 . SHL _expr4
-  306       | _expr4 . SHR _expr4
+  304 _expr4: _expr4 • POW _expr4
+  304       | _expr4 POW _expr4 •
+  305       | _expr4 • SHL _expr4
+  306       | _expr4 • SHR _expr4
 
     $default  reduce using rule 304 (_expr4)
 
 
 State 426
 
-  304 _expr4: _expr4 . POW _expr4
-  305       | _expr4 . SHL _expr4
-  305       | _expr4 SHL _expr4 .
-  306       | _expr4 . SHR _expr4
+  304 _expr4: _expr4 • POW _expr4
+  305       | _expr4 • SHL _expr4
+  305       | _expr4 SHL _expr4 •
+  306       | _expr4 • SHR _expr4
 
     $default  reduce using rule 305 (_expr4)
 
 
 State 427
 
-  304 _expr4: _expr4 . POW _expr4
-  305       | _expr4 . SHL _expr4
-  306       | _expr4 . SHR _expr4
-  306       | _expr4 SHR _expr4 .
+  304 _expr4: _expr4 • POW _expr4
+  305       | _expr4 • SHL _expr4
+  306       | _expr4 • SHR _expr4
+  306       | _expr4 SHR _expr4 •
 
     $default  reduce using rule 306 (_expr4)
 
 
 State 428
 
-  308 _expr4_5: _expr4_5 . MUL _expr4_5
-  308         | _expr4_5 MUL _expr4_5 .
-  309         | _expr4_5 . DIV _expr4_5
-  310         | _expr4_5 . MOD _expr4_5
+  308 _expr4_5: _expr4_5 • MUL _expr4_5
+  308         | _expr4_5 MUL _expr4_5 •
+  309         | _expr4_5 • DIV _expr4_5
+  310         | _expr4_5 • MOD _expr4_5
 
     $default  reduce using rule 308 (_expr4_5)
 
 
 State 429
 
-  308 _expr4_5: _expr4_5 . MUL _expr4_5
-  309         | _expr4_5 . DIV _expr4_5
-  309         | _expr4_5 DIV _expr4_5 .
-  310         | _expr4_5 . MOD _expr4_5
+  308 _expr4_5: _expr4_5 • MUL _expr4_5
+  309         | _expr4_5 • DIV _expr4_5
+  309         | _expr4_5 DIV _expr4_5 •
+  310         | _expr4_5 • MOD _expr4_5
 
     $default  reduce using rule 309 (_expr4_5)
 
 
 State 430
 
-  308 _expr4_5: _expr4_5 . MUL _expr4_5
-  309         | _expr4_5 . DIV _expr4_5
-  310         | _expr4_5 . MOD _expr4_5
-  310         | _expr4_5 MOD _expr4_5 .
+  308 _expr4_5: _expr4_5 • MUL _expr4_5
+  309         | _expr4_5 • DIV _expr4_5
+  310         | _expr4_5 • MOD _expr4_5
+  310         | _expr4_5 MOD _expr4_5 •
 
     $default  reduce using rule 310 (_expr4_5)
 
 
 State 431
 
-  312 _expr5: _expr5 . BAND _expr5
-  312       | _expr5 BAND _expr5 .
+  312 _expr5: _expr5 • BAND _expr5
+  312       | _expr5 BAND _expr5 •
 
     $default  reduce using rule 312 (_expr5)
 
 
 State 432
 
-  314 _expr6: _expr6 . BXOR _expr6
-  314       | _expr6 BXOR _expr6 .
+  314 _expr6: _expr6 • BXOR _expr6
+  314       | _expr6 BXOR _expr6 •
 
     $default  reduce using rule 314 (_expr6)
 
 
 State 433
 
-  316 _expr7: _expr7 . BOR _expr7
-  316       | _expr7 BOR _expr7 .
+  316 _expr7: _expr7 • BOR _expr7
+  316       | _expr7 BOR _expr7 •
 
     $default  reduce using rule 316 (_expr7)
 
 
 State 434
 
-  318 _expr8: _expr8 . ADD _expr8
-  318       | _expr8 ADD _expr8 .
-  319       | _expr8 . SUB _expr8
+  318 _expr8: _expr8 • ADD _expr8
+  318       | _expr8 ADD _expr8 •
+  319       | _expr8 • SUB _expr8
 
     $default  reduce using rule 318 (_expr8)
 
 
 State 435
 
-  318 _expr8: _expr8 . ADD _expr8
-  319       | _expr8 . SUB _expr8
-  319       | _expr8 SUB _expr8 .
+  318 _expr8: _expr8 • ADD _expr8
+  319       | _expr8 • SUB _expr8
+  319       | _expr8 SUB _expr8 •
 
     $default  reduce using rule 319 (_expr8)
 
 
 State 436
 
-  321 _expr9: _expr9 . LT _expr9
-  321       | _expr9 LT _expr9 .
-  322       | _expr9 . GT _expr9
-  323       | _expr9 . LE _expr9
-  324       | _expr9 . GE _expr9
+  321 _expr9: _expr9 • LT _expr9
+  321       | _expr9 LT _expr9 •
+  322       | _expr9 • GT _expr9
+  323       | _expr9 • LE _expr9
+  324       | _expr9 • GE _expr9
 
     $default  reduce using rule 321 (_expr9)
 
 
 State 437
 
-  321 _expr9: _expr9 . LT _expr9
-  322       | _expr9 . GT _expr9
-  322       | _expr9 GT _expr9 .
-  323       | _expr9 . LE _expr9
-  324       | _expr9 . GE _expr9
+  321 _expr9: _expr9 • LT _expr9
+  322       | _expr9 • GT _expr9
+  322       | _expr9 GT _expr9 •
+  323       | _expr9 • LE _expr9
+  324       | _expr9 • GE _expr9
 
     $default  reduce using rule 322 (_expr9)
 
 
 State 438
 
-  321 _expr9: _expr9 . LT _expr9
-  322       | _expr9 . GT _expr9
-  323       | _expr9 . LE _expr9
-  323       | _expr9 LE _expr9 .
-  324       | _expr9 . GE _expr9
+  321 _expr9: _expr9 • LT _expr9
+  322       | _expr9 • GT _expr9
+  323       | _expr9 • LE _expr9
+  323       | _expr9 LE _expr9 •
+  324       | _expr9 • GE _expr9
 
     $default  reduce using rule 323 (_expr9)
 
 
 State 439
 
-  321 _expr9: _expr9 . LT _expr9
-  322       | _expr9 . GT _expr9
-  323       | _expr9 . LE _expr9
-  324       | _expr9 . GE _expr9
-  324       | _expr9 GE _expr9 .
+  321 _expr9: _expr9 • LT _expr9
+  322       | _expr9 • GT _expr9
+  323       | _expr9 • LE _expr9
+  324       | _expr9 • GE _expr9
+  324       | _expr9 GE _expr9 •
 
     $default  reduce using rule 324 (_expr9)
 
 
 State 440
 
-  326 _expr10: _expr10 . EQ _expr10
-  327        | _expr10 . NE _expr10
-  327        | _expr10 NE _expr10 .
+  326 _expr10: _expr10 • EQ _expr10
+  327        | _expr10 • NE _expr10
+  327        | _expr10 NE _expr10 •
 
     $default  reduce using rule 327 (_expr10)
 
 
 State 441
 
-  326 _expr10: _expr10 . EQ _expr10
-  326        | _expr10 EQ _expr10 .
-  327        | _expr10 . NE _expr10
+  326 _expr10: _expr10 • EQ _expr10
+  326        | _expr10 EQ _expr10 •
+  327        | _expr10 • NE _expr10
 
     $default  reduce using rule 326 (_expr10)
 
 
 State 442
 
-  329 _expr11: _expr11 . LAND _expr11
-  329        | _expr11 LAND _expr11 .
+  329 _expr11: _expr11 • LAND _expr11
+  329        | _expr11 LAND _expr11 •
 
     $default  reduce using rule 329 (_expr11)
 
 
 State 443
 
-  331 _expr12: _expr12 . LXOR _expr12
-  331        | _expr12 LXOR _expr12 .
+  331 _expr12: _expr12 • LXOR _expr12
+  331        | _expr12 LXOR _expr12 •
 
     $default  reduce using rule 331 (_expr12)
 
 
 State 444
 
-  333 _expr13: _expr13 . LOR _expr13
-  333        | _expr13 LOR _expr13 .
+  333 _expr13: _expr13 • LOR _expr13
+  333        | _expr13 LOR _expr13 •
 
     $default  reduce using rule 333 (_expr13)
 
 
 State 445
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  335        | _expr14 ASSIGN _expr14 .
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
+  335 _expr14: _expr14 • ASSIGN _expr14
+  335        | _expr14 ASSIGN _expr14 •
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9114,18 +9114,18 @@ State 445
 
 State 446
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  336        | _expr14 EQ_SHL _expr14 .
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  336        | _expr14 EQ_SHL _expr14 •
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9144,18 +9144,18 @@ State 446
 
 State 447
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  337        | _expr14 EQ_SHR _expr14 .
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  337        | _expr14 EQ_SHR _expr14 •
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9174,18 +9174,18 @@ State 447
 
 State 448
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  338        | _expr14 EQ_MUL _expr14 .
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  338        | _expr14 EQ_MUL _expr14 •
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9204,18 +9204,18 @@ State 448
 
 State 449
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  339        | _expr14 EQ_DIV _expr14 .
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  339        | _expr14 EQ_DIV _expr14 •
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9234,18 +9234,18 @@ State 449
 
 State 450
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  340        | _expr14 EQ_MOD _expr14 .
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  340        | _expr14 EQ_MOD _expr14 •
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9264,18 +9264,18 @@ State 450
 
 State 451
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  341        | _expr14 EQ_BAND _expr14 .
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  341        | _expr14 EQ_BAND _expr14 •
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9294,18 +9294,18 @@ State 451
 
 State 452
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  342        | _expr14 EQ_BXOR _expr14 .
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  342        | _expr14 EQ_BXOR _expr14 •
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9324,18 +9324,18 @@ State 452
 
 State 453
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  343        | _expr14 EQ_BOR _expr14 .
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  343        | _expr14 EQ_BOR _expr14 •
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9354,18 +9354,18 @@ State 453
 
 State 454
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  344        | _expr14 EQ_ADD _expr14 .
-  345        | _expr14 . EQ_SUB _expr14
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  344        | _expr14 EQ_ADD _expr14 •
+  345        | _expr14 • EQ_SUB _expr14
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9384,18 +9384,18 @@ State 454
 
 State 455
 
-  335 _expr14: _expr14 . ASSIGN _expr14
-  336        | _expr14 . EQ_SHL _expr14
-  337        | _expr14 . EQ_SHR _expr14
-  338        | _expr14 . EQ_MUL _expr14
-  339        | _expr14 . EQ_DIV _expr14
-  340        | _expr14 . EQ_MOD _expr14
-  341        | _expr14 . EQ_BAND _expr14
-  342        | _expr14 . EQ_BXOR _expr14
-  343        | _expr14 . EQ_BOR _expr14
-  344        | _expr14 . EQ_ADD _expr14
-  345        | _expr14 . EQ_SUB _expr14
-  345        | _expr14 EQ_SUB _expr14 .
+  335 _expr14: _expr14 • ASSIGN _expr14
+  336        | _expr14 • EQ_SHL _expr14
+  337        | _expr14 • EQ_SHR _expr14
+  338        | _expr14 • EQ_MUL _expr14
+  339        | _expr14 • EQ_DIV _expr14
+  340        | _expr14 • EQ_MOD _expr14
+  341        | _expr14 • EQ_BAND _expr14
+  342        | _expr14 • EQ_BXOR _expr14
+  343        | _expr14 • EQ_BOR _expr14
+  344        | _expr14 • EQ_ADD _expr14
+  345        | _expr14 • EQ_SUB _expr14
+  345        | _expr14 EQ_SUB _expr14 •
 
     ASSIGN   shift, and go to state 355
     EQ_SHL   shift, and go to state 356
@@ -9414,29 +9414,29 @@ State 455
 
 State 456
 
-   23 asm_blk_stmt: NAME COLON .
+   23 asm_blk_stmt: NAME COLON •
 
     $default  reduce using rule 23 (asm_blk_stmt)
 
 
 State 457
 
-   22 asm_blk_stmt: NAME DOUBLE_COLON .
+   22 asm_blk_stmt: NAME DOUBLE_COLON •
 
     $default  reduce using rule 22 (asm_blk_stmt)
 
 
 State 458
 
-   33 name_list: NAME .
+   33 name_list: NAME •
 
     $default  reduce using rule 33 (name_list)
 
 
 State 459
 
-   34 name_list: name_list . COMMA NAME
-   35 asm_blk_stmt: ASM_IMPORT name_list . SEMI
+   34 name_list: name_list • COMMA NAME
+   35 asm_blk_stmt: ASM_IMPORT name_list • SEMI
 
     COMMA  shift, and go to state 508
     SEMI   shift, and go to state 509
@@ -9444,22 +9444,22 @@ State 459
 
 State 460
 
-   25 asm_blk_stmt: DOUBLE_AT INT . COLON
+   25 asm_blk_stmt: DOUBLE_AT INT • COLON
 
     COLON  shift, and go to state 510
 
 
 State 461
 
-   24 asm_blk_stmt: DOUBLE_AT NAME . COLON
+   24 asm_blk_stmt: DOUBLE_AT NAME • COLON
 
     COLON  shift, and go to state 511
 
 
 State 462
 
-   27 data_exprs: data_exprs . COMMA expr
-   28 asm_blk_stmt: DU8 data_exprs . SEMI
+   27 data_exprs: data_exprs • COMMA expr
+   28 asm_blk_stmt: DU8 data_exprs • SEMI
 
     COMMA  shift, and go to state 512
     SEMI   shift, and go to state 513
@@ -9467,15 +9467,15 @@ State 462
 
 State 463
 
-   26 data_exprs: expr .
+   26 data_exprs: expr •
 
     $default  reduce using rule 26 (data_exprs)
 
 
 State 464
 
-   27 data_exprs: data_exprs . COMMA expr
-   29 asm_blk_stmt: DU16 data_exprs . SEMI
+   27 data_exprs: data_exprs • COMMA expr
+   29 asm_blk_stmt: DU16 data_exprs • SEMI
 
     COMMA  shift, and go to state 512
     SEMI   shift, and go to state 514
@@ -9483,8 +9483,8 @@ State 464
 
 State 465
 
-   27 data_exprs: data_exprs . COMMA expr
-   30 asm_blk_stmt: DU32 data_exprs . SEMI
+   27 data_exprs: data_exprs • COMMA expr
+   30 asm_blk_stmt: DU32 data_exprs • SEMI
 
     COMMA  shift, and go to state 512
     SEMI   shift, and go to state 515
@@ -9492,8 +9492,8 @@ State 465
 
 State 466
 
-   27 data_exprs: data_exprs . COMMA expr
-   31 asm_blk_stmt: DU64 data_exprs . SEMI
+   27 data_exprs: data_exprs • COMMA expr
+   31 asm_blk_stmt: DU64 data_exprs • SEMI
 
     COMMA  shift, and go to state 512
     SEMI   shift, and go to state 516
@@ -9501,29 +9501,29 @@ State 466
 
 State 467
 
-   37 asm_blk_stmt: ALIGN INT . COMMA INT
+   37 asm_blk_stmt: ALIGN INT • COMMA INT
 
     COMMA  shift, and go to state 517
 
 
 State 468
 
-   41 asm_blk: ASM LEFT_CURLY asm_blk_stmts RIGHT_CURLY .
+   41 asm_blk: ASM LEFT_CURLY asm_blk_stmts RIGHT_CURLY •
 
     $default  reduce using rule 41 (asm_blk)
 
 
 State 469
 
-   40 asm_blk_stmts: asm_blk_stmts asm_blk_stmt .
+   40 asm_blk_stmts: asm_blk_stmts asm_blk_stmt •
 
     $default  reduce using rule 40 (asm_blk_stmts)
 
 
 State 470
 
-  167 namewptrs: MUL MUL MUL . NAME
-  172 __ptrcount: MUL MUL MUL .
+  167 namewptrs: MUL MUL MUL • NAME
+  172 __ptrcount: MUL MUL MUL •
 
     NAME  shift, and go to state 518
 
@@ -9532,25 +9532,25 @@ State 470
 
 State 471
 
-  166 namewptrs: MUL MUL NAME .
+  166 namewptrs: MUL MUL NAME •
 
     $default  reduce using rule 166 (namewptrs)
 
 
 State 472
 
-  199 func: primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT . RIGHT_PAREN SEMI
-  203     | primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT . RIGHT_PAREN scope
+  199 func: primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT • RIGHT_PAREN SEMI
+  203     | primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT • RIGHT_PAREN scope
 
     RIGHT_PAREN  shift, and go to state 519
 
 
 State 473
 
-  133 primtype0: primtype0 . _union
-  134          | primtype0 . _class
-  180 single_decl: primtype0 . vardecltail
-  181            | primtype0 . vardecltail_asn
+  133 primtype0: primtype0 • _union
+  134          | primtype0 • _class
+  180 single_decl: primtype0 • vardecltail
+  181            | primtype0 • vardecltail_asn
 
     MUL    shift, and go to state 220
     NAME   shift, and go to state 221
@@ -9573,18 +9573,18 @@ State 473
 
 State 474
 
-  186 funcargs: single_decl .
+  186 funcargs: single_decl •
 
     $default  reduce using rule 186 (funcargs)
 
 
 State 475
 
-  187 funcargs: funcargs . COMMA single_decl
-  197 func: primtype0 namewptrs LEFT_PAREN funcargs . RIGHT_PAREN SEMI
-  198     | primtype0 namewptrs LEFT_PAREN funcargs . COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
-  204     | primtype0 namewptrs LEFT_PAREN funcargs . COMMA DOT_DOT_DOT RIGHT_PAREN scope
-  205     | primtype0 namewptrs LEFT_PAREN funcargs . RIGHT_PAREN scope
+  187 funcargs: funcargs • COMMA single_decl
+  197 func: primtype0 namewptrs LEFT_PAREN funcargs • RIGHT_PAREN SEMI
+  198     | primtype0 namewptrs LEFT_PAREN funcargs • COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
+  204     | primtype0 namewptrs LEFT_PAREN funcargs • COMMA DOT_DOT_DOT RIGHT_PAREN scope
+  205     | primtype0 namewptrs LEFT_PAREN funcargs • RIGHT_PAREN scope
 
     COMMA        shift, and go to state 522
     RIGHT_PAREN  shift, and go to state 523
@@ -9592,9 +9592,9 @@ State 475
 
 State 476
 
-  139 arrlit: LEFT_CURLY . _arrlit RIGHT_CURLY
-  140       | LEFT_CURLY . _arrlit COMMA RIGHT_CURLY
-  141       | LEFT_CURLY . COMMA RIGHT_CURLY
+  139 arrlit: LEFT_CURLY • _arrlit RIGHT_CURLY
+  140       | LEFT_CURLY • _arrlit COMMA RIGHT_CURLY
+  141       | LEFT_CURLY • COMMA RIGHT_CURLY
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -9641,29 +9641,29 @@ State 476
 
 State 477
 
-  178 vardecltail_asn: vardecltail ASSIGN expr .
+  178 vardecltail_asn: vardecltail ASSIGN expr •
 
     $default  reduce using rule 178 (vardecltail_asn)
 
 
 State 478
 
-  179 vardecltail_asn: vardecltail ASSIGN arrlit .
+  179 vardecltail_asn: vardecltail ASSIGN arrlit •
 
     $default  reduce using rule 179 (vardecltail_asn)
 
 
 State 479
 
-  177 vardecltail: vardecltail LEFT_SQAURE RIGHT_SQAURE .
+  177 vardecltail: vardecltail LEFT_SQAURE RIGHT_SQAURE •
 
     $default  reduce using rule 177 (vardecltail)
 
 
 State 480
 
-  128 expr_comma: expr_comma . COMMA expr
-  176 vardecltail: vardecltail LEFT_SQAURE expr_comma . RIGHT_SQAURE
+  128 expr_comma: expr_comma • COMMA expr
+  176 vardecltail: vardecltail LEFT_SQAURE expr_comma • RIGHT_SQAURE
 
     COMMA         shift, and go to state 156
     RIGHT_SQAURE  shift, and go to state 528
@@ -9671,9 +9671,9 @@ State 480
 
 State 481
 
-  173 vardecltail: __ptrcount LEFT_PAREN MUL . NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
-  174            | __ptrcount LEFT_PAREN MUL . MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
-  175            | __ptrcount LEFT_PAREN MUL . MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  173 vardecltail: __ptrcount LEFT_PAREN MUL • NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  174            | __ptrcount LEFT_PAREN MUL • MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  175            | __ptrcount LEFT_PAREN MUL • MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
 
     MUL   shift, and go to state 529
     NAME  shift, and go to state 530
@@ -9681,32 +9681,32 @@ State 481
 
 State 482
 
-  168 vardecltail: namewptrs .
+  168 vardecltail: namewptrs •
 
     $default  reduce using rule 168 (vardecltail)
 
 
 State 483
 
-  182 vardecltails: vardecltails . COMMA vardecltails
-  182             | vardecltails COMMA vardecltails .
+  182 vardecltails: vardecltails • COMMA vardecltails
+  182             | vardecltails COMMA vardecltails •
 
     $default  reduce using rule 182 (vardecltails)
 
 
 State 484
 
-  161 _class: cheader LEFT_CURLY cbody RIGHT_CURLY .
+  161 _class: cheader LEFT_CURLY cbody RIGHT_CURLY •
 
     $default  reduce using rule 161 (_class)
 
 
 State 485
 
-  133 primtype0: primtype0 . _union
-  134          | primtype0 . _class
-  147 cdecl: primtype0 . cdecltail
-  149 cbody: cbody primtype0 . SEMI
+  133 primtype0: primtype0 • _union
+  134          | primtype0 • _class
+  147 cdecl: primtype0 • cdecltail
+  149 cbody: cbody primtype0 • SEMI
 
     MUL    shift, and go to state 220
     NAME   shift, and go to state 221
@@ -9731,40 +9731,40 @@ State 485
 
 State 486
 
-  148 cbody: cbody cdecl . SEMI
+  148 cbody: cbody cdecl • SEMI
 
     SEMI  shift, and go to state 535
 
 
 State 487
 
-  162 _union: uheader LEFT_CURLY cbody RIGHT_CURLY .
+  162 _union: uheader LEFT_CURLY cbody RIGHT_CURLY •
 
     $default  reduce using rule 162 (_union)
 
 
 State 488
 
-  256 simple_stmt: linkage CLASS NAME SEMI .
+  256 simple_stmt: linkage CLASS NAME SEMI •
 
     $default  reduce using rule 256 (simple_stmt)
 
 
 State 489
 
-  255 simple_stmt: linkage UNION NAME SEMI .
+  255 simple_stmt: linkage UNION NAME SEMI •
 
     $default  reduce using rule 255 (simple_stmt)
 
 
 State 490
 
-  200 func: linkage primtype0 namewptrs LEFT_PAREN . funcargs RIGHT_PAREN SEMI
-  201     | linkage primtype0 namewptrs LEFT_PAREN . funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
-  202     | linkage primtype0 namewptrs LEFT_PAREN . DOT_DOT_DOT RIGHT_PAREN SEMI
-  206     | linkage primtype0 namewptrs LEFT_PAREN . DOT_DOT_DOT RIGHT_PAREN scope
-  207     | linkage primtype0 namewptrs LEFT_PAREN . funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
-  208     | linkage primtype0 namewptrs LEFT_PAREN . funcargs RIGHT_PAREN scope
+  200 func: linkage primtype0 namewptrs LEFT_PAREN • funcargs RIGHT_PAREN SEMI
+  201     | linkage primtype0 namewptrs LEFT_PAREN • funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
+  202     | linkage primtype0 namewptrs LEFT_PAREN • DOT_DOT_DOT RIGHT_PAREN SEMI
+  206     | linkage primtype0 namewptrs LEFT_PAREN • DOT_DOT_DOT RIGHT_PAREN scope
+  207     | linkage primtype0 namewptrs LEFT_PAREN • funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope
+  208     | linkage primtype0 namewptrs LEFT_PAREN • funcargs RIGHT_PAREN scope
 
     DOT_DOT_DOT  shift, and go to state 536
     CLASS        shift, and go to state 61
@@ -9786,29 +9786,29 @@ State 490
 
 State 491
 
-  217 ostmt: ifcl cstmt ELSE ostmt .
+  217 ostmt: ifcl cstmt ELSE ostmt •
 
     $default  reduce using rule 217 (ostmt)
 
 
 State 492
 
-  220 cstmt: ifcl cstmt ELSE cstmt .
+  220 cstmt: ifcl cstmt ELSE cstmt •
 
     $default  reduce using rule 220 (cstmt)
 
 
 State 493
 
-   52 callargs: callargs COMMA _callargs .
+   52 callargs: callargs COMMA _callargs •
 
     $default  reduce using rule 52 (callargs)
 
 
 State 494
 
-   67 expr2: expr2 LEFT_PAREN primtype0 MUL MUL . RIGHT_PAREN
-   68      | expr2 LEFT_PAREN primtype0 MUL MUL . MUL RIGHT_PAREN
+   67 expr2: expr2 LEFT_PAREN primtype0 MUL MUL • RIGHT_PAREN
+   68      | expr2 LEFT_PAREN primtype0 MUL MUL • MUL RIGHT_PAREN
 
     MUL          shift, and go to state 538
     RIGHT_PAREN  shift, and go to state 539
@@ -9816,15 +9816,15 @@ State 494
 
 State 495
 
-   66 expr2: expr2 LEFT_PAREN primtype0 MUL RIGHT_PAREN .
+   66 expr2: expr2 LEFT_PAREN primtype0 MUL RIGHT_PAREN •
 
     $default  reduce using rule 66 (expr2)
 
 
 State 496
 
-  128 expr_comma: expr_comma . COMMA expr
-  222 dostmt: DO ocstmt WHILE LEFT_PAREN expr_comma . RIGHT_PAREN
+  128 expr_comma: expr_comma • COMMA expr
+  222 dostmt: DO ocstmt WHILE LEFT_PAREN expr_comma • RIGHT_PAREN
 
     COMMA        shift, and go to state 156
     RIGHT_PAREN  shift, and go to state 540
@@ -9832,15 +9832,15 @@ State 496
 
 State 497
 
-  214 loop_header: FOR LEFT_PAREN expr_opt SEMI expr_opt . SEMI expr_opt RIGHT_PAREN
+  214 loop_header: FOR LEFT_PAREN expr_opt SEMI expr_opt • SEMI expr_opt RIGHT_PAREN
 
     SEMI  shift, and go to state 541
 
 
 State 498
 
-  232 swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY . swit_body RIGHT_CURLY
-  233     | SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY . RIGHT_CURLY
+  232 swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY • swit_body RIGHT_CURLY
+  233     | SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY • RIGHT_CURLY
 
     CHAR         shift, and go to state 7
     INT          shift, and go to state 8
@@ -9935,22 +9935,22 @@ State 498
 
 State 499
 
-  294 _expr3: SIZEOF LEFT_PAREN sizeof_type RIGHT_PAREN .
+  294 _expr3: SIZEOF LEFT_PAREN sizeof_type RIGHT_PAREN •
 
     $default  reduce using rule 294 (_expr3)
 
 
 State 500
 
-  293 _expr3: SIZEOF LEFT_PAREN expr_comma RIGHT_PAREN .
+  293 _expr3: SIZEOF LEFT_PAREN expr_comma RIGHT_PAREN •
 
     $default  reduce using rule 293 (_expr3)
 
 
 State 501
 
-    3 sib_ib: sib_ib ADD INT . MUL REGISTER
-   45 expr0: INT .
+    3 sib_ib: sib_ib ADD INT • MUL REGISTER
+   45 expr0: INT •
 
     MUL  shift, and go to state 550
 
@@ -9959,8 +9959,8 @@ State 501
 
 State 502
 
-    2 sib_ib: sib_ib ADD REGISTER .
-    4       | sib_ib ADD REGISTER . MUL INT
+    2 sib_ib: sib_ib ADD REGISTER •
+    4       | sib_ib ADD REGISTER • MUL INT
 
     MUL  shift, and go to state 551
 
@@ -9969,70 +9969,70 @@ State 502
 
 State 503
 
-    7 sib_d: sib_ib ADD expr .
+    7 sib_d: sib_ib ADD expr •
 
     $default  reduce using rule 7 (sib_d)
 
 
 State 504
 
-    8 sib_d: sib_ib SUB expr .
+    8 sib_d: sib_ib SUB expr •
 
     $default  reduce using rule 8 (sib_d)
 
 
 State 505
 
-   16 opc_operand: TYPENAME REGISTER COLON sib .
+   16 opc_operand: TYPENAME REGISTER COLON sib •
 
     $default  reduce using rule 16 (opc_operand)
 
 
 State 506
 
-  288 _expr2: _expr2 LEFT_PAREN callargs RIGHT_PAREN .
+  288 _expr2: _expr2 LEFT_PAREN callargs RIGHT_PAREN •
 
     $default  reduce using rule 288 (_expr2)
 
 
 State 507
 
-  289 _expr2: _expr2 LEFT_PAREN primtype0 RIGHT_PAREN .
+  289 _expr2: _expr2 LEFT_PAREN primtype0 RIGHT_PAREN •
 
     $default  reduce using rule 289 (_expr2)
 
 
 State 508
 
-   34 name_list: name_list COMMA . NAME
+   34 name_list: name_list COMMA • NAME
 
     NAME  shift, and go to state 552
 
 
 State 509
 
-   35 asm_blk_stmt: ASM_IMPORT name_list SEMI .
+   35 asm_blk_stmt: ASM_IMPORT name_list SEMI •
 
     $default  reduce using rule 35 (asm_blk_stmt)
 
 
 State 510
 
-   25 asm_blk_stmt: DOUBLE_AT INT COLON .
+   25 asm_blk_stmt: DOUBLE_AT INT COLON •
 
     $default  reduce using rule 25 (asm_blk_stmt)
 
 
 State 511
 
-   24 asm_blk_stmt: DOUBLE_AT NAME COLON .
+   24 asm_blk_stmt: DOUBLE_AT NAME COLON •
 
     $default  reduce using rule 24 (asm_blk_stmt)
 
 
 State 512
 
-   27 data_exprs: data_exprs COMMA . expr
+   27 data_exprs: data_exprs COMMA • expr
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -10075,50 +10075,50 @@ State 512
 
 State 513
 
-   28 asm_blk_stmt: DU8 data_exprs SEMI .
+   28 asm_blk_stmt: DU8 data_exprs SEMI •
 
     $default  reduce using rule 28 (asm_blk_stmt)
 
 
 State 514
 
-   29 asm_blk_stmt: DU16 data_exprs SEMI .
+   29 asm_blk_stmt: DU16 data_exprs SEMI •
 
     $default  reduce using rule 29 (asm_blk_stmt)
 
 
 State 515
 
-   30 asm_blk_stmt: DU32 data_exprs SEMI .
+   30 asm_blk_stmt: DU32 data_exprs SEMI •
 
     $default  reduce using rule 30 (asm_blk_stmt)
 
 
 State 516
 
-   31 asm_blk_stmt: DU64 data_exprs SEMI .
+   31 asm_blk_stmt: DU64 data_exprs SEMI •
 
     $default  reduce using rule 31 (asm_blk_stmt)
 
 
 State 517
 
-   37 asm_blk_stmt: ALIGN INT COMMA . INT
+   37 asm_blk_stmt: ALIGN INT COMMA • INT
 
     INT  shift, and go to state 554
 
 
 State 518
 
-  167 namewptrs: MUL MUL MUL NAME .
+  167 namewptrs: MUL MUL MUL NAME •
 
     $default  reduce using rule 167 (namewptrs)
 
 
 State 519
 
-  199 func: primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN . SEMI
-  203     | primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN . scope
+  199 func: primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN • SEMI
+  203     | primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN • scope
 
     SEMI        shift, and go to state 555
     LEFT_CURLY  shift, and go to state 43
@@ -10128,11 +10128,11 @@ State 519
 
 State 520
 
-  176 vardecltail: vardecltail . LEFT_SQAURE expr_comma RIGHT_SQAURE
-  177            | vardecltail . LEFT_SQAURE RIGHT_SQAURE
-  178 vardecltail_asn: vardecltail . ASSIGN expr
-  179                | vardecltail . ASSIGN arrlit
-  180 single_decl: primtype0 vardecltail .
+  176 vardecltail: vardecltail • LEFT_SQAURE expr_comma RIGHT_SQAURE
+  177            | vardecltail • LEFT_SQAURE RIGHT_SQAURE
+  178 vardecltail_asn: vardecltail • ASSIGN expr
+  179                | vardecltail • ASSIGN arrlit
+  180 single_decl: primtype0 vardecltail •
 
     ASSIGN       shift, and go to state 383
     LEFT_SQAURE  shift, and go to state 384
@@ -10142,16 +10142,16 @@ State 520
 
 State 521
 
-  181 single_decl: primtype0 vardecltail_asn .
+  181 single_decl: primtype0 vardecltail_asn •
 
     $default  reduce using rule 181 (single_decl)
 
 
 State 522
 
-  187 funcargs: funcargs COMMA . single_decl
-  198 func: primtype0 namewptrs LEFT_PAREN funcargs COMMA . DOT_DOT_DOT RIGHT_PAREN SEMI
-  204     | primtype0 namewptrs LEFT_PAREN funcargs COMMA . DOT_DOT_DOT RIGHT_PAREN scope
+  187 funcargs: funcargs COMMA • single_decl
+  198 func: primtype0 namewptrs LEFT_PAREN funcargs COMMA • DOT_DOT_DOT RIGHT_PAREN SEMI
+  204     | primtype0 namewptrs LEFT_PAREN funcargs COMMA • DOT_DOT_DOT RIGHT_PAREN scope
 
     DOT_DOT_DOT  shift, and go to state 557
     CLASS        shift, and go to state 61
@@ -10170,8 +10170,8 @@ State 522
 
 State 523
 
-  197 func: primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN . SEMI
-  205     | primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN . scope
+  197 func: primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN • SEMI
+  205     | primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN • scope
 
     SEMI        shift, and go to state 559
     LEFT_CURLY  shift, and go to state 43
@@ -10181,24 +10181,24 @@ State 523
 
 State 524
 
-  141 arrlit: LEFT_CURLY COMMA . RIGHT_CURLY
+  141 arrlit: LEFT_CURLY COMMA • RIGHT_CURLY
 
     RIGHT_CURLY  shift, and go to state 561
 
 
 State 525
 
-  137 _arrlit: expr .
+  137 _arrlit: expr •
 
     $default  reduce using rule 137 (_arrlit)
 
 
 State 526
 
-  135 _arrlit: _arrlit . COMMA expr
-  136        | _arrlit . COMMA arrlit
-  139 arrlit: LEFT_CURLY _arrlit . RIGHT_CURLY
-  140       | LEFT_CURLY _arrlit . COMMA RIGHT_CURLY
+  135 _arrlit: _arrlit • COMMA expr
+  136        | _arrlit • COMMA arrlit
+  139 arrlit: LEFT_CURLY _arrlit • RIGHT_CURLY
+  140       | LEFT_CURLY _arrlit • COMMA RIGHT_CURLY
 
     COMMA        shift, and go to state 562
     RIGHT_CURLY  shift, and go to state 563
@@ -10206,22 +10206,22 @@ State 526
 
 State 527
 
-  138 _arrlit: arrlit .
+  138 _arrlit: arrlit •
 
     $default  reduce using rule 138 (_arrlit)
 
 
 State 528
 
-  176 vardecltail: vardecltail LEFT_SQAURE expr_comma RIGHT_SQAURE .
+  176 vardecltail: vardecltail LEFT_SQAURE expr_comma RIGHT_SQAURE •
 
     $default  reduce using rule 176 (vardecltail)
 
 
 State 529
 
-  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL . NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
-  175            | __ptrcount LEFT_PAREN MUL MUL . MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL • NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  175            | __ptrcount LEFT_PAREN MUL MUL • MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
 
     MUL   shift, and go to state 564
     NAME  shift, and go to state 565
@@ -10229,22 +10229,22 @@ State 529
 
 State 530
 
-  173 vardecltail: __ptrcount LEFT_PAREN MUL NAME . RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  173 vardecltail: __ptrcount LEFT_PAREN MUL NAME • RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
 
     RIGHT_PAREN  shift, and go to state 566
 
 
 State 531
 
-  149 cbody: cbody primtype0 SEMI .
+  149 cbody: cbody primtype0 SEMI •
 
     $default  reduce using rule 149 (cbody)
 
 
 State 532
 
-  143 cdecltail: cdecltail . COMMA _cdecltail
-  147 cdecl: primtype0 cdecltail .
+  143 cdecltail: cdecltail • COMMA _cdecltail
+  147 cdecl: primtype0 cdecltail •
 
     COMMA  shift, and go to state 567
 
@@ -10253,17 +10253,17 @@ State 532
 
 State 533
 
-  144 cdecltail: _cdecltail .
+  144 cdecltail: _cdecltail •
 
     $default  reduce using rule 144 (cdecltail)
 
 
 State 534
 
-  145 _cdecltail: vardecltail .
-  146           | vardecltail . metadata
-  176 vardecltail: vardecltail . LEFT_SQAURE expr_comma RIGHT_SQAURE
-  177            | vardecltail . LEFT_SQAURE RIGHT_SQAURE
+  145 _cdecltail: vardecltail •
+  146           | vardecltail • metadata
+  176 vardecltail: vardecltail • LEFT_SQAURE expr_comma RIGHT_SQAURE
+  177            | vardecltail • LEFT_SQAURE RIGHT_SQAURE
 
     NAME         shift, and go to state 568
     LEFT_SQAURE  shift, and go to state 384
@@ -10275,26 +10275,26 @@ State 534
 
 State 535
 
-  148 cbody: cbody cdecl SEMI .
+  148 cbody: cbody cdecl SEMI •
 
     $default  reduce using rule 148 (cbody)
 
 
 State 536
 
-  202 func: linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT . RIGHT_PAREN SEMI
-  206     | linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT . RIGHT_PAREN scope
+  202 func: linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT • RIGHT_PAREN SEMI
+  206     | linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT • RIGHT_PAREN scope
 
     RIGHT_PAREN  shift, and go to state 570
 
 
 State 537
 
-  187 funcargs: funcargs . COMMA single_decl
-  200 func: linkage primtype0 namewptrs LEFT_PAREN funcargs . RIGHT_PAREN SEMI
-  201     | linkage primtype0 namewptrs LEFT_PAREN funcargs . COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
-  207     | linkage primtype0 namewptrs LEFT_PAREN funcargs . COMMA DOT_DOT_DOT RIGHT_PAREN scope
-  208     | linkage primtype0 namewptrs LEFT_PAREN funcargs . RIGHT_PAREN scope
+  187 funcargs: funcargs • COMMA single_decl
+  200 func: linkage primtype0 namewptrs LEFT_PAREN funcargs • RIGHT_PAREN SEMI
+  201     | linkage primtype0 namewptrs LEFT_PAREN funcargs • COMMA DOT_DOT_DOT RIGHT_PAREN SEMI
+  207     | linkage primtype0 namewptrs LEFT_PAREN funcargs • COMMA DOT_DOT_DOT RIGHT_PAREN scope
+  208     | linkage primtype0 namewptrs LEFT_PAREN funcargs • RIGHT_PAREN scope
 
     COMMA        shift, and go to state 571
     RIGHT_PAREN  shift, and go to state 572
@@ -10302,28 +10302,28 @@ State 537
 
 State 538
 
-   68 expr2: expr2 LEFT_PAREN primtype0 MUL MUL MUL . RIGHT_PAREN
+   68 expr2: expr2 LEFT_PAREN primtype0 MUL MUL MUL • RIGHT_PAREN
 
     RIGHT_PAREN  shift, and go to state 573
 
 
 State 539
 
-   67 expr2: expr2 LEFT_PAREN primtype0 MUL MUL RIGHT_PAREN .
+   67 expr2: expr2 LEFT_PAREN primtype0 MUL MUL RIGHT_PAREN •
 
     $default  reduce using rule 67 (expr2)
 
 
 State 540
 
-  222 dostmt: DO ocstmt WHILE LEFT_PAREN expr_comma RIGHT_PAREN .
+  222 dostmt: DO ocstmt WHILE LEFT_PAREN expr_comma RIGHT_PAREN •
 
     $default  reduce using rule 222 (dostmt)
 
 
 State 541
 
-  214 loop_header: FOR LEFT_PAREN expr_opt SEMI expr_opt SEMI . expr_opt RIGHT_PAREN
+  214 loop_header: FOR LEFT_PAREN expr_opt SEMI expr_opt SEMI • expr_opt RIGHT_PAREN
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -10370,16 +10370,16 @@ State 541
 
 State 542
 
-  233 swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY RIGHT_CURLY .
+  233 swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY RIGHT_CURLY •
 
     $default  reduce using rule 233 (swit)
 
 
 State 543
 
-  226 swit_body_stmt: CASE . expr COLON
-  227               | CASE . COLON
-  228               | CASE . expr DOT_DOT_DOT expr COLON
+  226 swit_body_stmt: CASE • expr COLON
+  227               | CASE • COLON
+  228               | CASE • expr DOT_DOT_DOT expr COLON
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -10423,43 +10423,43 @@ State 543
 
 State 544
 
-  223 subswit: START . COLON swit_body END COLON
+  223 subswit: START • COLON swit_body END COLON
 
     COLON  shift, and go to state 577
 
 
 State 545
 
-  225 swit_body_stmt: DEFAULT . COLON
+  225 swit_body_stmt: DEFAULT • COLON
 
     COLON  shift, and go to state 578
 
 
 State 546
 
-  224 swit_body_stmt: ocstmt .
+  224 swit_body_stmt: ocstmt •
 
     $default  reduce using rule 224 (swit_body_stmt)
 
 
 State 547
 
-  229 swit_body_stmt: subswit .
+  229 swit_body_stmt: subswit •
 
     $default  reduce using rule 229 (swit_body_stmt)
 
 
 State 548
 
-  231 swit_body: swit_body_stmt .
+  231 swit_body: swit_body_stmt •
 
     $default  reduce using rule 231 (swit_body)
 
 
 State 549
 
-  230 swit_body: swit_body . swit_body_stmt
-  232 swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY swit_body . RIGHT_CURLY
+  230 swit_body: swit_body • swit_body_stmt
+  232 swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY swit_body • RIGHT_CURLY
 
     CHAR         shift, and go to state 7
     INT          shift, and go to state 8
@@ -10553,94 +10553,94 @@ State 549
 
 State 550
 
-    3 sib_ib: sib_ib ADD INT MUL . REGISTER
+    3 sib_ib: sib_ib ADD INT MUL • REGISTER
 
     REGISTER  shift, and go to state 581
 
 
 State 551
 
-    4 sib_ib: sib_ib ADD REGISTER MUL . INT
+    4 sib_ib: sib_ib ADD REGISTER MUL • INT
 
     INT  shift, and go to state 582
 
 
 State 552
 
-   34 name_list: name_list COMMA NAME .
+   34 name_list: name_list COMMA NAME •
 
     $default  reduce using rule 34 (name_list)
 
 
 State 553
 
-   27 data_exprs: data_exprs COMMA expr .
+   27 data_exprs: data_exprs COMMA expr •
 
     $default  reduce using rule 27 (data_exprs)
 
 
 State 554
 
-   37 asm_blk_stmt: ALIGN INT COMMA INT .
+   37 asm_blk_stmt: ALIGN INT COMMA INT •
 
     $default  reduce using rule 37 (asm_blk_stmt)
 
 
 State 555
 
-  199 func: primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI .
+  199 func: primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI •
 
     $default  reduce using rule 199 (func)
 
 
 State 556
 
-  203 func: primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope .
+  203 func: primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope •
 
     $default  reduce using rule 203 (func)
 
 
 State 557
 
-  198 func: primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT . RIGHT_PAREN SEMI
-  204     | primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT . RIGHT_PAREN scope
+  198 func: primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT • RIGHT_PAREN SEMI
+  204     | primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT • RIGHT_PAREN scope
 
     RIGHT_PAREN  shift, and go to state 583
 
 
 State 558
 
-  187 funcargs: funcargs COMMA single_decl .
+  187 funcargs: funcargs COMMA single_decl •
 
     $default  reduce using rule 187 (funcargs)
 
 
 State 559
 
-  197 func: primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI .
+  197 func: primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI •
 
     $default  reduce using rule 197 (func)
 
 
 State 560
 
-  205 func: primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope .
+  205 func: primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope •
 
     $default  reduce using rule 205 (func)
 
 
 State 561
 
-  141 arrlit: LEFT_CURLY COMMA RIGHT_CURLY .
+  141 arrlit: LEFT_CURLY COMMA RIGHT_CURLY •
 
     $default  reduce using rule 141 (arrlit)
 
 
 State 562
 
-  135 _arrlit: _arrlit COMMA . expr
-  136        | _arrlit COMMA . arrlit
-  140 arrlit: LEFT_CURLY _arrlit COMMA . RIGHT_CURLY
+  135 _arrlit: _arrlit COMMA • expr
+  136        | _arrlit COMMA • arrlit
+  140 arrlit: LEFT_CURLY _arrlit COMMA • RIGHT_CURLY
 
     CHAR         shift, and go to state 7
     INT          shift, and go to state 8
@@ -10686,35 +10686,35 @@ State 562
 
 State 563
 
-  139 arrlit: LEFT_CURLY _arrlit RIGHT_CURLY .
+  139 arrlit: LEFT_CURLY _arrlit RIGHT_CURLY •
 
     $default  reduce using rule 139 (arrlit)
 
 
 State 564
 
-  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL . NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL • NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
 
     NAME  shift, and go to state 587
 
 
 State 565
 
-  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME . RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME • RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
 
     RIGHT_PAREN  shift, and go to state 588
 
 
 State 566
 
-  173 vardecltail: __ptrcount LEFT_PAREN MUL NAME RIGHT_PAREN . LEFT_PAREN funcargs RIGHT_PAREN
+  173 vardecltail: __ptrcount LEFT_PAREN MUL NAME RIGHT_PAREN • LEFT_PAREN funcargs RIGHT_PAREN
 
     LEFT_PAREN  shift, and go to state 589
 
 
 State 567
 
-  143 cdecltail: cdecltail COMMA . _cdecltail
+  143 cdecltail: cdecltail COMMA • _cdecltail
 
     MUL   shift, and go to state 220
     NAME  shift, and go to state 221
@@ -10729,7 +10729,7 @@ State 567
 
 State 568
 
-  142 metadata: NAME . expr
+  142 metadata: NAME • expr
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -10772,15 +10772,15 @@ State 568
 
 State 569
 
-  146 _cdecltail: vardecltail metadata .
+  146 _cdecltail: vardecltail metadata •
 
     $default  reduce using rule 146 (_cdecltail)
 
 
 State 570
 
-  202 func: linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN . SEMI
-  206     | linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN . scope
+  202 func: linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN • SEMI
+  206     | linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN • scope
 
     SEMI        shift, and go to state 592
     LEFT_CURLY  shift, and go to state 43
@@ -10790,9 +10790,9 @@ State 570
 
 State 571
 
-  187 funcargs: funcargs COMMA . single_decl
-  201 func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA . DOT_DOT_DOT RIGHT_PAREN SEMI
-  207     | linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA . DOT_DOT_DOT RIGHT_PAREN scope
+  187 funcargs: funcargs COMMA • single_decl
+  201 func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA • DOT_DOT_DOT RIGHT_PAREN SEMI
+  207     | linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA • DOT_DOT_DOT RIGHT_PAREN scope
 
     DOT_DOT_DOT  shift, and go to state 594
     CLASS        shift, and go to state 61
@@ -10811,8 +10811,8 @@ State 571
 
 State 572
 
-  200 func: linkage primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN . SEMI
-  208     | linkage primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN . scope
+  200 func: linkage primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN • SEMI
+  208     | linkage primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN • scope
 
     SEMI        shift, and go to state 595
     LEFT_CURLY  shift, and go to state 43
@@ -10822,29 +10822,29 @@ State 572
 
 State 573
 
-   68 expr2: expr2 LEFT_PAREN primtype0 MUL MUL MUL RIGHT_PAREN .
+   68 expr2: expr2 LEFT_PAREN primtype0 MUL MUL MUL RIGHT_PAREN •
 
     $default  reduce using rule 68 (expr2)
 
 
 State 574
 
-  214 loop_header: FOR LEFT_PAREN expr_opt SEMI expr_opt SEMI expr_opt . RIGHT_PAREN
+  214 loop_header: FOR LEFT_PAREN expr_opt SEMI expr_opt SEMI expr_opt • RIGHT_PAREN
 
     RIGHT_PAREN  shift, and go to state 597
 
 
 State 575
 
-  227 swit_body_stmt: CASE COLON .
+  227 swit_body_stmt: CASE COLON •
 
     $default  reduce using rule 227 (swit_body_stmt)
 
 
 State 576
 
-  226 swit_body_stmt: CASE expr . COLON
-  228               | CASE expr . DOT_DOT_DOT expr COLON
+  226 swit_body_stmt: CASE expr • COLON
+  228               | CASE expr • DOT_DOT_DOT expr COLON
 
     COLON        shift, and go to state 598
     DOT_DOT_DOT  shift, and go to state 599
@@ -10852,7 +10852,7 @@ State 576
 
 State 577
 
-  223 subswit: START COLON . swit_body END COLON
+  223 subswit: START COLON • swit_body END COLON
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -10946,43 +10946,43 @@ State 577
 
 State 578
 
-  225 swit_body_stmt: DEFAULT COLON .
+  225 swit_body_stmt: DEFAULT COLON •
 
     $default  reduce using rule 225 (swit_body_stmt)
 
 
 State 579
 
-  232 swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY swit_body RIGHT_CURLY .
+  232 swit: SWITCH LEFT_PAREN expr_comma RIGHT_PAREN LEFT_CURLY swit_body RIGHT_CURLY •
 
     $default  reduce using rule 232 (swit)
 
 
 State 580
 
-  230 swit_body: swit_body swit_body_stmt .
+  230 swit_body: swit_body swit_body_stmt •
 
     $default  reduce using rule 230 (swit_body)
 
 
 State 581
 
-    3 sib_ib: sib_ib ADD INT MUL REGISTER .
+    3 sib_ib: sib_ib ADD INT MUL REGISTER •
 
     $default  reduce using rule 3 (sib_ib)
 
 
 State 582
 
-    4 sib_ib: sib_ib ADD REGISTER MUL INT .
+    4 sib_ib: sib_ib ADD REGISTER MUL INT •
 
     $default  reduce using rule 4 (sib_ib)
 
 
 State 583
 
-  198 func: primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN . SEMI
-  204     | primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN . scope
+  198 func: primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN • SEMI
+  204     | primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN • scope
 
     SEMI        shift, and go to state 601
     LEFT_CURLY  shift, and go to state 43
@@ -10992,42 +10992,42 @@ State 583
 
 State 584
 
-  140 arrlit: LEFT_CURLY _arrlit COMMA RIGHT_CURLY .
+  140 arrlit: LEFT_CURLY _arrlit COMMA RIGHT_CURLY •
 
     $default  reduce using rule 140 (arrlit)
 
 
 State 585
 
-  135 _arrlit: _arrlit COMMA expr .
+  135 _arrlit: _arrlit COMMA expr •
 
     $default  reduce using rule 135 (_arrlit)
 
 
 State 586
 
-  136 _arrlit: _arrlit COMMA arrlit .
+  136 _arrlit: _arrlit COMMA arrlit •
 
     $default  reduce using rule 136 (_arrlit)
 
 
 State 587
 
-  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME . RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
+  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME • RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN
 
     RIGHT_PAREN  shift, and go to state 603
 
 
 State 588
 
-  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME RIGHT_PAREN . LEFT_PAREN funcargs RIGHT_PAREN
+  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME RIGHT_PAREN • LEFT_PAREN funcargs RIGHT_PAREN
 
     LEFT_PAREN  shift, and go to state 604
 
 
 State 589
 
-  173 vardecltail: __ptrcount LEFT_PAREN MUL NAME RIGHT_PAREN LEFT_PAREN . funcargs RIGHT_PAREN
+  173 vardecltail: __ptrcount LEFT_PAREN MUL NAME RIGHT_PAREN LEFT_PAREN • funcargs RIGHT_PAREN
 
     CLASS     shift, and go to state 61
     UNION     shift, and go to state 62
@@ -11048,71 +11048,71 @@ State 589
 
 State 590
 
-  143 cdecltail: cdecltail COMMA _cdecltail .
+  143 cdecltail: cdecltail COMMA _cdecltail •
 
     $default  reduce using rule 143 (cdecltail)
 
 
 State 591
 
-  142 metadata: NAME expr .
+  142 metadata: NAME expr •
 
     $default  reduce using rule 142 (metadata)
 
 
 State 592
 
-  202 func: linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI .
+  202 func: linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN SEMI •
 
     $default  reduce using rule 202 (func)
 
 
 State 593
 
-  206 func: linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope .
+  206 func: linkage primtype0 namewptrs LEFT_PAREN DOT_DOT_DOT RIGHT_PAREN scope •
 
     $default  reduce using rule 206 (func)
 
 
 State 594
 
-  201 func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT . RIGHT_PAREN SEMI
-  207     | linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT . RIGHT_PAREN scope
+  201 func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT • RIGHT_PAREN SEMI
+  207     | linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT • RIGHT_PAREN scope
 
     RIGHT_PAREN  shift, and go to state 606
 
 
 State 595
 
-  200 func: linkage primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI .
+  200 func: linkage primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN SEMI •
 
     $default  reduce using rule 200 (func)
 
 
 State 596
 
-  208 func: linkage primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope .
+  208 func: linkage primtype0 namewptrs LEFT_PAREN funcargs RIGHT_PAREN scope •
 
     $default  reduce using rule 208 (func)
 
 
 State 597
 
-  214 loop_header: FOR LEFT_PAREN expr_opt SEMI expr_opt SEMI expr_opt RIGHT_PAREN .
+  214 loop_header: FOR LEFT_PAREN expr_opt SEMI expr_opt SEMI expr_opt RIGHT_PAREN •
 
     $default  reduce using rule 214 (loop_header)
 
 
 State 598
 
-  226 swit_body_stmt: CASE expr COLON .
+  226 swit_body_stmt: CASE expr COLON •
 
     $default  reduce using rule 226 (swit_body_stmt)
 
 
 State 599
 
-  228 swit_body_stmt: CASE expr DOT_DOT_DOT . expr COLON
+  228 swit_body_stmt: CASE expr DOT_DOT_DOT • expr COLON
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -11155,8 +11155,8 @@ State 599
 
 State 600
 
-  223 subswit: START COLON swit_body . END COLON
-  230 swit_body: swit_body . swit_body_stmt
+  223 subswit: START COLON swit_body • END COLON
+  230 swit_body: swit_body • swit_body_stmt
 
     CHAR        shift, and go to state 7
     INT         shift, and go to state 8
@@ -11250,28 +11250,28 @@ State 600
 
 State 601
 
-  198 func: primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI .
+  198 func: primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI •
 
     $default  reduce using rule 198 (func)
 
 
 State 602
 
-  204 func: primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope .
+  204 func: primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope •
 
     $default  reduce using rule 204 (func)
 
 
 State 603
 
-  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN . LEFT_PAREN funcargs RIGHT_PAREN
+  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN • LEFT_PAREN funcargs RIGHT_PAREN
 
     LEFT_PAREN  shift, and go to state 609
 
 
 State 604
 
-  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME RIGHT_PAREN LEFT_PAREN . funcargs RIGHT_PAREN
+  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME RIGHT_PAREN LEFT_PAREN • funcargs RIGHT_PAREN
 
     CLASS     shift, and go to state 61
     UNION     shift, and go to state 62
@@ -11292,8 +11292,8 @@ State 604
 
 State 605
 
-  173 vardecltail: __ptrcount LEFT_PAREN MUL NAME RIGHT_PAREN LEFT_PAREN funcargs . RIGHT_PAREN
-  187 funcargs: funcargs . COMMA single_decl
+  173 vardecltail: __ptrcount LEFT_PAREN MUL NAME RIGHT_PAREN LEFT_PAREN funcargs • RIGHT_PAREN
+  187 funcargs: funcargs • COMMA single_decl
 
     COMMA        shift, and go to state 611
     RIGHT_PAREN  shift, and go to state 612
@@ -11301,8 +11301,8 @@ State 605
 
 State 606
 
-  201 func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN . SEMI
-  207     | linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN . scope
+  201 func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN • SEMI
+  207     | linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN • scope
 
     SEMI        shift, and go to state 613
     LEFT_CURLY  shift, and go to state 43
@@ -11312,21 +11312,21 @@ State 606
 
 State 607
 
-  228 swit_body_stmt: CASE expr DOT_DOT_DOT expr . COLON
+  228 swit_body_stmt: CASE expr DOT_DOT_DOT expr • COLON
 
     COLON  shift, and go to state 615
 
 
 State 608
 
-  223 subswit: START COLON swit_body END . COLON
+  223 subswit: START COLON swit_body END • COLON
 
     COLON  shift, and go to state 616
 
 
 State 609
 
-  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN . funcargs RIGHT_PAREN
+  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN • funcargs RIGHT_PAREN
 
     CLASS     shift, and go to state 61
     UNION     shift, and go to state 62
@@ -11347,8 +11347,8 @@ State 609
 
 State 610
 
-  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs . RIGHT_PAREN
-  187 funcargs: funcargs . COMMA single_decl
+  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs • RIGHT_PAREN
+  187 funcargs: funcargs • COMMA single_decl
 
     COMMA        shift, and go to state 611
     RIGHT_PAREN  shift, and go to state 618
@@ -11356,7 +11356,7 @@ State 610
 
 State 611
 
-  187 funcargs: funcargs COMMA . single_decl
+  187 funcargs: funcargs COMMA • single_decl
 
     CLASS     shift, and go to state 61
     UNION     shift, and go to state 62
@@ -11374,43 +11374,43 @@ State 611
 
 State 612
 
-  173 vardecltail: __ptrcount LEFT_PAREN MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN .
+  173 vardecltail: __ptrcount LEFT_PAREN MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN •
 
     $default  reduce using rule 173 (vardecltail)
 
 
 State 613
 
-  201 func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI .
+  201 func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN SEMI •
 
     $default  reduce using rule 201 (func)
 
 
 State 614
 
-  207 func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope .
+  207 func: linkage primtype0 namewptrs LEFT_PAREN funcargs COMMA DOT_DOT_DOT RIGHT_PAREN scope •
 
     $default  reduce using rule 207 (func)
 
 
 State 615
 
-  228 swit_body_stmt: CASE expr DOT_DOT_DOT expr COLON .
+  228 swit_body_stmt: CASE expr DOT_DOT_DOT expr COLON •
 
     $default  reduce using rule 228 (swit_body_stmt)
 
 
 State 616
 
-  223 subswit: START COLON swit_body END COLON .
+  223 subswit: START COLON swit_body END COLON •
 
     $default  reduce using rule 223 (subswit)
 
 
 State 617
 
-  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs . RIGHT_PAREN
-  187 funcargs: funcargs . COMMA single_decl
+  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs • RIGHT_PAREN
+  187 funcargs: funcargs • COMMA single_decl
 
     COMMA        shift, and go to state 611
     RIGHT_PAREN  shift, and go to state 619
@@ -11418,13 +11418,13 @@ State 617
 
 State 618
 
-  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN .
+  174 vardecltail: __ptrcount LEFT_PAREN MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN •
 
     $default  reduce using rule 174 (vardecltail)
 
 
 State 619
 
-  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN .
+  175 vardecltail: __ptrcount LEFT_PAREN MUL MUL MUL NAME RIGHT_PAREN LEFT_PAREN funcargs RIGHT_PAREN •
 
     $default  reduce using rule 175 (vardecltail)

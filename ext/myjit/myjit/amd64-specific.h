@@ -18,7 +18,12 @@
  */
 
 #include "amd64-codegen.h"
-
+#ifndef TARGET_WIN32
+#include <sys/ptrace.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/user.h>
+#endif
 /* Stack frame organization:
  *
  * RBP      +--------------+
@@ -36,6 +41,56 @@
 #define GET_GPREG_POS(jit, r) (- ((JIT_REG(r).id + 1) * REG_SIZE) - jit_current_func_info(jit)->allocai_mem)
 #define GET_FPREG_POS(jit, r) (- jit_current_func_info(jit)->gp_reg_count * REG_SIZE - (JIT_REG(r).id + 1) * sizeof(jit_float) - jit_current_func_info(jit)->allocai_mem)
 #define GET_ARG_SPILL_POS(jit, info, arg) ((- (arg + info->gp_reg_count + info->fp_reg_count) * REG_SIZE) - jit_current_func_info(jit)->allocai_mem)
+//Regs is from ptrace
+#if 0
+int64_t jit_debugger_get_reg(struct jit *jit,struct jit_op *op,jit_value r,const struct user_regs_struct *regs,const struct user_fpregs_struct *fregs) {
+		jit_hw_reg *reg=rmap_get(op->regmap,r);
+		if(!reg) {
+			int64_t *fp=regs->rbp;
+			if(JIT_REG(r).type==JIT_RTYPE_FLOAT)
+				fp=(void*)fp+GET_FPREG_POS(jit, r);
+			else if(JIT_REG(r).type==JIT_RTYPE_INT)
+				fp=(void*)fp+GET_GPREG_POS(jit, r);
+			return *fp;
+		} else {
+			if(JIT_REG(r).type==JIT_RTYPE_INT) {
+				switch(reg->id) {
+					case AMD64_RBX:
+					return regs->rbx;
+					case AMD64_RCX:
+					return regs->rcx;
+					case AMD64_RDX:
+					return regs->rdx;
+					case AMD64_RSI:
+					return regs->rsi;
+					case AMD64_RDI:
+					return regs->rdi;
+					case AMD64_R8:
+					return regs->r8;
+					case AMD64_R9:
+					return regs->r9;
+					case AMD64_R10:
+					return regs->r10;
+					case AMD64_R11:
+					return regs->r11;
+					case AMD64_R12:
+					return regs->r12;
+					case AMD64_R13:
+					return regs->r13;
+					case AMD64_R14:
+					return regs->r14;
+					case AMD64_R15:
+					return regs->r15;
+					case AMD64_RBP:
+					return regs->rbp;
+				}
+			} else if(JIT_REG(r).type==JIT_RTYPE_FLOAT) {
+				//https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/x86/sys/user.h;h=02d3db78891a409c79571343cd732a9cdcdc868a;hb=eefa3be8e4c2c721a9f277d8ea2e11180231829f
+				return *((int64_t*)(16*reg->id+(void*)fregs->xmm_space));
+			}
+		}
+}
+#endif
 static inline int GET_REG_POS(struct jit * jit, int r)
 {
 	if (JIT_REG(r).spec == JIT_RTYPE_REG) {
