@@ -1,9 +1,11 @@
 HEADERS := HolyC.tab.h 3d.h
 CC := gcc
 B_CFLAGS :=  `pkg-config --cflags --libs sdl2` -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC -DBSD -Wno-parentheses -Wno-switch
-B_OBJS := aot.o tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o at3.o exceptLin.o asm.o
+B_OBJS := aot.o tags.o rl.o vec.o rt.o jitlib-core.o map.o compile.o lexer.o HolyC.o unesc.o tosprn.o gc.o debugger.o rope.o at3.o exceptLin.o asm.o linenoise.o
 all: 3d_tests 3d
 	echo "Done"
+linenoise.o: ext/linenoise/linenoise.c ext/linenoise/linenoise.h
+	$(CC) $(CFLAGS) -c ext/linenoise/linenoise.c -o linenoise.o
 HCRT := HCRT/ASM.HC  HCRT/BITS.HC  HCRT/CHAR.HC  HCRT/COMPRESS.HC  HCRT/FIFO.HC  HCRT/FILE.HC  HCRT/FS.HC  HCRT/HASH.HC  HCRT/HCRT.HC  HCRT/MATH.HC  HCRT/Opcodes.DD  HCRT/PRINT.HC  HCRT/QSORT.HC
 HCRT/HCRT.BIN: 3d.bootstrap $(HCRT)
 	./3d.bootstrap --noruntime -c HCRT/HCRT.BIN HCRT/HCRT.HC --binheader HCRT/HCRT.HH
@@ -12,9 +14,9 @@ package: HCRT/HCRT.BIN 3d FreeBSD_pkg.sh
 main.o: main.c
 	$(CC) $(B_CFLAGS) -c  main.c -o $@
 3d.bootstrap: $(B_OBJS) main.o
-	gcc $(B_CFLAGS) $(B_OBJS) main.o -lm -lncurses -ltinfo -lpthread -lreadline -o $@
+	gcc $(B_CFLAGS) $(B_OBJS) main.o -lm -lncurses -ltinfo -lpthread -o $@
 3d_tests: $(B_OBJS) tests.c
-	gcc $(B_CFLAGS) $(B_OBJS) tests.c -lm -lncurses -ltinfo -lpthread -lreadline -o $@
+	gcc $(B_CFLAGS) $(B_OBJS) tests.c -lm -lncurses -ltinfo -lpthread -o $@
 HolyC.o: HolyC.tab.c $(HEADERS)
 	$(CC) $(B_CFLAGS) -g -c HolyC.tab.c -o $@
 HolyC.tab.c HolyC.tab.h: HolyC.y
@@ -58,12 +60,12 @@ aot.o: aot.c $(HEADERS)
 sexy:
 	astyle *.c *.h
 
-OBJS := aot.cyborg.o tags.cyborg.o rl.cyborg.o vec.cyborg.o rt.cyborg.o jitlib-core.cyborg.o map.cyborg.o compile.cyborg.o lexer.cyborg.o HolyC.cyborg.o unesc.cyborg.o tosprn.cyborg.o gc.cyborg.o debugger.cyborg.o rope.cyborg.o at3.cyborg.o exceptLin.cyborg.o asm.cyborg.o
+OBJS := aot.cyborg.o tags.cyborg.o rl.cyborg.o vec.cyborg.o rt.cyborg.o jitlib-core.cyborg.o map.cyborg.o compile.cyborg.o lexer.cyborg.o HolyC.cyborg.o unesc.cyborg.o tosprn.cyborg.o gc.cyborg.o debugger.cyborg.o rope.cyborg.o at3.cyborg.o exceptLin.cyborg.o asm.cyborg.o linenoise.o
 CFLAGS :=  `pkg-config --cflags --libs sdl2` -DBOOTSTRAPED -g3 -Os -Wformat=0 -Wreturn-type -DUSEGC -DBSD -Wno-parentheses -Wno-switch
 main.cyborg.o: main.c
 	$(CC) $(CFLAGS) -c  main.c -o $@
 3d: $(OBJS) main.cyborg.o HCRT/HCRT.BIN
-	gcc $(CFLAGS) $(OBJS) main.cyborg.o -lm -lncurses -ltinfo -lpthread -lreadline -o $@
+	gcc $(CFLAGS) $(OBJS) main.cyborg.o -lm -lncurses -ltinfo -lpthread -o $@
 HolyC.cyborg.o: HolyC.tab.c $(HEADERS)
 	$(CC) $(CFLAGS) -g -c HolyC.tab.c -o $@
 HolyC.tab.c HolyC.tab.h: HolyC.y

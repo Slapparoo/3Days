@@ -24,7 +24,7 @@ static void completion(const char *buf,linenoiseCompletions *lc) {
     int instr=0;
     const char *ptr=buf;
     sloop:;
-    if(strchr(ptr, '\"')) {
+    if(ptr=strchr(ptr, '\"')) {
       instr=1;
       ptr++;
       sloop2:;

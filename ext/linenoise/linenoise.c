@@ -366,7 +366,14 @@ static int completeLine(struct linenoiseState *ls) {
     int nread, nwritten;
     char c = 0;
 
-    completionCallback(ls->buf,&lc);
+    char buffer[strlen(ls->buf)+1],obuf[strlen(ls->buf)+1];
+    strcpy(obuf,ls->buf);
+    strcpy(buffer,ls->buf);
+    buffer[ls->pos]=0;
+    char end_buffer[strlen(ls->buf)-ls->pos+1];
+    strcpy(end_buffer,ls->buf+ls->pos);
+    completionCallback(buffer,&lc);
+    long opos=ls->pos;
     if (lc.len == 0) {
         linenoiseBeep();
     } else {
@@ -376,14 +383,18 @@ static int completeLine(struct linenoiseState *ls) {
             /* Show completion or original buffer */
             if (i < lc.len) {
                 struct linenoiseState saved = *ls;
-
                 ls->len = ls->pos = strlen(lc.cvec[i]);
-                ls->buf = lc.cvec[i];
+                nwritten = snprintf(ls->buf,ls->buflen,"%s%s",lc.cvec[i],end_buffer);
+                ls->len = nwritten;
+                ls->pos=strlen(lc.cvec[i]);
                 refreshLine(ls);
                 ls->len = saved.len;
                 ls->pos = saved.pos;
                 ls->buf = saved.buf;
             } else {
+                ls->len=strlen(obuf);
+                strcpy(ls->buf,obuf);
+                ls->pos=opos;
                 refreshLine(ls);
             }
 
@@ -398,16 +409,13 @@ static int completeLine(struct linenoiseState *ls) {
                     i = (i+1) % (lc.len+1);
                     if (i == lc.len) linenoiseBeep();
                     break;
-                case 27: /* escape */
-                    /* Re-show original buffer */
-                    if (i < lc.len) refreshLine(ls);
-                    stop = 1;
-                    break;
                 default:
                     /* Update buffer and return */
                     if (i < lc.len) {
-                        nwritten = snprintf(ls->buf,ls->buflen,"%s",lc.cvec[i]);
-                        ls->len = ls->pos = nwritten;
+                        nwritten = snprintf(ls->buf,ls->buflen,"%s%s",lc.cvec[i],end_buffer);
+                        ls->len = nwritten;
+                        ls->pos=strlen(lc.cvec[i]);
+                        refreshLine(ls);
                     }
                     stop = 1;
                     break;
