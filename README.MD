@@ -78,18 +78,6 @@ I64 x=#exe{StreamPrint("10");};
  pi==(0x400921FB54442D18(F64));
  I64 int_pi=ToI64(pi);
  ```
-# Assembler
-This compiler includes an assembler,see `asmtest.hc` for usage. All functions are placed in the first 32 bits of memory,so you should be able to jump to them if you import them. **However the case isn't the same for global variables,load their pointer into a register before addressing them**(Most memory operations use 32bit offsets,see `MOFFSxx` in `HCRT/Opcodes.DD` if you really want to.).
-```
-U0 Hi() {
- asm {
-	 IMPORT Hello;
-	 CALL Hello;
- }
-}
-```
-If you suspect the assembler is acting up,open in gdb and type `disas GetVariable("Func_with_asm_in_it").func.funcptr,+100` for a dissambly. I would love to fix any problems in the assembler. Also,make sure you follow the ABI for your OS when using assembler code. And **DONT JUMP INTO ASM BLOCKS FROM HolyC Code**. All registers are unloaded prior to entering an asm block and before any label that an asm block jumps to.
-
 
 # Internals
 This compiler uses a modified myjit which runs under windows(new feature),linux(and breifly tested on FreeBSD). The main part of the Compiler is in compile.c. The compiler uses a value stack for temporary values(if they are on the stack on the same time they interfere). The grammar is in `HolyC.y`. The lexer uses a rope data structure provided by a patched `ext/mropes`.  I plan on making a game with this compiler so I will add to the runtime as needed. If you want to add functions,look at `runtime.c`,but a functional text editor is provided in `HolyEd/EDITOR.HC`.
