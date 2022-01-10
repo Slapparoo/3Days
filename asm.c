@@ -225,10 +225,9 @@ void* AST2X64Mode(AST* a, int64_t* lab_offset) {
   return NULL;
 }
 void* GetRegister(char* name) {
-#ifndef BOOTSTRAP
+#ifndef BOOTSTRAPED
   return NULL;
-#endif // BOOTSTRAP
-  if(Compiler.tagsFile) return NULL;
+#endif // BOOTSTRAPED
   if(!Compiler.loadedHCRT) return 0;
   CVariable* enc = GetHCRTVar("GetRegister");
 
@@ -239,10 +238,9 @@ void* GetRegister(char* name) {
   return ((void* (*)(char*))enc->func->funcptr)(name);
 }
 int IsOpcode(char* name) {
-#ifndef BOOTSTRAP
+#ifndef BOOTSTRAPED
   return NULL;
-#endif // BOOTSTRAP
-  if(Compiler.tagsFile) return 0;
+#endif // BOOTSTRAPED
   if(!Compiler.loadedHCRT) return 0;
   CVariable* enc = GetHCRTVar("IsOpcode");
 
