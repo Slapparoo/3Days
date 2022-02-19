@@ -55,6 +55,8 @@ set HeaderFiles = ( \
   "ext/myjit/myjit/jitlib-debug.c" \
   "ext/myjit/myjit/code-check.c" \
   "ext/myjit/myjit/x86-common-stuff.c" \
+  "alloc.h" \
+  "rl.h" \
 )
 
 set MiscFiles = ( \

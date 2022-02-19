@@ -53,7 +53,7 @@ foreach f ( $CFiles $AsmFiles $HolyCFiles $MiscFiles $HeaderFiles )
 	cp  $f "$SrcPath/$f"
 end
 
-./proot -R chroot/ apk add gcc sdl2-dev tcsh yasm
+./proot -R chroot/ apk add gcc sdl2-dev tcsh yasm musl-dev
 ./proot -r chroot/ -w /3Days tcsh "make.tcsh"
 ./proot -r chroot -w /3Days ./3d_loader --noruntime MAKE_HCRT.HC
 cp chroot/3Days/REPL.BIN ./HCRT/HCRT.BIN
