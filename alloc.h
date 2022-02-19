@@ -1,6 +1,6 @@
 #pragma once
 #include <stdlib.h>
-#include "gc.h"
+#include "poopalloc.h"
 #ifdef USEGC
 #define TD_MALLOC(sz) GC_MALLOC(sz)
 #define TD_CALLOC(n,sz) GC_MALLOC(sz*n)

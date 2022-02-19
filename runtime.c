@@ -1,4 +1,5 @@
 #include "3d.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <ctype.h>
@@ -8,6 +9,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
+extern int64_t HCSetJmp(void *ptr);
+extern void HCLongJmp(void *ptr);
 #ifndef MACOS
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_video.h>
@@ -29,10 +32,32 @@
 #include <windows.h>
 #include <fileapi.h>
 #include <shlwapi.h>
+#include <memoryapi.h>
+#else
+#include <sys/mman.h>
 #endif
-#include <curses.h>
+typedef struct CType CType;
 static void *jit_INIT() {
     return jit_init();
+}
+int jit_FunctionParents(void **pars,int max);
+int jit_ParentFramePtrs(void **fptrs,int max);
+static void *VirtAlloc(size_t size) {
+    #ifdef TARGET_WIN32
+    return VirtualAlloc(NULL,size,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
+    #else
+    return mmap(NULL,size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    #endif // TARGET_WIN32
+}
+static void VirtFree(void *ptr,size_t size) {
+#ifndef TARGET_WIN32
+	munmap(ptr,size);
+#else
+	VirtualFree(ptr,0,MEM_RELEASE);
+#endif
+}
+static void *jit_BREAKPOINT(void *jit,void *bp,void *routine,void *ctrl) {
+  return jit_breakpoint(jit,bp,routine,ctrl);
 }
 static void jit_GENERATE_CODE(void *jit) {
 	jit_generate_code(jit,NULL);
@@ -554,7 +579,7 @@ static void *jit_DUMP_PTR(void *jit,void *a) {
 static void *jit_RELOCATION(void *jit,int64_t a,void *b) {
     return jit_relocation(jit,a,b);
 }
-static void *jit_ALLOCAI(void *jit,int64_t a) {
+static int64_t jit_ALLOCAI(void *jit,int64_t a) {
     return jit_allocai(jit,a);
 }
 TOS_Fs Fs;
@@ -566,156 +591,7 @@ ExceptFrame *EnterTry() {
     ExceptFrame *new=TD_MALLOC(sizeof(ExceptFrame));
     new->parent=curframe;
     curframe=new;
-    #ifdef BOOTSTRAPED
-    new->callStackSize=Debugger.callStack.length;
-    #endif
     return new;
-}
-ExceptFrame *EnterCTry() {
-    ExceptFrame *new=TD_MALLOC(sizeof(ExceptFrame));
-    new->parent=curframe;
-    new->isCRuntime=1;
-    curframe=new;
-    #ifdef BOOTSTRAPED
-    new->callStackSize=Debugger.callStack.length;
-    #endif
-    return new;
-}
-static AST *HC_CreateI64(int64_t i) {
-    AST *r=TD_MALLOC(sizeof(AST));
-    r->type=AST_INT;
-    r->integer=i;
-    return r;
-}
-static AST *HC_CreateF64(double f) {
-    AST *r=TD_MALLOC(sizeof(AST));
-    r->type=AST_FLOAT;
-    r->floating=f;
-    return r;
-}
-static AST *HC_CreateStr(char *str) {
-    AST *r=TD_MALLOC(sizeof(AST));
-    r->type=AST_STRING;
-    r->string=strdup(str);
-    return r;
-}
-static AST *HC_SetPosFromLexer(AST *node,char *fn,long line) {
-    node->fn=fn;
-    node->ln=line;
-    return node;
-}
-#include "LEXER.HH"
-#include "HolyC.tab.h"
-static AST *HC_CreateToken(int64_t tok) {
-    AST *r=TD_MALLOC(sizeof(AST));
-    r->type=AST_TOKEN;
-    switch(tok) {
-      case TK_EOF: r->tokenAtom=0;  break;
-      case TK_PLUS_PLUS:  r->tokenAtom=HC_INC; break;
-      case TK_MINUS_MINUS: r->tokenAtom=HC_DEC; break;
-      case TK_DEREFERENCE: r->tokenAtom=HC_ARROW; break;
-      case TK_DBL_COLON: r->tokenAtom=HC_DOUBLE_COLON; break;
-      case TK_SHL: r->tokenAtom=HC_SHL; break;
-      case TK_SHR: r->tokenAtom=HC_SHR; break;
-      case TK_EQU_EQU: r->tokenAtom=HC_EQ; break;
-      case TK_NOT_EQU: r->tokenAtom=HC_NE; break;
-      case TK_LESS_EQU: r->tokenAtom=HC_LE; break;
-      case TK_GREATER_EQU: r->tokenAtom=HC_GE; break;
-      case TK_AND_AND: r->tokenAtom=HC_LAND; break;
-      case TK_OR_OR: r->tokenAtom=HC_LOR; break;
-      case TK_XOR_XOR: r->tokenAtom=HC_LXOR; break;
-      case TK_SHL_EQU	: r->tokenAtom=HC_EQ_SHL; break;
-      case TK_SHR_EQU:	r->tokenAtom=HC_EQ_SHR; break;
-      case TK_MUL_EQU: r->tokenAtom=HC_EQ_MUL; break;
-      case TK_DIV_EQU:	r->tokenAtom=HC_EQ_DIV; break;
-      case TK_AND_EQU: r->tokenAtom=HC_EQ_BAND; break;
-      case TK_OR_EQU: r->tokenAtom=HC_EQ_BOR; break;
-      case TK_XOR_EQU: r->tokenAtom=HC_EQ_BXOR; break;
-      case TK_ADD_EQU: r->tokenAtom=HC_EQ_ADD; break;
-      case TK_SUB_EQU: r->tokenAtom=HC_EQ_SUB; break;
-      case TK_IF: r->tokenAtom=HC_IF; break;
-      case TK_ELSE: r->tokenAtom=HC_ELSE; break;
-      case TK_MOD_EQU: r->tokenAtom=HC_EQ_MOD; break;
-      case TK_ELLIPSIS:r->tokenAtom=HC_DOT_DOT_DOT; break;
-      case '.': r->tokenAtom=HC_DOT; break;
-      case '!': r->tokenAtom=HC_LNOT; break;
-      case '~': r->tokenAtom=HC_BNOT; break;
-      case '>': r->tokenAtom=HC_GT; break;
-      case '<': r->tokenAtom=HC_LT; break;
-      case '`': r->tokenAtom=HC_POW; break;
-      case '*': r->tokenAtom=HC_MUL; break;
-      case '/': r->tokenAtom=HC_DIV; break;
-      case '%': r->tokenAtom=HC_MOD; break;
-      case '+': r->tokenAtom=HC_ADD; break;
-      case '-': r->tokenAtom=HC_SUB; break;
-      case '=': r->tokenAtom=HC_ASSIGN; break;
-      case ',': r->tokenAtom=HC_COMMA; break;
-      case '{': r->tokenAtom=HC_LEFT_CURLY; break;
-      case '[': r->tokenAtom=HC_LEFT_SQAURE; break;
-      case '(': r->tokenAtom=HC_LEFT_PAREN; break;
-      case '}': r->tokenAtom=HC_RIGHT_CURLY; break;
-      case ']': r->tokenAtom=HC_RIGHT_SQAURE; break;
-      case ')': r->tokenAtom=HC_RIGHT_PAREN; break;
-      case ';': r->tokenAtom=HC_SEMI; break;
-      case ':': r->tokenAtom=HC_COLON; break;
-      case '&': r->tokenAtom=HC_BAND; break;
-      case '|': r->tokenAtom=HC_BOR; break;
-      case '^': r->tokenAtom=HC_BXOR; break;
-      default: printf("Unkown token %d\n",tok); abort();
-    }
-    return r;
-}
-static AST *HC_CreateIdent(char *id) {
-    AST *r=TD_MALLOC(sizeof(AST));
-    const struct {
-        const char *name;
-        int code;
-    } kws[]={{"union",HC_UNION},
-        {"catch",HC_CATCH},
-        {"class",HC_CLASS},
-        {"try",HC_TRY},
-        {"if",HC_IF},
-        {"else",HC_ELSE},
-        {"for",HC_FOR},
-        {"while",HC_WHILE},
-        {"extern",HC_EXTERN},
-        {"_extern",HC_EXTERN2},
-        {"return",HC_RET},
-        {"sizeof",HC_SIZEOF},
-        {"intern",HC_INTERN},
-        {"do",HC_DO},
-        {"goto",HC_GOTO},
-        {"break",HC_BREAK},
-        {"switch",HC_SWITCH},
-        {"start",HC_START},
-        {"end",HC_END},
-        {"case",HC_CASE},
-        {"default",HC_DEFAULT},
-        {"public",HC_PUBLIC},
-        {"import",HC_IMPORT},
-        {"_import",HC_IMPORT2},
-        {"lastclass",HC_LASTCLASS},
-        {"static",HC_STATIC},
-        {"DU8",HC_DU8},
-        {"DU16",HC_DU16},
-        {"DU32",HC_DU32},
-        {"DU64",HC_DU64},
-        {"ALIGN",HC_ALIGN},
-        {"BINFILE",HC_BINFILE},
-        {"asm",HC_ASM},
-        {"IMPORT",HC_ASM_IMPORT},
-    };
-    long count=sizeof(kws)/sizeof(*kws);
-    while(--count>=0) {
-        if(!strcmp(kws[count].name,id)) {
-            r->type=AST_TOKEN ;
-            r->tokenAtom=kws[count].code;
-            return r;
-        }
-    }
-    r->type=AST_NAME;
-    r->name=strdup(id);
-    return r;
 }
 void PopTryFrame() {
     ExceptFrame *c=curframe;
@@ -724,34 +600,28 @@ void PopTryFrame() {
     curframe=par;
 }
 static void GCollect() {
-  GC_Enable();
-  GC_Collect();
-  GC_Disable();
+    int old=PoopSetGCEnable(1);
+    PoopCollect();
+    PoopSetGCEnable(old);
 }
 void throw(uint64_t val) {
     if(!curframe)
       exit(0);
     Fs.except_ch=val;
-    if(curframe->isCRuntime)
-      Fs.catch_except=1;
-    else
-      Fs.catch_except=0;
+    Fs.catch_except=0;
     ExceptFrame old=*curframe;
-    #ifdef BOOTSTRAPED
-    Debugger.stackDepthAtThrow=Debugger.callStack.length;
-    vec_truncate(&Debugger.callStack,curframe->callStackSize);
-    #endif
     PopTryFrame();
     if(!curframe) {
       fail:;
+      /*
       #ifdef BOOTSTRAPED
       char code[9];
       *(uint64_t*)code=Fs.except_ch;
       code[8]=0;
       fprintf(stderr,"Uncaught exception('%s'):\n",code);
-      Debugger.callStack.length=Debugger.stackDepthAtThrow;
-      Backtrace();
+      Backtrace(-1,1);
       #endif
+      */
     }
     HCLongJmp(old.pad);
 }
@@ -766,63 +636,13 @@ static void ExitCatch() {
           *(uint64_t*)code=Fs.except_ch;
           code[8]=0;
           fprintf(stderr,"Uncaught exception('%s'):\n",code);
-          Debugger.callStack.length=Debugger.stackDepthAtThrow;
-          Backtrace();
+          Backtrace(-1,1);
           #endif
         }
         ExceptFrame old=*curframe;
         PopTryFrame();
         HCLongJmp(old.pad);
     }
-    #ifdef BOOTSTRAPED
-    else
-      Debugger.stackDepthAtThrow=0;
-    #endif
-}
-static struct jit_op *CompileEnterTry() {
-    jit_value fr=MoveGlobalPtrToReg(GetVariable("EnterTry"), 2);
-    jit_prepare(Compiler.JIT);
-    jit_callr(Compiler.JIT,fr);
-    jit_retval(Compiler.JIT, R(0));
-    fr=MoveGlobalPtrToReg(GetVariable("HCSetJmp"), 2);
-    jit_prepare(Compiler.JIT);
-    jit_putargr(Compiler.JIT, R(0));
-    jit_putargi(Compiler.JIT, 1);
-#ifndef TARGET_WIN32
-    jit_callr(Compiler.JIT,fr);
-#else
-    jit_callr(Compiler.JIT,fr);
-#endif
-    jit_retval(Compiler.JIT, R(0));
-    return jit_bnei(Compiler.JIT, (jit_value)NULL,R(0),0);
-}
-static void CompileCatch(AST *catch,struct jit_op *patch) {
-    /**
-     * try {
-     *    ...
-     */
-    //Pop the exception frame,we shouldnt have thrown if we are here
-    jit_value fr=MoveGlobalPtrToReg(GetVariable("PopTryFrame"), 2);
-    jit_prepare(Compiler.JIT);
-    jit_callr(Compiler.JIT, fr);
-    struct jit_op *jmp=jit_jmpi(Compiler.JIT, (jit_value)NULL);
-    /**
-     * catch {...}
-     */
-    jit_patch(Compiler.JIT, patch);
-    __CompileAST(catch);
-    //Throw again
-    ReleaseValue(&vec_pop(&Compiler.valueStack));
-    fr=MoveGlobalPtrToReg(GetVariable("ExitCatch"), 2);
-    jit_prepare(Compiler.JIT);
-    jit_callr(Compiler.JIT, fr);
-    jit_patch(Compiler.JIT,jmp);
-}
-void CompileTry(AST *t) {
-    struct jit_op *cat=CompileEnterTry();
-    __CompileAST(t->try.try);
-    ReleaseValue(&vec_pop(&Compiler.valueStack));
-    CompileCatch(t->try.catch,cat);
 }
 static int64_t BFFS(int64_t v) {
     return __builtin_ffsl(v);
@@ -861,56 +681,8 @@ static int64_t PowI64(int64_t x,int64_t n) {
     }
     return x*y;
 }
-static void CreateBuiltin(void *fptr,CType *rtype,char *name,int hasvargs,...) {
-    if(GetVariable(name)) return ;
-    va_list list;
-    va_start(list,hasvargs);
-    CType *ftype=TD_MALLOC(sizeof(CType));
-    ftype->func.ret=rtype;
-    ftype->func.hasvargs=hasvargs;
-    ftype->type=TYPE_FUNC;
-    CType *argtype;
-    while(argtype=va_arg(list,CType*)) {
-        vec_push(&ftype->func.arguments,argtype);
-        vec_push(&ftype->func.dftArgs,NULL);
-        vec_push(&ftype->func.names,NULL);
-    }
-    va_end(list);
-    CFunction *func=TD_MALLOC(sizeof(CFunction));
-    func->type=ftype;
-    func->funcptr=fptr;
-    CVariable *var=TD_MALLOC(sizeof(CVariable));
-    var->isGlobal=1,var->isFunc=1,var->isBuiltin=1;
-    var->func=func;
-    var->type=ftype;
-    var->name=strdup(name);
-    var->linkage.type=LINK_NORMAL;
-    map_set(&Compiler.globals, name, var);
-}
-static AST *CreateDummyName(char *text) {
-    AST *t=TD_MALLOC(sizeof(AST));
-    t->refCnt=1;
-    t->type=AST_NAME;
-    t->name=strdup(text);
-    return t;
-}
 static char *__GetStr(char*txt) {
     return rl(txt);
-}
-static FILE *FOpen(char *fn,char *flags,long cnt) {
-    return fopen(fn,flags);
-}
-static void FClose(FILE *f) {
-    fclose(f);
-}
-static long FSize(FILE *f) {
-    long r=ftell(f);
-    fseek(f, 0, SEEK_END);
-    long end=ftell(f);
-    fseek(f, 0, SEEK_SET);
-    long ret=end-ftell(f);
-    fseek(f,r, SEEK_SET);
-    return ret;
 }
 static void *MemNCpy(void *d,void *s,long sz) {
     return memcpy(d,s,sz);
@@ -964,8 +736,10 @@ static int64_t FileWrite(char *fn,void *data,int64_t sz) {
 void* FileRead(char *fn,int64_t *sz) {
     FILE *f=fopen(fn,"rb");
     if(!f) return NULL;
-    long len=FSize(f);
-    fseek(f,  0, SEEK_SET);
+    fseek(f,0,SEEK_END);
+    size_t len=ftell(f);
+    fseek(f,0, SEEK_SET);
+    len-=ftell(f);
     void *data=TD_MALLOC(len+1);
     fread(data, 1, len, f);
     fclose(f);
@@ -997,72 +771,6 @@ static int64_t IsMac() {
     return 0;
 #endif
 }
-static int64_t ColorPair(int64_t i) {
-    return COLOR_PAIR(i);
-}
-#ifndef BOOTSTRAPED
-void CreateMacroInt(char *name,int64_t i) {
-    char buffer[128];
-    sprintf(buffer,"%ld",i);
-    CMacro macro= {strdup(name),strdup(buffer)};
-    map_set(&Lexer.macros,name,macro);
-}
-#else
-void CreateMacroInt(char *name,int64_t i) {
-    if(!GetVariable("LexIncludeStr")) return;
-    char buffer[128];
-    sprintf(buffer,"#define %s %ld\n",name,i);
-    void(*inc)(void*cc,char *fn,char *src,int64_t act_f)=(void*)GetVariable("LexIncludeStr")->func->funcptr;
-    inc(Lexer.HCLexer,"(nofile)",strdup(buffer),0);
-}
-#endif
-static void WMove(void *w,int64_t y,int64_t x) {
-    wmove(w, y, x);
-}
-static int64_t Lines() {
-    return LINES;
-}
-static int64_t Cols() {
-    return COLS;
-}
-static void WPrint(WINDOW *wind,char *fmt,int64_t argc,void *argv) {
-    char *s=MStrPrint(fmt,argc,argv);
-    wprintw(wind,"%s",s);
-    TD_FREE(s);
-}
-//Sign extend to 64bits
-static int64_t GetCH() {
-    return getch();
-}
-//Sign extend to 64bits
-static int64_t WGetCH(void *w) {
-    return wgetch(w);
-}
-void GetParYX(WINDOW *w,int64_t *y,int64_t *x) {
-    int y2,x2;
-    getparyx(w, y2, x2);
-    if(y) *y=y2;
-    if(x) *x=x2;
-}
-WINDOW *StdScr() {
-    return stdscr;
-}
-static void LoadBinFile(char *name) {
-  FILE *f=fopen(name,"rb");
-  LoadAOTBin(f,0);
-  fclose(f);
-}
-void CreateBinFile(char *bin,char *root) {
-  char buffer[2048];
-  strcpy(buffer,CompilerPath);
-  strcat(buffer," -s -c ");
-  strcat(buffer,bin);
-  if(root) {
-      strcat(buffer," ");
-      strcat(buffer,root);
-  }
-  system(buffer);
-}
 #ifdef TARGET_WIN32
 static void EscapePathCat(char *buffer,char *path,DWORD  buf_sz) {
 #else
@@ -1085,7 +793,6 @@ void CreateTagsAndErrorsFiles(char *tags,char *errs,char *root) {
   #else
   EscapePathCat(buffer,CompilerPath,sizeof(buffer));
   #endif
-  strcat(buffer," -s");
   if(tags) {
         sprintf(buffer+strlen(buffer)," -t ");
         EscapePathCat(buffer,tags,sizeof(buffer));
@@ -1124,61 +831,6 @@ static void Test(int64_t a,int64_t b,int64_t c,int64_t d,int64_t e,int64_t f,int
 static void TestMixed(int a, double b, int c, double d, int e, double f) {
   printf("%d,%lf,%d,%lf,%d,%lf\n",a,b,c,d,e,f);
 }
-static void MVWCHGAT(WINDOW *w,int64_t y,int64_t x,int64_t n,int64_t a,int64_t c,void *opts) {
-  mvwchgat(w,y,x,n,a,c,opts);
-}
-void AddMemberToClass(CType *cls,CType *t,char* name,long offset) {
-    if(!cls) return;
-    CMember mem;
-    memset(&mem,0,sizeof(mem));
-    mem.name=strdup(name);
-    mem.offset=offset;
-    mem.type=t;
-    vec_push(&cls->cls.members,mem);
-}
-void AddMemberToClassBySize(CType *cls,long size,char* name,long offset) {
-    if(!cls) return;
-    CMember mem;
-    memset(&mem,0,sizeof(mem));
-    mem.name=strdup(name);
-    mem.offset=offset;
-    switch(size) {
-    case 1: mem.type=CreatePrimType(TYPE_I8); break;
-    case 2: mem.type=CreatePrimType(TYPE_I16); break;
-    case 4: mem.type=CreatePrimType(TYPE_I32); break;
-    case 8: mem.type=CreatePrimType(TYPE_I64); break;
-    }
-    vec_push(&cls->cls.members,mem);
-}
-void UAddMemberToClassBySize(CType *cls,long size,char* name,long offset) {
-    if(!cls) return;
-    CMember mem;
-    memset(&mem,0,sizeof(mem));
-    mem.name=strdup(name);
-    mem.offset=offset;
-    switch(size) {
-    case 1: mem.type=CreatePrimType(TYPE_U8); break;
-    case 2: mem.type=CreatePrimType(TYPE_U16); break;
-    case 4: mem.type=CreatePrimType(TYPE_U32); break;
-    case 8: mem.type=CreatePrimType(TYPE_U64); break;
-    }
-    vec_push(&cls->cls.members,mem);
-}
-static CType *CreateEmptyClass(char *name,long size,long align) {
-    if(map_get(&Compiler.types,name)) return NULL;
-    CType *t=TD_MALLOC(sizeof(CType));
-    t->isBuiltin=1;
-    t->type=TYPE_CLASS;
-    t->cls.name=strdup(name);
-    t->cls.size=size;
-    t->cls.align=align;
-    map_set(&Compiler.types,name,t);
-    return t;
-}
-#define ADD_TYPED_MEMBER(hc,hct,t,mem) if(hc) AddMemberToClass(hc,hct,#mem,offsetof(t,mem));
-#define ADD_PRIM_MEMBER(hc,t,mem) if(hc) AddMemberToClassBySize(hc,sizeof(((t*)NULL)->mem),#mem,offsetof(t,mem));
-#define ADD_UPRIM_MEMBER(hc,t,mem) if(hc) UAddMemberToClassBySize(hc,sizeof(((t*)NULL)->mem),#mem,offsetof(t,mem));
-#define IMPORT_CLASS_WO_MEMBERS(type) CreateEmptyClass(#type,sizeof(type),alignof(type))
 static char *hc_SDL_GetWindowTitle(SDL_Window *win) {
     return strdup(SDL_GetWindowTitle(win));
 }
@@ -1190,9 +842,6 @@ static int64_t GetSurfaceW(SDL_Surface *s) {
 }
 static int64_t GetSurfaceH(SDL_Surface *s) {
     return s->h;
-}
-int64_t JIT_EvalExpr(char *t,char **end) {
-    return EvalExprNoComma(t,end);
 }
 static double Bit4BitU64ToF64(uint64_t b) {
     union {double f;int64_t i;} val;
@@ -1219,678 +868,612 @@ static double F64Shl(double a,int64_t b) {
 static double F64Shr(double a,int64_t b) {
     return (*(uint64_t*)&a)>>b;
 }
-static void ForeachFunc(void(*func)(const char *name,void *ptr)) {
-  map_iter_t iter=map_iter(&Compiler.globals);
+static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
+  map_iter_t iter=map_iter(&Loader.symbols);
   const char *key;
-  while(key=map_next(&Compiler.globals,&iter)) {
-    CVariable *var=*map_get(&Compiler.globals, key);
-    if(var->isBuiltin&&GetGlobalPtr(var))
-      func(key,GetGlobalPtr(var));
+  while(key=map_next(&Loader.symbols,&iter)) {
+    CSymbol *var=map_get(&Loader.symbols, key);
+    if(!var->is_importable)
+        continue;
+    func(key,var->value_ptr,var->size);
   }
 }
 static void jit_DATA_BYTES(struct jit *j,int64_t count,void *d) {
   jit_data_bytes(j,count,d);
 }
-void RegisterBuiltins() {
-    //Primitive types
-  CType *u0 =CreatePrimType(TYPE_U0);
-  map_set(&Compiler.types, "U0", u0);
-  CType *bl=CreatePrimType(TYPE_BOOL);
-  map_set(&Compiler.types, "Bool", bl);
-  CType *i8 =CreatePrimType(TYPE_I8);
-  map_set(&Compiler.types, "I8i", i8);
-  CType *u8 =CreatePrimType(TYPE_U8);
-  map_set(&Compiler.types, "U8i", u8);
-  CType *i16 =CreatePrimType(TYPE_I16);
-  map_set(&Compiler.types, "I16i", i16);
-  CType *u16 =CreatePrimType(TYPE_U16);
-  map_set(&Compiler.types, "U16i", u16);
-  CType *i32 =CreatePrimType(TYPE_I32);
-  map_set(&Compiler.types, "I32i", i32);
-  CType *u32 =CreatePrimType(TYPE_U32);
-  map_set(&Compiler.types, "U32i", u32);
-  CType *i64 =CreatePrimType(TYPE_I64);
-  map_set(&Compiler.types, "I64i", i64);
-  CType *u64 =CreatePrimType(TYPE_U64);
-  map_set(&Compiler.types, "U64i", u64);
-  CType *f64=CreatePrimType(TYPE_F64);
-  map_set(&Compiler.types, "F64", f64);
-    //
-    CType *u8p =CreatePtrType(u8);
-    CType *u8pp =CreatePtrType(u8p);
-    CType *u0p =CreatePtrType(u0);
-    CType *i32p =CreatePtrType(i32);
-    CType *i64p =CreatePtrType(i64);
-    CType *cfs =CreateClassForwardDecl(NULL, CreateDummyName("CFs"));
-    CType *cfsptr =CreatePtrType(cfs);
-    CType *cfile =CreateClassForwardDecl(NULL, CreateDummyName("CFile"));
-    CType *cfileptr =CreatePtrType(cfile);
-    CType *wind =CreateClassForwardDecl(NULL, CreateDummyName("WINDOW"));
-    CType *windp =CreatePtrType(wind);
-    //
-    CreateMacroInt("JIT_SIGNED_NUM", JIT_SIGNED_NUM);
-    CreateMacroInt("JIT_UNSIGNED_NUM", JIT_UNSIGNED_NUM);
-    CreateMacroInt("JIT_FLOAT_NUM", JIT_FLOAT_NUM);
-    CreateMacroInt("JIT_PTR", JIT_PTR);
+static void RegisterFunctionPtr(char *name,void *fptr) {
+    CSymbol sym;
+    sym.type=SYM_FUNC;
+    sym.value_ptr=fptr;
+    sym.is_importable=1;
+    map_set(&Loader.symbols, name, sym);
+}
+static double Log2(double c) {
+    return log(c)/log(2);
+}
+void UnblockSignals() {
+    sigset_t set;
+    sigfillset(&set);
+    sigprocmask(SIG_UNBLOCK,&set,NULL);
+}
+char *GetBuiltinMacrosText();
+void RegisterFuncPtrs() {
+    RegisterFunctionPtr("RegisterRuntimeClasses",RegisterRuntimeClasses);
+    RegisterFunctionPtr("UnblockSignals",UnblockSignals);
+    RegisterFunctionPtr("signal",signal);
+    RegisterFunctionPtr("IsDir",IsDir);
+    RegisterFunctionPtr("FileRead",FileRead);
+    RegisterFunctionPtr("FileWrite",FileWrite);
+    RegisterFunctionPtr("jit_breakpoint",jit_BREAKPOINT);
+    RegisterFunctionPtr("jit_putargi",jit_PUTARGI);
+    RegisterFunctionPtr("jit_dump_ptr",jit_DUMP_PTR);
+    RegisterFunctionPtr("jit_putargr",jit_PUTARGR);
+    RegisterFunctionPtr("jit_get_breakpoint_by_ptr",jit_get_breakpoint_btr_ptr);
+    RegisterFunctionPtr("VirtFree",VirtFree);
+    RegisterFunctionPtr("VirtAlloc",VirtAlloc);
+    RegisterFunctionPtr("jit_free",jit_free);
+    RegisterFunctionPtr("jit_FunctionParents",jit_FunctionParents);
+    RegisterFunctionPtr("jit_ParentFramePtrs",jit_ParentFramePtrs);
+    RegisterFunctionPtr("jit_BREAKPOINT",jit_BREAKPOINT);
+    RegisterFunctionPtr("jit_debugger_get_reg_ptr",jit_debugger_get_reg_ptr);
+    RegisterFunctionPtr("jit_debugger_get_vreg_ptr_from_parent",jit_debugger_get_vreg_ptr_from_parent);
+    RegisterFunctionPtr("jit_get_breakpoint_btr_ptr",jit_get_breakpoint_btr_ptr);
+    RegisterFunctionPtr("jit_disable_optimization",jit_disable_optimization);
+    RegisterFunctionPtr("jit_enable_optimization",jit_enable_optimization);
+    RegisterFunctionPtr("ForeachFuncInTable",ForeachFunc);//
+    RegisterFunctionPtr("jit_init",jit_INIT);
+    RegisterFunctionPtr("jit_dump_ops",jit_DUMP_OPS);
+    RegisterFunctionPtr("jit_generate_code",jit_GENERATE_CODE);
+    RegisterFunctionPtr("jit_andr",jit_ANDR);
+    RegisterFunctionPtr("jit_andi",jit_ANDI);
+    RegisterFunctionPtr("R_FP",jit_R_FP);
+    RegisterFunctionPtr("jit_bin_size",jit_BINSIZE);
+    RegisterFunctionPtr("jit_FR",jit_FR);
+    RegisterFunctionPtr("jit_R",jit_R);
+    RegisterFunctionPtr("jit_allocai",jit_ALLOCAI);
+    RegisterFunctionPtr("jit_get_label",jit_GET_LABEL);
+    RegisterFunctionPtr("jit_prolog",jit_PROLOG);
+    RegisterFunctionPtr("jit_movr",jit_MOVR);
+    RegisterFunctionPtr("jit_movi",jit_MOVI);
+    RegisterFunctionPtr("jit_jmpr",jit_JMPR);
+    RegisterFunctionPtr("jit_jmpi",jit_JMPI);
+    RegisterFunctionPtr("jit_patch",jit_PATCH);
+    RegisterFunctionPtr("jit_prepare",jit_PREPARE);
+    RegisterFunctionPtr("jit_call",jit_CALL);
+    RegisterFunctionPtr("jit_callr",jit_CALLR);
+    RegisterFunctionPtr("jit_reti",jit_RETI);
+    RegisterFunctionPtr("jit_retr",jit_RETR);
+    RegisterFunctionPtr("jit_retval",jit_RETVAL);
+    RegisterFunctionPtr("jit_getarg",jit_GETARG);
+    RegisterFunctionPtr("jit_declare_arg",jit_DECLARE_ARG);
+    RegisterFunctionPtr("jit_addr",jit_ADDR);
+    RegisterFunctionPtr("jit_addi",jit_ADDI);
+    RegisterFunctionPtr("jit_subr",jit_SUBR);
+    RegisterFunctionPtr("jit_subi",jit_SUBI);
+    RegisterFunctionPtr("jit_mulr",jit_MULR);
+    RegisterFunctionPtr("jit_muli",jit_MULI);
+    RegisterFunctionPtr("jit_mulr_u",jit_MULR_U);
+    RegisterFunctionPtr("jit_muli_u",jit_MULI_U);
+    RegisterFunctionPtr("jit_divr",jit_DIVR);
+    RegisterFunctionPtr("jit_divi",jit_DIVI);
+    RegisterFunctionPtr("jit_divr_u",jit_DIVR_U);
+    RegisterFunctionPtr("jit_divi_u",jit_DIVI_U);
+    RegisterFunctionPtr("jit_modr",jit_MODR);
+    RegisterFunctionPtr("jit_modi",jit_MODI);
+    RegisterFunctionPtr("jit_modr_u",jit_MODR_U);
+    RegisterFunctionPtr("jit_modi_u",jit_MODI_U);
+    RegisterFunctionPtr("jit_orr",jit_ORR);
+    RegisterFunctionPtr("jit_ori",jit_ORI);
+    RegisterFunctionPtr("jit_xorr",jit_XORR);
+    RegisterFunctionPtr("jit_xori",jit_XORI);
+    RegisterFunctionPtr("jit_lshr",jit_LSHR);
+    RegisterFunctionPtr("jit_lshi",jit_LSHI);
+    RegisterFunctionPtr("jit_rshr",jit_RSHR);
+    RegisterFunctionPtr("jit_rshi",jit_RSHI);
+    RegisterFunctionPtr("jit_rshr_u",jit_RSHR_U);
+    RegisterFunctionPtr("jit_rshi_u",jit_RSHI_U);
+    RegisterFunctionPtr("jit_notr",jit_NOTR);
+    RegisterFunctionPtr("jit_bltr",jit_BLTR);
+    RegisterFunctionPtr("jit_blti",jit_BLTI);
+    RegisterFunctionPtr("jit_bltr_u",jit_BLTR_U);
+    RegisterFunctionPtr("jit_blti_u",jit_BLTI_U);
+    RegisterFunctionPtr("jit_bler",jit_BLER);
+    RegisterFunctionPtr("jit_blei",jit_BLEI);
+    RegisterFunctionPtr("jit_bler_u",jit_BLER_U);
+    RegisterFunctionPtr("jit_blei_u",jit_BLEI_U);
+    RegisterFunctionPtr("jit_bger",jit_BGER);
+    RegisterFunctionPtr("jit_bgei",jit_BGEI);
+    RegisterFunctionPtr("jit_bger_u",jit_BGER_U);
+    RegisterFunctionPtr("jit_bgei_u",jit_BGEI_U);
+    RegisterFunctionPtr("jit_bgtr",jit_BGTR);
+    RegisterFunctionPtr("jit_bgti",jit_BGTI);
+    RegisterFunctionPtr("jit_bgtr_u",jit_BGTR_U);
+    RegisterFunctionPtr("jit_bgti_u",jit_BGTI_U);
+    RegisterFunctionPtr("jit_beqr",jit_BEQR);
+    RegisterFunctionPtr("jit_beqi",jit_BEQI);
+    RegisterFunctionPtr("jit_bner",jit_BNER);
+    RegisterFunctionPtr("jit_bnei",jit_BNEI);
 
-    CreateBuiltin(&jit_disable_optimization,u0,"jit_disable_optimization",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_enable_optimization,u0,"jit_enable_optimization",0,u0p,i64,NULL);
-    CreateMacroInt("JIT_OPT_ALL",JIT_OPT_ALL);
-    CreateMacroInt("JIT_OPT_JOIN_ADDMUL",JIT_OPT_JOIN_ADDMUL);
-    CreateMacroInt("JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS",JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS);
-    CreateMacroInt("JIT_OPT_OMIT_FRAME_PTR",JIT_OPT_OMIT_FRAME_PTR);
-    CreateBuiltin(&ForeachFunc, u0, "ForeachFuncInTable", 0, u0p,NULL);
-    CreateBuiltin(&jit_INIT,u0p,"jit_init",0,NULL);
-    CreateBuiltin(&jit_DUMP_OPS,u0,"jit_dump_ops",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_GENERATE_CODE,u0,"jit_generate_code",0,u8p,NULL);
-    CreateBuiltin(&jit_ANDR,u0p,"jit_andr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_ANDI,u0p,"jit_andi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_R_FP,i64,"R_FP",0,NULL);
-    CreateBuiltin(&jit_BINSIZE,i64,"jit_bin_size",0,u0p,NULL);
-    CreateBuiltin(&jit_FR,i64,"jit_FR",0,i64,NULL);
-    CreateBuiltin(&jit_ALLOCAI,i64,"jit_allocai",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_R,i64,"jit_R",0,i64,NULL);
-    CreateBuiltin(&jit_GET_LABEL,u0p,"jit_get_label",0,u0p,NULL);
-    CreateBuiltin(&jit_PROLOG,u0p,"jit_prolog",0,u0p,u8p,NULL);
-    CreateBuiltin(&jit_MOVR,u0p,"jit_movr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_MOVI,u0p,"jit_movi",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_JMPR,u0p,"jit_jmpr",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_JMPI,u0p,"jit_jmpi",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_PATCH,u0p,"jit_patch",0,u0p,u0p,NULL);
-    CreateBuiltin(&jit_PREPARE,u0p,"jit_prepare",0,u0p,NULL);
-    CreateBuiltin(&jit_PUTARGI,u0p,"jit_putargi",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_PUTARGR,u0p,"jit_putargr",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_CALL,u0p,"jit_call",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_CALLR,u0p,"jit_callr",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_RETR,u0p,"jit_retr",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_RETI,u0p,"jit_reti",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_RETVAL,u0p,"jit_retval",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_GETARG,u0p,"jit_getarg",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_DECLARE_ARG,u0p,"jit_declare_arg",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_ADDR,u0p,"jit_addr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_ADDI,u0p,"jit_addi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_SUBR,u0p,"jit_subr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_SUBI,u0p,"jit_subi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_NEGR,u0p,"jit_negr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_MULR,u0p,"jit_mulr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_MULI,u0p,"jit_muli",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_MULR_U,u0p,"jit_mulr_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_MULI_U,u0p,"jit_muli_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_DIVR,u0p,"jit_divr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_DIVI,u0p,"jit_divi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_DIVR_U,u0p,"jit_divr_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_DIVI_U,u0p,"jit_divi_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_MODR,u0p,"jit_modr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_MODI,u0p,"jit_modi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_MODR_U,u0p,"jit_modr_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_MODI_U,u0p,"jit_modi_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_ORR,u0p,"jit_orr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_ORI,u0p,"jit_ori",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_XORR,u0p,"jit_xorr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_XORI,u0p,"jit_xori",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LSHR,u0p,"jit_lshr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LSHI,u0p,"jit_lshi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_RSHR,u0p,"jit_rshr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_RSHI,u0p,"jit_rshi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_RSHR_U,u0p,"jit_rshr_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_RSHI_U,u0p,"jit_rshi_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_NOTR,u0p,"jit_notr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_BLTR,u0p,"jit_bltr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BLTI,u0p,"jit_blti",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BLTR_U,u0p,"jit_bltr_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BLTI_U,u0p,"jit_blti_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BLER,u0p,"jit_bler",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BLEI,u0p,"jit_blei",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BLER_U,u0p,"jit_bler_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BLEI_U,u0p,"jit_blei_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BGTR,u0p,"jit_bgtr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BGTI,u0p,"jit_bgti",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BGTR_U,u0p,"jit_bgtr_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BGTI_U,u0p,"jit_bgti_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BGER,u0p,"jit_bger",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BGEI,u0p,"jit_bgei",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BGER_U,u0p,"jit_bger_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BGEI_U,u0p,"jit_bgei_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BEQR,u0p,"jit_beqr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BEQI,u0p,"jit_beqi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BNER,u0p,"jit_bner",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_BNEI,u0p,"jit_bnei",0,u0p,i64,i64,i64,NULL); //HERE
-    CreateBuiltin(&jit_LTR,u0p,"jit_ltr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LTI,u0p,"jit_lti",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LTR_U,u0p,"jit_ltr_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LTI_U,u0p,"jit_lti_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_GTR,u0p,"jit_gtr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_GTI,u0p,"jit_gti",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_GTR_U,u0p,"jit_gtr_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_GTI_U,u0p,"jit_gti_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_GER,u0p,"jit_ger",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_GEI,u0p,"jit_gei",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_GER_U,u0p,"jit_ger_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_GEI_U,u0p,"jit_gei_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LER,u0p,"jit_ler",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LEI,u0p,"jit_lei",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LER_U,u0p,"jit_ler_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LEI_U,u0p,"jit_lei_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_EQR,u0p,"jit_eqr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_EQI,u0p,"jit_eqi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_NER,u0p,"jit_ner",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_NEI,u0p,"jit_nei",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LDR,u0p,"jit_ldr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LDI,u0p,"jit_ldi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LDXR,u0p,"jit_ldxr",0,u0p,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LDXI,u0p,"jit_ldxi",0,u0p,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LDR_U,u0p,"jit_ldr_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LDI_U,u0p,"jit_ldi_u",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LDXR_U,u0p,"jit_ldxr_u",0,u0p,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_LDXI_U,u0p,"jit_ldxi_u",0,u0p,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_STR,u0p,"jit_str",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_STI,u0p,"jit_sti",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_STXR,u0p,"jit_stxr",0,u0p,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_STXI,u0p,"jit_stxi",0,u0p,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FMOVR,u0p,"jit_fmovr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_FMOVI,u0p,"jit_fmovi",0,u0p,i64,f64,NULL);
-    CreateBuiltin(&jit_FADDR,u0p,"jit_faddr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FADDI,u0p,"jit_faddi",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FSUBR,u0p,"jit_fsubr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FSUBI,u0p,"jit_fsubi",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FMULR,u0p,"jit_fmulr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FMULI,u0p,"jit_fmuli",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FDIVR,u0p,"jit_fdivr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FDIVI,u0p,"jit_fdivi",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FNEGR,u0p,"jit_fnegr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_EXTR,u0p,"jit_extr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_TRUNCR,u0p,"jit_truncr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_FLOORR,u0p,"jit_floorr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_CEILR,u0p,"jit_ceilr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_ROUNDR,u0p,"jit_roundr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_FBLTR,u0p,"jit_fbltr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FBLTI,u0p,"jit_fblti",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FBGTR,u0p,"jit_fbgtr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FBGTI,u0p,"jit_fbgti",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FBLER,u0p,"jit_fbler",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FBLEI,u0p,"jit_fblei",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FBGER,u0p,"jit_fbger",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FBGEI,u0p,"jit_fbgei",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FBEQR,u0p,"jit_fbeqr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FBEQI,u0p,"jit_fbeqi",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FBEQR,u0p,"jit_fbeqr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FBEQI,u0p,"jit_fbeqi",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FBNER,u0p,"jit_fbner",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FBNEI,u0p,"jit_fbnei",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FSTR,u0p,"jit_fstr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FSTI,u0p,"jit_fsti",0,u0p,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FSTXR,u0p,"jit_fstxr",0,u0p,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FSTXI,u0p,"jit_fstxi",0,u0p,i64,i64,i64,f64,NULL);
-    CreateBuiltin(&jit_FLDR,u0p,"jit_fldr",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FLDI,u0p,"jit_fldi",0,u0p,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FLDXR,u0p,"jit_fldxr",0,u0p,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FLDXI,u0p,"jit_fldxi",0,u0p,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&jit_FPUTARGR,u0p,"jit_fputargr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_FPUTARGI,u0p,"jit_fputargi",0,u0p,f64,i64,NULL);
-    CreateBuiltin(&jit_FRETR,u0p,"jit_fretr",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_FRETI,u0p,"jit_freti",0,u0p,i64,f64,NULL);
-    CreateBuiltin(&jit_FRETVAL,u0p,"jit_fretval",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_REF_CODE,u0p,"jit_ref_code",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_REF_DATA,u0p,"jit_ref_data",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_TAINT_LABEL,u0p,"jit_taint_label",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_END_ASM_BLK,u0p,"jit_end_asm_blk",0,u0p,NULL);
-    CreateBuiltin(&jit_CODE_ALIGN,u0p,"jit_code_align",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_CODE_ALIGN_FILL,u0p,"jit_code_align_fill",0,u0p,i64,i64,NULL);
-    CreateBuiltin(&jit_DATA_STR,u0p,"jit_data_str",0,u0p,u0p,NULL);
-    CreateBuiltin(&jit_DATA_BYTE,u0p,"jit_data_byte",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_DATA_WORD,u0p,"jit_data_word",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_DATA_DWORD,u0p,"jit_data_dword",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_DATA_QWORD,u0p,"jit_data_qword",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_DATA_REF_CODE,u0p,"jit_data_ref_code",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_DATA_REF_DATA,u0p,"jit_data_ref_data",0,u0p,i64,NULL);
-    CreateBuiltin(&jit_DUMP_PTR,u0p,"jit_dump_ptr",0,u0p,u0p,NULL);
-    CreateBuiltin(&jit_RELOCATION,u0p,"jit_relocation",0,u0p,i64,u0p,NULL);
-    CreateBuiltin(&jit_DATA_BYTES,u8p,"jit_data_bytes",0,u8p,i64,u0p,NULL);
-    //
-    CreateBuiltin(&HC_CreateF64,u0p,"HC_CreateF64",0,f64,NULL);
-    CreateBuiltin(&HC_CreateI64,u0p,"HC_CreateI64",0,i64,NULL);
-    CreateBuiltin(&HC_CreateToken,u0p,"HC_CreateToken",0,i64,NULL);
-    CreateBuiltin(&HC_CreateStr,u0p,"HC_CreateStr",0,u8p,NULL);
-    CreateBuiltin(&HC_CreateIdent,u0p,"HC_CreateIdent",0,u8p,NULL);
-    CreateBuiltin(&HC_SetPosFromLexer,u0p,"HC_SetPosFromLexer",0,u0p,u8p,i64,NULL);
-    //
-    CreateBuiltin(&HCSetJmp,u0,"HCSetJmp",0,NULL);
-    CreateBuiltin(&PopTryFrame,u0,"PopTryFrame",0,NULL);
-    CreateBuiltin(&EnterTry,u0,"EnterTry",0,NULL);
-    CreateBuiltin(&ExitCatch,u0,"ExitCatch",0,NULL);
-    CreateBuiltin(&TOSPrint,u0,"TOSPrint",1,u8p,NULL);
-    CreateBuiltin(&PowU64,u64,"PowU64",0,u64,u64,NULL);
-    CreateBuiltin(&PowI64,i64,"PowI64",0,i64,i64,NULL);
-    CreateBuiltin(&fmod,f64,"FMod",0,f64,f64,NULL);
-    #ifdef BOOTSTRAPED
-    CreateBuiltin(&WhineOnOutOfBounds,u0,"WhineOnOutOfBounds",0,u0p,i64,NULL);
-    CreateBuiltin(&DbgLeaveFunction,u0,"DbgLeaveFunction",0,NULL);
-    CreateBuiltin(&VisitBreakpoint,u0,"VisitBreakpoint",0,u0p,NULL);
-    CreateBuiltin(&DbgEnterFunction,u0,"DbgEnterFunction",0,u0p,u0p,NULL);
-    CreateBuiltin(&EnterDebugger, u0, "Debugger",0,NULL);
-    CreateBuiltin(&__LexExe,u0,"__LexExe",0,NULL);
-    #else
-    CreateBuiltin(NULL,u0,"__LexExe",0,NULL);
-    #endif
-    CreateBuiltin(&Bit4BitU64ToF64,f64,"Bit4BitU64ToF64",0,u64,NULL);
-    CreateBuiltin(&Bit4BitF64ToU64,u64,"Bit4BitF64ToU64",0,f64,NULL);
-    CreateBuiltin(&F64And,f64,"F64And",0,f64,f64,NULL);
-    CreateBuiltin(&F64Xor,f64,"F64Xor",0,f64,f64,NULL);
-    CreateBuiltin(&F64Or,f64,"F64Or",0,f64,f64,NULL);
-    CreateBuiltin(&F64Shr,f64,"F64Shr",0,f64,i64,NULL);
-    CreateBuiltin(&F64Shl,f64,"F64Shl",0,f64,i64,NULL);
-    CreateBuiltin(&pow,f64,"Pow",0,f64,f64,NULL);
-    CreateBuiltin(&CreateBinFile,u0,"CreateBinFile",0,u8p,u8p,NULL);
-    CreateBuiltin(&LoadBinFile,u0,"LoadBinFile",0,u8p,NULL);
-    CreateBuiltin(&EvalExprNoComma,i64,"JIT_Eval",0,u8p,u8pp,NULL);
-    CreateBuiltin(&GCollect,u0,"GC_Collect",0,NULL);
-    CreateBuiltin(&CreateTagsAndErrorsFiles,u0,"CreateTagsAndErrorsFiles",0,u8p,u8p,u8p,NULL);
-    CreateBuiltin(&MSize, i64, "MSize",0, u0p,NULL);
-    CreateBuiltin(&BFFS, i64, "Bsf",0, i64,NULL);
-    CreateBuiltin(&BCLZ, i64, "Bsr",0, i64,NULL);
-    CreateBuiltin(&nonl,u0,"nonl",0,NULL);
-    CreateBuiltin(&throw, u0, "throw",0, i64,NULL);
-    CreateBuiltin(&GC_Malloc, u0p, "MAlloc",0, i64,NULL);
-    CreateBuiltin(&GC_Free, u0, "Free",0, u0p,NULL);
-    CreateBuiltin(&MemNCpy, u0p, "MemCpy",0, u0p,u0p,i64,NULL);
-    CreateBuiltin(&MemNCpy, u0p, "MemNCpy",0, u0p,u0p,i64,NULL);
-    CreateBuiltin(&strlen, i64, "StrLen",0, u8p,NULL);
-    CreateBuiltin(&strcmp, i64, "StrCmp",0, u8p,u8p,NULL);
-    CreateBuiltin(&strncmp, i64, "StrNCmp",0,u8p,u8p,i64,NULL);
-    CreateBuiltin(&strcpy, u8p, "StrCpy",0,u8p,u8p,NULL);
-    CreateBuiltin(&strncpy, u8p, "StrNCpy",0,u8p,u8p,i64,NULL);
-    CreateBuiltin(&strstr, u8p, "StrMatch",0,u8p,u8p,NULL);
-    CreateBuiltin(&GetFs, cfsptr, "Fs",0,NULL);
-    CreateBuiltin(&__GetStr, u8p, "__GetStr",0,u8p,NULL);
-    CreateBuiltin(&atan, f64,"ATan", 0,f64,NULL);
-    CreateBuiltin(&fabs, f64, "Abs",0,f64,NULL);
-    CreateBuiltin(&cos, f64, "Cos", 0,f64,NULL);
-    CreateBuiltin(&sin, f64, "Sin", 0,f64,NULL);
-    CreateBuiltin(&sqrt, f64, "Sqrt", 0,f64,NULL);
-    CreateBuiltin(&tan, f64, "Tan", 0,f64,NULL);
-    CreateBuiltin(&ceil, f64, "Ceil", 0,f64,NULL);
-    CreateBuiltin(&floor, f64, "Floor", 0,f64,NULL);
-    CreateBuiltin(&log, f64, "Ln", 0,f64,NULL);
-    CreateBuiltin(&log10, f64, "Log10", 0,f64,NULL);
-    CreateBuiltin(&log2, f64, "Log2", 0,f64,NULL);
-    CreateBuiltin(&round, f64, "Round", 0,f64,NULL);
-    CreateBuiltin(&trunc, f64, "Trunc", 0,f64,NULL);
-    CreateBuiltin(&exit, u0, "Exit", 0,i64,NULL);
-    CreateBuiltin(&FOpen, cfileptr, "FOpen", 0,u8p,u8p,i64,NULL);
-    CreateBuiltin(&FClose, u0, "FClose",0, cfileptr,NULL);
-    CreateBuiltin(&FSize, i64, "FSize", 0,cfileptr,NULL);
-    CreateBuiltin(&Cd, i64, "Cd", 0,u8p,NULL);
-    CreateBuiltin(&DirCur, u8p, "DirCur",0,NULL);
-    CreateBuiltin(&DirMk, i64, "DirMk",0,u8p,NULL);
-    CreateBuiltin(&__Move, i64, "__Move",0,u8p,u8p,NULL);
-    CreateBuiltin(&FileNameAbs, u8p, "FileNameAbs",0,u8p,NULL);
-    CreateBuiltin(&FileNameAbs, u8p, "DirNameAbs",0,u8p,NULL);
-    CreateBuiltin(&IsDir, i64, "IsDir",0,u8p,NULL);
-    CreateBuiltin(&FileWrite, i64, "FileWrite",0,u8p,u0p,i64,NULL);
-    CreateBuiltin(&FileRead, u8p, "FileRead",0,u8p,i64p,NULL);
-    CreateBuiltin(&abort, u0, "abort",0,NULL);
-    CreateBuiltin(&__Dir, u8pp, "__Dir",0,u8p,NULL);
-    CreateBuiltin(&IsWindows, i64, "IsWindows",0,NULL);
-    CreateBuiltin(&IsMac, i64, "IsMac",0,NULL);
-    CreateBuiltin(&MStrPrint, u8p, "MStrPrint",1,u8p,NULL);
-    CreateBuiltin(&StreamPrint, u0, "StreamPrint",1,u8p,NULL);
-    CreateBuiltin(&memset, u0p, "MemSet",0,u8p,u8,i64,NULL);
-    CreateBuiltin(&GetCH,u0,"getch",0,NULL);
-    CreateBuiltin(&redrawwin,u0,"redrawwin",0,windp,NULL);
-    CreateBuiltin(&MVWCHGAT,u0,"mvwchgat",0,windp,i64,i64,i64,i64,i64,u0p,NULL);
-    CreateBuiltin(&Test,u0,"Test",0,i64,i64,i64,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&TestMixed,u0,"TestMixed",0,i64,f64,i64,f64,i64,f64,NULL);
-    CreateBuiltin(&wclear,u0,"wclear",0,windp,NULL);
-    CreateBuiltin(&flushinp,u0,"flushinp",0,NULL);
-    //curses
-    CreateMacroInt("COLOR_RED", COLOR_RED);
-    CreateMacroInt("COLOR_BLACK",COLOR_BLACK);
-    CreateMacroInt("COLOR_BLUE",COLOR_BLUE);
-    CreateMacroInt("COLOR_GREEN",COLOR_GREEN);
-    CreateMacroInt("COLOR_YELLOW",COLOR_YELLOW);
-    CreateMacroInt("COLOR_MAGENTA",COLOR_MAGENTA);
-    CreateMacroInt("COLOR_CYAN",COLOR_CYAN);
-    CreateMacroInt("COLOR_WHITE",COLOR_WHITE);
-    CreateMacroInt("ERR",ERR);
-    CreateMacroInt("A_NORMAL",A_NORMAL);
-    CreateMacroInt("A_STANDOUT",A_STANDOUT);
-    CreateMacroInt("A_UNDERLINE",A_UNDERLINE);
-    CreateMacroInt("A_REVERSE",A_REVERSE);
-    CreateMacroInt("A_DIM",A_DIM);
-    CreateMacroInt("A_BOLD",A_BOLD);
-    CreateMacroInt("KEY_LEFT",KEY_LEFT);
-    CreateMacroInt("KEY_RIGHT",KEY_RIGHT);
-    CreateMacroInt("KEY_UP",KEY_UP);
-    CreateMacroInt("KEY_DOWN",KEY_DOWN);
-    CreateMacroInt("KEY_RESIZE",KEY_RESIZE);
-    CreateBuiltin(&resize_term, u0, "resize_term", 0, i64, i64, NULL);
-    CreateBuiltin(&clear, u0, "clear", 0, NULL);
-#ifdef TARGET_WIN32
-    CreateBuiltin(&is_termresized, u8, "is_termresized", 0, NULL);
-    CreateMacroInt("KEY_BACKSPACE",KEY_BACKSPACE);
-    CreateMacroInt("KEY_F1",KEY_F0+1);
-    CreateMacroInt("KEY_F2",KEY_F0+2);
-    CreateMacroInt("KEY_F3",KEY_F0+3);
-    CreateMacroInt("KEY_F4",KEY_F0+4);
-    CreateMacroInt("KEY_F5",KEY_F0+5);
-    CreateMacroInt("KEY_F6",KEY_F0+6);
-    CreateMacroInt("KEY_F7",KEY_F0+7);
-    CreateMacroInt("KEY_F8",KEY_F0+8);
-    CreateMacroInt("KEY_F9",KEY_F0+9);
-    CreateMacroInt("KEY_F11",KEY_F0+10);
-    CreateMacroInt("KEY_F10",KEY_F0+11);
-    CreateMacroInt("KEY_F12",KEY_F0+12);
-    CreateMacroInt("KEY_NPAGE",KEY_NPAGE);
-    CreateMacroInt("KEY_PPAGE",KEY_PPAGE);
-    CreateMacroInt("KEY_ENTER",KEY_ENTER);
-    CreateMacroInt("KEY_HOME",KEY_HOME);
-    CreateMacroInt("KEY_END",KEY_END);
-    CreateMacroInt("KEY_BTAB",KEY_BTAB);
-    CreateMacroInt("KEY_TAB",KEY_STAB);
-    CreateMacroInt("ALT_A",ALT_A);
-CreateMacroInt("ALT_B",ALT_B);
-CreateMacroInt("ALT_C",ALT_C);
-CreateMacroInt("ALT_D",ALT_D);
-CreateMacroInt("ALT_E",ALT_E);
-CreateMacroInt("ALT_F",ALT_F);
-CreateMacroInt("ALT_G",ALT_G);
-CreateMacroInt("ALT_H",ALT_H);
-CreateMacroInt("ALT_I",ALT_I);
-CreateMacroInt("ALT_J",ALT_J);
-CreateMacroInt("ALT_K",ALT_K);
-CreateMacroInt("ALT_L",ALT_L);
-CreateMacroInt("ALT_M",ALT_M);
-CreateMacroInt("ALT_N",ALT_N);
-CreateMacroInt("ALT_O",ALT_O);
-CreateMacroInt("ALT_P",ALT_P);
-CreateMacroInt("ALT_Q",ALT_Q);
-CreateMacroInt("ALT_R",ALT_R);
-CreateMacroInt("ALT_S",ALT_S);
-CreateMacroInt("ALT_T",ALT_T);
-CreateMacroInt("ALT_U",ALT_U);
-CreateMacroInt("ALT_V",ALT_V);
-CreateMacroInt("ALT_W",ALT_W);
-CreateMacroInt("ALT_X",ALT_X);
-CreateMacroInt("ALT_Y",ALT_Y);
-CreateMacroInt("ALT_Z",ALT_Z);
-    #endif
-    CreateBuiltin(&standend,u0,"standend",0,NULL);
-    CreateBuiltin(&newwin, windp, "newwin",0,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&delwin, u0, "delwin",0,windp,NULL);
-    CreateBuiltin(&init_pair, u0, "init_pair", 0,i64, i64,i64,NULL);
-    CreateBuiltin(&WMove, u0, "wmove", 0, windp,i64,i64,NULL);
-    CreateBuiltin(&wattron, u0, "wattron", 0, windp,i64,NULL);
-    CreateBuiltin(&wattroff, u0, "wattroff", 0,windp, i64,NULL);
-    CreateBuiltin(&ColorPair,i64,"COLOR_PAIR",0,i64,NULL);
-    CreateBuiltin(&initscr,windp,"initscr",0,NULL);
-    CreateBuiltin(&raw,u0,"raw",0,NULL);
-    CreateBuiltin(&cbreak,u0,"cbreak",0,NULL);
-    CreateBuiltin(&echo,u0,"echo",0,NULL);
-    CreateBuiltin(&noecho,u0,"noecho",0,NULL);
-    CreateBuiltin(&keypad,u0,"keypad",0,windp,i64,NULL);
-    CreateBuiltin(&WPrint,u0,"wprint",1,windp,u8p,NULL);
-    CreateBuiltin(&refresh,u0,"refresh",0,NULL);
-    CreateBuiltin(&wrefresh,u0,"wrefresh",0,windp,NULL);
-    CreateBuiltin(&wresize,u0,"wresize",0,windp,i64,i64,NULL);
-    CreateBuiltin(&getcurx,i64,"getcurx",0,windp,NULL);
-    CreateBuiltin(&getcury,i64,"getcury",0,windp,NULL);
-    CreateBuiltin(&endwin,i64,"endwin",0,NULL);
-    CreateBuiltin(&mvwin,i64,"mvwin",0,windp,i64,i64,NULL);
-    CreateBuiltin(&WGetCH,i64,"wgetch",0,windp,NULL);
-    CreateBuiltin(&box,u0,"box",0,windp,i64,i64,NULL);
-    CreateBuiltin(&start_color,u0,"start_color",0,NULL);
-    CreateBuiltin(&getmaxx,i64,"getmaxx",0,windp,NULL);
-    CreateBuiltin(&getmaxy,i64,"getmaxy",0,windp,NULL);
-    CreateBuiltin(&wtimeout,u0,"wtimeout",0,windp,i64,NULL);
-    CreateBuiltin(&timeout,u0,"timeout",0,i64,NULL);
-    CreateBuiltin(&wscrl,u0,"wscrl",0,windp,i64,NULL);
-    CreateBuiltin(&waddch,u0,"waddch",0,windp,u8,NULL);
-    CreateBuiltin(&wclrtoeol,u0,"wclrtoeol",0,windp,NULL);
-    CreateBuiltin(&Lines,i64,"LINES",0,NULL);
-    CreateBuiltin(&Cols,i64,"COLS",0,NULL);
-    CreateBuiltin(&wbkgdset,i64,"wbkgdset",0,windp,i64,NULL);
-    CreateBuiltin(&curs_set,u0,"curs_set",0,i64,NULL);
-    CreateBuiltin(&getbegx,i64,"getbegx",0,windp,NULL);
-    CreateBuiltin(&getbegy,i64,"getbegy",0,windp,NULL);
-    CreateBuiltin(&StdScr,windp,"stdscr",0,NULL);
+    RegisterFunctionPtr("jit_ltr",jit_LTR);
+    RegisterFunctionPtr("jit_lti",jit_LTI);
+    RegisterFunctionPtr("jit_ltr_u",jit_LTR_U);
+    RegisterFunctionPtr("jit_lti_u",jit_LTI_U);
+    RegisterFunctionPtr("jit_ler",jit_LER);
+    RegisterFunctionPtr("jit_lei",jit_LEI);
+    RegisterFunctionPtr("jit_ger_u",jit_GER_U);
+    RegisterFunctionPtr("jit_gei_u",jit_GEI_U);
+    RegisterFunctionPtr("jit_ger",jit_GER);
+    RegisterFunctionPtr("jit_gei",jit_GEI);
+    RegisterFunctionPtr("jit_ger_u",jit_GER_U);
+    RegisterFunctionPtr("jit_gei_u",jit_GEI_U);
+    RegisterFunctionPtr("jit_gtr",jit_GTR);
+    RegisterFunctionPtr("jit_gti",jit_GTI);
+    RegisterFunctionPtr("jit_gtr_u",jit_GTR_U);
+    RegisterFunctionPtr("jit_gti_u",jit_GTI_U);
+    RegisterFunctionPtr("jit_eqr",jit_EQR);
+    RegisterFunctionPtr("jit_eqi",jit_EQI);
+    RegisterFunctionPtr("jit_ner",jit_NER);
+    RegisterFunctionPtr("jit_nei",jit_NEI);
+    RegisterFunctionPtr("jit_ldr",jit_LDR);
+    RegisterFunctionPtr("jit_ldi",jit_LDI);
+    RegisterFunctionPtr("jit_ldxr",jit_LDXR);
+    RegisterFunctionPtr("jit_ldxi",jit_LDXI);
+    RegisterFunctionPtr("jit_ldr_u",jit_LDR_U);
+    RegisterFunctionPtr("jit_ldi_u",jit_LDI_U);
+    RegisterFunctionPtr("jit_ldxr_u",jit_LDXR_U);
+    RegisterFunctionPtr("jit_ldxi_u",jit_LDXI_U);
+    RegisterFunctionPtr("jit_str",jit_STR);
+    RegisterFunctionPtr("jit_sti",jit_STI);
+    RegisterFunctionPtr("jit_stxr",jit_STXR);
+    RegisterFunctionPtr("jit_stxi",jit_STXI);
+    RegisterFunctionPtr("jit_fmovi",jit_FMOVI);
+    RegisterFunctionPtr("jit_fmovr",jit_FMOVR);
+    RegisterFunctionPtr("jit_faddr",jit_FADDR);
+    RegisterFunctionPtr("jit_faddi",jit_FADDI);
+    RegisterFunctionPtr("jit_fsubi",jit_FSUBI);
+    RegisterFunctionPtr("jit_fsubr",jit_FSUBR);
+    RegisterFunctionPtr("jit_fmulr",jit_FMULR);
+    RegisterFunctionPtr("jit_fmuli",jit_FMULI);
+    RegisterFunctionPtr("jit_fdivi",jit_FDIVI);
+    RegisterFunctionPtr("jit_fdivr",jit_FDIVR);
+    RegisterFunctionPtr("jit_fnegr",jit_FNEGR);
+    RegisterFunctionPtr("jit_negr",jit_NEGR);
+    RegisterFunctionPtr("jit_extr",jit_EXTR);
+    RegisterFunctionPtr("jit_truncr",jit_TRUNCR);
+    RegisterFunctionPtr("jit_floorr",jit_FLOORR);
+    RegisterFunctionPtr("jit_ceilr",jit_CEILR);
+    RegisterFunctionPtr("jit_roundr",jit_ROUNDR);
+    RegisterFunctionPtr("jit_fbltr",jit_FBLTR);
+    RegisterFunctionPtr("jit_fbgtr",jit_FBGTR);
+    RegisterFunctionPtr("jit_fbler",jit_FBLER);
+    RegisterFunctionPtr("jit_fbger",jit_FBGER);
+    RegisterFunctionPtr("jit_fbeqr",jit_FBEQR);
+    RegisterFunctionPtr("jit_fbner",jit_FBNER);
+    RegisterFunctionPtr("jit_fblti",jit_FBLTI);
+    RegisterFunctionPtr("jit_fbgti",jit_FBGTI);
+    RegisterFunctionPtr("jit_fblei",jit_FBLEI);
+    RegisterFunctionPtr("jit_fbgei",jit_FBGEI);
+    RegisterFunctionPtr("jit_fbeqi",jit_FBEQI);
+    RegisterFunctionPtr("jit_fbnei",jit_FBNEI);
+    RegisterFunctionPtr("jit_fstr",jit_FSTR);
+    RegisterFunctionPtr("jit_fsti",jit_FSTI);
+    RegisterFunctionPtr("jit_fstxr",jit_FSTXR);
+    RegisterFunctionPtr("jit_fstxi",jit_FSTXI);
+    RegisterFunctionPtr("jit_fldr",jit_FLDR);
+    RegisterFunctionPtr("jit_fldi",jit_FLDI);
+    RegisterFunctionPtr("jit_fldxr",jit_FLDXR);
+    RegisterFunctionPtr("jit_fldxi",jit_FLDXI);
+    RegisterFunctionPtr("jit_fputargi",jit_FPUTARGI);
+    RegisterFunctionPtr("jit_fputargr",jit_FPUTARGR);
+    RegisterFunctionPtr("jit_freti",jit_FRETI);
+    RegisterFunctionPtr("jit_fretr",jit_FRETR);
+    RegisterFunctionPtr("jit_fretval",jit_FRETVAL);
+    RegisterFunctionPtr("jit_ref_code",jit_REF_CODE);
+    RegisterFunctionPtr("jit_ref_data",jit_REF_DATA);
+    RegisterFunctionPtr("jit_taint_label",jit_TAINT_LABEL);
+    RegisterFunctionPtr("jit_end_asm_blk",jit_END_ASM_BLK);
+    RegisterFunctionPtr("jit_code_align",jit_CODE_ALIGN);
+    RegisterFunctionPtr("jit_code_align_fill",jit_CODE_ALIGN_FILL);
+    RegisterFunctionPtr("jit_data_str",jit_DATA_STR);
+    RegisterFunctionPtr("jit_data_byte",jit_DATA_BYTE);
+    RegisterFunctionPtr("jit_data_word",jit_DATA_WORD);
+    RegisterFunctionPtr("jit_data_dword",jit_DATA_DWORD);
+    RegisterFunctionPtr("jit_data_qword",jit_DATA_QWORD);
+    RegisterFunctionPtr("jit_data_ref_code",jit_DATA_REF_CODE);
+    RegisterFunctionPtr("jit_data_ref_data",jit_DATA_REF_DATA);
+    RegisterFunctionPtr("jit_relocation",jit_RELOCATION);
+    RegisterFunctionPtr("jit_data_bytes",jit_DATA_BYTES);
+    RegisterFunctionPtr("HCSetJmp",HCSetJmp);
+    RegisterFunctionPtr("PopTryFrame",PopTryFrame);
+    RegisterFunctionPtr("EnterTry",EnterTry);
+    RegisterFunctionPtr("ExitCatch",ExitCatch);
+    RegisterFunctionPtr("TOSPrint",TOSPrint);
+    RegisterFunctionPtr("PowI64",PowI64);
+    RegisterFunctionPtr("PowU64",PowU64);
+    RegisterFunctionPtr("FMod",fmod);
+    RegisterFunctionPtr("WhineOnOutOfBounds",InBounds);
+    RegisterFunctionPtr("Bit4BitU64ToF64",Bit4BitU64ToF64);
+    RegisterFunctionPtr("Bit4BitF64ToU64",Bit4BitF64ToU64);
+    RegisterFunctionPtr("F64And",F64And);
+    RegisterFunctionPtr("F64Xor",F64Xor);
+    RegisterFunctionPtr("F64Shr",F64Shr);
+    RegisterFunctionPtr("F64Shl",F64Shl);
+    RegisterFunctionPtr("Pow",pow);
+    RegisterFunctionPtr("PoopSetGCEnable",PoopSetGCEnable);
+    RegisterFunctionPtr("GC_Collect",GCollect);
+    RegisterFunctionPtr("CreateTagsAndErrorsFiles",CreateTagsAndErrorsFiles);
+    RegisterFunctionPtr("MSize",MSize);
+    RegisterFunctionPtr("Bsf",BFFS);
+    RegisterFunctionPtr("Bsr",BCLZ);
+    RegisterFunctionPtr("throw",throw);
+    RegisterFunctionPtr("MAlloc",PoopMAlloc);
+    RegisterFunctionPtr("Free",PoopFree);
+    RegisterFunctionPtr("MemCpy",MemNCpy);
+    RegisterFunctionPtr("MemNCpy",MemNCpy);
+    RegisterFunctionPtr("StrLen",strlen);
+    RegisterFunctionPtr("StrCmp",strcmp);
+    RegisterFunctionPtr("StrNCmp",strncmp);
+    RegisterFunctionPtr("StrCpy",strcpy);
+    RegisterFunctionPtr("StrNCpy",strncpy);
+    RegisterFunctionPtr("StrMatch",strstr);
+    RegisterFunctionPtr("Fs",GetFs);
+    RegisterFunctionPtr("__GetStr",__GetStr);
+    RegisterFunctionPtr("ATan",atan);
+    RegisterFunctionPtr("Abs",fabs);
+    RegisterFunctionPtr("Cos",cos);
+    RegisterFunctionPtr("Sin",sin);
+    RegisterFunctionPtr("Sqrt",sqrt);
+    RegisterFunctionPtr("Tan",tan);
+    RegisterFunctionPtr("Ceil",ceil);
+    RegisterFunctionPtr("Floor",floor);
+    RegisterFunctionPtr("Ln",log);
+    RegisterFunctionPtr("Log10",log10);
+    RegisterFunctionPtr("Log2",Log2);
+    RegisterFunctionPtr("Round",round);
+    RegisterFunctionPtr("Trunc",trunc);
+    RegisterFunctionPtr("Exit",exit);
+    RegisterFunctionPtr("Cd",Cd);
+    RegisterFunctionPtr("DirCur",DirCur);
+    RegisterFunctionPtr("DirMk",DirMk);
+    RegisterFunctionPtr("__Move",__Move);
+    RegisterFunctionPtr("FileNameAbs",FileNameAbs);
+    RegisterFunctionPtr("DirNameAbs",FileNameAbs);
+    RegisterFunctionPtr("__Dir",__Dir);
+    RegisterFunctionPtr("IsWindows",IsWindows);
+    RegisterFunctionPtr("IsMac",IsMac);
+    RegisterFunctionPtr("MemSet",memset);
+    RegisterFunctionPtr("SDL_Init",SDL_Init);
+    RegisterFunctionPtr("SDL_WasInit",SDL_WasInit);
+    RegisterFunctionPtr("SDL_CreateWindow",SDL_CreateWindow);
+    RegisterFunctionPtr("SDL_SetTextureBlendMode",SDL_SetTextureBlendMode);
+    RegisterFunctionPtr("SDL_CreateWindowAndRenderer",SDL_CreateWindowAndRenderer);
+    RegisterFunctionPtr("SDL_DestroyWindow",SDL_DestroyWindow);
+    RegisterFunctionPtr("SDL_DestroyRenderer",SDL_DestroyRenderer);
+    RegisterFunctionPtr("SDL_DisableScreenSaver",SDL_DisableScreenSaver);
+    RegisterFunctionPtr("SDL_GetGrabbedWindow",SDL_GetGrabbedWindow);
+    RegisterFunctionPtr("SDL_GetWindowPosition",SDL_GetWindowPosition);
+    RegisterFunctionPtr("SDL_GetWindowMinimumSize",SDL_GetWindowMinimumSize);
+    RegisterFunctionPtr("SDL_GetWindowMaximumSize",SDL_GetWindowMaximumSize);
+    RegisterFunctionPtr("SDL_GetWindowSize",SDL_GetWindowSize);
+    RegisterFunctionPtr("SDL_GetWindowTitle",hc_SDL_GetWindowTitle);
+    RegisterFunctionPtr("SDL_HideWindow",SDL_HideWindow);
+    RegisterFunctionPtr("SDL_MaximizeWindow",SDL_MaximizeWindow);
+    RegisterFunctionPtr("SDL_MinimizeWindow",SDL_MinimizeWindow);
+    RegisterFunctionPtr("SDL_SetWindowBordered",SDL_SetWindowBordered);
+    RegisterFunctionPtr("SDL_SetWindowFullscreen",SDL_SetWindowFullscreen);
+    RegisterFunctionPtr("SDL_SetWindowMaximumSize",SDL_SetWindowMaximumSize);
+    RegisterFunctionPtr("SDL_SetWindowMinimumSize",SDL_SetWindowMinimumSize);
+    RegisterFunctionPtr("SDL_SetWindowResizable",SDL_SetWindowResizable);
+    RegisterFunctionPtr("SDL_SetWindowSize",SDL_SetWindowSize);
+    RegisterFunctionPtr("SDL_SetWindowTitle",SDL_SetWindowTitle);
+    RegisterFunctionPtr("SDL_ShowWindow",SDL_ShowWindow);
+    RegisterFunctionPtr("SDL_CreateRenderer",SDL_CreateRenderer);
+    RegisterFunctionPtr("SDL_CreateTexture",SDL_CreateTexture);
+    RegisterFunctionPtr("SDL_DestroyRenderer",SDL_DestroyRenderer);
+    RegisterFunctionPtr("SDL_GetRenderDrawColor",SDL_GetRenderDrawColor);
+    RegisterFunctionPtr("SDL_GetRenderer",SDL_GetRenderer);
+    RegisterFunctionPtr("SDL_GetRendererOutputSize",SDL_GetRendererOutputSize);
+    RegisterFunctionPtr("SDL_GetRenderTarget",SDL_GetRenderTarget);
+    RegisterFunctionPtr("SDL_GetTextureAlphaMod",SDL_GetTextureAlphaMod);
+    RegisterFunctionPtr("SDL_GetTextureColorMod",SDL_GetTextureColorMod);
+    RegisterFunctionPtr("SDL_RenderClear",SDL_RenderClear);
+    RegisterFunctionPtr("SDL_RenderCopy",SDL_RenderCopy);
+    RegisterFunctionPtr("SDL_RenderDrawLine",SDL_RenderDrawLine);
+    RegisterFunctionPtr("SDL_RenderDrawLines",SDL_RenderDrawLines);
+    RegisterFunctionPtr("SDL_RenderDrawPoint",SDL_RenderDrawPoint);
+    RegisterFunctionPtr("SDL_RenderDrawPoints",SDL_RenderDrawPoints);
+    RegisterFunctionPtr("SDL_RenderDrawRect",SDL_RenderDrawRect);
+    RegisterFunctionPtr("SDL_RenderDrawRects",SDL_RenderDrawRects);
+    RegisterFunctionPtr("SDL_RenderFillRects",SDL_RenderFillRects);
+    RegisterFunctionPtr("SDL_RenderFillRects",SDL_RenderFillRects);
+    RegisterFunctionPtr("SDL_RenderGetClipRect",SDL_RenderGetClipRect);
+    RegisterFunctionPtr("SDL_RenderPresent",SDL_RenderPresent);
+    RegisterFunctionPtr("SDL_RenderSetClipRect",SDL_RenderSetClipRect);
+    RegisterFunctionPtr("SDL_SetRenderDrawColor",SDL_SetRenderDrawColor);
+    RegisterFunctionPtr("SDL_SetRenderTarget",SDL_SetRenderTarget);
+    RegisterFunctionPtr("SDL_SetTextureAlphaMod",SDL_SetTextureAlphaMod);
+    RegisterFunctionPtr("SDL_SetTextureColorMod",SDL_SetTextureColorMod);
+    RegisterFunctionPtr("SDL_UpdateTexture",SDL_UpdateTexture);
+    RegisterFunctionPtr("SDL_QueryTexture",SDL_QueryTexture);
+    RegisterFunctionPtr("SDL_GetClipboardText",hc_SDL_GetClipboardText);
+    RegisterFunctionPtr("SDL_SetClipboardText",SDL_SetClipboardText);
+    RegisterFunctionPtr("SDL_PollEvent",SDL_PollEvent);
+    RegisterFunctionPtr("SDL_WaitEvent",SDL_WaitEvent);
+    RegisterFunctionPtr("SDL_DestroyRenderer",SDL_DestroyRenderer);
+    RegisterFunctionPtr("SDL_DestroyTexture",SDL_DestroyTexture);
+    RegisterFunctionPtr("SDL_StartTextInput",SDL_StartTextInput);
+    RegisterFunctionPtr("SDL_StopTextInput",SDL_StopTextInput);
+    RegisterFunctionPtr("SDL_GetError",SDL_GetError);
+    RegisterFunctionPtr("SDL_ClearError",SDL_ClearError);
+    RegisterFunctionPtr("SDL_FlushEvent",SDL_FlushEvent);
+    RegisterFunctionPtr("SDL_GetSurfaceWidth",GetSurfaceW);
+    RegisterFunctionPtr("SDL_GetSurfaceHeight",GetSurfaceH);
+    RegisterFunctionPtr("SDL_CreateRGBSurface",SDL_CreateRGBSurface);
+    RegisterFunctionPtr("SDL_CreateRGBSurfaceFrom",SDL_CreateRGBSurfaceFrom);
+    RegisterFunctionPtr("SDL_UpperBlit",SDL_UpperBlit);
+    RegisterFunctionPtr("SDL_FillRect",SDL_FillRect);
+    RegisterFunctionPtr("SDL_FillRects",SDL_FillRects);
+    RegisterFunctionPtr("SDL_GetClipRect",SDL_GetClipRect);
+    RegisterFunctionPtr("SDL_GetColorKey",SDL_GetColorKey);
+    RegisterFunctionPtr("SDL_GetSurfaceAlphaMod",SDL_GetSurfaceAlphaMod);
+    RegisterFunctionPtr("SDL_GetSurfaceColorMod",SDL_GetSurfaceColorMod);
+    RegisterFunctionPtr("SDL_LockSurface",SDL_LockSurface);
+    RegisterFunctionPtr("SDL_UnlockSurface",SDL_UnlockSurface);
+    RegisterFunctionPtr("SDL_SetClipRect",SDL_SetClipRect);
+    RegisterFunctionPtr("SDL_SetColorKey",SDL_SetColorKey);
+    RegisterFunctionPtr("SDL_SetSurfaceAlphaMod",SDL_SetSurfaceAlphaMod);
+    RegisterFunctionPtr("SDL_SetSurfaceColorMod",SDL_SetSurfaceColorMod);
+    RegisterFunctionPtr("SDL_SetSurfaceRLE",SDL_SetSurfaceRLE);
+    RegisterFunctionPtr("SDL_BlitSurface",SDL_BlitSurface);
+    RegisterFunctionPtr("SDL_BlitScaled",SDL_BlitScaled);
+    RegisterFunctionPtr("SDL_FreeSurface",SDL_FreeSurface);
+    RegisterFunctionPtr("SDL_UpdateWindowSurface",SDL_UpdateWindowSurface);
+    RegisterFunctionPtr("SDL_GetWindowSurface",SDL_GetWindowSurface);
+    RegisterFunctionPtr("__GetBuiltinMacrosText",GetBuiltinMacrosText);
+}
+static void *GetType(void *fp,char *name,long ptr_level) {
+    CSymbol *gt;
+    if(!fp) {
+        gt=map_get(&Loader.symbols,"GetType");
+        if(!gt) return NULL;
+        fp=gt->value_ptr;
+    }
+    return ((void*(*)(char *,long))fp)(name,ptr_level);
+}
+static void *__LoaderCreateTypeFwd(void *fp,char *name,long sz,long align) {
+    CSymbol *gt;
+    if(!fp) {
+        gt=map_get(&Loader.symbols,"LoaderCreateTypeFwd");
+        if(!gt) return NULL;
+        fp=gt->value_ptr;
+    }
+    return ((void*(*)(char *,long,long))fp)(name,sz,align);
+}
+#define LoaderCreateTypeFwd(fp,t) __LoaderCreateTypeFwd(fp,#t,sizeof(t),8);
+static void __LoaderAddMember(void *fp,void *dst,void *t,char *name,long off) {
+    CSymbol *gt;
+    if(!fp) {
+        gt=map_get(&Loader.symbols,"LoaderAddMember");
+        if(!gt) return NULL;
+        fp=gt->value_ptr;
+    }
+    return ((void(*)(void*,void*,char *,long))fp)(dst,t,name,off);
+}
+static CType *PrimType(void *fp,int64_t sz) {
+    switch(sz) {
+    case 1:
+        return GetType(fp,"I8i",0);
+    case 2:
+        return GetType(fp,"I16i",0);
+    case 4:
+        return GetType(fp,"I32i",0);
+    case 8:
+        return GetType(fp,"I64i",0);
+    default: abort();
+    }
+}
+static CType *LoaderCreateArrayType(void *fp,char *name,int64_t dim) {
+    CSymbol *gt;
+    if(!fp) {
+        gt=map_get(&Loader.symbols,"LoaderCreateArrayType");
+        if(!gt) return NULL;
+        fp=gt->value_ptr;
+    }
+    return ((void*(*)(char *,long))fp)(name,dim);
+}
+#define LoaderAddMember(fp,d,t,ct,mem) __LoaderAddMember(fp,d,t,#mem,offsetof(ct,mem));
+#define LoaderAddPrimMember(fp,gt,d,ct,mem) __LoaderAddMember(fp,d,PrimType(gt,sizeof(((ct*)NULL)->mem)),#mem,offsetof(ct,mem));
+static void CreateMacroInt(vec_char_t *to,char *name,int64_t value) {
+    char buffer[1024];
+    sprintf(buffer,"#define %s %ld\n",name,value);
+    vec_pusharr(to,buffer,strlen(buffer));
+}
+vec_char_t CreateMacros() {
+    vec_char_t macros;
+    vec_init(&macros);
+    CreateMacroInt(&macros,"JIT_SIGNED_NUM", JIT_SIGNED_NUM);
+    CreateMacroInt(&macros,"JIT_UNSIGNED_NUM", JIT_UNSIGNED_NUM);
+    CreateMacroInt(&macros,"JIT_FLOAT_NUM", JIT_FLOAT_NUM);
+    CreateMacroInt(&macros,"JIT_PTR", JIT_PTR);
+    CreateMacroInt(&macros,"JIT_OPT_ALL",JIT_OPT_ALL);
+    CreateMacroInt(&macros,"JIT_OPT_JOIN_ADDMUL",JIT_OPT_JOIN_ADDMUL);
+    CreateMacroInt(&macros,"JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS",JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS);
+    CreateMacroInt(&macros,"JIT_OPT_OMIT_FRAME_PTR",JIT_OPT_OMIT_FRAME_PTR);
+    //SIGNALS
+    CreateMacroInt(&macros,"SIGILL",SIGILL);
+    CreateMacroInt(&macros,"SIGABRT",SIGABRT);
+    CreateMacroInt(&macros,"SIGBUS",SIGBUS);
+    CreateMacroInt(&macros,"SIGFPE",SIGFPE);
+    CreateMacroInt(&macros,"SIGKILL",SIGKILL);
+    CreateMacroInt(&macros,"SIGSEGV",SIGSEGV);
+    CreateMacroInt(&macros,"SIGTERM",SIGTERM);
+    CreateMacroInt(&macros,"SIGSTOP",SIGSTOP);
+    CreateMacroInt(&macros,"SDL_INIT_TIMER",SDL_INIT_TIMER);
+    CreateMacroInt(&macros,"SDL_INIT_AUDIO",SDL_INIT_AUDIO);
+    CreateMacroInt(&macros,"SDL_INIT_VIDEO",SDL_INIT_VIDEO);
+    CreateMacroInt(&macros,"SDL_INIT_EVENTS",SDL_INIT_EVENTS);
+    CreateMacroInt(&macros,"SDL_INIT_EVERYTHING",SDL_INIT_EVERYTHING);
+    CreateMacroInt(&macros,"SDL_BLENDMODE_NONE",SDL_BLENDMODE_NONE);
+    CreateMacroInt(&macros,"SDL_BLENDMODE_BLEND",SDL_BLENDMODE_BLEND);
+    CreateMacroInt(&macros,"SDL_BLENDMODE_ADD",SDL_BLENDMODE_ADD);
+    CreateMacroInt(&macros,"SDL_BLENDMODE_MOD",SDL_BLENDMODE_MOD);
+    CreateMacroInt(&macros,"SDL_WINDOWPOS_UNDEFINED",SDL_WINDOWPOS_UNDEFINED);
+    CreateMacroInt(&macros,"SDL_WINDOWPOS_CENTERED",SDL_WINDOWPOS_CENTERED);
+    CreateMacroInt(&macros,"SDL_WINDOW_FULLSCREEN",SDL_WINDOW_FULLSCREEN);
+    CreateMacroInt(&macros,"SDL_WINDOW_FULLSCREEN_DESKTOP",SDL_WINDOW_FULLSCREEN_DESKTOP);
+    CreateMacroInt(&macros,"SDL_WINDOW_RESIZABLE",SDL_WINDOW_RESIZABLE);
+    CreateMacroInt(&macros,"SDL_WINDOW_MINIMIZED",SDL_WINDOW_MINIMIZED);
+    CreateMacroInt(&macros,"SDL_WINDOW_MAXIMIZED",SDL_WINDOW_MAXIMIZED);
+    CreateMacroInt(&macros,"SDL_RENDERER_SOFTWARE",SDL_RENDERER_SOFTWARE);
+    CreateMacroInt(&macros,"SDL_RENDERER_ACCELERATED",SDL_RENDERER_ACCELERATED);
+    CreateMacroInt(&macros,"SDL_RENDERER_PRESENTVSYNC",SDL_RENDERER_PRESENTVSYNC);
+    CreateMacroInt(&macros,"SDL_RENDERER_TARGETTEXTURE",SDL_RENDERER_TARGETTEXTURE);
+    CreateMacroInt(&macros,"SDL_TEXTUREACCESS_TARGET",SDL_TEXTUREACCESS_TARGET);
+    CreateMacroInt(&macros,"SDL_TEXTUREACCESS_STREAMING",SDL_TEXTUREACCESS_STREAMING);
+    CreateMacroInt(&macros,"SDL_TEXTUREACCESS_STATIC",SDL_TEXTUREACCESS_STATIC);
+    CreateMacroInt(&macros,"SDL_PIXELFORMAT_RGBA8888",SDL_PIXELFORMAT_RGBA8888);
+    CreateMacroInt(&macros,"SDL_WINDOWEVENT",SDL_WINDOWEVENT);
+    CreateMacroInt(&macros,"SDL_WINDOWEVENT_RESIZED",SDL_WINDOWEVENT_RESIZED);
+    CreateMacroInt(&macros,"SDL_KEYUP",SDL_KEYUP);
+    CreateMacroInt(&macros,"SDL_KEYDOWN",SDL_KEYDOWN);
+    CreateMacroInt(&macros,"KMOD_LSHIFT",KMOD_LSHIFT);
+    CreateMacroInt(&macros,"KMOD_RSHIFT",KMOD_RSHIFT);
+    CreateMacroInt(&macros,"KMOD_SHIFT",KMOD_SHIFT);
+    CreateMacroInt(&macros,"KMOD_LCTRL",KMOD_LCTRL);
+    CreateMacroInt(&macros,"KMOD_RCTRL",KMOD_RCTRL);
+    CreateMacroInt(&macros,"KMOD_CTRL",KMOD_CTRL);
+    CreateMacroInt(&macros,"KMOD_LALT",KMOD_LALT);
+    CreateMacroInt(&macros,"KMOD_RALT",KMOD_RALT);
+    CreateMacroInt(&macros,"KMOD_ALT",KMOD_ALT);
+    CreateMacroInt(&macros,"KMOD_LGUI",KMOD_LGUI);
+    CreateMacroInt(&macros,"KMOD_RGUI",KMOD_RGUI);
+    CreateMacroInt(&macros,"KMOD_GUI",KMOD_GUI);
+    CreateMacroInt(&macros,"KMOD_CAPS",KMOD_CAPS);
+    CreateMacroInt(&macros,"SDL_TEXTEDITING",SDL_TEXTEDITING);
+    CreateMacroInt(&macros,"SDL_TEXTINPUT",SDL_TEXTINPUT);
+    CreateMacroInt(&macros,"SDL_MOUSEMOTION",SDL_MOUSEMOTION);
+    CreateMacroInt(&macros,"SDL_BUTTON_LMASK",SDL_BUTTON_LMASK);
+    CreateMacroInt(&macros,"SDL_BUTTON_RMASK",SDL_BUTTON_RMASK);
+    CreateMacroInt(&macros,"SDL_BUTTON_MMASK",SDL_BUTTON_MMASK);
+    CreateMacroInt(&macros,"SDL_MOUSEBUTTONUP",SDL_MOUSEBUTTONUP);
+    CreateMacroInt(&macros,"SDL_MOUSEBUTTONDOWN",SDL_MOUSEBUTTONDOWN);
+    CreateMacroInt(&macros,"SDL_PRESSED",SDL_PRESSED);
+    CreateMacroInt(&macros,"SDL_RELEASED",SDL_RELEASED);
+    CreateMacroInt(&macros,"SDL_QUIT",SDL_QUIT);
+    return macros;
+}
+char *GetBuiltinMacrosText() {
+    vec_char_t macros=CreateMacros();
+    vec_push(&macros,0);
+    return macros.data;
+}
+void RegisterRuntimeClasses(void *gt,void *ctf,void *add_mem,void *c_arr_t) {
     //SDL2 bindings
-    CType *sdlr_t=IMPORT_CLASS_WO_MEMBERS(SDL_Rect);
-    ADD_PRIM_MEMBER(sdlr_t,SDL_Rect,x);
-    ADD_PRIM_MEMBER(sdlr_t,SDL_Rect,y);
-    ADD_PRIM_MEMBER(sdlr_t,SDL_Rect,w);
-    ADD_PRIM_MEMBER(sdlr_t,SDL_Rect,h);
-    CType *sdlp_t=IMPORT_CLASS_WO_MEMBERS(SDL_Point);
-    ADD_PRIM_MEMBER(sdlp_t,SDL_Point,x);
-    ADD_PRIM_MEMBER(sdlp_t,SDL_Point,y);
-    //Init section
-    CreateMacroInt("SDL_INIT_TIMER",SDL_INIT_TIMER);
-    CreateMacroInt("SDL_INIT_AUDIO",SDL_INIT_AUDIO);
-    CreateMacroInt("SDL_INIT_VIDEO",SDL_INIT_VIDEO);
-    CreateMacroInt("SDL_INIT_EVENTS",SDL_INIT_EVENTS);
-    CreateMacroInt("SDL_INIT_EVERYTHING",SDL_INIT_EVERYTHING);
-    CreateBuiltin(&SDL_Init,i64,"SDL_Init",0,i64,NULL);
-    CreateBuiltin(&SDL_WasInit,i64,"SDL_WasInit",0,i64,NULL);
-    //Video section
-    CreateMacroInt("SDL_BLENDMODE_NONE",SDL_BLENDMODE_NONE);
-    CreateMacroInt("SDL_BLENDMODE_BLEND",SDL_BLENDMODE_BLEND);
-    CreateMacroInt("SDL_BLENDMODE_ADD",SDL_BLENDMODE_ADD);
-    CreateMacroInt("SDL_BLENDMODE_MOD",SDL_BLENDMODE_MOD);
-    CType *sdlwindp_t=CreatePtrType(CreateClassForwardDecl(NULL,CreateDummyName("SDL_Window")));
-    CType *sdlrendp_t=CreatePtrType(CreateClassForwardDecl(NULL,CreateDummyName("SDL_Renderer")));
-    CType *sdltextp_t=CreatePtrType(CreateClassForwardDecl(NULL,CreateDummyName("SDL_Texture")));
-    CreateMacroInt("SDL_WINDOWPOS_UNDEFINED",SDL_WINDOWPOS_UNDEFINED);
-    CreateMacroInt("SDL_WINDOWPOS_CENTERED",SDL_WINDOWPOS_CENTERED);
-    CreateMacroInt("SDL_WINDOW_FULLSCREEN",SDL_WINDOW_FULLSCREEN);
-    CreateMacroInt("SDL_WINDOW_FULLSCREEN_DESKTOP",SDL_WINDOW_FULLSCREEN_DESKTOP);
-    CreateMacroInt("SDL_WINDOW_RESIZABLE",SDL_WINDOW_RESIZABLE);
-    CreateMacroInt("SDL_WINDOW_MINIMIZED",SDL_WINDOW_MINIMIZED);
-    CreateMacroInt("SDL_WINDOW_MAXIMIZED",SDL_WINDOW_MAXIMIZED);
-    CreateBuiltin(&SDL_CreateWindow,sdlwindp_t,"SDL_CreateWindow",0,u8p,i64,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&SDL_SetTextureBlendMode,i64,"SDL_SetTextureBlendMode",0,sdltextp_t,i64,NULL);
-    CreateBuiltin(&SDL_CreateWindowAndRenderer,sdlrendp_t,"SDL_CreateWindowAndRenderer",0,i64,i64,i64,CreatePtrType(sdlwindp_t),CreatePtrType(sdlrendp_t),NULL);
-    CreateBuiltin(&SDL_DestroyWindow,u0,"SDL_DestroyWindow",0,sdlwindp_t,NULL);
-    CreateBuiltin(&SDL_DestroyRenderer,u0,"SDL_DestroyRenderer",0,sdlrendp_t,NULL);
-    CreateBuiltin(&SDL_DisableScreenSaver,u0,"SDL_DisableScreenSaver",0,NULL);
-    CreateBuiltin(&SDL_GetGrabbedWindow,sdlwindp_t,"SDL_GetGrabbedWindow",0,NULL);
-    CreateBuiltin(&SDL_GetWindowPosition,u0,"SDL_GetWindowPosition",0,sdlwindp_t,i32p,i32p,NULL);
-    CreateBuiltin(&SDL_GetWindowMinimumSize,u0,"SDL_GetWindowMinimumSize",0,sdlwindp_t,i32p,i32p,NULL);
-    CreateBuiltin(&SDL_GetWindowMaximumSize,u0,"SDL_GetWindowMaximumSize",0,sdlwindp_t,i32p,i32p,NULL);
-    CreateBuiltin(&SDL_GetWindowSize,u0,"SDL_GetWindowSize",0,sdlwindp_t,i32p,i32p,NULL);
-    CreateBuiltin(&hc_SDL_GetWindowTitle,u8p,"SDL_GetWindowTitle",0,sdlwindp_t,NULL);
-    CreateBuiltin(&SDL_HideWindow,u0,"SDL_HideWindow",0,sdlwindp_t,NULL);
-    CreateBuiltin(&SDL_MaximizeWindow,u0,"SDL_MaximizeWindow",0,sdlwindp_t,NULL);
-    CreateBuiltin(&SDL_MinimizeWindow,u0,"SDL_MinimizeWindow",0,sdlwindp_t,NULL);
-    CreateBuiltin(&SDL_SetWindowBordered,u0,"SDL_SetWindowBordered",0,sdlwindp_t,i64,NULL);
-    CreateBuiltin(&SDL_SetWindowFullscreen,u0,"SDL_SetWindowFullscreen",0,sdlwindp_t,i64,NULL);
-    CreateBuiltin(&SDL_SetWindowMaximumSize,u0,"SDL_SetWindowMaximumSize",0,sdlwindp_t,i64,i64,NULL);
-    CreateBuiltin(&SDL_SetWindowMinimumSize,u0,"SDL_SetWindowMinimumSize",0,sdlwindp_t,i64,i64,NULL);
-    CreateBuiltin(&SDL_SetWindowResizable,u0,"SDL_SetWindowResizable",0,sdlwindp_t,i64,NULL);
-    CreateBuiltin(&SDL_SetWindowSize,u0,"SDL_SetWindowSize",0,sdlwindp_t,i64,i64,NULL);
-    CreateBuiltin(&SDL_SetWindowTitle,u0,"SDL_SetWindowTitle",0,sdlwindp_t,u8p,NULL);
-    CreateBuiltin(&SDL_ShowWindow,u0,"SDL_ShowWindow",0,sdlwindp_t,NULL);
-    CreateMacroInt("SDL_RENDERER_SOFTWARE",SDL_RENDERER_SOFTWARE);
-    CreateMacroInt("SDL_RENDERER_ACCELERATED",SDL_RENDERER_ACCELERATED);
-    CreateMacroInt("SDL_RENDERER_PRESENTVSYNC",SDL_RENDERER_PRESENTVSYNC);
-    CreateMacroInt("SDL_RENDERER_TARGETTEXTURE",SDL_RENDERER_TARGETTEXTURE);
-    CreateBuiltin(&SDL_CreateRenderer,sdlrendp_t,"SDL_CreateRenderer",0,sdlwindp_t,i64,i64,0);
-    CreateMacroInt("SDL_TEXTUREACCESS_TARGET",SDL_TEXTUREACCESS_TARGET);
-    CreateMacroInt("SDL_TEXTUREACCESS_STREAMING",SDL_TEXTUREACCESS_STREAMING);
-    CreateMacroInt("SDL_TEXTUREACCESS_STATIC",SDL_TEXTUREACCESS_STATIC);
-    CreateMacroInt("SDL_PIXELFORMAT_RGBA8888",SDL_PIXELFORMAT_RGBA8888);
-    CreateBuiltin(&SDL_CreateTexture,sdltextp_t,"SDL_CreateTexture",0,sdlrendp_t,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&SDL_DestroyRenderer,sdlrendp_t,"SDL_DestroyRenderer",0,sdlrendp_t,NULL);
-    CreateBuiltin(&SDL_GetRenderDrawColor,i64,"SDL_GetRenderDrawColor",0,sdlrendp_t,u8p,u8p,u8p,u8p,NULL);
-    CreateBuiltin(&SDL_GetRenderer,sdlrendp_t,"SDL_GetRenderer",0,sdlwindp_t,NULL);
-    CreateBuiltin(&SDL_GetRendererOutputSize,i64,"SDL_GetRendererOutputSize",0,sdlrendp_t,i32p,i32p,NULL);
-    CreateBuiltin(&SDL_GetRenderTarget,sdltextp_t,"SDL_GetRenderTarget",0,sdlrendp_t,NULL);
-    CreateBuiltin(&SDL_GetTextureAlphaMod,i64,"SDL_GetTextureAlphaMod",0,sdltextp_t,u8p,NULL);
-    CreateBuiltin(&SDL_GetTextureColorMod,i64,"SDL_GetTextureColorMod",0,sdltextp_t,u8p,u8p,u8p,NULL);
-    CreateBuiltin(&SDL_RenderClear,i64,"SDL_RenderClear",0,sdlrendp_t,NULL);
-    CType *sdlrp_t=CreatePtrType(sdlr_t);
-    CType *sdlpp_t=CreatePtrType(sdlp_t);
-    CreateBuiltin(&SDL_RenderCopy,i64,"SDL_RenderCopy",0,sdlrendp_t,sdltextp_t,sdlrp_t,sdlrp_t,NULL);
-    CreateBuiltin(&SDL_RenderDrawLine,i64,"SDL_RenderDrawLine",0,sdlrendp_t,i64,i64,i64,i64,NULL);
-    CreateBuiltin(&SDL_RenderDrawLines,i64,"SDL_RenderDrawLines",0,sdlrendp_t,sdlp_t,i64,NULL);
-    CreateBuiltin(&SDL_RenderDrawPoint,i64,"SDL_RenderDrawPoint",0,sdlrendp_t,i64,i64,NULL);
-    CreateBuiltin(&SDL_RenderDrawPoints,i64,"SDL_RenderDrawPoints",0,sdlrendp_t,sdlpp_t,i64,NULL);
-    CreateBuiltin(&SDL_RenderDrawRect,i64,"SDL_RenderDrawRect",0,sdlrendp_t,sdlrp_t,NULL);
-    CreateBuiltin(&SDL_RenderDrawRects,i64,"SDL_RenderDrawRects",0,sdlrendp_t,sdlrp_t,i64,NULL);
-    CreateBuiltin(&SDL_RenderFillRect,i64,"SDL_RenderFillRect",0,sdlrendp_t,sdlrp_t,NULL);
-    CreateBuiltin(&SDL_RenderFillRects,i64,"SDL_RenderFillRects",0,sdlrendp_t,sdlrp_t,i64,NULL);
-    CreateBuiltin(&SDL_RenderGetClipRect,i64,"SDL_RenderGetClipRect",0,sdlrendp_t,sdlrp_t,NULL);
-    CreateBuiltin(&SDL_RenderPresent,i64,"SDL_RenderPresent",0,sdlrendp_t,NULL);
-    CreateBuiltin(&SDL_RenderSetClipRect,i64,"SDL_RenderSetClipRect",0,sdlrendp_t,sdlrp_t,NULL);
-    CreateBuiltin(&SDL_SetRenderDrawColor,i64,"SDL_SetRenderDrawColor",0,sdlrendp_t,u8,u8,u8,u8,NULL);
-    CreateBuiltin(&SDL_SetRenderTarget,i64,"SDL_SetRenderTarget",0,sdlrendp_t,sdltextp_t,NULL);
-    CreateBuiltin(&SDL_SetTextureAlphaMod,i64,"SDL_SetTextureAlphaMod",0,sdltextp_t,u8,NULL);
-    CreateBuiltin(&SDL_SetTextureColorMod,i64,"SDL_SetTextureColorMod",0,sdltextp_t,u8,u8,u8,NULL);
-    CreateBuiltin(&SDL_UpdateTexture,i64,"SDL_UpdateTexture",0,sdltextp_t,sdlrp_t,u0p,i64,NULL);
-    CreateBuiltin(&SDL_QueryTexture,i64,"SDL_QueryTexture",0,sdltextp_t,i32p,i32p,i32p,i32p,NULL);
-    //Clipboard
-    CreateBuiltin(&hc_SDL_GetClipboardText,u8p,"SDL_GetClipboardText",0,NULL);
-    CreateBuiltin(&SDL_SetClipboardText,u0,"SDL_SetClipboardText",0,u8p,NULL);
-    //Events
-    CType *sdlevent_t=IMPORT_CLASS_WO_MEMBERS(SDL_Event);
-    {
-        ADD_PRIM_MEMBER(sdlevent_t,SDL_Event,type);
-        {
-            CreateMacroInt("SDL_WINDOWEVENT",SDL_WINDOWEVENT);
-            CreateMacroInt("SDL_WINDOWEVENT_RESIZED",SDL_WINDOWEVENT_RESIZED);
-            CType *sdlevent_wind_t=IMPORT_CLASS_WO_MEMBERS(SDL_WindowEvent);
-            ADD_UPRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,type);
-            ADD_UPRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,timestamp);
-            ADD_UPRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,event);
-            ADD_PRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,data1);
-            ADD_PRIM_MEMBER(sdlevent_wind_t,SDL_WindowEvent,data2);
-            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_wind_t,SDL_Event,window);
-        }
-        {
-            CreateMacroInt("SDL_KEYUP",SDL_KEYUP);
-            CreateMacroInt("SDL_KEYDOWN",SDL_KEYDOWN);
-            CreateMacroInt("KMOD_LSHIFT",KMOD_LSHIFT);
-            CreateMacroInt("KMOD_RSHIFT",KMOD_RSHIFT);
-            CreateMacroInt("KMOD_SHIFT",KMOD_SHIFT);
-            CreateMacroInt("KMOD_LCTRL",KMOD_LCTRL);
-            CreateMacroInt("KMOD_RCTRL",KMOD_RCTRL);
-            CreateMacroInt("KMOD_CTRL",KMOD_CTRL);
-            CreateMacroInt("KMOD_LALT",KMOD_LALT);
-            CreateMacroInt("KMOD_RALT",KMOD_RALT);
-            CreateMacroInt("KMOD_ALT",KMOD_ALT);
-            CreateMacroInt("KMOD_LGUI",KMOD_LGUI);
-            CreateMacroInt("KMOD_RGUI",KMOD_RGUI);
-            CreateMacroInt("KMOD_GUI",KMOD_GUI);
-            CreateMacroInt("KMOD_CAPS",KMOD_CAPS);
-            CType *sdlevent_key_t=IMPORT_CLASS_WO_MEMBERS(SDL_KeyboardEvent);
-            ADD_UPRIM_MEMBER(sdlevent_key_t,SDL_KeyboardEvent,type);
-            ADD_UPRIM_MEMBER(sdlevent_key_t,SDL_KeyboardEvent,timestamp);
-            ADD_UPRIM_MEMBER(sdlevent_key_t,SDL_KeyboardEvent,state);
-            ADD_UPRIM_MEMBER(sdlevent_key_t,SDL_KeyboardEvent,repeat);
-            //
-            CType *sdlkeysym_t=IMPORT_CLASS_WO_MEMBERS(SDL_Keysym);
-            ADD_UPRIM_MEMBER(sdlkeysym_t,SDL_Keysym,scancode);
-            ADD_UPRIM_MEMBER(sdlkeysym_t,SDL_Keysym,sym);
-            ADD_UPRIM_MEMBER(sdlkeysym_t,SDL_Keysym,mod);
-            //
-            ADD_TYPED_MEMBER(sdlevent_key_t,sdlkeysym_t,SDL_KeyboardEvent,keysym);
-            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_key_t,SDL_Event,key);
-        }
-        {
-            CreateMacroInt("SDL_TEXTEDITING",SDL_TEXTEDITING);
-            CType *sdlevent_edit_t=IMPORT_CLASS_WO_MEMBERS(SDL_TextEditingEvent);
-            ADD_UPRIM_MEMBER(sdlevent_edit_t,SDL_TextEditingEvent,type);
-            ADD_UPRIM_MEMBER(sdlevent_edit_t,SDL_TextEditingEvent,timestamp);
-            ADD_TYPED_MEMBER(sdlevent_edit_t,CreateArrayType(u8,CreateI64(32)),SDL_TextEditingEvent,text);
-            ADD_PRIM_MEMBER(sdlevent_edit_t,SDL_TextEditingEvent,start);
-            ADD_PRIM_MEMBER(sdlevent_edit_t,SDL_TextEditingEvent,length);
-            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_edit_t,SDL_Event,edit);
-        }
-        {
-            CreateMacroInt("SDL_TEXTINPUT",SDL_TEXTINPUT);
-            CType *sdlevent_text_t=IMPORT_CLASS_WO_MEMBERS(SDL_TextInputEvent);
-            ADD_UPRIM_MEMBER(sdlevent_text_t,SDL_TextInputEvent,type);
-            ADD_UPRIM_MEMBER(sdlevent_text_t,SDL_TextInputEvent,timestamp);
-            ADD_TYPED_MEMBER(sdlevent_text_t,CreateArrayType(u8,CreateI64(32)),SDL_TextInputEvent,text);
-            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_text_t,SDL_Event,text);
-        }
-        {
-            CreateMacroInt("SDL_MOUSEMOTION",SDL_MOUSEMOTION);
-            CreateMacroInt("SDL_BUTTON_LMASK",SDL_BUTTON_LMASK);
-            CreateMacroInt("SDL_BUTTON_RMASK",SDL_BUTTON_RMASK);
-            CreateMacroInt("SDL_BUTTON_MMASK",SDL_BUTTON_MMASK);
-            CType *sdlevent_mousemot_t=IMPORT_CLASS_WO_MEMBERS(SDL_MouseMotionEvent);
-            ADD_UPRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,type);
-            ADD_UPRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,timestamp);
-            ADD_UPRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,which);
-            ADD_UPRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,state);
-            ADD_PRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,x);
-            ADD_PRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,y);
-            ADD_PRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,xrel);
-            ADD_PRIM_MEMBER(sdlevent_mousemot_t,SDL_MouseMotionEvent,yrel);
-            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_mousemot_t,SDL_Event,motion);
-            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_mousemot_t,SDL_Event,wheel);
-        }
-        {
-            CreateMacroInt("SDL_MOUSEBUTTONUP",SDL_MOUSEBUTTONUP);
-            CreateMacroInt("SDL_MOUSEBUTTONDOWN",SDL_MOUSEBUTTONDOWN);
-            CType *sdlevent_mouse_t=IMPORT_CLASS_WO_MEMBERS(SDL_MouseButtonEvent);
-            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,type);
-            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,timestamp);
-            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,which);
-            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,button);
-            CreateMacroInt("SDL_PRESSED",SDL_PRESSED);
-            CreateMacroInt("SDL_RELEASED",SDL_RELEASED);
-            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,state);
-            ADD_UPRIM_MEMBER(sdlevent_mouse_t,SDL_MouseButtonEvent,clicks);;
-            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_mouse_t,SDL_Event,button);
-        }
-        {
-            CreateMacroInt("SDL_QUIT",SDL_QUIT);
-            CType *sdlevent_quit_t=IMPORT_CLASS_WO_MEMBERS(SDL_QuitEvent);
-            ADD_UPRIM_MEMBER(sdlevent_quit_t,SDL_QuitEvent,type);
-            ADD_UPRIM_MEMBER(sdlevent_quit_t,SDL_QuitEvent,timestamp);
-            ADD_TYPED_MEMBER(sdlevent_t,sdlevent_quit_t,SDL_Event,quit);
-        }
-    }
-    CType *sdleventp_t=CreatePtrType(sdlevent_t);
-    CreateBuiltin(&SDL_PollEvent,i64,"SDL_PollEvent",0,sdleventp_t,NULL);
-    CreateBuiltin(&SDL_WaitEvent,i64,"SDL_WaitEvent",0,sdleventp_t,NULL);
-    CreateBuiltin(&SDL_DestroyRenderer,u0,"SDL_DestroyRenderer",0,sdlrendp_t,NULL);
-    CreateBuiltin(&SDL_DestroyTexture,u0,"SDL_DestroyTexture",0,sdltextp_t,NULL);
-    CreateBuiltin(&SDL_StartTextInput,u0,"SDL_StartTextInput",0,NULL);
-    CreateBuiltin(&SDL_StopTextInput,u0,"SDL_StopTextInput",0,NULL);
-    CreateBuiltin(&SDL_GetError,u8p,"SDL_GetError",0,NULL);
-    CreateBuiltin(&SDL_ClearError,u0,"SDL_ClearError",0,NULL);
-    CreateBuiltin(&SDL_FlushEvent,u0,"SDL_FlushEvent",0,i64,NULL);
-    //Surfaces
-    CType *u32p=CreatePtrType(u32);
-    {
-        CType *sdlsurf_t=IMPORT_CLASS_WO_MEMBERS(SDL_Surface);
-        ADD_TYPED_MEMBER(sdlsurf_t,u0p,SDL_Surface,pixels);
-        CType *sdlsurfp_t=CreatePtrType(sdlsurf_t);
-        CreateBuiltin(&GetSurfaceW,i64,"SDL_GetSurfaceWidth",0,sdlsurfp_t,NULL);
-        CreateBuiltin(&GetSurfaceH,i64,"SDL_GetSurfaceHeight",0,sdlsurfp_t,NULL);
-        CreateBuiltin(&SDL_CreateRGBSurface,sdlsurfp_t,"SDL_CreateRGBSurface",0,u32,i32,i32,i32,u32,u32,u32,u32,NULL);
-        CreateBuiltin(&SDL_CreateRGBSurfaceFrom,sdlsurfp_t,"SDL_CreateRGBSurfaceFrom",0,u0p,i32,i32,i32,u32,u32,u32,u32,NULL);
-        CreateBuiltin(&SDL_UpperBlit,i64,"SDL_UpperBlit",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);
-        CreateBuiltin(&SDL_FillRect,i64,"SDL_FillRect",0,sdlsurfp_t,sdlrp_t,u32,NULL);
-        CreateBuiltin(&SDL_FillRects,i64,"SDL_FillRects",0,sdlsurfp_t,sdlrp_t,i32,u32,NULL);
-        CreateBuiltin(&SDL_GetClipRect,u0,"SDL_GetClipRect",0,sdlsurfp_t,sdlrp_t,NULL);
-        CreateBuiltin(&SDL_GetColorKey,i64,"SDL_GetColorKey",0,sdlsurfp_t,u32p,NULL);
-        CreateBuiltin(&SDL_GetSurfaceAlphaMod,i64,"SDL_GetSurfaceAlphaMod",0,sdlsurfp_t,u8p,NULL);
-        CreateBuiltin(&SDL_GetSurfaceColorMod,i64,"SDL_GetSurfaceColorMod",0,sdlsurfp_t,u8p,u8p,u8p,NULL);
-        CreateBuiltin(&SDL_LockSurface,i64,"SDL_LockSurface",0,sdlsurfp_t,NULL);
-        CreateBuiltin(&SDL_UnlockSurface,i64,"SDL_UnlockSurface",0,sdlsurfp_t,NULL);
-        CreateBuiltin(&SDL_SetClipRect,i64,"SDL_SetClipRect",0,sdlsurfp_t,sdlrp_t,NULL);
-        CreateBuiltin(&SDL_SetColorKey,i64,"SDL_SetColorKey",0,sdlsurfp_t,i32, u32,NULL);
-        CreateBuiltin(&SDL_SetSurfaceAlphaMod,i64,"SDL_SetSurfaceAlphaMod",0,sdlsurfp_t,u8,NULL);
-        CreateBuiltin(&SDL_SetSurfaceColorMod,i64,"SDL_SetSurfaceColorMod",0,sdlsurfp_t,u8,u8,u8,NULL);
-        CreateBuiltin(&SDL_SetSurfaceRLE,i64,"SDL_SetSurfaceRLE",0,sdlsurfp_t,i32,NULL);
-        CreateBuiltin(&SDL_BlitSurface,i64,"SDL_BlitSurface",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);
-        CreateBuiltin(&SDL_BlitScaled,i64,"SDL_BlitScaled",0,sdlsurfp_t,sdlrp_t,sdlsurfp_t,sdlrp_t,NULL);
-        CreateBuiltin(&SDL_FreeSurface,i64,"SDL_FreeSurface",0,sdlsurfp_t,NULL);
-        CreateBuiltin(&SDL_UpdateWindowSurface,i64,"SDL_UpdateWindowSurface",0,sdlwindp_t,NULL);
-        CreateBuiltin(&SDL_GetWindowSurface,sdlsurfp_t,"SDL_GetWindowSurface",0,sdlwindp_t,NULL);
-    }
-    //Timer
+    __LoaderCreateTypeFwd(ctf,"SDL_Window",0,1);
+    __LoaderCreateTypeFwd(ctf,"SDL_Renderer",0,1);
+    __LoaderCreateTypeFwd(ctf,"SDL_Texture",0,1);
+    LoaderCreateTypeFwd(ctf,SDL_Surface);
+    CType *sdlr_t=LoaderCreateTypeFwd(ctf,SDL_Rect);
+    LoaderAddPrimMember(add_mem,gt,sdlr_t,SDL_Rect,x);
+    LoaderAddPrimMember(add_mem,gt,sdlr_t,SDL_Rect,y);
+    LoaderAddPrimMember(add_mem,gt,sdlr_t,SDL_Rect,w);
+    LoaderAddPrimMember(add_mem,gt,sdlr_t,SDL_Rect,h);
+    CType *sdlp_t=LoaderCreateTypeFwd(ctf,SDL_Point);
+    LoaderAddPrimMember(add_mem,gt,sdlp_t,SDL_Point,x);
+    LoaderAddPrimMember(add_mem,gt,sdlp_t,SDL_Point,y);
 
+    CType *sdlevent_t=LoaderCreateTypeFwd(ctf,SDL_Event);
+    {
+        LoaderAddPrimMember(add_mem,gt,sdlevent_t,SDL_Event,type);
+        {
+            CType *sdlevent_wind_t=LoaderCreateTypeFwd(ctf,SDL_WindowEvent);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_wind_t,SDL_WindowEvent,type);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_wind_t,SDL_WindowEvent,timestamp);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_wind_t,SDL_WindowEvent,event);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_wind_t,SDL_WindowEvent,data1);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_wind_t,SDL_WindowEvent,data2);
+            LoaderAddMember(add_mem,sdlevent_t,sdlevent_wind_t,SDL_Event,window);
+        }
+        {
+            CType *sdlevent_key_t=LoaderCreateTypeFwd(ctf,SDL_KeyboardEvent);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_key_t,SDL_KeyboardEvent,type);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_key_t,SDL_KeyboardEvent,timestamp);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_key_t,SDL_KeyboardEvent,state);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_key_t,SDL_KeyboardEvent,repeat);
+            //
+            CType *sdlkeysym_t=LoaderCreateTypeFwd(ctf,SDL_Keysym);
+            LoaderAddPrimMember(add_mem,gt,sdlkeysym_t,SDL_Keysym,scancode);
+            LoaderAddPrimMember(add_mem,gt,sdlkeysym_t,SDL_Keysym,sym);
+            LoaderAddPrimMember(add_mem,gt,sdlkeysym_t,SDL_Keysym,mod);
+            //
+            LoaderAddMember(add_mem,sdlevent_key_t,sdlkeysym_t,SDL_KeyboardEvent,keysym);
+            LoaderAddMember(add_mem,sdlevent_t,sdlevent_key_t,SDL_Event,key);
+        }
+        {
+            CType *sdlevent_edit_t=LoaderCreateTypeFwd(ctf,SDL_TextEditingEvent);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_edit_t,SDL_TextEditingEvent,type);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_edit_t,SDL_TextEditingEvent,timestamp);
+            LoaderAddMember(add_mem,sdlevent_edit_t,LoaderCreateArrayType(c_arr_t,"U8i",32),SDL_TextEditingEvent,text);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_edit_t,SDL_TextEditingEvent,start);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_edit_t,SDL_TextEditingEvent,length);
+            LoaderAddMember(add_mem,sdlevent_t,sdlevent_edit_t,SDL_Event,edit);
+        }
+        {
+            CType *sdlevent_text_t=LoaderCreateTypeFwd(ctf,SDL_TextInputEvent);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_text_t,SDL_TextInputEvent,type);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_text_t,SDL_TextInputEvent,timestamp);
+            LoaderAddMember(add_mem,sdlevent_text_t,LoaderCreateArrayType(c_arr_t,"U8i",32),SDL_TextInputEvent,text);
+            LoaderAddMember(add_mem,sdlevent_t,sdlevent_text_t,SDL_Event,text);
+        }
+        {
+            CType *sdlevent_mousemot_t=LoaderCreateTypeFwd(ctf,SDL_MouseMotionEvent);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mousemot_t,SDL_MouseMotionEvent,type);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mousemot_t,SDL_MouseMotionEvent,timestamp);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mousemot_t,SDL_MouseMotionEvent,which);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mousemot_t,SDL_MouseMotionEvent,state);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mousemot_t,SDL_MouseMotionEvent,x);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mousemot_t,SDL_MouseMotionEvent,y);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mousemot_t,SDL_MouseMotionEvent,xrel);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mousemot_t,SDL_MouseMotionEvent,yrel);
+            LoaderAddMember(add_mem,sdlevent_t,sdlevent_mousemot_t,SDL_Event,motion);
+            LoaderAddMember(add_mem,sdlevent_t,sdlevent_mousemot_t,SDL_Event,wheel);
+        }
+        {
+            CType *sdlevent_mouse_t=LoaderCreateTypeFwd(ctf,SDL_MouseButtonEvent);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mouse_t,SDL_MouseButtonEvent,type);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mouse_t,SDL_MouseButtonEvent,timestamp);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mouse_t,SDL_MouseButtonEvent,which);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mouse_t,SDL_MouseButtonEvent,button);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mouse_t,SDL_MouseButtonEvent,state);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_mouse_t,SDL_MouseButtonEvent,clicks);;
+            LoaderAddMember(add_mem,sdlevent_t,sdlevent_mouse_t,SDL_Event,button);
+        }
+        {
+            CType *sdlevent_quit_t=LoaderCreateTypeFwd(ctf,SDL_QuitEvent);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_quit_t,SDL_QuitEvent,type);
+            LoaderAddPrimMember(add_mem,gt,sdlevent_quit_t,SDL_QuitEvent,timestamp);
+            LoaderAddMember(add_mem,sdlevent_t,sdlevent_quit_t,SDL_Event,quit);
+        }
+    }
+}
+void RegisterMacrosAndREPL(char *includes,int flags,char *body_code) {
+    vec_char_t macros=CreateMacros();
+    const char *rtc="#define RUNTIME_C\n";
+    vec_pusharr(&macros,rtc,strlen(rtc));
+    if(includes)
+      vec_pusharr(&macros,includes,strlen(includes));
+    vec_push(&macros,0);
+    CSymbol *repl=map_get(&Loader.symbols,"REPL");
+    assert(repl);
+    for(;;) {
+        if(!HCSetJmp(EnterTry())) {
+            ((void(*)(char*,long,char *))repl->value_ptr)(macros.data,flags,body_code);
+            break;
+        } else {
+            fprintf(stderr,"Caught exception,re-entering.\n");
+        }
+        if(macros.data)
+            vec_deinit(&macros);
+        macros.data=NULL;
+    }
 }

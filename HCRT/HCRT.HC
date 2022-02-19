@@ -7,7 +7,8 @@
 #include "FILE.HC"
 #include "HASH.HC"
 #include "QSORT.HC"
-#include "ASM.HC"
 #include "PRINT.HC"
+#include "ASM.HC"
 #include "LEXER.HC"
-#include "../HolyEd/EDITOR.HC"
+//#include "../HolyEd/EDITOR.HC"
+

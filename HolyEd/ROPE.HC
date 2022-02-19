@@ -96,6 +96,7 @@ U8 RopeChar(CRope *r,I64 i) {
 }
 CRope *RopeInsText(CRope *r,U8 *text,I64 at) {
   CRope *left,*right;
+  if(at<0) throw('Rope');
   RopeSplit(r,at,&left,&right);
   return RopeCat(RopeAppendText(left,text),right);
 }

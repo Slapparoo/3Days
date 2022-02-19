@@ -84,8 +84,7 @@ asm {
   PUSH R12;
   MOV R12,10;
  @@Loop:
-  MOV RAX, &HelloWorld;
-  CALL RAX;
+  CALL &HelloWorld;
   DEC R12;
   CMP R12,0;
   JNE @@Loop;
@@ -101,4 +100,3 @@ asm {
 _import C_HELLO U0 Hi();
 Dummy;
 Hi;
-

@@ -161,6 +161,7 @@ static void jit_correct_int64_t_imms(struct jit * jit)
 		if (GET_OP(op) == JIT_REF_CODE) continue;
 		if (GET_OP(op) == JIT_RELOCATION) continue;
 		if (GET_OP(op) == JIT_FORCE_ASSOC) continue;
+		if (GET_OP(op) == JIT_BREAKPOINT) continue;
 		int imm_arg;
 		for (int i = 1; i < 4; i++)
 			if (ARG_TYPE(op, i) == IMM) imm_arg = i - 1;
@@ -361,7 +362,7 @@ static void ReleaseFMem(void *_jit,void *data) {
 }
 static void free_labels(jit_label * lab);
 static void free_ops(jit_op * lab);
-#include "graphcoloring.h"
+//#include "ssa.h"
 void jit_generate_code(struct jit * jit,struct CFunction *func)
 {
     if(!jit) return;
@@ -371,16 +372,13 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 #endif
 	jit_correct_float_imms(jit);
 	jit_prepare_reg_counts(jit);
-
-	jit_prepare_spills_on_jmpr_targets(jit);
+	jit_flw_analysis(jit);
+    jit_prepare_spills_on_jmpr_targets(jit);
 	jit_prepare_unloads_at_tainted(jit);
-	//jit_flw_analysis(jit);
-	ReduceRegisterCount(jit,func);
-
 	jit_prepare_arguments(jit);
 
 	//jit_dead_code_analysis(jit, 1);
-	//jit_flw_analysis(jit);
+	//ReduceRegisterCount(jit,func);
 
 
 	if (jit->optimizations & JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS) jit_optimize_unused_assignments(jit);
@@ -482,18 +480,18 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 	int code_size = jit->ip - jit->buf;
 	void * mem;
 	#ifndef TARGET_WIN32
-	mem=mmap(NULL,code_size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
-        #else
+    mem=PoopMAlloc(code_size);
+    #else
 	mem=VirtualAlloc(NULL,code_size,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
 	#endif
 	memcpy(mem, jit->buf, code_size);
 	JIT_FREE(jit->buf);
-
-	GC_SetDestroy(jit, ReleaseFMem,NULL);
-
 	for (struct jit_op * op = jit->ops; op != NULL; op = op->next) {
 	  if(GET_OP(op)==JIT_DUMP_PTR) {
 	    *((void**)op->arg[0])=mem+op->arg[1];
+	  } else if(GET_OP(op)==JIT_BREAKPOINT) {
+        ((jit_breakpoint_t*)op->arg[0])->at=op;
+        op->bp_ptr+=(int64_t)mem;
 	  }
 	}
 
@@ -513,9 +511,18 @@ void jit_generate_code(struct jit * jit,struct CFunction *func)
 	}
 
 	//Free IR for more memory
-	jit_reg_allocator_free(jit->reg_al);
-	free_ops(jit_op_first(jit->ops));
-	free_labels(jit->labels);
+	//jit_reg_allocator_free(jit->reg_al);
+	//Remove all data except for breakpoints
+	//free_ops(jit_op_first(jit->ops));
+	jit_op *first_valid=jit_op_first(jit->ops);
+	for(jit_op *op=jit_op_first(jit->ops)->next;op;) {
+        jit_op *next=op->next;
+        if(GET_OP(op)!=JIT_BREAKPOINT&&GET_OP(op)!=JIT_PROLOG) {
+            jit_free_op(op);
+        }
+        op=next;
+	}
+	jit->ops=first_valid;
 	struct jit oldj=*jit;
 	jit->buf=oldj.buf;
 	jit->ip =oldj.ip;
@@ -574,4 +581,21 @@ void jit_free(struct jit * jit)
   */
 	free_ops(jit_op_first(jit->ops));
 	JIT_FREE(jit);
+}
+jit_breakpoint_t *jit_get_breakpoint_btr_ptr(struct jit *jit,void *at) {
+    jit_breakpoint_t *last_bp=NULL;
+    if(at>=(void*)jit->buf)
+        if((void*)jit->buf+jit->bin_size>=at) {
+            struct jit_op *op=jit_op_first(jit->ops);
+            for(;op;op=op->next) {
+                if(GET_OP(op)==JIT_BREAKPOINT) {
+                    if(!last_bp) last_bp=op->arg[0];
+                    if(at<=op->bp_ptr)
+                        break;
+                    last_bp=op->arg[0];
+                }
+            }
+            return last_bp;
+        }
+    return NULL;
 }

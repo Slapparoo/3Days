@@ -41,14 +41,54 @@
 #define JIT_FREE	TD_FREE
 #endif
 
+struct jit_op;
+typedef struct jit_breakpoint_t {
+    uint8_t enabled;
+    struct jit_op *at;
+    int8_t user_data[0];
+} jit_breakpoint_t;
+typedef struct jit_debugger_ctrl {
+    //Dont change these
+    #define JIT_DBG_STEP 1
+    #define JIT_DBG_NEXT 2
+    #define JIT_DBG_FIN 3
+    int64_t code;
+    void *prev_stack_ptr;
+} jit_debugger_ctrl ;
+typedef struct jit_debugger_regs{
+    int64_t RAX;
+    int64_t RBX;
+    int64_t RCX;
+    int64_t RDX;
+    int64_t RSI;
+    int64_t RDI;
+    int64_t RSP;
+    int64_t RBP;
+    int64_t R8;
+    int64_t R9;
+    int64_t R10;
+    int64_t R11;
+    int64_t R12;
+    int64_t R13;
+    int64_t R15;
+    double XMM0;
+    double XMM1;
+    double XMM2;
+    double XMM3;
+    double XMM4;
+    double XMM5;
+    double XMM6;
+    double XMM7;
+    int64_t R14;
+} jit_debugger_regs;
 /*
  * Data structures
  */
 struct jit_tree;
 struct jit_set;
+struct jit_op;
 struct jit_rmap;
 struct jit_debug_info;
-
 typedef struct jit_op {
         unsigned short code;            // operation code
         unsigned char spec;             // argument types, e.g REG+REG+IMM
@@ -66,6 +106,20 @@ typedef struct jit_op {
         struct jit_set * live_in;
         struct jit_set * live_out;
         struct jit_set * live_kill;
+        long *bi_live_in; //Binary representation for integer registers,first 3 are R_FP,R_OUT,R_IMM
+        long *bi_live_out;
+        long *bi_live_kill;
+        long *bf_live_in; //Binary representation for floating registers,first is FR_IMM
+        long *bf_live_out;
+        long *bf_live_kill;
+        long *b_dominators;
+        long inst_idx;
+        //Breakpoint pointer for JIT_BREAKPOINT
+        void *bp_ptr;
+        struct jit_set *outgoing,*incoming;
+        struct jit_set  *dominators,*ssa_frontiers,*dominates;
+        struct jit_set *ssa_cans;
+        struct jit_op *idom; //immediate dominator
         struct jit_rmap * regmap;                // register mappings
         int normalized_pos;             // number of operations from the end of the function
         struct jit_tree * allocator_hints; // reg. allocator to collect statistics on used registers
@@ -75,7 +129,8 @@ typedef struct jit_op {
   uint64_t flow_analysis_state:3; //Used to detirmine if the item was changed
   uint64_t shadow_flow_analysis_state:3; //Used to detirmine if the item was changed
 } jit_op;
-
+struct jit;
+jit_breakpoint_t *jit_get_breakpoint_btr_ptr(struct jit *jit,void *at);
 typedef struct jit_label {
         int64_t pos;
         jit_op * op;
@@ -86,7 +141,8 @@ typedef struct {
         unsigned type: 1; // INT / FP
         unsigned spec: 2; // register, alias, immediate, argument's shadow space
         unsigned part: 1; // allows to split one virtual register into two hw. registers (implicitly 0)
-        unsigned id: 28;
+        unsigned id: 16;
+        unsigned ssa:12; //Single static assignemt
 #ifndef JIT_ARCH_AMD64
 #else
         unsigned reserved: 32;
@@ -121,6 +177,7 @@ static inline jit_value jit_mkreg(int type, int spec, int id)
 	r.spec = spec;
 	r.id = id;
 	r.part = 0;
+	r.ssa=0;
 #ifdef JIT_ARCH_AMD64
 	r.reserved = 0;
 #endif
@@ -134,6 +191,7 @@ static inline jit_value jit_mkreg_ex(int type, int spec, int id)
 	r.spec = spec;
 	r.id = id;
 	r.part = 1;
+	r.ssa=0;
 #ifdef JIT_ARCH_AMD64
 	r.reserved = 0;
 #endif
@@ -276,10 +334,11 @@ typedef enum {
 	JIT_DUMP_PTR =(0xb8<<3),
 	JIT_TAINT_LABEL =(0xb9<<3), //Marks for fullspill
 	JIT_END_ASM_BLK =(0xba<<3), //Says to the allocator we can jump anywhere
-    JIT_RELOCATION =(0xbb<<3), //This dumps the ptr to arg[1] and stores in register arg[0]
+  JIT_RELOCATION =(0xbb<<3), //This dumps the ptr to arg[1] and stores in register arg[0]
 
 	JIT_MSG		= (0xf0 << 3),
 	JIT_COMMENT	= (0xf1 << 3),
+  JIT_BREAKPOINT = (0xf2<<3),
 
 	// platform specific opcodes, for optimization purposes only
 	JIT_X86_STI     = (0x0100 << 3),
@@ -542,6 +601,7 @@ int jit_allocai(struct jit * jit, int size);
 #define jit_msg(jit, a) jit_add_op(jit, JIT_MSG | IMM, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_msgr(jit, a, b) jit_add_op(jit, JIT_MSG | REG, SPEC(IMM, REG, NO), (jit_value)(a), b, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_comment(jit, a) jit_add_op(jit, JIT_COMMENT, SPEC(IMM, NO, NO), (jit_value)(a), 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
+#define jit_breakpoint(jit, bp,routine,dbg_ctrl) jit_add_op(jit, JIT_BREAKPOINT, SPEC(IMM, IMM, IMM), (jit_value)(bp), (jit_value)(routine),(jit_value)(dbg_ctrl), 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 
 /* FPU */
 
@@ -642,4 +702,10 @@ do {\
  */
 #define jit_force_spill(jit, a) jit_add_fop(jit, JIT_FORCE_SPILL, SPEC(REG, NO, NO), a, 0, 0, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
 #define jit_force_assoc(jit, a, b, c) jit_add_fop(jit, JIT_FORCE_ASSOC, SPEC(REG, IMM, NO), a, b, c, 0, 0, jit_debug_info_new(__FILE__, __func__, __LINE__))
+void *jit_debugger_get_reg_ptr(struct jit *jit,jit_debugger_regs *regs,struct jit_op *op,jit_value r);
+/**
+ * This grabs a virtual register from a function that is a owns the current function being debugged.
+ * It may return NULL if the virtual register isnt available for debugging.
+ */
+void *jit_debugger_get_vreg_ptr_from_parent(struct jit *jit,void *fptr,struct jit_op *op,jit_value r);
 #endif

@@ -8,11 +8,14 @@
 #ifndef TARGET_WIN32
 #include <sys/syscall.h>
 #include "winjmp.h"
+#include <execinfo.h>
 #endif
+int jit_FunctionParents(void **pars,int max);
+int jit_ParentFramePtrs(void **fptrs,int max);
 static const char* ListLines(const char *fn,long start,long end);
 void SignalHandler(int s) {
     #ifdef BOOTSTRAPED
-    Backtrace();
+    Backtrace(-1,1);
     #endif
     printf("\n");
     switch(s) {
@@ -33,16 +36,51 @@ void SignalHandler(int s) {
     }
     throw(0);
 }
+static CFunction *GetFunctionByPtr(void *ptr) {
+    map_iter_t iter=map_iter(Compiler.globals);
+    const char *key;
+    while(key=map_next(&Compiler.globals,&iter)) {
+        CVariable *var=*map_get(&Compiler.globals,key);
+        if(var->isFunc) {
+            if(var->func)
+            if(var->func->JIT) {
+                if((char*)ptr>=(char*)var->func->funcptr)
+                    if((char*)ptr<=((char*)var->func->funcptr)+jit_bin_size(var->func->JIT))
+                        return var->func;
+            }
+        }
+    }
+    return NULL;
+}
+CBreakpoint *GetBreakpointByPtr(void *ptr) {
+    CFunction *f=GetFunctionByPtr(ptr);
+    if(!f) return NULL;
+    jit_breakpoint_t *bp=(void*)jit_get_breakpoint_btr_ptr(f->JIT,ptr);
+    if(!bp) return NULL;
+    return *(CBreakpoint**)(bp->user_data);
+}
+jit_breakpoint_t *GetJITBreakpointByPtr(void *ptr) {
+    CFunction *f=GetFunctionByPtr(ptr);
+    if(!f) return NULL;
+    jit_breakpoint_t *bp=(void*)jit_get_breakpoint_btr_ptr(f->JIT,ptr);
+    return bp;
+}
 #ifndef BOOTSTRAPED
 void DbgPrintVar(CType *type,void *ptr) {
 }
+void VisitBreakpoint(struct jit_debugger_regs *reg,CBreakpoint *bp,void *caller_ptr) {}
+void Backtrace(int stkpos,int trim) {}
 #else
 void EnterDebugger() {
     if(!Compiler.debugMode) {
       fprintf(stderr, "Run with -d or -b to use the debugger.\n");
       return;
     }
-    VisitBreakpoint(NULL);
+    //jit_VisitBreakpoint
+    //parent
+    void *bt[1+1];
+    jit_FunctionParents(bt,2);
+    VisitBreakpoint(NULL,NULL,bt[1]);
 }
 void DbgPrintVar(CType *type,void *ptr) {
     int code;
@@ -164,36 +202,36 @@ static char *__WordAtPoint(char *text) {
     return strncpy(TD_MALLOC(1+text-orig),orig,text-orig);
 }
 
-void VisitBreakpoint(CBreakpoint *bp) {
+void VisitBreakpoint(struct jit_debugger_regs *regs,jit_breakpoint_t *bp,void *caller_ptr) {
+    Debugger.curBp=bp;
     if(!bp) goto dbg;
-    int stksz=Debugger.callStack.length;
-    if(bp)
-        vec_last(&Debugger.callStack).lastbp=bp;
-    else bp=vec_last(&Debugger.callStack).lastbp;
-    if(Debugger.fin) {
-        if(stksz<Debugger.prevStackDepth) {
-            Debugger.fin=0;
-            goto dbg;
-        }
-    } else if(Debugger.next) {
-        if(stksz<=Debugger.prevStackDepth) {
-            Debugger.next=0;
-            goto dbg;
-        }
-    } else if(Debugger.step) {
-        Debugger.step=0;
-        goto dbg;
-    }
-    if(bp)
-        if(!bp->enabled) return;
-dbg:
+    dbg:
     ;
-    Debugger.prevStackDepth=Debugger.callStack.length;
+    CBreakpoint *cbp=NULL;
+    void *_backtrace[256];
+    void *_frameptrs[256];
+    int stacksz=jit_FunctionParents(_backtrace,256);
+    jit_ParentFramePtrs(_frameptrs,256);
+    long idx=0;
+    for(;idx!=256;idx++)
+        if(_backtrace[idx]==caller_ptr)
+            break;
+    if(idx!=256) {
+        memmove(_backtrace,&_backtrace[idx],(256-idx)*sizeof(void*));
+        memmove(_frameptrs,&_frameptrs[idx],(256-idx)*sizeof(void*));
+    }
+    stacksz-=idx;
+    //Look for caller pointer
     printf("Welcome to debugger land.\n");
-    long stkpos=Debugger.callStack.length-1;
-    long curln=Debugger.callStack.data[stkpos].lastbp->ln-1; //Lines are 1 indexed
-    const char*curfn=Debugger.callStack.data[stkpos].lastbp->fn;
-    ListLines(curfn, curln, curln+1);
+    long stkpos=0;
+    cbp=GetBreakpointByPtr(_backtrace[stkpos]);
+    long curln=-1;//=Debugger.callStack.data[stkpos].lastbp->ln-1; //Lines are 1 indexed
+    const char*curfn="???";//Debugger.callStack.data[stkpos].lastbp->fn;
+    if(cbp) {
+      curln=cbp->ln;
+      curfn=cbp->fn;
+      ListLines(curfn, curln-1, curln);
+    }
     static char prevCommand[512];
 loop:
     ;
@@ -207,23 +245,35 @@ loop:
     char *word=__WordAtPoint(s);
     if(!word) goto loop;
     if(0==strcmp(word,"down")) {
-        if(stkpos+1<=Debugger.callStack.length) stkpos++;
+        if(0<stkpos) stkpos--;
         else {
             printf("At bottommost stack item!\n");
             goto lfail;
         }
-        curln=Debugger.callStack.data[stkpos].lastbp->ln-1; //Lines are 1 indexed
-        curfn=Debugger.callStack.data[stkpos].lastbp->fn;
-        ListLines(curfn, curln, curln+1);
+        cbp=GetBreakpointByPtr(_backtrace[stkpos]);
+        if(cbp) {
+            curln=cbp->ln;
+            curfn=cbp->fn;
+            ListLines(curfn, curln-1, curln);
+        } else {
+            curln=-1;
+            curfn="???";
+        }
     } else if(0==strcmp(word,"up")) {
-        if(stkpos-1>=0) stkpos--;
+        if(stacksz>1+stkpos) stkpos++;
         else {
             printf("At topmost stack item!\n");
             goto lfail;
         }
-        curln=Debugger.callStack.data[stkpos].lastbp->ln-1; //Lines are 1 indexed
-        curfn=Debugger.callStack.data[stkpos].lastbp->fn;
-        ListLines(curfn, curln, curln+1);
+        cbp=GetBreakpointByPtr(_backtrace[stkpos]);
+        if(cbp) {
+            curln=cbp->ln;
+            curfn=cbp->fn;
+            ListLines(curfn, curln-1, curln);
+        } else {
+            curln=-1;
+            curfn="???";
+        }
     } else if(0==strcmp(word,"help")) {
 help:
         printf("help\t-- Display this message\n");
@@ -247,17 +297,19 @@ help:
     } else if(0==strcmp(word,"b")) {
         s+=strlen("b");
         s=__SkipWhitespace(s);
-        CBacktrace cur=Debugger.callStack.data[stkpos];
         char *colon=strrchr(s, ':');
         long line=-1;
         if(colon) {
             sscanf(colon+1,"%ld",&line);
             *colon=0;
         } else if(sscanf(s,"%ld",&line)) {
-            s=(char *)cur.lastbp->fn;
+            if(cbp)
+                s=cbp->fn;
+        } else if(cbp) {
+                s=cbp->fn;
+                line=cbp->ln;
         } else {
-            line=cur.lastbp->ln;
-            s=(char *)cur.lastbp->fn;
+            line=-1;
         }
         int matched=0;
         //Match filename
@@ -266,16 +318,23 @@ help:
             if(fn) {
                 char buffer[256];
                 sprintf(buffer,"%s:%ld",fn,line);
-                CBreakpoint *bp=map_get(&Compiler.breakpoints,buffer);
-                if(bp) {
+                CBreakpoint *bps=map_get(&Compiler.breakpoints,buffer);
+                if(bps) {
                     matched++;
-                    printf("Match at %s:%ld\n",bp->fn,bp->ln);
-                    if(bp->enabled) {
-                        printf("Breakpoint is already present at %s:%li\n",bp->fn,bp->ln);
-                    } else {
+                    printf("Match at %s:%ld\n",bps->fn,bps->ln);
+                    jit_breakpoint_t *bp;
+                    long iter;
+                    int prev_enabled=0;
+                    vec_foreach(&bps->jit_bps,bp,iter) {
+                        if(bp->enabled)
+                            prev_enabled=1;
                         bp->enabled=1;
+                    }
+                    if(prev_enabled) {
+                        printf("Breakpoint is already present at %s:%li\n",bps->fn,bps->ln);
+                    } else {
                         sprintf(buffer,"%ld",++Debugger.breakpointNumber);
-                        map_set(&Debugger.activeBreakpoints,buffer,bp);
+                        map_set(&Debugger.activeBreakpoints,buffer,bps);
                     }
                 }
             }
@@ -294,7 +353,12 @@ help:
                 remallloop:;
                 map_iter_t biter=map_iter(&Debugger.activeBreakpoints);
                 while(key=map_next(&Debugger.activeBreakpoints,&biter)) {
-                    map_get(&Debugger.activeBreakpoints,key)[0]->enabled=0;
+                    CBreakpoint *bps=map_get(&Debugger.activeBreakpoints,key);
+                    jit_breakpoint_t *bp;
+                    long iter;
+                    vec_foreach(&bps->jit_bps,bp,iter) {
+                        bp->enabled=1;
+                    }
                     map_remove(&Debugger.activeBreakpoints,key);
                     goto remallloop;
                 }
@@ -307,9 +371,13 @@ help:
         } else {
             char buffer[strlen(s)+1];
             sprintf(buffer,"%ld",num);
-            CBreakpoint **bp=map_get(&Debugger.activeBreakpoints,buffer);
+            CBreakpoint **bps=map_get(&Debugger.activeBreakpoints,buffer);
             if(bp) {
-                bp[0]->enabled=0;
+                jit_breakpoint_t *bp;
+                long iter;
+                vec_foreach(&bps[0]->jit_bps,bp,iter) {
+                    bp->enabled=1;
+                }
                 map_remove(&Debugger.activeBreakpoints,buffer);
             } else {
                 printf("Active breakpoint %ld doesn't exist.\n",num);
@@ -326,32 +394,43 @@ help:
             }
         }
     } else if(0==strcmp(word,"s")) {
-        Debugger.step=1;
+        Debugger.ctrl.code=JIT_DBG_STEP;
         goto end;
     } else if(0==strcmp(word,"f")) {
-        Debugger.fin=1;
+        Debugger.ctrl.code=JIT_DBG_FIN;
+        //Typically VisitBreakpoint is called indirecty so finish when above caller of caller
+        Debugger.ctrl.prev_stack_ptr=__builtin_frame_address(2);
         goto end;
     } else if(0==strcmp(word,"p")) {
-        int code;
-        s+=strlen(word);
-        s=__SkipWhitespace(s);
-        CBacktrace cur=Debugger.callStack.data[stkpos];
-        DebugEvalExpr(cur.bp, &cur.func->funcInfo, s);
+        Debugger.curBp=GetJITBreakpointByPtr(_backtrace[stkpos]);
+        if(stkpos!=0&&regs) {
+            s+=strlen(word);
+            s=__SkipWhitespace(s);
+            CFunction *f=GetFunctionByPtr(_backtrace[stkpos]);
+            if(!f) {
+                printf("Cant get info for current function.\n");
+                DebugEvalExpr(NULL, NULL, s,NULL);
+            } else
+                DebugEvalExprAtFrame(cbp, &f->funcInfo, s, _frameptrs[stkpos]);
+        } else {
+            s+=strlen(word);
+            s=__SkipWhitespace(s);
+            CFunction *f=GetFunctionByPtr(_backtrace[stkpos]);
+            if(!f) {
+                printf("Cant get info for current function.\n");
+                DebugEvalExpr(NULL, NULL, s,NULL);
+            } else
+                DebugEvalExpr(cbp, &f->funcInfo, s,regs);
+        }
     } else if(0==strcmp(word,"n")) {
-        Debugger.next=1;
+        Debugger.ctrl.code=JIT_DBG_NEXT;
+        //Typically VisitBreakpoint is called indirecty so finish when above caller of caller
+        Debugger.ctrl.prev_stack_ptr=__builtin_frame_address(2);
         goto end;
     } else if(0==strcmp(word,"bt")) {
-        CBacktrace *bt;
-        int iter;
-        vec_foreach_ptr_rev(&Debugger.callStack, bt, iter) {
-            char *marker=(iter==stkpos)?" *":"  ";
-            if(bt->lastbp)
-                printf("%s[%i] %s:%li<%s>\n",marker,iter,bt->lastbp->fn,bt->lastbp->ln,bt->func->name);
-            else
-                printf("%s[%i] ?:?<%s>\n",marker,iter,bt->func->name);
-        }
+        Backtrace(stkpos,idx);
     } else if(0==strcmp(word,"exit")) {
-        Debugger.next=Debugger.step=Debugger.fin=0;
+        Debugger.ctrl.code=0;
         goto end;
     } else if(0==strcmp(word,"list")) {
         s+=strlen(word);
@@ -360,7 +439,7 @@ help:
         long tmpln;
         if(colon) {
             *colon=0;
-            if(!sscanf(s, "%ld", &tmpln)) {
+            if(!sscanf(colon+1, "%ld", &tmpln)) {
                 printf("Expected a line number.\n");
                 goto lfail;
             }
@@ -396,28 +475,33 @@ end:
 }
 
 void DbgEnterFunction(void *baseptr,CFunction *func) {
-    CBacktrace bt;
-    bt.bp=baseptr;
-    bt.func=func;
-    bt.lastbp=NULL;
-    vec_push(&Debugger.callStack,bt);
 }
 void DbgLeaveFunction() {
-    vec_pop(&Debugger.callStack);
 }
-void Backtrace() {
-    CBacktrace *bt;
-    int iter;
-    vec_foreach_ptr_rev(&Debugger.callStack, bt, iter) {
-        if(bt->lastbp)
-            fprintf(stderr,"  [%i] %s:%li<%s>\n",iter,bt->lastbp->fn,bt->lastbp->ln,bt->func->name);
-        else
-            fprintf(stderr,"  [%i] ?:?<%s>\n",iter,bt->func->name);
+void Backtrace(int stkpos,int trim) {
+    void *bt[256];
+    int top=jit_FunctionParents(bt,256),iter;
+    struct CBreakpoint *bp;
+    jit_breakpoint_t *jbp;
+    for(iter=0;iter<top-(trim+1);iter++) {
+        CFunction *func=GetFunctionByPtr(bt[iter+trim+1]);
+        if(func) {
+            if(func->JIT)
+                if(jbp=jit_get_breakpoint_btr_ptr(func->JIT,bt[iter+trim+1])) {
+                    bp=*(CBreakpoint**)jbp->user_data;
+                    printf(" %c [%d] %s:%s,%d\n",(stkpos==iter?' ':'*'),iter,func->name,bp->fn,bp->ln);
+                    goto skip;
+                }
+            printf(" %c [%d] %s:???\n",(stkpos==iter?' ':'*'),iter,func->name);
+            goto skip;
+        }
+        printf(" %c [%d] ???\n",(stkpos==iter?' ':'*'),iter);
+        skip:;
     }
 }
 void WhineOnOutOfBounds(void *ptr,int64_t sz) {
-    if(!InBounds(ptr+sz)) {
-        Backtrace();
+    if(!InBounds(ptr,sz)) {
+        Backtrace(-1,0);
     }
 }
 //Returns matched file

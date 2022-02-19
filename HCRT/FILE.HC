@@ -132,7 +132,7 @@ CDirEntry *FilesFind(U8 *mask,I64 flags=0) {
   U8 **files=NULL;
   if(flags&FUF_RECURSE) {
     U8 *recurfs[1024];
-    I64 found=__DirRecur(root,recurfs,1024);
+    I64 found=__DirRecur(root,recurfs,1024);    
     files=MAlloc((1+found)*sizeof(U8 *));
     files[found]=NULL;
     while(--found>=0) {
@@ -214,12 +214,7 @@ CDirEntry *FilesFind(U8 *mask,I64 flags=0) {
     if(files[fcnt]) {
       CDirEntry *ent=MAlloc(sizeof(CDirEntry));
       StrCpy(path+fnstart,files[fcnt]);
-      StrCpy(ent.name,files[fcnt]);
-      CFile *f=FOpen(path,"rb",-1);
-      if(f) {
-        ent.size=FSize(f);
-        FClose(f);
-      }
+      StrCpy(ent.name,files[fcnt]);      
       if(prev) {
         ent->prev=prev;
         prev->next=ent;
@@ -304,3 +299,5 @@ U0 Move(U8 *mask,U8 *to) {
     DirEntryFree(orig);
   }
 }
+
+

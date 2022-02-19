@@ -4,9 +4,6 @@
 #include <string.h>
 #include <math.h>
 #include <setjmp.h>
-#ifdef TARGET_WIN32
-#include <memoryapi.h>
-#endif
 void CompileBreakpoint(AST *at);
 CVariable *UniqueGlblVar(CType *type) {
     static long try;
@@ -914,7 +911,6 @@ double EvaluateF64(AST *exp) {
     ReleaseType(Compiler.returnType);
     double ret2=0;
     if(f&&!Compiler.tagsFile) {
-        GC_Disable();
         #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
         ret2=((double(*)())f->funcptr)();
@@ -923,7 +919,6 @@ double EvaluateF64(AST *exp) {
         ret2=((double(*)())f->funcptr)();
         #endif
     }
-    GC_Enable();
     ReleaseFunction(f);
     RestoreCompilerState(old);
     return ret2;
@@ -944,7 +939,6 @@ int64_t EvaluateInt(AST *exp,int flags) {
     vec_deinit(&args);
     int64_t ret2=0;
     if(f&&!Compiler.tagsFile) {
-        GC_Disable();
         #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
         ret2=((int64_t(*)())f->funcptr)();
@@ -952,7 +946,6 @@ int64_t EvaluateInt(AST *exp,int flags) {
         #else
         ret2=((int64_t(*)())f->funcptr)();
         #endif
-        GC_Enable();
     }
     ReleaseFunction(f);
     RestoreCompilerState(old);
@@ -1140,7 +1133,6 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
                       CFunction *stmt=CompileAST(NULL,ret,empty,C_AST_FRAME_OFF_DFT,C_AST_IS_TMP_FUNCTION);
                       RestoreCompilerState(olds);
                       vec_deinit(&empty);
-                      GC_Disable();
         #ifndef TARGET_WIN32
                       signal(SIGINT,SignalHandler);
                       stmt->funcptr(0);
@@ -1148,7 +1140,6 @@ CType *CreateFuncType(CType *ret,AST *_args,int hasvargs) {
         #else
                       stmt->funcptr(0);
         #endif
-                      GC_Enable();
                       ReleaseFunction(stmt);
                     } else {
                         COldFuncState olds=CreateCompilerState();
@@ -1634,7 +1625,7 @@ jit_value MoveGlobalPtrToReg(CVariable *var,int r) {
     switch(var->linkage.type) {
     case LINK_STATIC:
     case LINK_NORMAL:
-        if(Compiler.AOTMode&&var->name) {
+        if( Compiler.AOTMode&&var->name) {
             name=var->name;
             goto reloc;
         }
@@ -4263,7 +4254,7 @@ tmp=CreateTmpRegVar(GetFltTmpReg(), expt); \
 AST *ptr =PtrifyIfNeeded(exp->unopArg); \
 CType *ptrt =AssignTypeToNode(ptr); \
 CType *de =DerrefedType(ptrt); \
-expt=de; \
+expt=ptrt; \
 tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
   } else { \
 tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
@@ -4350,8 +4341,7 @@ tmp=CreateTmpRegVar(GetIntTmpReg(), expt); \
         } else {
             AST *z =CreateI64(0);
             CType *t =AssignTypeToNode(exp->unopArg);
-            AST *tc =CreateImplicitTypecast(z, CreateTypeNode(t));
-            AST *exp2 =CreateBinop(exp->unopArg, tc,AST_EQ);
+            AST *exp2 =CreateBinop(exp->unopArg, z,AST_EQ);
             SetPosFromOther(exp2, exp);
             __CompileAST(exp2);
         }
@@ -4923,10 +4913,16 @@ stuffint:
         vec_push(&Compiler.valueStack, VALUE_INT(0));
         return;
 alwaystrue:
-        CompileBodyWithBreakpoints(exp->ifStmt.body);
+        if(exp->ifStmt.body)
+            CompileBodyWithBreakpoints(exp->ifStmt.body);
+        else
+            vec_push(&Compiler.valueStack, VALUE_INT(0));
         return;
 alwaysfalse:
-        CompileBodyWithBreakpoints(exp->ifStmt.elseBody);
+        if(exp->ifStmt.elseBody)
+            CompileBodyWithBreakpoints(exp->ifStmt.elseBody);
+        else
+            vec_push(&Compiler.valueStack, VALUE_INT(0));
         return;
     }
     case AST_FOR: {
@@ -5379,20 +5375,22 @@ void CompileBreakpoint(AST *at) {
     sprintf(buffer,"%s:%li",at->fn,at->ln);
 add:
     ;
-    CBreakpoint *bp;
-    if(bp=map_get(&Compiler.breakpoints,buffer)) {
+    CBreakpoint *bps;
+    jit_breakpoint_t *bp=NULL;
+    if(bps=map_get(&Compiler.breakpoints,buffer)) {
+        //Allocate space to tell what CBreakpoint we are at(usefull for getting file location)
+        bp=TD_MALLOC(sizeof(jit_breakpoint_t)+sizeof(CBreakpoint*));
+        *(CBreakpoint**)(bp->user_data)=bps;
+        vec_push(&bps->jit_bps,bp);
     } else {
-        CBreakpoint en;
-        en.fn=at->fn; //From Lexer.filenames
-        en.ln=at->ln;
-        en.enabled=0;
-        map_set(&Compiler.breakpoints,buffer,en);
+        CBreakpoint bp;
+        bp.fn=at->fn;
+        bp.ln=at->ln;
+        vec_init(&bp.jit_bps);
+        map_set(&Compiler.breakpoints,buffer,bp);
         goto add;
     }
-    jit_value fr=__LoadFuncPtrIntoIntReg("VisitBreakpoint",2);
-    jit_prepare(Compiler.JIT);
-    jit_putargi(Compiler.JIT,bp);
-    jit_callr(Compiler.JIT, fr);
+    jit_breakpoint(Compiler.JIT, bp, &VisitBreakpoint,&Debugger.ctrl);
     #endif
 }
 void ReleaseFunction(CFunction *func) {
@@ -5401,6 +5399,7 @@ void ReleaseFunction(CFunction *func) {
     TD_FREE(func);
 }
 static void ReleaseFunction2(void *f,void *ul) {
+    //jit_free(((CFunction*)f)->JIT);
 }
 AST* CreateReturn(AST *exp) {
     AST *r=TD_CALLOC(1,sizeof(AST));
@@ -5564,10 +5563,10 @@ CFunction *CompileAST(map_CVariable_t *locals,AST *exp,vec_CVariable_t args,long
         const char *_var;
         while((_var=map_next(locals,&liter))) {
             CVariable *var=*map_get(locals,_var);
-            if(var->isNoreg||Compiler.debugMode||force_noregs) {
+            if(Compiler.debugMode)
+                map_set(&dbgNoregs,var->name,CloneVariable(var));
+            if(var->isNoreg||force_noregs) {
 noreg:
-                if(Compiler.debugMode)
-                    map_set(&dbgNoregs,var->name,CloneVariable(var));
                 var->isReg=0;
                 var->isNoreg=1;
                 int align=TypeAlign(var->type);
@@ -5596,6 +5595,7 @@ noreg:
         func->funcInfo.noregs=dbgNoregs;
     else
         map_init(&func->funcInfo.noregs);
+    func->funcInfo.jit=Compiler.JIT;
     jit_prolog(Compiler.JIT, &funcptr);
     Compiler.tmpFltRegStart=freg;
     Compiler.tmpIntRegStart=ireg;
@@ -5684,10 +5684,6 @@ noreg:
         jit_callr(Compiler.JIT, fr);
     }
     jit_reti(Compiler.JIT,0);
-    //if(Compiler.debugMode)
-    //    jit_check_code(curjit,JIT_WARN_ALL);
-    //if(Compiler.debugMode)
-    //    jit_dump_ops(curjit,1);
 
     //Ensure there is no unresolved labels
     map_iter_t lriter=map_iter(&Compiler.labelRefs);
@@ -5716,11 +5712,9 @@ noreg:
 	    jit_taint_label(Compiler.JIT, (jit_value)lab->label);
 	}
       }
-        jit_disable_optimization(curjit, JIT_OPT_JOIN_ADDMUL); //Seems to mess things up
+        jit_disable_optimization(curjit, JIT_OPT_JOIN_ADDMUL|JIT_OPT_OMIT_FRAME_PTR); //Seems to mess things up
         jit_generate_code(curjit,func);
     }
-    //if(Compiler.debugMode)
-    //    jit_dump_ops(curjit,1);
     if(Compiler.errorFlag||dont_compile)  {
         funcptr=(void(*)(int64_t,...))Blank;
     } else {
@@ -5760,7 +5754,6 @@ noreg:
         vec_deinit(map_get(&Compiler.labelRefs,key));
     map_deinit(&Compiler.labelRefs);
     map_deinit(&Compiler.labels);
-    GC_SetDestroy(func, ReleaseFunction2,NULL);
     return func;
 }
 void AddStringDataToFunc(CFunction *f) {
@@ -5804,25 +5797,172 @@ void FillFunctionRelocations(CFunction *func) {
             }
     }
 }
-void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
+struct refPair {
+    map_CVariable_t locs;
+    CFuncInfo *info;
+};
+static void __refedLocs(AST *a,void *_pair) {
+    struct refPair *pair=_pair;
+    CVariable **vptr;
+    if(a->type==AST_NAME)
+        if(vptr=map_get(&pair->info->noregs,a->name))
+            map_set(&pair->locs,a->name,*vptr);
+}
+static map_CVariable_t ReferencedLocals(CFuncInfo *info,AST *exp) {
+    struct refPair pair;
+    map_init(&pair.locs);
+    pair.info=info;
+    ScanAST(exp,__refedLocs,&pair);
+    return pair.locs;
+}
+void EvalDebugExprAtFrame(CFuncInfo *info,AST *exp,void *frame_ptr) {
+    jit_breakpoint_t *bp=NULL;
+    #ifdef BOOTSTRAPED
+    bp=Debugger.curBp;
+    frame_ptr=Debugger.debuggedFramePtr;
+    #endif
+    map_CVariable_t refed=ReferencedLocals(info,exp);
+    map_iter_t liter=map_iter(&refed);
+    const char *key;
+    liter=map_iter(&refed);
+    while(key=map_next(&refed,&liter)) {
+        CVariable *v=*map_get(&info->noregs,key);
+        if(v->isNoreg) {
+        } else {
+          void *fptr=NULL;
+          if(IsF64(v->type))
+            fptr=jit_debugger_get_vreg_ptr_from_parent(info->jit,frame_ptr,bp->at,FR(v->reg));
+          else
+            fptr=jit_debugger_get_vreg_ptr_from_parent(info->jit,frame_ptr,bp->at,R(v->reg));
+          if(!fptr) {
+            fprintf(stderr,"Variable \"%s\" is not avaible for debugger here.\n",key);
+            return;
+          }
+        }
+    }
     COldFuncState old=CreateCompilerState();
-    //Add args to scope
-    int iter;
-    CVariable *arg;
     vec_init(&Compiler.valueStack); //Freed
     map_init(&Compiler.locals); //Freed
     map_init(&Compiler.currentRelocations);
-    map_iter_t liter=map_iter(&info->noregs);
-    const char *key;
-    while(key=map_next(&info->noregs,&liter)) {
+    liter=map_iter(&refed);
+    while(key=map_next(&refed,&liter)) {
         CVariable *v=*map_get(&info->noregs,key);
         CVariable *g=TD_MALLOC(sizeof(CVariable));
         g->refCount=1;
         g->type=v->type;
         g->isGlobal=1;
         g->isNoreg=1;
-        g->linkage.globalPtr=framePtr+v->frameOffset;
+        if(v->isNoreg) {
+          g->linkage.globalPtr=frame_ptr+info->frameOffset+v->frameOffset;
+        } else {
+          void *fptr=NULL;
+          if(IsF64(g->type))
+            g->linkage.globalPtr=jit_debugger_get_vreg_ptr_from_parent(info->jit,frame_ptr,bp->at,FR(v->reg));
+          else
+            g->linkage.globalPtr=jit_debugger_get_vreg_ptr_from_parent(info->jit,frame_ptr,bp->at,R(v->reg));
+        }
+        if(!g->linkage.globalPtr) {
+            fprintf(stderr,"Variable \"%s\" is not avaible for debugger here.\n",key);
+            return;
+          }
         map_set(&Compiler.locals,key,g);
+    }
+    struct jit *curjit=Compiler.JIT=NULL;
+    if(!Compiler.tagsFile) {
+            curjit=Compiler.JIT=jit_init();
+    }
+    void(*funcptr)(int64_t,...);
+    CFunction *func=TD_CALLOC(1,sizeof(CFunction));
+    func->JIT=curjit;
+    func->locals=Compiler.locals;
+    map_init(&func->funcInfo.noregs);
+    jit_prolog(Compiler.JIT, &funcptr);
+    CType * t =AssignTypeToNode(exp);
+    if(t->type==TYPE_ARRAY||t->type==TYPE_ARRAY_REF) {
+        CType *d =DerrefedType(t);
+        t=CreatePtrType(d);
+    }
+    uint8_t buffer[TypeSize(t)];
+    CVariable *ret AF_VAR=TD_MALLOC(sizeof(CVariable));
+    ret->refCount=1;
+    ret->type=t;
+    ret->isGlobal=1;
+    ret->isNoreg=1;
+    ret->linkage.globalPtr=buffer;
+    AST *vnode =CreateVarNode(ret);
+    AST *assign =CreateBinop(vnode,exp,AST_ASSIGN);
+    SetPosFromOther(assign, exp);
+    __CompileAST(assign);
+    ReleaseValue(&vec_pop(&Compiler.valueStack));
+    jit_reti(Compiler.JIT,0);
+    if(!Compiler.errorFlag) {
+        func->relocations=Compiler.currentRelocations;
+        jit_disable_optimization(curjit, JIT_OPT_ALL);
+        jit_generate_code(curjit,func);
+        FillFunctionRelocations(func);
+        func->stringRelocations=Compiler.stringDatas;
+        AddStringDataToFunc(func);
+        func->funcptr=funcptr;
+        #ifndef TARGET_WIN32
+        signal(SIGINT,SignalHandler);
+        func->funcptr(0);
+        signal(SIGINT,SIG_IGN);
+        #else
+        func->funcptr(0);
+        #endif
+        t=AssignTypeToNode(exp);
+        if(t->type==TYPE_ARRAY||t->type==TYPE_ARRAY_REF)
+          DbgPrintVar(t, *(void**)buffer); //Arrays return pointer to self
+        else
+          DbgPrintVar(t, buffer);
+    }
+    if(Compiler.errorFlag)
+        funcptr=(void(*)(int64_t,...))Blank;
+
+    vec_deinit(&Compiler.valueStack);
+    //
+    liter=map_iter(&Compiler.locals);
+    while(key=map_next(&Compiler.locals,&liter))
+        ReleaseVariable(*map_get(&Compiler.locals,key));
+    map_deinit(&Compiler.locals);
+    map_deinit(&refed);
+    RestoreCompilerState(old);
+    ReleaseFunction(func);
+}
+void EvalDebugExpr(CFuncInfo *info,AST *exp,struct jit_debugger_regs *regs) {
+    COldFuncState old=CreateCompilerState();
+    jit_breakpoint_t *bp=NULL;
+    #ifdef BOOTSTRAPED
+    bp=Debugger.curBp;
+    #endif
+    //Add args to scope
+    int iter;
+    CVariable *arg;
+    vec_init(&Compiler.valueStack); //Freed
+    map_init(&Compiler.locals); //Freed
+    map_init(&Compiler.currentRelocations);
+    if(info) {
+        map_CVariable_t refed=ReferencedLocals(info,exp);
+        map_iter_t liter=map_iter(&refed);
+        const char *key;
+        while(key=map_next(&refed,&liter)) {
+            CVariable *v=*map_get(&info->noregs,key);
+            CVariable *g=TD_MALLOC(sizeof(CVariable));
+            g->refCount=1;
+            g->type=v->type;
+            g->isGlobal=1;
+            g->isNoreg=1;
+            if(v->isNoreg) {
+              g->linkage.globalPtr=regs->RBP+info->frameOffset+v->frameOffset;
+            } else {
+              if(IsF64(g->type))
+                g->linkage.globalPtr=jit_debugger_get_reg_ptr(info->jit,regs,bp->at,FR(v->reg));
+              else
+                g->linkage.globalPtr=jit_debugger_get_reg_ptr(info->jit,regs,bp->at,R(v->reg));
+            }
+            map_set(&Compiler.locals,key,g);
+        }
+        map_deinit(&refed);
     }
 
     struct jit *curjit=Compiler.JIT=NULL;
@@ -5860,7 +6000,6 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         FillFunctionRelocations(func);
         func->stringRelocations=Compiler.stringDatas;
         AddStringDataToFunc(func);
-        GC_Disable();
         func->funcptr=funcptr;
         #ifndef TARGET_WIN32
         signal(SIGINT,SignalHandler);
@@ -5869,7 +6008,6 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
         #else
         func->funcptr(0);
         #endif
-        GC_Enable();
         t=AssignTypeToNode(exp);
         if(t->type==TYPE_ARRAY||t->type==TYPE_ARRAY_REF)
           DbgPrintVar(t, *(void**)buffer); //Arrays return pointer to self
@@ -5881,7 +6019,8 @@ void EvalDebugExpr(CFuncInfo *info,AST *exp,void *framePtr) {
 
     vec_deinit(&Compiler.valueStack);
     //
-    liter=map_iter(&Compiler.locals);
+    map_iter_t liter=map_iter(&Compiler.locals);
+    const char *key;
     while(key=map_next(&Compiler.locals,&liter))
         ReleaseVariable(*map_get(&Compiler.locals,key));
     map_deinit(&Compiler.locals);
@@ -6384,7 +6523,6 @@ void RunStatement(AST *s) {
     static int count;
     count++;
     if(stmt&&!Compiler.errorFlag&&!Compiler.tagsFile) {
-      GC_Disable();
       #ifndef TARGET_WIN32
       signal(SIGINT,SignalHandler);
       ((void(*)())stmt->funcptr)();
@@ -6392,7 +6530,6 @@ void RunStatement(AST *s) {
       #else
       ((void(*)())stmt->funcptr)();
       #endif
-      GC_Enable();
       ReleaseFunction(stmt);
     }
     Compiler.errorFlag=oldflag;

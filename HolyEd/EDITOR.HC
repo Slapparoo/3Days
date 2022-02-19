@@ -1,3 +1,4 @@
+#define ERR (-1)
 #include "KEYS2.HC"
 #include "FONT.HC"
 #include "ROPE.HC"
@@ -20,9 +21,10 @@ class CUndoInfo {
 #define TAG_CLASS 3
 #define TAG_VAR 4
 #define TAG_FUNC 5
+#define TAG_MEMBER 6
 CHashTable *TagFiles=HashTableNew(1<<7);
 class CTrie {
-    CTrie *ents[26+10+1+1]; //a...z/0-9/_/.
+    CTrie *ents[26+10+1+1+1]; //a...z/0-9/_/./other
     U8 *fn; //From TagFiles
     U8 *fullname;
     U8 * name;
@@ -48,7 +50,7 @@ I64 TrieChrIdx(U8 chr) {
         idx=26+10+1;
         break;
     default:
-      idx=-1;
+      idx=26+10+2;
     }
     return idx;
 }
@@ -101,6 +103,7 @@ CTrie *ReadTags(U8 *file) {
     CTrie *ret=MAlloc(sizeof(CTrie));
     I64 len;
     U8 *text=FileRead(file,&len);
+    if(!text) return ret;
     U8 *en=text+len,*fullname,*orig=text;
     U8 buf1[256],buf2[256],buf3[256];
     U8 *_buf1=buf1,*_buf2=buf2,*_buf3=buf3;
@@ -122,7 +125,7 @@ attrloop:
                     case 'c':
                         type=TAG_CLASS;
                         break;
-                    case 'm':
+                    case 'd':
                         type=TAG_MACRO;
                         break;
                     case 'f':
@@ -134,29 +137,32 @@ attrloop:
                     case 'v':
                         type=TAG_VAR;
                         break;
+                    case 'm':
+                        type=TAG_MEMBER;
+                        break;
                     default:
                         throw('InvType');
                     }
                     text++;
                     goto attrloop;
                 }
+                if(0==StrNCmp("display:",text,len=StrLen("display:"))) {
+                    text+=len;
+                    Free(fullname);
+                    U8 *tdelim=StrFirstOcc(text,"\x0d\n\t");
+                    fullname=StrNCpy(MAlloc(tdelim-text+1),text,tdelim-text);
+                    text=tdelim;
+                    goto attrloop;
+                }
                 if(0==StrNCmp("struct:",text,len=StrLen("struct:"))) {
                     text+=len;
-                    U8 *tdelim=StrFirstOcc(text,"\x0d\n\t");
-                    U8 *ofclass=StrNCpy(MAlloc(tdelim-text+1),text,tdelim-text);
-                    ofclass[tdelim-text]=0;
-                    Free(fullname);
-                    fullname=MStrPrint("%s.%s",ofclass,buf1);
+                    tdelim=StrFirstOcc(text,"\x0d\n\t");
                     text=tdelim;
                     goto attrloop;
                 }
                 if(0==StrNCmp("union:",text,len=StrLen("union:"))) {
                     text+=len;
                     tdelim=StrFirstOcc(text,"\x0d\n\t");
-                    ofclass=StrNCpy(MAlloc(tdelim-text+1),text,tdelim-text);
-                    ofclass[tdelim-text]=0;
-                    Free(fullname);
-                    fullname=MStrPrint("%s.%s",ofclass,buf1);
                     text=tdelim;
                     goto attrloop;
                 }
@@ -196,6 +202,7 @@ class CDiag {
 CDiag *ParseDiags(U8 *file) {
     I64 cnt,len;
     U8 *text=FileRead(file,&cnt);
+    if(!text)  return NULL;
     U8 *ptr=text;
     CDiag *prev=NULL;
     while(*ptr) {
@@ -204,7 +211,7 @@ CDiag *ParseDiags(U8 *file) {
         if(prev) prev->next=new;
         new->fn=MAlloc(1024);
         try {
-            //fn:ln:col [WARNING|ERROR] [msg]
+            //fn:col [WARNING|ERROR] [msg]
             //Filename can contain ':' so ensure a number follows the ':'
             U8 *fnstart=ptr;
             loop:
@@ -217,7 +224,7 @@ CDiag *ParseDiags(U8 *file) {
                 ptr=colon+1;
                 goto loop;
             }
-            ptr=StrScan(ptr,"%d:%d: ",&new->ln,&new->col);
+            ptr=StrScan(ptr,"%d ",&new->ln);
             if(0==StrNCmp(ptr,"WARNING",len=StrLen("WARNING"))) {
                 ptr+=len;
                 new->type=DIAG_WARN;
@@ -248,8 +255,7 @@ U0 FreeDiags(CDiag *errs) {
   Free(errs->fn);
   Free(errs->msg);
   Free(errs);
-}
-U0 __FuzzyMatch(CTrie *trie,U8 *name,I64 *cnt,CTrie **dumpto) {
+}U0 __FuzzyMatch(CTrie *trie,U8 *name,I64 *cnt,CTrie **dumpto) {
     if(!trie) return;
     if(!*name) {
         if(trie->name) {
@@ -263,7 +269,11 @@ U0 __FuzzyMatch(CTrie *trie,U8 *name,I64 *cnt,CTrie **dumpto) {
         idx=TrieChrIdx(*name);
     I64 cnt2=sizeof(trie->ents)/sizeof(*trie->ents);
     while(--cnt2>=0) {
-        if(cnt2!=idx)
+        //Last trie entry is reserved for other characotr,so accept any
+        if(cnt2==sizeof(trie->ents)/sizeof(*trie->ents)-1) {
+            if(!*name)
+                __FuzzyMatch(trie->ents[cnt2],name,cnt,dumpto);
+        } else if(cnt2!=idx)
             __FuzzyMatch(trie->ents[cnt2],name,cnt,dumpto);
         else
             __FuzzyMatch(trie->ents[cnt2],name+1,cnt,dumpto);
@@ -418,6 +428,7 @@ SDL_Surface *global_font=NULL;
 #define FONT_X 8
 #define FONT_Y 8
 U0 SDL_InitScr() {
+    SDL_Init();
     global_window=SDL_CreateWindow("HolyEd",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,640,480,SDL_WINDOW_RESIZABLE);
     global_font=SDL_CreateRGBSurface(0,FONT_X*0x100,FONT_Y,32,0,0,0,0);
     SDL_FillRect(global_font, NULL, 0x00000000);
@@ -451,10 +462,8 @@ class CSDL_TextWin {
     Bool cur_enabled;
     Bool inverse;
 };
-#define FONT_X 8
-#define FONT_Y 8
-#define FONT_X2 16
-#define FONT_Y2 16
+I64 FONT_X2=16;
+I64 FONT_Y2=16;
 CSDL_TextWin *SDL_NewTextWin(I64 w,I64 h) {
     CSDL_TextWin *ret=MAlloc(sizeof(CSDL_TextWin));
     ret->text=SDL_CreateRGBSurface(0,w*FONT_X2,h*FONT_Y2,32,0,0,0,0);
@@ -473,6 +482,18 @@ I64 SDL_WinX(CSDL_TextWin *w) {
 I64 SDL_WinY(CSDL_TextWin *w) {
     return SDL_GetSurfaceHeight(w->text)/FONT_Y2;
 }
+//Debug later
+U0 DecreaseFontSize() {
+    return;
+    if(FONT_X2<=8) return;
+    FONT_Y2--,FONT_X2--;
+}
+//Debug later
+U0 IncreaseFontSize() {
+    return;
+    FONT_Y2++,FONT_X2++;
+}
+
 //Pass CSDL_TextWin's
 U0 SDL_DrawWin(...) {
     I64 idx=0;
@@ -597,7 +618,7 @@ I64 ShowDiagsWindow(CEditor *parent) {
     parent->window->cur_cp=CP_WHITE;
     CSDL_TextWin *win=parent->window;
     draw:
-    I64 h=getmaxy(stdscr);
+    I64 h=SDL_WinY(parent->window);
     I64 cap=MinI64(y_scroll+h,cnt);
     I64 cnt2=0;
     dloop:
@@ -641,6 +662,15 @@ I64 ShowDiagsWindow(CEditor *parent) {
     SDL_DrawWin(win);
     I64 key=GetKey();
     switch(key) {
+        case ED_KEY_QUIT:
+        ret=ED_RET_QUIT;
+        goto exit;
+        case ED_KEY_SIZE_UP:
+        IncreaseFontSize;
+        goto redraw;
+        case ED_KEY_SIZE_DOWN:
+        DecreaseFontSize;
+        goto redraw;
         case ED_KEY_ESCAPE: goto exit;
         case ERR: goto inp;
         case ED_KEY_PAGEUP:
@@ -666,6 +696,7 @@ I64 ShowDiagsWindow(CEditor *parent) {
         break;
         case ED_KEY_REDRAW:
         case ED_KEY_RESIZE:
+        redraw:
         SDL_DrawWin(win);
         break;
     }
@@ -676,7 +707,7 @@ I64 ShowDiagsWindow(CEditor *parent) {
     Free(lines);
     return ret;
 }
-
+U0 EdJumpToChar(CEditor *ed,I64 chr);
 I64 UndoBufSize(CEditor* ed) {
     if (ed->undo_info_end > ed->undo_info_start)
     return ed->undo_info_end - ed->undo_info_start;
@@ -714,18 +745,14 @@ CUndoInfo* GetUndoInfo(CEditor* ed) {
     I64 i = (ed->undo_info_cur + ed->undo_info_start) % UNDO_INFO_LENGTH;
     I64 s = ed->undo_info_start;
     I64 e = ed->undo_info_end;
-
     if (s == e) goto en;
 
     if (s < e) {
         if (!(s <= i < e)) return NULL;
     } else if (e <= i < s) return NULL;
-
     en:
-
     if (ed->undo_info[i]->type == EDIT_UNUSED)
     return NULL;
-
     return &ed->undo_info[i];
 }
 class CBuffer:CHash {
@@ -1065,6 +1092,7 @@ U0 __EditorInsText(CEditor *ed,U8 *text,I64 at) {
     CLine *ln=ed->lines,*prev=NULL;
     I64 linum=0;
     while(ln) {
+        if(!RopeLength(ln->text)) break;
         if(ln_off<=at<ln_off+RopeLength(ln->text)) break;
         ln_off+=RopeLength(ln->text);
         prev=ln;
@@ -1076,44 +1104,57 @@ U0 __EditorInsText(CEditor *ed,U8 *text,I64 at) {
         if(prev) {
             ln=prev;
             ln_off-=RopeLength(ln->text);
-        } else {
-            CLine *nl=MAlloc(sizeof(CLine));
-            ed->line_count++;
-            nl->prev=prev;
-            if(prev) prev->next=nl;
-            ln=nl;
-            ln->text=RopeAppendText(NULL,"");
-            if(!ed->lines) ed->lines=nl;
         }
     }
-    ln->text=RopeInsText(ln->text, text, at-ln_off);
-    ln->text=RopeCondense(ln->text);
+    if(!ln) {
+        ln=MAlloc(sizeof(CLine));
+        if(!ed->lines) ed->lines=ln;
+        ed->line_count++;
+        ln->text=RopeAppendText(NULL,"\n");
+    }
+    U8 *nl3=StrFirstOcc(text,"\n");
+    if(!nl3) nl3=StrLen(text)+text;
+    else nl3++;
+    U8 *ln_txt=MAlloc(nl3-text+1),*trail;
+    StrNCpy(ln_txt,text,nl3-text);
+    if(!StrOcc(text,'\n')) {
+        ln->text=RopeInsText(ln->text, ln_txt, at-ln_off);
+        Free(ln_txt);
+        return;
+    } else {
+        CRope *right;
+        RopeSplit(ln->text,at-ln_off,&ln->text,&right);
+        ln->text=RopeAppendText(ln->text,ln_txt);
+        trail=Rope2Str(right);
+        RopeFree(right);
+        text=MStrPrint("%s%s",nl3,trail);
+        Free(trail);
+    }
     Highlight(ed, ln, TRUE);
     CLine *start_ln=ln;
+    U8 *text2=text,*otext2;
+    otext2=text2;
 loop:
-    U8 *text2=Rope2Str(ln->text);
-    U8 *nl3=StrFirstOcc(text2,"\n");
-    if(nl3)
-        if(nl3[1]) {
-            CRope *right;
-            RopeSplit(ln->text,  nl3-text2+1, &ln->text, &right);
-            //Insert a blank line
-            nl=MAlloc(sizeof(CLine));
-            ed->line_count++;
-            nl->prev=ln;
-            if(ln) nl->next=ln->next;
-            if(nl->prev) nl->prev->next=nl;
-            if(nl->next) nl->next->prev=nl;
-            nl->text=right;
-            ln=nl;
-            Free(text2);
-            goto loop;
-        }
-
-    if(!StrLen(text2)) ln->text=RopeAppendText(ln->text, "\n");
-    else if(text2[StrLen(text2)-1]!='\n') ln->text=RopeAppendText(ln->text, "\n");
+    nl3=StrFirstOcc(text2,"\n");
+    if(nl3) {
+        ln_txt=MAlloc(nl3-text2+1+1);
+        StrNCpy(ln_txt,text2,nl3-text2+1);
+        //Insert a blank line
+        CLine *nl=MAlloc(sizeof(CLine));
+        nl->text=RopeAppendText(NULL,ln_txt);
+        ed->line_count++;
+        nl->prev=ln;
+        if(ln) nl->next=ln->next;
+        if(nl->prev) nl->prev->next=nl;
+        if(nl->next) nl->next->prev=nl;
+        nl->text=RopeAppendText(NULL,ln_txt);
+        ln=nl;
+        Free(ln_txt);
+        text2+=nl3-text2+1;
+        goto loop;
+    }
     DirtyLinesBelow(ed, GetLinum(ed,start_ln));
-    Free(text2);
+    Free(otext2);
 }
 U0 RenumberLines(CEditor *ed,CLine *l=NULL) {
     I64 num=0;
@@ -1125,11 +1166,22 @@ U0 RenumberLines(CEditor *ed,CLine *l=NULL) {
     }
 }
 U0 EditorInsText(CEditor *ed,U8 *text,I64 at,Bool undo=FALSE) {
-    EdDelSel(ed); //Clear selection if needed
+    Bool gt_end_ins=FALSE;
+    if(ed->sel_start!=ed->sel_end) {
+        EdDelSel(ed);
+        at=GetLineOffset(ed,ed->cury)+ed->curx;
+        gt_end_ins=TRUE;
+    }
     __EditorInsText(ed, text, at);
+    if(gt_end_ins)
+        EdJumpToChar(ed,at+StrLen(text));
     if(undo) {
         CUndoInfo *prev;
-        if(!(prev=GetUndoInfo(ed))) {
+        if(ed->undo_info_cur)
+            ed->undo_info_cur--,(prev=GetUndoInfo(ed)),ed->undo_info_cur++;
+        else
+            prev=GetUndoInfo(ed);
+        if(!prev) {
             ins1:
             CUndoInfo info;
             info.type=EDIT_INS_STR;
@@ -1142,6 +1194,7 @@ U0 EditorInsText(CEditor *ed,U8 *text,I64 at,Bool undo=FALSE) {
                 U8 *new=MStrPrint("%s%s",prev->inserted_str,text);
                 Free(prev->inserted_str);
                 prev->inserted_str=new;
+                goto ret;
             }
         }
         goto ins1;
@@ -1179,7 +1232,7 @@ CEditor *EditorNew(Bool gen_rt_tags=FALSE) {
     r->line_cache=MAlloc(sizeof(CLine*));
     r->line_cache_size=0;
     EditorInsText(r,"",0);
-    if(gen_rt_tags) {
+    if(0&&gen_rt_tags) {
         CreateTagsAndErrorsFiles("TAGS","ERRS",r->fn);
         r->tags=ReadTags("TAGS");
         r->diags=ParseDiags("ERRS");
@@ -1336,8 +1389,12 @@ U0 EditorDelText(CEditor *ed,I64 soff,I64 eoff,Bool undo=FALSE) {
     if(undo)
         U8 *slice=EdTextSlice(ed,soff,eoff);
      __EditorDelText(ed, soff, eoff);
+    CUndoInfo *prev;
     if(undo) {
-        CUndoInfo *prev=GetUndoInfo(ed);
+        if(ed->undo_info_cur)
+            ed->undo_info_cur--,(prev=GetUndoInfo(ed)),ed->undo_info_cur++;
+        else
+            prev=GetUndoInfo(ed);
         if(!prev) {
             ins1:
             CUndoInfo del;
@@ -1549,7 +1606,7 @@ U0 EdDown(CEditor *ed) {
     }
 }
 #define ED_MOVE_DONT_SKIP_TAB 1
-U0 EdRight(CEditor *ed,I64 flags=0) {
+U0 EdRight(CEditor *ed,I64 flags=0) {
     CLine *rline=GetLine(ed,ed->cury);
     U8 *text=Rope2Str(rline->text);
     I64 x=ed->curx,cnt=0;
@@ -1716,7 +1773,7 @@ U0 EdPageUp(CEditor *ed) {
 }
 U0 FreeEditor(CEditor *ed);
 I64 GotoLine(CEditor *ed) {
-    I64 origy=ed->cury,origx=ed->curx;
+    I64 origy=ed->cury,origx=ed->curx,ret=ED_RET_OK;
     I64 to_ln=0;
     U8 *buf;
     CEditor *sed=EditorNew();
@@ -1724,10 +1781,18 @@ I64 GotoLine(CEditor *ed) {
     loop:
     I64 key=GetKey;
     switch(key) {
+        case ED_KEY_QUIT:
+        ret=ED_RET_QUIT;
+        goto ex;
+        case ED_KEY_SIZE_UP:
+        IncreaseFontSize;
+        goto resize;
+        case ED_KEY_SIZE_DOWN:
+        DecreaseFontSize;
+        goto resize;
         case ERR:
         goto loop;
         case ED_KEY_RESIZE:
-        "RESIZE\n";
         resize:
         SDL_DrawWin(ed->window);
         sed->window->begy=SDL_WinY(ed->window)-1;
@@ -1789,17 +1854,27 @@ I64 GotoLine(CEditor *ed) {
     FocusCursor(ed);
     FreeEditor(sed);
     DrawEditor(ed);
-    return ED_RET_OK;
+    return ret;
 }
 I64 EdSearch(CEditor *ed) {
     static U8 prevs[1024];
+    I64 ret=ED_RET_OK;
     CEditor *sed=EditorNew();
     goto resize;
 loop:
     I64 key=GetKey;
     switch(key) {
+    case ED_KEY_QUIT:
+    ret=ED_RET_QUIT;
+    goto en;
     case ERR:
         goto loop;
+    case ED_KEY_SIZE_DOWN:
+    DecreaseFontSize;
+    goto resize;
+    case ED_KEY_SIZE_UP:
+    IncreaseFontSize;
+    goto resize;
     case ED_KEY_RESIZE:
 resize:
         SDL_DrawWin(ed->window);
@@ -1892,6 +1967,7 @@ mvsrncur:
 en:
     DrawEditor(ed,ED_DRAW_DFT);
     FreeEditor(sed);
+    return ret;
 }
 I64 Edit(CEditor *ed);
 //interactive tells us to enter the autcomplete
@@ -1957,6 +2033,9 @@ loop:
 winput:
         I64 key=GetKey();
         switch(key) {
+        case ED_KEY_QUIT:
+        ret=ED_RET_QUIT;
+        goto fin;
         case ERR:
             goto winput;
         case ED_KEY_UP:
@@ -2154,9 +2233,9 @@ U0 AddMenuBar(CEditor *ed,I64 active=-1) {
         {"[C]ompile Check",'c',&ShowDiagsWindow},
         {NULL,0,NULL},
     };
-    I64 x=getbegx(stdscr);
-    I64 y=getbegy(stdscr);
-    I64 w=getmaxx(stdscr);
+    I64 x=0;
+    I64 y=0;
+    I64 w=SDL_WinX(ed->window);
     class {
         CMenuEnt *spec;
         U8 *name;
@@ -2171,6 +2250,16 @@ U0 AddMenuBar(CEditor *ed,I64 active=-1) {
 loop:
     I64 key=GetKey();
     switch(key) {
+
+    case ED_KEY_QUIT:
+    ret=ED_RET_QUIT;
+    goto en;
+    case ED_KEY_SIZE_UP:
+    IncreaseFontSize;
+    goto draw;
+    case ED_KEY_SIZE_DOWN:
+    DecreaseFontSize;
+    goto draw;
       case ERR: goto loop;
     case ED_KEY_ESCAPE: goto en;
     case ED_KEY_UP:
@@ -2268,6 +2357,15 @@ U8 *FuzzySelectWindow(CEditor *parent,U8** (*match_cb)(CEditor *ed,U8 *str),U8 *
   loop:
   I64 key=GetKey();
   switch(key) {
+    case ED_KEY_QUIT:
+    Free(matches);
+    return ED_RET_QUIT;
+    case ED_KEY_SIZE_UP:
+    IncreaseFontSize;
+    goto draw;
+    case ED_KEY_SIZE_DOWN:
+    DecreaseFontSize;
+    goto draw;
     case ERR: goto loop;
     case ED_KEY_ESCAPE:
     for(idx=0;matches[idx];idx++)
@@ -2352,9 +2450,11 @@ U8 *FuzzySelectWindow(CEditor *parent,U8** (*match_cb)(CEditor *ed,U8 *str),U8 *
       ed->window->cur_cp=CP_FUZZY_SEL_A;
     else
       ed->window->cur_cp=CP_FUZZY_UNSEL_A;
-    U8 buffer2[]={*(tc++),0};
-    U8 *chr=StrFirstOcc(mat,buffer2);
-    if(!chr) {
+    U8 buffer2[2]={*(tc++),0};
+    U8 to_match=ToUpper(buffer2[0]);
+    U8 *chr=mat;
+    for(;*chr&&to_match!=ToUpper(*chr);chr++);
+    if(!*chr) {
       WriteWithinView(ed,mat, offset);
       mat+=StrLen(mat);
     } else {
@@ -2367,6 +2467,7 @@ U8 *FuzzySelectWindow(CEditor *parent,U8** (*match_cb)(CEditor *ed,U8 *str),U8 *
         ed->window->cur_cp=CP_FUZZY_SEL_B;
       else
         ed->window->cur_cp=CP_FUZZY_UNSEL_B;
+      buffer2[0]=*chr;
       WriteWithinView(ed,buffer2, offset++);
       mat++;
     }
@@ -2593,6 +2694,7 @@ I64 Edit(CEditor *ed) {
   goto mvsrncur;
 loop:
     I64 key=GetKey,cnt,cnt2;
+    if(key==ED_KEY_QUIT) return ED_RET_QUIT;
     if(key==ERR) goto loop;
     I64 eoff,soff;
     switch(key) {
@@ -2649,6 +2751,13 @@ loop:
     case ALT_KEY('c'):
     if(DrawEditor(ed,ED_DRAW_DFT,,2)==ED_RET_QUIT) return ED_RET_QUIT; //First menu item
     goto mvsrncur;
+    start:
+    case ED_KEY_SIZE_UP:
+    IncreaseFontSize;
+    break;
+    case ED_KEY_SIZE_DOWN:
+    DecreaseFontSize;
+    end:
     case ED_KEY_RESIZE:
         goto mvsrncur;
     case ED_KEY_UP:
@@ -2732,9 +2841,9 @@ pagedown:
     SaveDoc(ed);
     goto mvsrncur;
     default:
-        if(key==('q'&0x1f)) {return ED_RET_QUIT;}
+        if(key==('q'&0x1f)) {return ED_RET_OK;} //Simply pop the stack
         if(key==('f'&0x1f)) {
-            EdSearch(ed);
+            if(ED_RET_QUIT==EdSearch(ed)) return ED_RET_QUIT;
             goto mvsrncur;
         }
         soff=GetLineOffset(ed, ed->cury)+ed->curx++;

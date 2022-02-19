@@ -24,7 +24,7 @@ static void completion(const char *buf,linenoiseCompletions *lc) {
     int instr=0;
     const char *ptr=buf;
     sloop:;
-    if(ptr=strchr(ptr, '\"')) {
+    if(strchr(ptr, '\"')) {
       instr=1;
       ptr++;
       sloop2:;
@@ -92,6 +92,18 @@ static void completion(const char *buf,linenoiseCompletions *lc) {
     vec_deinit(&path);
     closedir(dir);
     #endif
+    CSymbol *hccomps;
+    if(hccomps=map_get(&Loader.symbols,"__HCCompetions")) {
+        char **res=((char**(*)(char*))(hccomps->value_ptr))(buf);
+        if(!res) return;
+        int64_t cnt=MSize(res)/sizeof(char*),idx;
+        for(idx=0;idx!=cnt;idx++) {
+            if(!res[idx]) continue;
+            linenoiseAddCompletion(lc,res[idx]);
+            TD_FREE(res[idx]);
+        }
+        TD_FREE(res);
+    }
 }
 char* rl(char* prompt) {
   char *fn=linenoise(prompt);

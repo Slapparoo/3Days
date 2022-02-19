@@ -1,4 +1,3 @@
-U8 *StrPrint(U8 *dst,U8 *fmt,...);
 #define STR_LEN 144
 #define PRTF_PAD_ZERO 0x001
 #define PRTF_LEFT_JUSTIFY 0x002
@@ -263,7 +262,7 @@ U8 *StrPrintJoin(U8 *dst,U8 *fmt,I64 argc,I64 *argv)
   */
   I64 i,j,l,ch,k,k0,n,n0,len,dec_len,flags,old_flags,
       aux_fmt_num,comma_cnt,comma_fmt_cnt,cur_arg=0;
-  I64 m;
+  U64 m;
   F64 d,d1;
   U8 *ptr,**_buf,*buf,**_dst,tmp_buf[TMP_BUF_LEN],tmp_buf2[TMP_BUF_LEN*2];
   if (!fmt)
@@ -1037,7 +1036,7 @@ U0 Print(U8 *fmt,...)
 {//$LK,"Print(\"\") Fmt Strings",A="FI:::/Doc/Print.DD"$.See $LK,"StrPrintJoin",A="MN:StrPrintJoin"$().
 //Don't use this.  $LK,"See Print() shortcut.",A="FF:::/Doc/HolyC.DD,DemoHolyC"$
   U8 *buf=StrPrintJoin(NULL,fmt,argc,argv);
-  "%s",buf;
+  TOSPrint("%s",buf);
   Free(buf);
 }
 
@@ -1048,4 +1047,3 @@ U8 *MStrPrint(U8 *fmt,...)
   Free(buf);
   return res;
 }
-

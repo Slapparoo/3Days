@@ -192,6 +192,7 @@ CArcCtrl *ArcCtrlNew(Bool expand,I64 compression_type=CT_8_BIT)
   CArcCtrl *c;
   //MAllocs in Cubit are automatically set to 0,so CAlloc isnt necessary
   c=MAlloc(sizeof(CArcCtrl));
+
   if (expand) {
     c->stk_base=MAlloc(1<<ARC_BITS_MAX);
     c->stk_ptr=c->stk_base;

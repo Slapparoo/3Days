@@ -110,7 +110,7 @@ typedef struct jit_prepared_args {
 } jit_prepared_args;
 
 typedef struct jit_set {
-	vec_int_t vec;
+	vec_t(jit_value) vec;
 } jit_set;
 
 struct jit_func_info {			// collection of information related to one function
@@ -275,7 +275,9 @@ static inline void jit_free_op(struct jit_op *op)
                 JIT_FREE(info->args);
                 JIT_FREE(info);
         }
-
+        jit_op *prev=op->prev,*next=op->next;
+        if(prev) prev->next=next;
+        if(next) next->prev=prev;
         JIT_FREE(op);
 }
 

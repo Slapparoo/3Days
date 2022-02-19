@@ -34,6 +34,9 @@
 #define ED_KEY_SHIFT_UP 32+512
 #define ED_KEY_SHIFT_DOWN 33+512
 #define ED_KEY_CTRL_BACKSPACE 34+512
+#define ED_KEY_SIZE_UP 35+512
+#define ED_KEY_SIZE_DOWN 36+512
+#define ED_KEY_QUIT 37+512
 I64 ALT_KEY(U8 chr) {return ToUpper(chr)+256;}
 
 #define SDL_SCANCODE_UNKNOWN 0x000
@@ -308,6 +311,14 @@ I64 GetKey() {
         switch(sc=e.key.keysym.scancode) {
             case SDL_SCANCODE_TAB: return '\t';
             case SDL_SCANCODE_RETURN: return '\n';
+						case SDL_SCANCODE_MINUS:
+						if(e.key.keysym.mod&vKMOD_CTRL)
+							return SDL_FlushEvent(SDL_TEXTINPUT),ED_KEY_SIZE_DOWN;
+						break;
+						case SDL_SCANCODE_EQUALS:
+						if(e.key.keysym.mod&vKMOD_CTRL)
+							return SDL_FlushEvent(SDL_TEXTINPUT),ED_KEY_SIZE_UP;
+						break;
             case SDL_SCANCODE_BACKSPACE:
  	    if(e.key.keysym.mod&vKMOD_CTRL) {
                 return ED_KEY_CTRL_BACKSPACE;
@@ -371,10 +382,11 @@ I64 GetKey() {
             return ED_KEY_ESCAPE;
         }
         break;
+        case SDL_QUIT:
+        return ED_KEY_QUIT;
         case SDL_TEXTINPUT:
         StrCpy(ibuffer+ibufferi,e.text.text);
         goto grabb;
     }
     return ERR;
 }
-
