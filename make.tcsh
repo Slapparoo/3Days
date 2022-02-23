@@ -8,7 +8,16 @@ if ! -e 3d_loader then
   end
 else
   foreach f ( $CFiles )
+    if $f:t == "jitlib-core.c" then
+      if -e $f.obj then
+        foreach f2 ( $MyjitFiles )
+          set find = `find . -wholename "./$f2" -newer $f.o `
+          if($#find) goto compile
+        end
+      endif
+    endif
     set find = `find -wholename $f -newer 3d_loader `
+    compile:
     if($#find) gcc $CFlags -c $f -o $f.o
   end
 endif

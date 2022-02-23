@@ -1,5 +1,11 @@
 #include "poopalloc.h"
+#ifndef TARGET_WIN32
 #include <sys/mman.h>
+#include <unistd.h>
+#else
+#include <windows.h>
+#include <memoryapi.h>
+#endif
 #include <stdio.h>
 #include <assert.h>
 #include <stdint.h>
@@ -7,7 +13,6 @@
 #include <setjmp.h>
 #include <stdlib.h>
 #include <stddef.h>
-#include <unistd.h>
 #include "3d.h"
 #define PALLOC_ALIGN (16)
 //
@@ -192,7 +197,11 @@ static void *Alloc32(size_t size) {
         if(1) {
             add:
             assert((1<<17)>=sizeof(CPoopSlab32));
+            #ifndef TARGET_WIN32
             slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+            #else
+            slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
+            #endif
             memset(slab,0,sizeof(CPoopSlab2));
             dummy.slab=slab;
             dummy.len=32;
@@ -232,7 +241,11 @@ static void *Alloc128(size_t size) {
         if(1) {
             add:
             assert((1<<17)>=sizeof(CPoopSlab128));
+            #ifndef TARGET_WIN32
             slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+            #else
+            slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
+            #endif
             memset(slab,0,sizeof(CPoopSlab2));
             dummy.slab=slab;
             dummy.len=128;
@@ -273,7 +286,11 @@ static void *Alloc512(size_t size) {
         if(1) {
             add:
             assert((1<<17)>=sizeof(CPoopSlab512));
+            #ifndef TARGET_WIN32
             slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+            #else
+            slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
+            #endif
             memset(slab,0,sizeof(CPoopSlab2));
             dummy.slab=slab;
             dummy.len=512;
@@ -313,7 +330,11 @@ static void *Alloc1024(size_t size) {
         if(1) {
             add:
             assert((1<<17)>=sizeof(CPoopSlab1024));
+            #ifndef TARGET_WIN32
             slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+            #else
+            slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
+            #endif
             memset(slab,0,sizeof(CPoopSlab2));
             dummy.slab=slab;
             dummy.len=1024;
@@ -389,10 +410,18 @@ void PoopFree(void *ptr) {
         if(HashTable[HASH_PTR(ptr)&HASH_MASK]==p->slab) {
             HashTable[HASH_PTR(ptr)&HASH_MASK]=next;
             if(next) next->prev=NULL;
+            #ifndef TARGET_WIN32
             munmap(p->slab,p->slab->filled);
+            #else
+            VirtualFree(p->slab,0,MEM_RELEASE);
+            #endif
             return;
         }
+        #ifndef TARGET_WIN32
         munmap(p->slab,p->slab->filled);
+        #else
+        VirtualFree(p->slab,0,MEM_RELEASE);
+        #endif
         if(prev) prev->next=next;
         if(next) next->prev=prev;
         return;
@@ -425,7 +454,11 @@ void PoopFree(void *ptr) {
           }
         }
         CPoopSlab2 *next=orig.slab->next,*prev=orig.slab->prev;
-        munmap(orig.slab,1l<<17l);
+        #ifndef TARGET_WIN32
+        munmap(orig.slab,1<<17);
+        #else
+        VirtualFree(orig.slab,0,MEM_RELEASE);
+        #endif
         if(prev) prev->next=next;
         if(next) next->prev=prev;
     }
@@ -464,7 +497,11 @@ void *PoopMAlloc(int64_t size) {
     PoopCollect();
   }
   int64_t size2;
+  #ifndef TARGET_WIN32
   CPoopSlab2 *big=mmap(NULL,size2=sizeof(CPoopSlab2)+sizeof(CPoopPtr)+((sizeof(CPoopPtr)+sizeof(CPoopSlab2))%16)+size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+  #else
+  CPoopSlab2 *big=VirtualAlloc(NULL,size2=sizeof(CPoopSlab2)+sizeof(CPoopPtr)+((sizeof(CPoopPtr)+sizeof(CPoopSlab2))%16)+size,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
+  #endif
   big->ident=SLAB_BIG;
   big->filled=size2;
   ret=memset((void*)big+size2-size,0,size);

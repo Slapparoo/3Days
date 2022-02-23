@@ -46,7 +46,9 @@ static inline void jit_flw_initialize(struct jit * jit)
 	}
 }
 static inline void add_ibset_to_set(struct jit *jit,jit_set *set,long *bits,long bytes) {
-    bytes/=8;
+		if(bytes%sizeof(long))
+			bytes+=sizeof(long)-bytes%sizeof(long);
+    bytes/=sizeof(long);
     if(bits[0]&(1<<R_FP_POS)) {
         jit_set_add(set,R_FP);
     } else if(bits[0]&(1<<R_OUT_POS)) {
@@ -69,7 +71,9 @@ static inline void add_ibset_to_set(struct jit *jit,jit_set *set,long *bits,long
     }
 }
 static inline void add_fbset_to_set(struct jit *jit,jit_set *set,long *bits,long bytes) {
-    bytes/=8;
+		if(bytes%sizeof(long))
+			bytes+=sizeof(long)-bytes%sizeof(long);
+		bytes/=sizeof(long);
     if(bits[0]&(1<<R_FIMM_POS)) {
         jit_set_add(set,FR_IMM);
     }

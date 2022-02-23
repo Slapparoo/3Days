@@ -1,3 +1,4 @@
+#if !IsWindows
 extern U0 Backtrace(I64,I64); //PARSER.HC
 U0 ArmSignals();
 U0 SignalHandler(I64 sig) {
@@ -39,3 +40,6 @@ U0 ArmSignals() {
     signal(SIGSTOP,&SignalHandler);
 }
 ArmSignals;
+#else
+U0 ArmSignals() {}
+#endif

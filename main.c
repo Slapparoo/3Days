@@ -63,6 +63,8 @@ BOOL WINAPI CtrlCHandlerRoutine(DWORD c) {
   printf("User Abort.\n");
   return FALSE;
 }
+#include <windows.h>
+#include <dbghelp.h>
 #endif
 #include <signal.h>
 void SignalHandler(int sig) {
@@ -97,6 +99,8 @@ int main(int argc,char **argv) {
         tagsArg=arg_file0("t", "tags", "<file>","Dump symbols to tags file(doesnt run code)."),
         noRuntime=arg_lit0(NULL,"noruntime","Don't include the runtime(useful for compiling the runtime and the compiler)."),
         includeArg=arg_filen(NULL, NULL, "<file>", 0, 1024, "Files to include after loading."),
+        binHeader=arg_file0(NULL,"binheader","<header>","Embed this file in your Compiled binary"),
+        compileTo=arg_file0("c","binfile","<binary>","The file to write the compiled binary to."),
         endArg=arg_end(1),
     };
     int errs=arg_parse(argc, argv, argtable);
@@ -131,12 +135,14 @@ int main(int argc,char **argv) {
           */
         }
     #else
+      assert(SymInitialize(GetCurrentProcess(),NULL,TRUE));
+      char buffer[1024];
       GetModuleFileNameA(NULL,buffer,sizeof(buffer));
       dirname(buffer);
       strcat(buffer,HCRT_INSTALLTED_DIR);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
         FILE *rt=fopen(buffer,"rb");
-        LoadAOTBin(rt,1,&header);
+        LoadAOTBin(rt,flags,&header);
         fclose(rt);
       }
     #endif
@@ -172,8 +178,16 @@ int main(int argc,char **argv) {
         vec_init(&includes);
         vec_pusharr(&includes,buffer2,strlen(buffer2)+1);
     }
-    RegisterRuntimeClasses(NULL,NULL,NULL,NULL);
-    RegisterMacrosAndREPL(prefixed.data,flags,includes.data);
+     RegisterRuntimeClasses(NULL,NULL,NULL,NULL);
+    if(compileTo->count) {
+        vec_pusharr(&prefixed,includes.data,includes.length);
+        vec_deinit(&includes);
+        char *embed=NULL;
+        if(binHeader->count)
+            embed=strdup(binHeader->filename[0]);
+        RegisterMacrosAndCompile(prefixed.data,compileTo->filename[0],embed);
+    } else
+        RegisterMacrosAndREPL(prefixed.data,flags,includes.data);
     return 0;
 }
 CLoader Loader;

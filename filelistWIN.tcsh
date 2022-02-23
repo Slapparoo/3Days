@@ -11,11 +11,10 @@ set CFiles= ( \
  "runtime.c" \
  "poopalloc.c" \
  "aot.c" \
- "ext/linenoise/linenoise.c" \
 )
 set AsmFiles = ( \
-  "exceptLin.yasm" \
-  "debuggerAsm.yasm" \
+  "exceptWin.yasm" \
+  "debuggerAsmWin.yasm" \
 )
 
 set HolyCFiles = ( \
@@ -51,7 +50,7 @@ set MyjitFiles = (\
 )
 
 set HeaderFiles = ( \
-  `find ext/ -name "*.h"` \
+  `find ext/ -name '*.h' ` \
   "3d.h" \
   "poopalloc.h" \
   # IMPORTANT,these files are used like headers so they are put in HeaderFiles \

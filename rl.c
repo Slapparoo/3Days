@@ -1,15 +1,14 @@
+#include "3d.h"
+#ifndef TARGET_WIN32
 #include <assert.h>
 #include "rl.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "alloc.h"
-#include "3d.h"
 #include "ext/linenoise/linenoise.h"
-#ifdef TARGET_WIN32
-#else
+
 #include <dirent.h>
-#endif
 CCompletion* (*rlACGen)(const char *buffer,long srcoff,const char* text,long *length);
 static int IsEscaped(const char *start,const char *at) {
   if(at-1>=start)
@@ -107,6 +106,7 @@ static void completion(const char *buf,linenoiseCompletions *lc) {
 }
 char* rl(char* prompt) {
   char *fn=linenoise(prompt);
+  if(!fn) fn=strdup("");
   linenoiseHistoryAdd(fn);
   char *r=strdup(fn);
   linenoiseFree(fn);
@@ -115,3 +115,16 @@ char* rl(char* prompt) {
 void InitRL() {
     linenoiseSetCompletionCallback(completion);
 }
+#else
+#include "ext/wineditline-2.206/include/editline/readline.h"
+void InitRL() {
+}
+char* rl(char* prompt) {
+  char *fn=readline(prompt);
+  if(!fn) fn=strdup("");
+  add_history(fn);
+  char *r=strdup(fn);
+  rl_free(fn);
+  return r;
+}
+#endif

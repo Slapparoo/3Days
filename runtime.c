@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <signal.h>
 extern int64_t HCSetJmp(void *ptr);
 extern void HCLongJmp(void *ptr);
 #ifndef MACOS
@@ -42,20 +43,10 @@ static void *jit_INIT() {
 }
 int jit_FunctionParents(void **pars,int max);
 int jit_ParentFramePtrs(void **fptrs,int max);
-static void *VirtAlloc(size_t size) {
-    #ifdef TARGET_WIN32
-    return VirtualAlloc(NULL,size,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
-    #else
-    return mmap(NULL,size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
-    #endif // TARGET_WIN32
-}
-static void VirtFree(void *ptr,size_t size) {
-#ifndef TARGET_WIN32
-	munmap(ptr,size);
-#else
-	VirtualFree(ptr,0,MEM_RELEASE);
+#ifdef TARGET_WIN32
+#include <winnt.h>
+#include <dbghelp.h>
 #endif
-}
 static void *jit_BREAKPOINT(void *jit,void *bp,void *routine,void *ctrl) {
   return jit_breakpoint(jit,bp,routine,ctrl);
 }
@@ -891,11 +882,16 @@ static void RegisterFunctionPtr(char *name,void *fptr) {
 static double Log2(double c) {
     return log(c)/log(2);
 }
+#ifndef TARGET_WIN32
 void UnblockSignals() {
     sigset_t set;
     sigfillset(&set);
     sigprocmask(SIG_UNBLOCK,&set,NULL);
 }
+#else
+void UnblockSignals() {
+}
+#endif
 char *GetBuiltinMacrosText();
 void RegisterFuncPtrs() {
     RegisterFunctionPtr("RegisterRuntimeClasses",RegisterRuntimeClasses);
@@ -909,11 +905,11 @@ void RegisterFuncPtrs() {
     RegisterFunctionPtr("jit_dump_ptr",jit_DUMP_PTR);
     RegisterFunctionPtr("jit_putargr",jit_PUTARGR);
     RegisterFunctionPtr("jit_get_breakpoint_by_ptr",jit_get_breakpoint_btr_ptr);
-    RegisterFunctionPtr("VirtFree",VirtFree);
-    RegisterFunctionPtr("VirtAlloc",VirtAlloc);
     RegisterFunctionPtr("jit_free",jit_free);
+    #ifndef TARGET_WIN32
     RegisterFunctionPtr("jit_FunctionParents",jit_FunctionParents);
     RegisterFunctionPtr("jit_ParentFramePtrs",jit_ParentFramePtrs);
+    #endif
     RegisterFunctionPtr("jit_BREAKPOINT",jit_BREAKPOINT);
     RegisterFunctionPtr("jit_debugger_get_reg_ptr",jit_debugger_get_reg_ptr);
     RegisterFunctionPtr("jit_debugger_get_vreg_ptr_from_parent",jit_debugger_get_vreg_ptr_from_parent);
@@ -1300,6 +1296,7 @@ vec_char_t CreateMacros() {
     CreateMacroInt(&macros,"JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS",JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS);
     CreateMacroInt(&macros,"JIT_OPT_OMIT_FRAME_PTR",JIT_OPT_OMIT_FRAME_PTR);
     //SIGNALS
+    #ifndef TARGET_WIN32
     CreateMacroInt(&macros,"SIGILL",SIGILL);
     CreateMacroInt(&macros,"SIGABRT",SIGABRT);
     CreateMacroInt(&macros,"SIGBUS",SIGBUS);
@@ -1308,6 +1305,7 @@ vec_char_t CreateMacros() {
     CreateMacroInt(&macros,"SIGSEGV",SIGSEGV);
     CreateMacroInt(&macros,"SIGTERM",SIGTERM);
     CreateMacroInt(&macros,"SIGSTOP",SIGSTOP);
+    #endif
     CreateMacroInt(&macros,"SDL_INIT_TIMER",SDL_INIT_TIMER);
     CreateMacroInt(&macros,"SDL_INIT_AUDIO",SDL_INIT_AUDIO);
     CreateMacroInt(&macros,"SDL_INIT_VIDEO",SDL_INIT_VIDEO);
@@ -1476,4 +1474,14 @@ void RegisterMacrosAndREPL(char *includes,int flags,char *body_code) {
             vec_deinit(&macros);
         macros.data=NULL;
     }
+}
+void RegisterMacrosAndCompile(char *includes,char *to_file,char *embed_header) {
+    vec_char_t macros=CreateMacros();
+    const char *rtc="#define RUNTIME_C\n";
+    vec_pusharr(&macros,rtc,strlen(rtc));
+    if(includes)
+      vec_pusharr(&macros,includes,strlen(includes));
+    vec_push(&macros,0);
+    CSymbol *comp=map_get(&Loader.symbols,"CompileBinModule");
+    ((void(*)(char*,char*,char *))comp->value_ptr)(macros.data,to_file,embed_header);
 }

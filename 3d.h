@@ -60,3 +60,4 @@ void InitRL();
 //Leave args NULL to use Loader's symbols
 void RegisterRuntimeClasses(void *gt,void *ctf,void *add_mem,void *c_arr_t);
 void RegisterMacrosAndREPL(char *includes,int flags,char *body_code) ;
+void RegisterMacrosAndCompile(char *includes,char *to_file,char *embed_header);

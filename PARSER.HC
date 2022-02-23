@@ -243,7 +243,14 @@ class CAsmPatcher:CFunction {
     I64 width,label_scope;
     Bool is_rel;
 };
+#if IsWindows
+U0 WindowsEnterFunc(U0 *func,U0 *frame);
+U0 WindowsLeaveFunc();
+I64 WindowsCallStackSize();
+I64 WindowsSetCallStackSize(I64 sz);
+#endif
 CCompilerState *NewCompilerState() {
+    JIT_OP *enter;
     CCompilerState *ret=MAlloc(sizeof(CCompilerState));
     *ret=Compiler;
     if(GlobalCompiler==&Compiler)
@@ -252,7 +259,7 @@ CCompilerState *NewCompilerState() {
     Compiler.locals=HashTableNew(0x100);
     Compiler.labels=HashTableNew(0x10);
     Compiler.asm_tainted_label_names=HashTableNew(0x10);
-        Compiler.imports=HashTableNew(0x10);
+    Compiler.imports=HashTableNew(0x10);
     Compiler.relocations=NULL;
     Compiler.cur_breaks=NULL;
     Compiler.relocations=NULL;
@@ -264,7 +271,20 @@ CCompilerState *NewCompilerState() {
     Compiler.unresolved_labels=HashTableNew(0x10);
     if(Compiler.aot_mode)
         Compiler.cur_strings=HashTableNew(0x10);
+    #if IsWindows
+    enter=jit_get_label(Compiler.jit);
     jit_prolog(Compiler.jit,&Compiler.func_ptr);
+    if(Compiler.debug_mode) {
+      jit_ref_code(Compiler.jit,jit_R(0),enter);
+      jit_movr(Compiler.jit,jit_R(1),R_FP);
+      jit_prepare(Compiler.jit);
+      jit_putargr(Compiler.jit,jit_R(0));
+      jit_putargr(Compiler.jit,jit_R(1));
+      jit_call(Compiler.jit,&WindowsEnterFunc);
+    }
+    #else
+    jit_prolog(Compiler.jit,&Compiler.func_ptr);
+    #endif
     Compiler.first_avail_freg=2,Compiler.first_avail_ireg=3;
     return ret;
 }
@@ -3625,7 +3645,6 @@ CIRValue *MovePtrToReg(CIRValue *var,I64 r=-1) {
     if(r==-1) r=GetFreeIReg;
     if(var->type!=IRV_INDIRX) {
         "VAIRALBLE INSNT INDIRECT\n";
-        Backtrace(0,0);
         throw('Compile');
     }
     if(!var->indirx.offset) {
@@ -6133,6 +6152,12 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     }
     if(IsInteger(Compiler.ret_type)) {
         if(!ast->unopArg) {
+            #if IsWindows
+            if(Compiler.debug_mode) {
+                jit_prepare(Compiler.jit);
+                jit_call(Compiler.jit,&WindowsLeaveFunc);
+            }
+            #endif
             jit_reti(Compiler.jit,0);
             PushIRInt(0);
             break;
@@ -6140,9 +6165,21 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
         CompileAST(ast->unopArg);
         PopIRValue(&value_a);
         value_a=MoveToReg(value_a,0);
+        #if IsWindows
+        if(Compiler.debug_mode) {
+            jit_prepare(Compiler.jit);
+            jit_call(Compiler.jit,&WindowsLeaveFunc);
+        }
+        #endif
         jit_retr(Compiler.jit,jit_R(value_a->reg));
     } else if(IsF64(Compiler.ret_type)) {
         if(!ast->unopArg) {
+            #if IsWindows
+            if(Compiler.debug_mode) {
+                jit_prepare(Compiler.jit);
+                jit_call(Compiler.jit,&WindowsLeaveFunc);
+            }
+            #endif
             jit_freti(Compiler.jit,0.0,8);
             PushIRInt(0);
             break;
@@ -6150,6 +6187,12 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
         CompileAstWithBreakpoint(ast->unopArg);
         PopIRValue(&value_a);
         value_a=MoveToFReg(value_a,0);
+        #if IsWindows
+        if(Compiler.debug_mode) {
+            jit_prepare(Compiler.jit);
+            jit_call(Compiler.jit,&WindowsLeaveFunc);
+        }
+        #endif
         jit_fretr(Compiler.jit,jit_FR(value_a->reg),8);
     }
     PushIRInt(0);
@@ -6194,6 +6237,16 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     PushIRInt(0);
     break;
     case AST_TRY:
+    //If we are debugging on windows,make a spot to store our call_stack depth,because I am sick of trying to make a SEH compliant thing
+    #if IsWindows
+    if(Compiler.debug_mode) {
+        lo=jit_allocai(Compiler.jit,8);
+        jit_prepare(Compiler.jit);
+        jit_call(Compiler.jit,&WindowsCallStackSize);
+        jit_retval(Compiler.jit,jit_R(0));
+        jit_stxi(Compiler.jit,lo,R_FP,jit_R(0),8);
+    }
+    #endif
     LoadSymPtrIntoReg("EnterTry",0);
     jit_prepare(Compiler.jit);
     jit_callr(Compiler.jit,jit_R(0));
@@ -6212,6 +6265,15 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     jit_callr(Compiler.jit,jit_R(0));
     op2=jit_jmpi(Compiler.jit,NULL);
     jit_patch(Compiler.jit,op1);
+    //If debugging on windows,restore call stack size
+    #if IsWindows
+    if(Compiler.debug_mode) {
+        jit_ldxi(Compiler.jit,jit_R(0),R_FP,lo,8);
+        jit_prepare(Compiler.jit);
+        jit_putargr(Compiler.jit,jit_R(0));
+        jit_call(Compiler.jit,&WindowsSetCallStackSize);
+    }
+    #endif
     CompileAstWithBreakpoint(ast->try_block.cat);
     PopIRValue;
     LoadSymPtrIntoReg("ExitCatch",0);
@@ -6606,7 +6668,13 @@ class jit_debugger_ctrl {
 class CDebugger {
     jit_debugger_ctrl ctrl;
     _CBreakpoint *cur_bp;
+    #if IsWindows
+    //Im am sorry,I actually tried to get SEH working on windows but im flabergasted
+    //So we will stick to a explicit call stack,it goes like this [func1,frame1,func2,func2,...]
+    CVector *call_stack;
+    #endif
 } _Debugger;
+_Debugger.call_stack=VectorNew;
 CFunction *GetFunctionByPtr(U0 *ptr) {
     I64 idx=Compiler.globals->mask+1;
     U8 *bptr;
@@ -6682,17 +6750,20 @@ U0 Backtrace(I64 hl_at,I64 trim=0) {
     CFunction *func;
     _CBreakpoint *bp;
     U8 chr;
-    for(idx=1+trim;idx!=stk_sz;idx++) {
-        if(hl_at==idx-1-trim) chr='*';
+    #if !IsWindows
+    trim++;
+    #endif
+    for(idx=trim;idx<stk_sz;idx++) {
+        if(hl_at==idx-trim) chr='*';
         else chr=' ';
         func=GetFunctionByPtr(backtrace[idx]);
         if(func) {
             if(bp=GetBreakpointByPtr(backtrace[idx]))
-                "[%d] %c %s %s\n",idx-1-trim,chr,func->str,bp->path;
+                "[%d] %c %s %s\n",idx-trim,chr,func->str,bp->path;
             else
-                "[%d] %c %s ???\n",idx-1-trim,chr,func->str;
+                "[%d] %c %s ???\n",idx-trim,chr,func->str;
         } else
-            "[%d] %c ???\n",idx-1-trim,chr;
+            "[%d] %c ???\n",idx-trim,chr;
         next:
     }
 }
@@ -6774,13 +6845,17 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
     U0 (*fptr)();
     stk_sz=jit_FunctionParents(backtrace,0x100);
     jit_ParentFramePtrs(base_ptrs,0x100);
-    if(caller_ptr) {
+    if(caller_ptr&&!IsWindows) {
         for(cidx=0;backtrace[cidx];cidx++)
             if(backtrace[cidx]==caller_ptr)
                 break;
     } else
+#if IsWindows
+        cidx=0;
+#else
         cidx=2;
-    for(idx=cidx;idx!=stk_sz;idx++) {
+#endif
+    for(idx=cidx;idx<stk_sz;idx++) {
         backtrace[idx-cidx]=backtrace[idx];
         base_ptrs[idx-cidx]=base_ptrs[idx];
     }
@@ -6919,7 +6994,11 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
         _Debugger.ctrl->prev_stack_ptr=base_ptrs[0];
         leave=TRUE;
     } else if(!StrNCmp(command,"bt",com_len)&&com_len==2) {
+        #if !IsWindows
         Backtrace(stk_pos,1+1);
+        #else
+        Backtrace(stk_pos,0);
+        #endif
     } else if(!StrNCmp(command,"p",com_len)&&com_len==1) {
         //TODO ensure doesnt reference optimized out values that arent avialable
         command+=com_len;
@@ -6996,6 +7075,12 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
                 jit_call(Compiler.jit,&DebugPrint);
             }
             Free(debug_value);
+            #if IsWindows
+            if(Compiler.debug_mode) {
+                jit_prepare(Compiler.jit);
+                jit_call(Compiler.jit,&WindowsLeaveFunc);
+            }
+            #endif
             jit_reti(Compiler.jit,1);
             cur_func=CompilerEmitCode;
             if(cur_func) {
@@ -7577,6 +7662,12 @@ CFunction *CompileFunction(AST *at,CCmpCtrl *cc,CType *type,U8 *name,Bool inst_e
 
     CompileAstWithBreakpoint(body);
     PopIRValue;
+    #if IsWindows
+    if(Compiler.debug_mode) {
+        jit_prepare(Compiler.jit);
+        jit_call(Compiler.jit,&WindowsLeaveFunc);
+    }
+    #endif
     jit_reti(Compiler.jit,0);
     idx=Compiler.asm_tainted_label_names.mask+1;
     while(--idx>=0) {
@@ -7630,6 +7721,33 @@ CFunction *CompileFunction(AST *at,CCmpCtrl *cc,CType *type,U8 *name,Bool inst_e
     RestoreCompilerState(state);
     return ret;
 }
+#if IsWindows
+I64 WindowsSetCallStackSize(I64 sz) {
+    return _Debugger.call_stack->size=2*sz;
+}
+I64 WindowsCallStackSize() {
+    return _Debugger.call_stack->size/2;
+}
+I64 jit_FunctionParents(U0 **ptrs,I64 max) {
+    I64 top=_Debugger.call_stack->size-2,cnt=0;
+    for(;top>=0<max;top-=2)
+        ptrs[--max,cnt++]=_Debugger.call_stack->data[top];
+    return cnt;
+}
+I64 jit_ParentFramePtrs(U0 **ptrs,I64 max) {
+    I64 top=_Debugger.call_stack->size-2,cnt=0;
+    for(;top>=0<max;top-=2)
+        ptrs[--max,cnt++]=_Debugger.call_stack->data[top+1];
+    return cnt;
+}
+U0 WindowsEnterFunc(U0 *func,U0 *frame) {
+    VectorPush(_Debugger.call_stack,func);
+    VectorPush(_Debugger.call_stack,frame);
+}
+U0 WindowsLeaveFunc() {
+    VectorPop(_Debugger.call_stack),VectorPop(_Debugger.call_stack);
+}
+#endif
 AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,Bool reg_only=FALSE) {
     AST *ret=NULL;
     AST *binop_a,*binop_b;
@@ -7926,6 +8044,12 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
         }
         Compiler.asm_mode=old_asm_mode;
         Assign(Compiler.stack->last,Compiler.stack);
+        #if IsWindows
+        if(Compiler.debug_mode) {
+            jit_prepare(Compiler.jit);
+            jit_call(Compiler.jit,&WindowsLeaveFunc);
+        }
+        #endif
         jit_retr(Compiler.jit,jit_R(r));
         PopIRValue,PopIRValue;
         *patcher=*(func=CompilerEmitCode);
@@ -8154,10 +8278,8 @@ U0 __LoadBuiltin(U8 *name,U0 *fptr,I64 cnt) {
         Free(func);
         return;
       }
-    } else {
-      Free(func);
-      return;
-    }
+    } else
+        func->hc_type=GetType("U0");
     func->func_ptr=fptr;
     func->is_aot=TRUE;
     func->aot_bin_size=cnt;
@@ -8383,7 +8505,7 @@ U8 *LoadFunction(U8 *from,Bool verbose=FALSE,CFunction **dump_to=NULL) {
     func->str=StrNew(name);
     func->is_aot=TRUE;
     func->aot_bin_size=cnt;
-    func->func_ptr=VirtAlloc(cnt);
+    func->func_ptr=MAlloc(cnt);
     MemCpy(func->func_ptr,from,cnt);
     from+=cnt;
     while(--pcnt>=0) {
@@ -8662,6 +8784,9 @@ U0 LoadBinModule(U8 *fn,Bool verbose=FALSE) {
 }
 U8 *__GetBuiltinMacrosText();
 U0 CompileBinModule(U8 *source,U8 *fn="A.BIN",U8 *header=NULL) {
+    Bool old_aot=Compiler.aot_mode;
+    Compiler.aot_mode=TRUE;
+    LoadBuiltins;
     CCompiler *old_glob=GlobalCompiler;
     CCompilerState *cstate=NewCompilerState;
     GlobalCompiler=&Compiler;;
@@ -8670,8 +8795,6 @@ U0 CompileBinModule(U8 *source,U8 *fn="A.BIN",U8 *header=NULL) {
     U8 *header_text=NULL,*bin;
     if(header)
         header_text=FileRead(header,NULL);
-    Compiler.aot_mode=TRUE;
-    LoadBuiltins;
     CCmpCtrl *cc=CmpCtrlNew(NULL);
     LexIncludeStr(cc,NULL,StrNew(source),FALSE);
     Lex(cc);
@@ -8694,6 +8817,7 @@ U0 CompileBinModule(U8 *source,U8 *fn="A.BIN",U8 *header=NULL) {
     Free(bin);
     RestoreCompilerState(cstate);
     GlobalCompiler=old_glob;
+    Compiler.aot_mode=old_aot;
 }
 
 //
@@ -8962,3 +9086,5 @@ Bool ParseAndRun(CCmpCtrl *cc) {
     }
     return FALSE;
 }
+
+
