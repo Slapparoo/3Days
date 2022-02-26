@@ -2,9 +2,13 @@
 source filelist.tcsh
 set CFlags = "-Os -g3 `sdl2-config --cflags --libs` -lm -fno-omit-frame-pointer"
 
+if ! -e HCRT/HCRT.BIN then
+	cp REPL.VBIN HCRT/HCRT.BIN
+endif
+
 if ! -e 3d_loader then
   foreach f ( $CFiles )
-    gcc $CFlags -c $f -o $f.o
+    gcc $CFlags -c $f -o $f.o  || rm $f.o
   end
 else
   foreach f ( $CFiles )
@@ -18,18 +22,18 @@ else
     endif
     set find = `find -wholename $f -newer 3d_loader `
     compile:
-    if($#find) gcc $CFlags -c $f -o $f.o
+    if($#find) gcc $CFlags -c $f -o $f.o || rm $f.o
   end
 endif
 
 if ! -e 3d_loader then
   foreach f ( $AsmFiles )
-    yasm -f elf64 $f -o $f.o
+    yasm -f elf64 $f -o $f.o  || rm $f.o
   end
 else
   foreach f ( $AsmFiles )
-    set find = `find -wholename $f -newer 3d_loader `
-    if($#find) yasm -f elf64 $f -o $f.o
+    set find = `find . -wholename "./$f" -newer 3d_loader `
+    if($#find) yasm -f elf64 $f -o $f.o || rm $f.o
   end
 endif
 

@@ -9,7 +9,7 @@ U0 CatchIf(...) {
     while(--argc>=0)
         if(argv[argc]==Fs->except_ch) {
             return Fs->catch_except=TRUE;
-        }
+    }
 }
 #define HTT_VAR 1
 #define HTT_TYPE 2
@@ -134,8 +134,7 @@ class CCompiler {
     allow_breaks,allow_subswit;
     CBreakLst *cur_breaks;
     CSwitchTable *swit_table;
-    CType
-     *ret_type;
+    CType *ret_type;
     CRelocation *relocations;
     I64 first_avail_ireg;
     I64 first_avail_freg,
@@ -180,6 +179,7 @@ Compiler.locals=HashTableNew(0x100);
 Compiler.asm_tainted_label_names=HashTableNew(0x10);
 Compiler.cur_strings=HashTableNew(0x100);
 Compiler.breakpoints=HashTableNew(0x1000);
+Compiler.labels=HashTableNew(0x10);
 class CCompilerState:CCompiler {};
 class CMemberMetaData {
     CMemberMetaData *last,*next;
@@ -233,8 +233,9 @@ class CFunction:CHashSrcSym {
     CRelocation *relocs;
     CHashTable *statics,*locals,*labels,*aot_strings;
     I64 frame_offset,aot_bin_size;
-    //Use VirtFree(funcptr,aot_bin_size);
-    Bool is_aot;
+    Bool is_aot,
+    //has_exports tells us to not free the function as we have asm exported labels
+    has_exports;
     CAsmPatcher *asm_patches;
 };
 class CAsmPatcher:CFunction {
@@ -243,14 +244,11 @@ class CAsmPatcher:CFunction {
     I64 width,label_scope;
     Bool is_rel;
 };
-#if IsWindows
-U0 WindowsEnterFunc(U0 *func,U0 *frame);
-U0 WindowsLeaveFunc();
-I64 WindowsCallStackSize();
-I64 WindowsSetCallStackSize(I64 sz);
-#endif
+U0 EnterFunc(U0 *func,U0 *frame);
+U0 LeaveFunc();
+I64 CallStackSize();
+I64 CallStackSize(I64 sz);
 CCompilerState *NewCompilerState() {
-    JIT_OP *enter;
     CCompilerState *ret=MAlloc(sizeof(CCompilerState));
     *ret=Compiler;
     if(GlobalCompiler==&Compiler)
@@ -259,7 +257,6 @@ CCompilerState *NewCompilerState() {
     Compiler.locals=HashTableNew(0x100);
     Compiler.labels=HashTableNew(0x10);
     Compiler.asm_tainted_label_names=HashTableNew(0x10);
-    Compiler.imports=HashTableNew(0x10);
     Compiler.relocations=NULL;
     Compiler.cur_breaks=NULL;
     Compiler.relocations=NULL;
@@ -271,20 +268,13 @@ CCompilerState *NewCompilerState() {
     Compiler.unresolved_labels=HashTableNew(0x10);
     if(Compiler.aot_mode)
         Compiler.cur_strings=HashTableNew(0x10);
-    #if IsWindows
-    enter=jit_get_label(Compiler.jit);
     jit_prolog(Compiler.jit,&Compiler.func_ptr);
     if(Compiler.debug_mode) {
-      jit_ref_code(Compiler.jit,jit_R(0),enter);
       jit_movr(Compiler.jit,jit_R(1),R_FP);
       jit_prepare(Compiler.jit);
-      jit_putargr(Compiler.jit,jit_R(0));
       jit_putargr(Compiler.jit,jit_R(1));
-      jit_call(Compiler.jit,&WindowsEnterFunc);
+      jit_call(Compiler.jit,&EnterFunc);
     }
-    #else
-    jit_prolog(Compiler.jit,&Compiler.func_ptr);
-    #endif
     Compiler.first_avail_freg=2,Compiler.first_avail_ireg=3;
     return ret;
 }
@@ -292,10 +282,12 @@ U0 CCompStringDestroy(CCompString *str) {
     Free(str->data);
     //TODO free refs
 }
+U0 HTT_LocalDestroy(CHash *);
 U0 RestoreCompilerState(CCompilerState *state) {
     if(state!=GlobalCompiler)
     HashTableDel(Compiler.asm_tainted_label_names);
     HashTableDel(Compiler.unresolved_labels);
+    
     Compiler=*state;
     if(GlobalCompiler==state)
         GlobalCompiler=&Compiler;
@@ -546,8 +538,10 @@ class AST {
 #define AST_IMPORT 87
 #define AST_ALIGN 88
 #define AST_BINFILE 89
+#define AST_ASM_BLK 90
     I64 type;
     union {
+        AST *asm_blk_body;
         class {
             I64 to,fill;
         } align;
@@ -1330,7 +1324,15 @@ CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
     //Dont assign I64i to the ast's type2(which is used for the sizeof type here).
     return HashFind("I64i",Compiler.globals);
     case AST_NAME:
-    if(Compiler.in_func) {
+    if(Compiler.asm_mode&&HashFind(a->name,Compiler.imports)) {
+        if(var=HashFind(a->name,Compiler.locals)) {
+            ret=GetType("U8i")+1;
+            var->isReg=FALSE;
+        } else if(var=HashFind(a->name,Compiler.globals)) {
+            ret=GetType("U8i")+1;
+        } else
+            ParserFail2(a,"Unknown symbol for import '%s'.",a->name);
+    } else if(Compiler.in_func) {
         if(var=HashFind(a->name,Compiler.locals)) {
             if(var->type==HTT_VAR) {
                 if(var->is_opted_out)
@@ -1363,9 +1365,8 @@ CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
         //May be a label
         ret=GetType("U8i")+1;
         break;
-    } else {
+    } else
         ParserFail2(a,"Unknown symbol '%s'.",a->name);
-    }
     break;
     case AST_IMPLICIT_TC:
     //TODO
@@ -1527,7 +1528,6 @@ CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
 }
 _extern Prec14 AST * ParseExprNoComma(CCmpCtrl *cc);
 _extern Prec15 AST * ParseExpr(CCmpCtrl *cc);
-
 AST *Prec0(CCmpCtrl *cc) {
     AST *ret;
     U8 *tmp_s;
@@ -3222,32 +3222,40 @@ CLinkage *ParseLinkage(CCmpCtrl *cc) {
 U0 *ResolveLinkage(AST *at,CLinkage *link,U8 *name=NULL) {
     CVariable *var=NULL;
     CFunction *func=NULL;
+    CLabel *lab;
     I64 t;
     try {
         loop:
         switch(link->type&~LINK_PUBLIC) {
             case LINK_EXTERN:
-            if(func=var=HashFind(name,Compiler.globals)) {
+            if(lab=func=var=HashFind(name,Compiler.globals)) {
                 goto resolve;
             }
             return NULL;
             case LINK_IMPORT:
-            if(func=var=HashFind(name,Compiler.globals)) {
+            if(lab=func=var=HashFind(name,Compiler.globals)) {
                 goto resolve;
             }
-            ParserFail2(at,"Unable to resolve symbol \"%s\".",name);
+            if(at)
+                ParserFail2(at,"Unable to resolve symbol \"%s\".",name);
             case LINK__IMPORT:
-            if(func=var=HashFind(link->_link,Compiler.globals)) {
+            "%s\n",link->_link;
+	    if(lab=func=var=HashFind(link->_link,Compiler.globals)) {
                 goto resolve;
             }
-            ParserFail2(at,"Unable to resolve symbol \"%s\".",link->_link);
+            if(at)
+                ParserFail2(at,"Unable to resolve symbol \"%s\".",link->_link);
             case LINK__EXTERN:
-            if(func=var=HashFind(link->_link,Compiler.globals)) {
+            "%s\n",link->_link;
+            if(lab=func=var=HashFind(link->_link,Compiler.globals)) {
                 goto resolve;
             }
             return NULL;
             default:
-            return NULL;
+            lab=func=var=HashFind(name,Compiler.globals);
+	    if(var)
+	   	 goto resolve;
+	    return NULL;
         }
         resolve:
         if(var->type==HTT_VAR) {
@@ -3260,6 +3268,8 @@ U0 *ResolveLinkage(AST *at,CLinkage *link,U8 *name=NULL) {
             if(t==LINK__EXTERN||t==LINK__IMPORT)
                 goto resolve;
             return func->func_ptr;
+        } else if(var->type==HTT_LABEL) {
+            return lab->ptr;
         }
     goto loop;
     } catch {
@@ -4032,9 +4042,10 @@ U0 CompileOpcode(AST *oc) {
         jit_data_bytes(Compiler.jit,end_ptr-buffer,buffer);
     }
 }
+U0 SetCallStackSize(I64);
 U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) {
     CIRValue *fargs[0xff];
-    CHashTable *tar_tab;
+    CHashTable *tar_tab,*old_asm_imports;
     CVariable *var;
     CIRValue *value_a,*value_b,*value_c;
     I64 idx,cnt,reg_a,reg_b,offset,mult,hi,lo,idx2;
@@ -4053,6 +4064,23 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     CCompString *comp_str;
     Bool has_dft;
     switch(ast->type) {
+        case AST_ASM_BLK:
+        Compiler.asm_mode=TRUE;
+        old_asm_imports=Compiler.imports;
+        Compiler.imports=HashTableNew(0x10);
+        if(Compiler.in_func) {
+            CompileAST(ast->asm_blk_body);
+        } else {
+            op1=jit_jmpi(Compiler.jit,NULL);
+            CompileAST(ast->asm_blk_body);
+            jit_patch(Compiler.jit,op1);
+        }
+        HashTableDel(Compiler.imports);
+        Compiler.imports=old_asm_imports;
+        Compiler.asm_mode=FALSE;
+        PopIRValue;
+        PushIRInt(0);
+        break;
         case AST_OPCODE:
         CompileOpcode(ast);
         PushIRInt(0);
@@ -6152,12 +6180,10 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     }
     if(IsInteger(Compiler.ret_type)) {
         if(!ast->unopArg) {
-            #if IsWindows
             if(Compiler.debug_mode) {
                 jit_prepare(Compiler.jit);
-                jit_call(Compiler.jit,&WindowsLeaveFunc);
+                jit_call(Compiler.jit,&LeaveFunc);
             }
-            #endif
             jit_reti(Compiler.jit,0);
             PushIRInt(0);
             break;
@@ -6165,21 +6191,17 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
         CompileAST(ast->unopArg);
         PopIRValue(&value_a);
         value_a=MoveToReg(value_a,0);
-        #if IsWindows
         if(Compiler.debug_mode) {
             jit_prepare(Compiler.jit);
-            jit_call(Compiler.jit,&WindowsLeaveFunc);
+            jit_call(Compiler.jit,&LeaveFunc);
         }
-        #endif
         jit_retr(Compiler.jit,jit_R(value_a->reg));
     } else if(IsF64(Compiler.ret_type)) {
         if(!ast->unopArg) {
-            #if IsWindows
             if(Compiler.debug_mode) {
                 jit_prepare(Compiler.jit);
-                jit_call(Compiler.jit,&WindowsLeaveFunc);
+                jit_call(Compiler.jit,&LeaveFunc);
             }
-            #endif
             jit_freti(Compiler.jit,0.0,8);
             PushIRInt(0);
             break;
@@ -6187,12 +6209,10 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
         CompileAstWithBreakpoint(ast->unopArg);
         PopIRValue(&value_a);
         value_a=MoveToFReg(value_a,0);
-        #if IsWindows
         if(Compiler.debug_mode) {
             jit_prepare(Compiler.jit);
-            jit_call(Compiler.jit,&WindowsLeaveFunc);
+            jit_call(Compiler.jit,&LeaveFunc);
         }
-        #endif
         jit_fretr(Compiler.jit,jit_FR(value_a->reg),8);
     }
     PushIRInt(0);
@@ -6237,16 +6257,14 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     PushIRInt(0);
     break;
     case AST_TRY:
-    //If we are debugging on windows,make a spot to store our call_stack depth,because I am sick of trying to make a SEH compliant thing
-    #if IsWindows
+    //If we are debugging,make a spot to store our call_stack depth,because I am sick of trying to make a SEH compliant things
     if(Compiler.debug_mode) {
         lo=jit_allocai(Compiler.jit,8);
         jit_prepare(Compiler.jit);
-        jit_call(Compiler.jit,&WindowsCallStackSize);
+        jit_call(Compiler.jit,&CallStackSize);
         jit_retval(Compiler.jit,jit_R(0));
         jit_stxi(Compiler.jit,lo,R_FP,jit_R(0),8);
     }
-    #endif
     LoadSymPtrIntoReg("EnterTry",0);
     jit_prepare(Compiler.jit);
     jit_callr(Compiler.jit,jit_R(0));
@@ -6265,15 +6283,12 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     jit_callr(Compiler.jit,jit_R(0));
     op2=jit_jmpi(Compiler.jit,NULL);
     jit_patch(Compiler.jit,op1);
-    //If debugging on windows,restore call stack size
-    #if IsWindows
     if(Compiler.debug_mode) {
         jit_ldxi(Compiler.jit,jit_R(0),R_FP,lo,8);
         jit_prepare(Compiler.jit);
         jit_putargr(Compiler.jit,jit_R(0));
-        jit_call(Compiler.jit,&WindowsSetCallStackSize);
+        jit_call(Compiler.jit,&SetCallStackSize);
     }
-    #endif
     CompileAstWithBreakpoint(ast->try_block.cat);
     PopIRValue;
     LoadSymPtrIntoReg("ExitCatch",0);
@@ -6413,6 +6428,22 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     Compiler.stack=value_a;
     goto asn_end;
     case AST_NAME:
+    if(Compiler.asm_mode&&HashFind(ast->name,Compiler.imports)) {
+        if(var=HashFind(ast->name,Compiler.locals)) {
+            if(var->isReg) throw('Compile');
+            PushIRInt(var->frame_off);
+            break;
+        } else if(func=var=HashFind(ast->name,Compiler.globals)) {
+            if(var->type==HTT_VAR) {
+                PushIRInt(var->global_ptr);
+                break;
+            } else if(var->type==HTT_FUNC) {
+                PushIRInt(func->func_ptr);
+                break;
+            } else 
+                throw('Compiler');
+        }
+    }
     if(Compiler.in_func) {
         var=HashFind(ast->name,Compiler.locals);
         if(!var) goto glob_var;
@@ -6658,21 +6689,22 @@ class jit_debugger_regs {
     F64 _XMM7;
     I64 _R14;
 };
+//See ext/myjit/myjit/jitlib.h for the C definition which is only put there for show.
 class jit_debugger_ctrl {
     #define JIT_DBG_STEP 1
     #define JIT_DBG_NEXT 2
     #define JIT_DBG_FIN 3
     I64 code;
     U0 *prev_stack_ptr;
+    //Our silly debugger "enters" into functions,but we will need the last known RIP to compute which breakpoint we were at before entering a breakpoint.
+    U0 *last_rip;
 };
 class CDebugger {
     jit_debugger_ctrl ctrl;
     _CBreakpoint *cur_bp;
-    #if IsWindows
     //Im am sorry,I actually tried to get SEH working on windows but im flabergasted
     //So we will stick to a explicit call stack,it goes like this [func1,frame1,func2,func2,...]
     CVector *call_stack;
-    #endif
 } _Debugger;
 _Debugger.call_stack=VectorNew;
 CFunction *GetFunctionByPtr(U0 *ptr) {
@@ -6738,10 +6770,12 @@ U0 ListLines(U8 *fn,I64 s,I64 e) {
     en:
     Free(ftext);
 }
+I64 ParentFramePtrs(U0 **ptrs,I64 max,jit_debugger_regs *regs);
+I64 FunctionParents(U0 **ptrs,I64 max);
 U0 Backtrace(I64 hl_at,I64 trim=0) {
     U0 *backtrace[0x100];
     try {
-        I64 idx,stk_sz=jit_FunctionParents(backtrace,0x100);
+        I64 idx,stk_sz=FunctionParents(backtrace,0x100);
     } catch {
         Fs->catch_except=TRUE;
         "CORRUPT STACK\n";
@@ -6750,9 +6784,6 @@ U0 Backtrace(I64 hl_at,I64 trim=0) {
     CFunction *func;
     _CBreakpoint *bp;
     U8 chr;
-    #if !IsWindows
-    trim++;
-    #endif
     for(idx=trim;idx<stk_sz;idx++) {
         if(hl_at==idx-trim) chr='*';
         else chr=' ';
@@ -6843,18 +6874,9 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
     _CBreakpoint *_bp;
     CBreakpoints *bps;
     U0 (*fptr)();
-    stk_sz=jit_FunctionParents(backtrace,0x100);
-    jit_ParentFramePtrs(base_ptrs,0x100);
-    if(caller_ptr&&!IsWindows) {
-        for(cidx=0;backtrace[cidx];cidx++)
-            if(backtrace[cidx]==caller_ptr)
-                break;
-    } else
-#if IsWindows
-        cidx=0;
-#else
-        cidx=2;
-#endif
+    stk_sz=FunctionParents(backtrace,0x100);
+    ParentFramePtrs(base_ptrs,0x100,regs);
+    cidx=0;
     for(idx=cidx;idx<stk_sz;idx++) {
         backtrace[idx-cidx]=backtrace[idx];
         base_ptrs[idx-cidx]=base_ptrs[idx];
@@ -6994,11 +7016,7 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
         _Debugger.ctrl->prev_stack_ptr=base_ptrs[0];
         leave=TRUE;
     } else if(!StrNCmp(command,"bt",com_len)&&com_len==2) {
-        #if !IsWindows
-        Backtrace(stk_pos,1+1);
-        #else
         Backtrace(stk_pos,0);
-        #endif
     } else if(!StrNCmp(command,"p",com_len)&&com_len==1) {
         //TODO ensure doesnt reference optimized out values that arent avialable
         command+=com_len;
@@ -7075,12 +7093,10 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
                 jit_call(Compiler.jit,&DebugPrint);
             }
             Free(debug_value);
-            #if IsWindows
             if(Compiler.debug_mode) {
                 jit_prepare(Compiler.jit);
-                jit_call(Compiler.jit,&WindowsLeaveFunc);
+                jit_call(Compiler.jit,&LeaveFunc);
             }
-            #endif
             jit_reti(Compiler.jit,1);
             cur_func=CompilerEmitCode;
             if(cur_func) {
@@ -7114,10 +7130,15 @@ U0 CompileAstWithBreakpoint(AST *a) {
         PushIRInt(0);
         return;
     }
-    if(a->type!=AST_OPCODE&&!Compiler.debug_mode) {
+    if(!Compiler.debug_mode) {
+        naked:
         CompileAST(a);
         return;
     }
+    if(a->type==AST_OPCODE)
+        goto naked;
+    if(a->next&&a->next->type==AST_OPCODE)
+        goto naked;
     re:
     U8 *path_str=MStrPrint("%s,%d",a->fn,a->ln);
     _CBreakpoint *bp=MAlloc(sizeof(_CBreakpoint));
@@ -7354,54 +7375,32 @@ U0 FreeAST(AST *d) {
 U0 FillInRelocations(CFunction *f) {
     CVariable *var;
     CFunction *func;
+    CLabel *lab;
     CRelocation *relocs=f->relocs,*last=NULL,*first=NULL,*tmp;
-    //"ENTER:\n";
     if(Compiler.aot_mode) first=f->relocs;
     next2:
     for(;relocs;) {
         loop:
-        var=func=HashFind(relocs->name,Compiler.globals);
-        if(!var) goto next;
-        if(func->type==HTT_FUNC) {
-            switch(func->link.type&~LINK_PUBLIC) {
-                case 0:
-                case LINK_IMPORT:
-                case LINK_EXTERN:
-                if(func->func_ptr) {
-                    *relocs->ptr=func->func_ptr;
-                    pass:
-                    if(!Compiler.aot_mode) {
-                        if(last) last->next=relocs->next;
-                        tmp=relocs->next;
-                        Free(relocs);
-                        relocs=tmp;
-                    } else
-                        relocs=relocs->next;
-                    goto next2;
-                }
-                break;
-                case LINK__IMPORT:
-                case LINK__EXTERN:
-                var=func=HashFind(func->link._link,Compiler.globals);
-                goto loop;
-            }
-        } else if(var->type==HTT_VAR) {
-            switch(var->link.type&~LINK_PUBLIC) {
-                case 0:
-                case LINK_IMPORT:
-                case LINK_EXTERN:
-                if(var->global_ptr) {
-                    *relocs->ptr=var->global_ptr;
-                    goto pass;
-                }
-                break;
-                case LINK__IMPORT:
-                case LINK__EXTERN:
-                var=func=HashFind(var->link._link,Compiler.globals);
-                goto loop;
+        *relocs->ptr=NULL;
+        lab=func=var=HashFind(relocs->name,Compiler.globals);
+	if(!var) goto skip;
+        if(var->type==HTT_VAR)
+            *relocs->ptr=ResolveLinkage(NULL,&var->link,var->str);
+        else if(func->type==HTT_FUNC)
+            *relocs->ptr=ResolveLinkage(NULL,&func->link,var->str);
+        else if(lab->type==HTT_LABEL)
+            *relocs->ptr=lab->ptr;
+        if(*relocs->ptr) {
+            pass:
+            if(!Compiler.aot_mode) {
+                if(last) last->next=relocs->next;
+                tmp=relocs->next;
+                Free(relocs);
+                relocs=tmp;
+                goto next2;
             }
         }
-        next:
+	skip:
         if(!first) first=relocs;
         last=relocs;
         relocs=relocs->next;
@@ -7411,6 +7410,7 @@ U0 FillInRelocations(CFunction *f) {
 U0 ApplyAsmPatches(CFunction *f);
 CFunction *CompilerEmitCode() {
     if(Compiler. error_count) return NULL;
+    Bool has_exports=FALSE;
     CFunction *ret;
     CCompString *str;
     CCompStringRef *str_ref;
@@ -7434,6 +7434,10 @@ CFunction *CompilerEmitCode() {
             }
         }
     }
+    ret=MAlloc(sizeof(CFunction));
+    jit_disable_optimization(Compiler.jit,0xff);
+    jit_generate_code(Compiler.jit);
+    //Run this after the label pointers are computed
     idx=Compiler.labels->mask+1;
     while(--idx>=0) {
         for(label=Compiler.labels->body[idx];label;label=label->next) {
@@ -7442,13 +7446,12 @@ CFunction *CompilerEmitCode() {
                 *new_label=*label;
                 new_label->str=StrNew(label->str);
                 HashAdd(new_label,Compiler.globals);
+                has_exports=TRUE;
             }
         }
-    }
-    ret=MAlloc(sizeof(CFunction));
-    jit_disable_optimization(Compiler.jit,0xff);
-    jit_generate_code(Compiler.jit);
+    } 
     ret->type=HTT_FUNC;
+    ret->has_exports=has_exports;
     ret->jit=Compiler.jit;
     ret->func_ptr=Compiler.func_ptr;
     ret->relocs=Compiler.relocations;
@@ -7494,10 +7497,17 @@ F64 EvalASTF64(AST *ast) {
 }
 I64 EvalAST(AST *ast) {
     AST *ret=MAlloc(sizeof(AST));
-    I64 v=0,en=PoopSetGCEnable(0);
+    CHashTable *swap;
+    I64 v=0,en=PoopSetGCEnable(0),idx;
     ret->type=AST_RETURN;
     ret->unopArg=ast;
     CCompilerState *state=NewCompilerState;
+    //We swap out the "new" and empty Compiler labels with the old ones,Global labels are used in global asm-blocks and need to be flushed to avoid wierdness
+    if(GlobalCompiler==state) {
+        swap=Compiler.labels;
+        Compiler.labels=state->labels;
+        state->labels=swap;
+    }
     Compiler.ret_type=HashFind("I64i",Compiler.globals);
     CompileAST(ret);
     CFunction *func=CompilerEmitCode;
@@ -7507,7 +7517,13 @@ I64 EvalAST(AST *ast) {
     }
     PoopSetGCEnable(en);
     RestoreCompilerState(state);
-    if(func) FreeFunction(func);
+    if(func) {
+        if(func->has_exports) {
+            func->str=MStrPrint("asm.%x",GetUnique);
+            HashAdd(func,Compiler.globals);
+        } else
+            FreeFunction(func);
+    }
     return v;
 }
 CFunction *CompileFunction(AST *at,CCmpCtrl *cc,CType *type,U8 *name,Bool inst_eval=FALSE) {
@@ -7662,12 +7678,10 @@ CFunction *CompileFunction(AST *at,CCmpCtrl *cc,CType *type,U8 *name,Bool inst_e
 
     CompileAstWithBreakpoint(body);
     PopIRValue;
-    #if IsWindows
     if(Compiler.debug_mode) {
         jit_prepare(Compiler.jit);
-        jit_call(Compiler.jit,&WindowsLeaveFunc);
+        jit_call(Compiler.jit,&LeaveFunc);
     }
-    #endif
     jit_reti(Compiler.jit,0);
     idx=Compiler.asm_tainted_label_names.mask+1;
     while(--idx>=0) {
@@ -7721,33 +7735,35 @@ CFunction *CompileFunction(AST *at,CCmpCtrl *cc,CType *type,U8 *name,Bool inst_e
     RestoreCompilerState(state);
     return ret;
 }
-#if IsWindows
-I64 WindowsSetCallStackSize(I64 sz) {
+I64 SetCallStackSize(I64 sz) {
     return _Debugger.call_stack->size=2*sz;
 }
-I64 WindowsCallStackSize() {
+I64 CallStackSize() {
     return _Debugger.call_stack->size/2;
 }
-I64 jit_FunctionParents(U0 **ptrs,I64 max) {
+I64 FunctionParents(U0 **ptrs,I64 max) {
+    --max;
     I64 top=_Debugger.call_stack->size-2,cnt=0;
+    *ptrs++=_Debugger.ctrl->last_rip;
     for(;top>=0<max;top-=2)
         ptrs[--max,cnt++]=_Debugger.call_stack->data[top];
     return cnt;
 }
-I64 jit_ParentFramePtrs(U0 **ptrs,I64 max) {
+I64 ParentFramePtrs(U0 **ptrs,I64 max,jit_debugger_regs *regs) {
+    --max;
     I64 top=_Debugger.call_stack->size-2,cnt=0;
+    if(regs) *ptrs++=regs->_RBP;
     for(;top>=0<max;top-=2)
         ptrs[--max,cnt++]=_Debugger.call_stack->data[top+1];
     return cnt;
 }
-U0 WindowsEnterFunc(U0 *func,U0 *frame) {
-    VectorPush(_Debugger.call_stack,func);
+U0 EnterFunc(U0 *frame) {
+    VectorPush(_Debugger.call_stack,frame(U0**)[1]);
     VectorPush(_Debugger.call_stack,frame);
 }
-U0 WindowsLeaveFunc() {
+U0 LeaveFunc() {
     VectorPop(_Debugger.call_stack),VectorPop(_Debugger.call_stack);
 }
-#endif
 AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,Bool reg_only=FALSE) {
     AST *ret=NULL;
     AST *binop_a,*binop_b;
@@ -8033,6 +8049,8 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
             break;
         }
         cstate=NewCompilerState;
+        Compiler.asm_mode=TRUE;
+        Compiler.imports=cstate->imports;
         PushIRReg(GetType("I64i"),r=GetFreeIReg);
         try {
             old_asm_mode=Compiler.asm_mode;
@@ -8044,12 +8062,10 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
         }
         Compiler.asm_mode=old_asm_mode;
         Assign(Compiler.stack->last,Compiler.stack);
-        #if IsWindows
         if(Compiler.debug_mode) {
             jit_prepare(Compiler.jit);
-            jit_call(Compiler.jit,&WindowsLeaveFunc);
+            jit_call(Compiler.jit,&LeaveFunc);
         }
-        #endif
         jit_retr(Compiler.jit,jit_R(r));
         PopIRValue,PopIRValue;
         *patcher=*(func=CompilerEmitCode);
@@ -8067,7 +8083,7 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
 }
 AST *ParseOpcode(CCmpCtrl *cc) {
     I64 acnt,idx;
-    AST     *ret,**args;
+    AST *ret,**args;
     Bool asm_mode2=Compiler.asm_mode;
     if(cc->token!=TK_IDENT) return NULL;
     if(!HashFind(cc->cur_str,opcodes)) return NULL;
@@ -8094,12 +8110,18 @@ AST *ParseOpcode(CCmpCtrl *cc) {
     return ret;
 }
 AST *ParseAsmBlock(CCmpCtrl *cc) {
-    AST *first=NULL,*last=NULL,*cur,**arr,*arr_first,*arr_cur,*arr_last;
+    AST *first=NULL,*last=NULL,*cur,**arr,*arr_first,*arr_cur,*arr_last,*ret;
     U8 *name,*new_name;
+    CHashTable *old_imports=Compiler.imports;
     I64 cnt;
     CLabel *label;
+    CHash *imprt;
     if(cc->token!=TK_IDENT) return NULL;
     if(StrCmp(cc->cur_str,"asm")) return NULL;
+    ret=MAlloc(sizeof(AST));
+    ret->type=AST_ASM_BLK;
+    LSP(cc,ret);
+    Compiler.imports=HashTableNew(0x10);
     //Compute possible labels later.
     Compiler.asm_mode=TRUE;
     Lex(cc);
@@ -8116,7 +8138,10 @@ AST *ParseAsmBlock(CCmpCtrl *cc) {
             first=MAlloc(sizeof(AST));
             first->type=AST_NOP;
         }
-        return first;
+        ret->asm_blk_body=first;
+        HashTableDel(Compiler.imports);
+        Compiler.imports=old_imports;
+        return ret;
     }
     if(cc->token==TK_IDENT) {
         if(cur=ParseOpcode(cc)) {
@@ -8182,6 +8207,9 @@ AST *ParseAsmBlock(CCmpCtrl *cc) {
             if(cc->token==';') {
                 Lex(cc);
             } else if(cc->token==TK_IDENT) {
+                imprt=MAlloc(sizeof(CHash));
+                imprt->str=StrNew(cc->cur_str);
+                HashAdd(imprt,Compiler.imports);
                 cur=MAlloc(sizeof(AST));
                 LSP(cc,cur);
                 cur->type=AST_IMPORT;
@@ -8190,12 +8218,13 @@ AST *ParseAsmBlock(CCmpCtrl *cc) {
                 if(last) last->next=cur;
                 last=cur;
                 Lex(cc);
-                if(cc->token!=';'&&cc->token!=',')
+                if(cc->token!=';'||cc->token!=',')
                     ;
                 else
                     ParserFail(cc,"Expected ';'.");
                 goto iloop;
             }
+            goto loop;
         } else if(!StrCmp("LIST",cc->cur_str)) {
             //TODO
             Lex(cc);
@@ -8238,6 +8267,7 @@ AST *ParseAsmBlock(CCmpCtrl *cc) {
             label->local_scope=Compiler.label_scope;
             label->refs=VectorNew;
             case TK_DBL_COLON:
+            cur->type=AST_GLOBAL_LABEL;
             label->is_exported=TRUE;
             Compiler.label_scope++;
             break;
@@ -8248,7 +8278,6 @@ AST *ParseAsmBlock(CCmpCtrl *cc) {
                 new_name=MStrPrint(LOCAL_LAB_FMT,name,Compiler.label_scope);
                 Free(name);
                 name=new_name;
-                cur->name=name;
             } else {
                 cur->type=AST_LABEL;
                 Compiler.label_scope++;
@@ -8319,6 +8348,7 @@ U0 REPL(U8 *init=NULL,I64 flags=PF_DEBUGGER,U8 *body=NULL) {
     //Load Forward declarations before assigning values
     Lex(cc);
     try {
+        
         while(ast=ParseStmt(cc)) {
             EvalAST(ast);
             FreeAST(ast);
@@ -8920,11 +8950,11 @@ U0 CompileBoundsCheck(I64 r,I64 sz,I64 off=0){}
 #ifdef STAGE1
 GC_Collect;
 RegisterRuntimeClasses(&GetType,&LoaderCreateTypeFwd,&LoaderAddMember,&LoaderCreateArrayType);
-    CompileBinModule("#define BOUNDS_CHECK\n#define SIGNAL\n#define RUNTIME_C\n#include \"PARSER.HC\"#include \"HolyEd/EDITOR.HC\";","REPL.BIN","HCRT/HCRT.HH");
+CompileBinModule("#define BOUNDS_CHECK\n#define SIGNAL\n#define RUNTIME_C\n#include \"PARSER.HC\"#include \"HolyEd/EDITOR.HC\";","REPL.BIN","HCRT/HCRT.HH");
 #endif
 //See rl.c
 I64 __HCCompetions2(U8 *buf,U8 **dst) {
-    I64 idx,buf_len=StrLen(buf),cnt=0;
+    I64 idx,idx2,buf_len=StrLen(buf),cnt=0;
     CHash *item;
     idx=lexer_macros->mask+1;
     while(--idx>=0) {
@@ -8938,18 +8968,43 @@ I64 __HCCompetions2(U8 *buf,U8 **dst) {
     while(--idx>=0) {
         for(item=Compiler.globals->body[idx];item;item=item->next)
             if(!StrNCmp(buf,item->str,buf_len)) {
+                idx2=buf_len;
+                //Ensure all charactors are alpha_numeric to avoid "Internal" values,TODO explictly mark them
+                while(item->str[idx2])
+                    if(!Bt(char_bmp_alpha_numeric,item->str[idx2++]))
+                        goto skip;
                 if(dst) *dst++=StrNew(item->str);
                 cnt++;
+                skip:
             }
     }
     return cnt;
 }
 U8 **__HCCompetions(U8 *buf) {
-    U8 **ret;
-    I64 cnt=__HCCompetions2(buf,NULL);
+    U8 **ret,*buf2,*tmp,*cat;
+    I64 cnt=0,idx=StrLen(buf);
+    while(--idx>=0)
+        if(!Bt(char_bmp_alpha_numeric,buf[idx]))
+           break;
+    idx++;
+    buf2=MAlloc(StrLen(buf)-idx+1);
+    StrCpy(buf2,buf+idx);
+    cnt=__HCCompetions2(buf2,NULL);
     if(!cnt) return NULL;
     ret=MAlloc(sizeof(U8 *)*cnt);
-    __HCCompetions2(buf,ret);
+    cnt=__HCCompetions2(buf2,ret);
+    //Linenoise (which is used for Unix line input) wants the whole buffer to be returned for completeion.
+    #if !IsWindows
+    buf=StrNew(buf);
+    buf[idx]=0;
+    while(--cnt>=0) {
+        tmp=MStrPrint("%s%s",buf,ret[cnt]);
+        Free(ret[cnt]);
+        ret[cnt]=tmp;
+    }
+    Free(buf);
+    #endif
+    Free(buf2);
     return ret;
 }
 I64 __WriteTags(U8 *write_t=NULL) {
@@ -9086,5 +9141,17 @@ Bool ParseAndRun(CCmpCtrl *cc) {
     }
     return FALSE;
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 

@@ -8,7 +8,6 @@ typedef int8_t ExceptBuf[216];
 #include "ext/map/src/map.h"
 #include "ext/vec/src/vec.h"
 #include "ext/myjit/myjit/jitlib.h"
-#include "ext/mropes/include/mropes/rope.h"
 #include "rl.h"
 #define AOT_NO_IMPORT_SYMS (1<<0)
 extern char CompilerPath[1024];

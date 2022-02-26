@@ -41,8 +41,6 @@ typedef struct CType CType;
 static void *jit_INIT() {
     return jit_init();
 }
-int jit_FunctionParents(void **pars,int max);
-int jit_ParentFramePtrs(void **fptrs,int max);
 #ifdef TARGET_WIN32
 #include <winnt.h>
 #include <dbghelp.h>
@@ -906,10 +904,6 @@ void RegisterFuncPtrs() {
     RegisterFunctionPtr("jit_putargr",jit_PUTARGR);
     RegisterFunctionPtr("jit_get_breakpoint_by_ptr",jit_get_breakpoint_btr_ptr);
     RegisterFunctionPtr("jit_free",jit_free);
-    #ifndef TARGET_WIN32
-    RegisterFunctionPtr("jit_FunctionParents",jit_FunctionParents);
-    RegisterFunctionPtr("jit_ParentFramePtrs",jit_ParentFramePtrs);
-    #endif
     RegisterFunctionPtr("jit_BREAKPOINT",jit_BREAKPOINT);
     RegisterFunctionPtr("jit_debugger_get_reg_ptr",jit_debugger_get_reg_ptr);
     RegisterFunctionPtr("jit_debugger_get_vreg_ptr_from_parent",jit_debugger_get_vreg_ptr_from_parent);

@@ -2,7 +2,7 @@ set AlpineURL = "https://dl-cdn.alpinelinux.org/alpine/v3.15/releases/x86_64/alp
 set ProotURL = "https://proot.gitlab.io/proot/bin/proot"
 
 echo "Welcome to the 3Days builder!"
-echo "This script will build 3Days in a chroot,but first you will need an mini filesystem to use."
+echo "This script will build 3Days in a (PRooted) chroot,but first you will need an mini filesystem to use."
 echo "If you have a (alpine linux) rootfs you want,type in its location,other press enter for download one from $AlpineURL ."
 set Provided = $<
 switch ( $Provided )
@@ -56,10 +56,10 @@ end
 ./proot -R chroot/ apk add gcc sdl2-dev tcsh yasm musl-dev
 ./proot -r chroot/ -w /3Days tcsh "make.tcsh"
 ./proot -r chroot -w /3Days ./3d_loader --noruntime MAKE_HCRT.HC
-cp chroot/3Days/REPL.BIN ./HCRT/HCRT.BIN
+cp chroot/3Days/REPL.VBIN ./HCRT/HCRT.BIN
 source make.tcsh
 
 echo "Recompiling HCRT/HCRT.BIN for non-chroot's SDL2"
-./3d_loader --noruntime MAKE_HCRT.HC
+./3d_loader --noruntime FULL_RUNTIME.HC
 
 echo "Congradulations,you compiled a runtime and loader."

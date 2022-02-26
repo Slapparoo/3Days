@@ -1,5 +1,5 @@
 # Welcome to 3D,a HolyC compiler
-This compiler contains a bounds checker and a debugger,but in order to use these you will need to enable them at the command line by using "-d" for the debugger and "-b" for the bounds checker(which will also enable the debugger). It currently comes with a runtime with compression support,though the data structures used here are type-aligned so they are not compatible with native TempleOS archives. Press `TAB` to autocomplete. There is currently no assembler support(I would rather port to other architectures than hassle with assembler)
+This compiler contains a bounds checker and a debugger,but in order to use these you will need to enable them at the command line by using "-d" for the debugger and "-b" for the bounds checker(which will also enable the debugger). It currently comes with a runtime with compression support,though the data structures used here are type-aligned so they are not compatible with native TempleOS archives. Press `TAB` to autocomplete.
 
 This compiler is currently mostly a compiler,but it needs a better runtime. Take a peak at the runtime to get a good idea of what your working with. If something isnt in there,try adding it from TempleOS yourself and maybe share your port.
 
@@ -54,10 +54,7 @@ I64 x=#exe{StreamPrint("10");};
 # Pitfalls/(and some "features")
  - This compiler will set all bytes to 0 when `MAlloc`'ed
  - Garbage collection is disabled when running HolyC code.
- - (Finer) syntax checking is done only when compiling a statement or function.
  - `#include` uses the file path scheme of the OS,so you should
- - There is no lexical scoping.
- - Like TempleOS,pointers can be nested 3 levels.
   ```
   #if IsWindows
   #include "C:\\File.HC"
@@ -65,6 +62,8 @@ I64 x=#exe{StreamPrint("10");};
   #include "/File.HC"
   #endif
   ```
+ - There is no lexical scoping.
+ - Like TempleOS,pointers can be nested 3 levels.
  - Don't put declarations in for statements as per TempleOS
  ```
  //Dont
@@ -79,12 +78,13 @@ I64 x=#exe{StreamPrint("10");};
  I64 int_pi=ToI64(pi);
  ```
 # Assembler
-This compiler includes an assembler,see `asmtest.hc` for usage. All functions are placed in the first 32 bits of memory,so you should be able to jump to them if you import them. **However the case isn't the same for global variables,load their pointer into a register before addressing them**(Most memory operations use 32bit offsets,see `MOFFSxx` in `HCRT/Opcodes.DD` if you really want to.).
+This compiler includes an assembler. **Global variables and Functions arent put in the first 32bits of address space like TempleOS,load their pointer into a register before addressing them**(Most memory operations use 32bit offsets,see `MOFFSxx` in `HCRT/Opcodes.DD` if you really want to.).
 ```
 U0 Hi() {
  asm {
 	 IMPORT Hello;
-	 CALL Hello;
+	 MOV RAX,Hello;
+	 CALL RAX;
  }
 }
 ```
@@ -92,7 +92,7 @@ If you suspect the assembler is acting up,open in gdb and type `disas GetVariabl
 
 
 # Internals
-This compiler uses a modified myjit which runs under windows(new feature),linux(and breifly tested on FreeBSD). The main part of the Compiler is in compile.c. The compiler uses a value stack for temporary values(if they are on the stack on the same time they interfere). The grammar is in `HolyC.y`. The lexer uses a rope data structure provided by a patched `ext/mropes`.  I plan on making a game with this compiler so I will add to the runtime as needed. If you want to add functions,look at `runtime.c`,but a functional text editor is provided in `HolyEd/EDITOR.HC`.
+This compiler uses a modified myjit which runs under windows(new feature),linux, and FreeBSD(and probaly any other systemV ABI Unix). The main part of the Compiler is in compile.c. The compiler uses a value stack for temporary values(if they are on the stack on the same time they interfere). The grammar is in `HolyC.y`. The lexer uses a rope data structure provided by a patched `ext/mropes`.  I plan on making a game with this compiler so I will add to the runtime as needed. If you want to add functions,look at `runtime.c`,but a functional text editor is provided in `HolyEd/EDITOR.HC`.
 
 # Contributing
 You can contribute by adding to the runtime(see `runtime.c` and `HCRT/`).  Nice things would include:
@@ -119,12 +119,9 @@ And the debugger(and bounds checker) are here too. `DebuggerRoutine` is aliased 
 
 
 # Credits
- - https://github.com/martincohen/x64
- - https://github.com/ruimaciel/mropes
  - http://myjit.sourceforge.net/index.htm
  - https://github.com/rxi/map
  - https://github.com/rxi/vec
  - C_Unescaper(me nrootconauto@gmail.com)
  - https://github.com/argtable/argtable3
- - https://pdcurses.org/
  - https://sourceforge.net/projects/mingweditline/

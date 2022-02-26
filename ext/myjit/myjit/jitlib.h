@@ -54,6 +54,7 @@ typedef struct jit_debugger_ctrl {
     #define JIT_DBG_FIN 3
     int64_t code;
     void *prev_stack_ptr;
+    jit_breakpoint_t *last_hit_rip;
 } jit_debugger_ctrl ;
 typedef struct jit_debugger_regs{
     int64_t RAX;

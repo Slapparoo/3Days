@@ -117,7 +117,37 @@ void InitRL() {
 }
 #else
 #include "ext/wineditline-2.206/include/editline/readline.h"
+static long count;
+static char **cmps;
+static char *gen(const char *ul,int idx) {
+	if(idx>=count) return NULL;
+	return strcpy(malloc(strlen(cmps[idx])+1),cmps[idx]);
+}
+static char **AttemptComps(const char *buf,int s,int e) {
+	CSymbol *hccomps;
+	count=0;
+    if(hccomps=map_get(&Loader.symbols,"__HCCompetions")) {
+        char **res=((char**(*)(char*))(hccomps->value_ptr))(buf);
+        cmps=res;
+        if(!res)  {
+			count=0;
+			goto en;
+		}
+        int64_t cnt=MSize(res)/sizeof(char*),idx;
+        count=cnt;
+        char **ret=rl_completion_matches(NULL,&gen);
+        for(idx=0;idx!=cnt;idx++) {
+            if(!res[idx]) continue;
+            TD_FREE(res[idx]);
+        }
+        TD_FREE(res);
+        return ret;
+    }
+    en:
+    return rl_completion_matches(NULL,&gen);
+}
 void InitRL() {
+	rl_attempted_completion_function=AttemptComps;
 }
 char* rl(char* prompt) {
   char *fn=readline(prompt);

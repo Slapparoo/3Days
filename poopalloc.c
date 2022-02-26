@@ -2,9 +2,45 @@
 #ifndef TARGET_WIN32
 #include <sys/mman.h>
 #include <unistd.h>
+#include <stdatomic.h>
+#include <assert.h>
+#ifdef __linux__
+//https://man7.org/linux/man-pages/man2/futex.2.html
+#include <sys/syscall.h>
+#include <linux/futex.h>
+static uint32_t fmtx=1;
+static void LockHeap() {
+		uint32_t one=1;
+		for(;;) {
+			if(atomic_compare_exchange_strong(&fmtx,&one,0)) 
+				break;
+			assert(-1!=syscall(SYS_futex,&fmtx,FUTEX_WAIT,0,NULL,NULL,0));
+		}
+}
+static void UnlockHeap() {
+		uint32_t zero=0;
+		if(atomic_compare_exchange_strong(&fmtx,&zero,1))  {
+			assert(-1!=syscall(SYS_futex,&fmtx,FUTEX_WAKE,0,NULL,NULL,0));
+		}
+}
+#elif defined __FreeBSD__
+static void LockHeap(uint32_t *fmtx) {
+	
+}
+#else
+#error "Not supported platfrom,feel free to port this mutex code to your platform."
+#endif //__linux
 #else
 #include <windows.h>
 #include <memoryapi.h>
+#include <synchapi.h>
+CRITICAL_SECTION fmtex;
+static void LockHeap() {
+		EnterCriticalSection(&fmtex);
+}
+static void UnlockHeap() {
+		LeaveCriticalSection(&fmtex);
+}
 #endif
 #include <stdio.h>
 #include <assert.h>
@@ -109,18 +145,6 @@ typedef struct CPoopSlab1024 {
   int8_t items[125*(1024+16)];
   int8_t occupied[125];
 } CPoopSlab1024;
-static void *__Alloc(CPoopSlab2 *slab,int8_t *data,int8_t *filled,size_t count,size_t width) {
-    int64_t idx=rand()%count,idx2=count;
-    for(;--idx2>=0&&!filled[idx%count];idx--) {
-            slab->filled++;
-            filled[idx%count]=1;
-            CPoopPtr *ptr=data+width*(idx%count);
-            ptr->slab=slab;
-            ptr->offset=idx%count;
-            return ptr;
-    }
-    return NULL;
-}
 static int64_t gc_age;
 static CFifo Arena32;
 static CFifo Arena128;
@@ -194,31 +218,23 @@ static void *Alloc32(size_t size) {
         slab->occupied[ptr->offset]=1;
         return memset(ptr+1,0,size);
     } else {
-        if(1) {
-            add:
-            assert((1<<17)>=sizeof(CPoopSlab32));
-            #ifndef TARGET_WIN32
-            slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
-            #else
-            slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
-            #endif
-            memset(slab,0,sizeof(CPoopSlab2));
-            dummy.slab=slab;
-            dummy.len=32;
-            dummy.offset=sizeof(slab->occupied);
-            while(--dummy.offset>=0) {
-                if(!FifoIns(&Arena32,dummy))break;
-            }
-            slab->ident=SLAB_32;
-            AddSlabToHash(slab);
-            goto loop;
-        } else
-            min_slab=slab;
-        ptr=__Alloc(min_slab,min_slab->items,min_slab->occupied,sizeof(min_slab->occupied),48);
-        if(!ptr) goto add;
-        ptr->len=size;
-        ptr->slab->filled++;
-        return memset(ptr+1,0,32);
+		add:
+		assert((1<<17)>=sizeof(CPoopSlab32));
+		#ifndef TARGET_WIN32
+		slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+		#else
+		slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
+		#endif
+		memset(slab,0,sizeof(CPoopSlab2));
+		dummy.slab=slab;
+		dummy.len=32;
+		dummy.offset=sizeof(slab->occupied);
+		while(--dummy.offset>=0) {
+			if(!FifoIns(&Arena32,dummy))break;
+		}
+		slab->ident=SLAB_32;
+		AddSlabToHash(slab);
+		goto loop;
     }
 }
 static void *Alloc128(size_t size) {
@@ -238,31 +254,23 @@ static void *Alloc128(size_t size) {
         slab->occupied[ptr->offset]=1;
         return memset(ptr+1,0,size);
     } else {
-        if(1) {
-            add:
-            assert((1<<17)>=sizeof(CPoopSlab128));
-            #ifndef TARGET_WIN32
-            slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
-            #else
-            slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
-            #endif
-            memset(slab,0,sizeof(CPoopSlab2));
-            dummy.slab=slab;
-            dummy.len=128;
-            dummy.offset=sizeof(slab->occupied);
-            while(--dummy.offset>=0) {
-                if(!FifoIns(&Arena128,dummy))break;;
-            }
-            slab->ident=SLAB_128;
-            AddSlabToHash(slab);
-            goto loop;
-        } else
-            min_slab=slab;
-        ptr=__Alloc(min_slab,min_slab->items,min_slab->occupied,sizeof(min_slab->occupied),128+16);
-        if(!ptr) goto add;
-        ptr->len=size;
-        ptr->slab->filled++;
-        return memset(ptr+1,0,size);
+		add:
+		assert((1<<17)>=sizeof(CPoopSlab128));
+		#ifndef TARGET_WIN32
+		slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+		#else
+		slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
+		#endif
+		memset(slab,0,sizeof(CPoopSlab2));
+		dummy.slab=slab;
+		dummy.len=128;
+		dummy.offset=sizeof(slab->occupied);
+		while(--dummy.offset>=0) {
+			if(!FifoIns(&Arena128,dummy))break;;
+		}
+		slab->ident=SLAB_128;
+		AddSlabToHash(slab);
+		goto loop;
     }
 }
 
@@ -283,31 +291,23 @@ static void *Alloc512(size_t size) {
         slab->occupied[ptr->offset]=1;
         return memset(ptr+1,0,size);
     } else {
-        if(1) {
-            add:
-            assert((1<<17)>=sizeof(CPoopSlab512));
-            #ifndef TARGET_WIN32
-            slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
-            #else
-            slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
-            #endif
-            memset(slab,0,sizeof(CPoopSlab2));
-            dummy.slab=slab;
-            dummy.len=512;
-            dummy.offset=sizeof(slab->occupied);
-            while(--dummy.offset>=0) {
-                    if(!FifoIns(&Arena512,dummy))break;
-            }
-            slab->ident=SLAB_512;
-            AddSlabToHash(slab);
-            goto loop;
-        } else
-            min_slab=slab;
-        ptr=__Alloc(min_slab,min_slab->items,min_slab->occupied,sizeof(min_slab->occupied),512+16);
-        if(!ptr) goto add;
-        ptr->len=size;
-        ptr->slab->filled++;
-        return memset(ptr+1,0,size);
+        add:
+		assert((1<<17)>=sizeof(CPoopSlab512));
+		#ifndef TARGET_WIN32
+		slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+		#else
+		slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
+		#endif
+		memset(slab,0,sizeof(CPoopSlab2));
+		dummy.slab=slab;
+		dummy.len=512;
+		dummy.offset=sizeof(slab->occupied);
+		while(--dummy.offset>=0) {
+				if(!FifoIns(&Arena512,dummy))break;
+		}
+		slab->ident=SLAB_512;
+		AddSlabToHash(slab);
+		goto loop;
     }
 }
 static void *Alloc1024(size_t size) {
@@ -327,31 +327,23 @@ static void *Alloc1024(size_t size) {
         slab->occupied[ptr->offset]=1;
         return memset(ptr+1,0,size);
     } else {
-        if(1) {
-            add:
-            assert((1<<17)>=sizeof(CPoopSlab1024));
-            #ifndef TARGET_WIN32
-            slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
-            #else
-            slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
-            #endif
-            memset(slab,0,sizeof(CPoopSlab2));
-            dummy.slab=slab;
-            dummy.len=1024;
-            dummy.offset=sizeof(slab->occupied);
-            while(--dummy.offset>=0) {
-                    if(!FifoIns(&Arena1024,dummy))break;
-            }
-            slab->ident=SLAB_1024;
-            AddSlabToHash(slab);
-            goto loop;
-        } else
-            min_slab=slab;
-        ptr=__Alloc(min_slab,min_slab->items,min_slab->occupied,sizeof(min_slab->occupied),1024+16);
-        if(!ptr) goto add;
-        ptr->len=size;
-        ptr->slab->filled++;
-        return memset(ptr+1,0,size);
+		add:
+		assert((1<<17)>=sizeof(CPoopSlab1024));
+		#ifndef TARGET_WIN32
+		slab=mmap(NULL,1<<17,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+		#else
+		slab=VirtualAlloc(NULL,1<<17,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
+		#endif
+		memset(slab,0,sizeof(CPoopSlab2));
+		dummy.slab=slab;
+		dummy.len=1024;
+		dummy.offset=sizeof(slab->occupied);
+		while(--dummy.offset>=0) {
+				if(!FifoIns(&Arena1024,dummy))break;
+		}
+		slab->ident=SLAB_1024;
+		AddSlabToHash(slab);
+		goto loop;
     }
 }
 int64_t MSize(void *ptr) {
@@ -360,11 +352,12 @@ int64_t MSize(void *ptr) {
     p--;
     return p->len;
 }
-void PoopFree(void *ptr) {
+static void __PoopFree(void *ptr,int no_lock) {
     if(!ptr) return;
+    if(!no_lock) LockHeap();
     if(!GetSlabByPtr(ptr)) {
         printf("Invalid free of %p.\n",ptr);
-        return ;
+        goto rend;
     }
     CPoopSlab2 *slab;
     CPoopPtr *p=ptr;
@@ -390,7 +383,7 @@ void PoopFree(void *ptr) {
     }
     if(!occupied[p->offset]) {
         fail:
-        return;
+        goto rend;
     }
     since_last_collect-=MSize(ptr);
     assert(occupied[p->offset]==1);
@@ -415,7 +408,7 @@ void PoopFree(void *ptr) {
             #else
             VirtualFree(p->slab,0,MEM_RELEASE);
             #endif
-            return;
+            goto rend;
         }
         #ifndef TARGET_WIN32
         munmap(p->slab,p->slab->filled);
@@ -424,7 +417,7 @@ void PoopFree(void *ptr) {
         #endif
         if(prev) prev->next=next;
         if(next) next->prev=prev;
-        return;
+        goto rend;
     }
     if(0==--p->slab->filled) {
         CFifo *to_filter;
@@ -462,7 +455,12 @@ void PoopFree(void *ptr) {
         if(prev) prev->next=next;
         if(next) next->prev=prev;
     }
+    rend:
+    if(!no_lock) UnlockHeap();
 }
+void PoopFree(void *ptr) {
+	__PoopFree(ptr,0);
+} 
 void *PoopReAlloc(void *ptr,int64_t size) {
   int64_t size2=MSize(ptr);
   void *ret=PoopMAlloc(size);
@@ -473,7 +471,8 @@ void *PoopReAlloc(void *ptr,int64_t size) {
   return ret;
 }
 void *PoopMAlloc(int64_t size) {
-  if(size==761680639942081328l) return NULL;
+  int collect=0;
+  LockHeap();
   since_last_collect+=size;
   void *ret;
   if(size<=32) {
@@ -492,10 +491,6 @@ void *PoopMAlloc(int64_t size) {
         ret=Alloc1024(size);
         goto end;
   }
-  if(since_last_collect>=(1l<<20l)) {
-  	since_last_collect=0;
-    PoopCollect();
-  }
   int64_t size2;
   #ifndef TARGET_WIN32
   CPoopSlab2 *big=mmap(NULL,size2=sizeof(CPoopSlab2)+sizeof(CPoopPtr)+((sizeof(CPoopPtr)+sizeof(CPoopSlab2))%16)+size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
@@ -509,13 +504,23 @@ void *PoopMAlloc(int64_t size) {
   ((CPoopPtr*)ret)[-1].slab=big;
   AddSlabToHash(big);
   end:
+  if(since_last_collect>=(1l<<26l)) {
+  	since_last_collect=0;
+    collect=1;
+  }
   ((CPoopPtr*)ret)[-1].gc_age=gc_age;
+  UnlockHeap();
+  assert(MSize(ret)==size);
+  if(collect) PoopCollect();
   assert(MSize(ret)==size);
   return ret;
 }
 int InBounds(void *ptr,int64_t size) {
-    if(StackStart>=ptr&&ptr>=__builtin_frame_address(0))
+	void *fptr;
+	asm ("movq %%rsp, %0" : "=r" (fptr) );
+    if(StackStart>=ptr&&ptr>=fptr)
     	return 1;
+    LockHeap();
     int64_t idx,cnt,size2;
     CPoopSlab2 *cur_slab=GetSlabByPtr(ptr);
     void *base;
@@ -570,12 +575,15 @@ int InBounds(void *ptr,int64_t size) {
                 fprintf(stderr,"Access is %ld bytes beyond %ld byte area.\n",ptr-(base+cnt),cnt);
             else
                 fprintf(stderr,"Access is %ld bytes before %ld byte area.\n",base-(ptr),cnt);
-        } else
+        } else {
+			UnlockHeap();
             return 1;
+		}
     } else {
         oob:
         fprintf(stderr,"Access is out of bounds.\n");
     }
+    UnlockHeap();        
     return 0;
 }
 static int64_t __ScanPtr(void **ptr,int64_t len) {
@@ -651,7 +659,8 @@ static int64_t __ScanPtr(void **ptr,int64_t len) {
 }
 static int64_t __PoopCollect(ExceptBuf *regs) {
     gc_age++;
-    void *frame_start=StackStart,*frame_end=__builtin_frame_address(0);
+    void *frame_start=StackStart,*frame_end;
+    asm ("movq %%rsp, %0" : "=r" (frame_end) );
     int64_t idx,cnt=0,sz;
     CPoopSlab2 *cur_slab,*next;
     //Stack grows down
@@ -672,7 +681,7 @@ static int64_t __PoopCollect(ExceptBuf *regs) {
             while(--cnt>=0) {
                 if(s32->occupied[cnt])
                     if(((CPoopPtr*)&s32->items[cnt*(32+16)])->gc_age!=gc_age) {
-                        PoopFree(((CPoopPtr*)&s32->items[cnt*(32+16)])+1);
+                        __PoopFree(((CPoopPtr*)&s32->items[cnt*(32+16)])+1,1);
                     } else {
                         sz=((CPoopPtr*)&s32->items[cnt*(32+16)])->len;
                         LargestAlloc=(sz>LargestAlloc)?sz:LargestAlloc;
@@ -685,7 +694,7 @@ static int64_t __PoopCollect(ExceptBuf *regs) {
             while(--cnt>=0) {
                 if(s128->occupied[cnt])
                 if(((CPoopPtr*)&s128->items[cnt*(128+16)])->gc_age!=gc_age) {
-                    PoopFree(((CPoopPtr*)&s128->items[cnt*(128+16)])+1);
+                    __PoopFree(((CPoopPtr*)&s128->items[cnt*(128+16)])+1,1);
                 } else {
                     sz=((CPoopPtr*)&s128->items[cnt*(128+16)])->len;
                     LargestAlloc=(sz>LargestAlloc)?sz:LargestAlloc;
@@ -698,7 +707,7 @@ static int64_t __PoopCollect(ExceptBuf *regs) {
             while(--cnt>=0){
                 if(s512->occupied[cnt])
                 if(((CPoopPtr*)&s512->items[cnt*(512+16)])->gc_age!=gc_age) {
-                    PoopFree(((CPoopPtr*)&s512->items[cnt*(512+16)])+1);
+                    __PoopFree(((CPoopPtr*)&s512->items[cnt*(512+16)])+1,1);
                 } else {
                     sz=((CPoopPtr*)&s512->items[cnt*(512+16)])->len;
                     LargestAlloc=(sz>LargestAlloc)?sz:LargestAlloc;
@@ -710,9 +719,9 @@ static int64_t __PoopCollect(ExceptBuf *regs) {
             while(--cnt>=0){
                 if(s1024->occupied[cnt])
                 if(((CPoopPtr*)&s1024->items[cnt*(1024+16)])->gc_age!=gc_age) {
-                    PoopFree(((CPoopPtr*)&s1024->items[cnt*(1024+16)])+1);
+                    __PoopFree(((CPoopPtr*)&s1024->items[cnt*(1024+16)])+1,1);
                 } else {
-                    sz=((CPoopPtr*)&s1024->items[cnt*(1024+16)])->len;
+                     sz=((CPoopPtr*)&s1024->items[cnt*(1024+16)])->len;
                     LargestAlloc=(sz>LargestAlloc)?sz:LargestAlloc;
                 }
             }
@@ -721,7 +730,7 @@ static int64_t __PoopCollect(ExceptBuf *regs) {
                 sz=((CPoopPtr*)(cur_slab+1))[0].len;
                 if(((CPoopPtr*)(cur_slab+1))[0].gc_age!=gc_age) {
                     next=cur_slab->next;
-                    PoopFree((sizeof(CPoopSlab2)+sizeof(CPoopPtr))%16+sizeof(CPoopSlab2)+sizeof(CPoopPtr)+(void*)cur_slab);
+                    __PoopFree((sizeof(CPoopSlab2)+sizeof(CPoopPtr))%16+sizeof(CPoopSlab2)+sizeof(CPoopPtr)+(void*)cur_slab,1);
                     cur_slab=next;
                     goto loop;
                 } else
@@ -739,12 +748,17 @@ int PoopSetGCEnable(int en) {
 }
 void PoopCollect() {
     if(!gc_enabled) return;
-    ExceptBuf pad;
+    LockHeap();
+    ExceptBuf pad; 
     if(HCSetJmp(&pad))
     	__PoopCollect(&pad);
     else
     	HCLongJmp(&pad);
+    UnlockHeap();
 }
-void PoopInit(void *frame_start) {
+void PoopInit(void *frame_start) { 
+	#ifdef TARGET_WIN32
+	InitializeCriticalSectionAndSpinCount(&fmtex,0x00000400);
+	#endif
     StackStart=frame_start;
 }

@@ -6,13 +6,13 @@ class CDiffItem {
     U32 line;
     U8 *str;
 };
-class CLine {
+class CDiffLine {
     I64 idx;
     U8 *text;
 };
-CLine *SplitLines(U8 *text,I64 *line_cnt) {
+CDiffLine *SplitLines(U8 *text,I64 *line_cnt) {
     I64 lines=StrOcc(text,'\n')+1;
-    CLine *ret=MAlloc(sizeof(CLine)*lines),*ret_ptr;
+    CDiffLine *ret=MAlloc(sizeof(CDiffLine)*lines),*ret_ptr;
     U8 *ln_start=text,*end_ptr,*line;
     ret_ptr=ret;
     loop:
@@ -32,10 +32,10 @@ CLine *SplitLines(U8 *text,I64 *line_cnt) {
     if(line_cnt) *line_cnt=lines;
     return ret;
 }
-I64 SCmp(CLine *a,CLine *b) {
+I64 SCmp(CDiffLine *a,CDiffLine *b) {
     return StrCmp(a->text,b->text);
 }
-CDiffItem *DiffSub(CDiffItem *res,CLine *str1,CLine *str2,I64 N,I64 M,CLine *sorted_a,CLine *sorted_b,I64 i1_lo,I64 i1_hi,I64 i2_lo,I64 i2_hi) {
+CDiffItem *DiffSub(CDiffItem *res,CDiffLine *str1,CDiffLine *str2,I64 N,I64 M,CDiffLine *sorted_a,CDiffLine *sorted_b,I64 i1_lo,I64 i1_hi,I64 i2_lo,I64 i2_hi) {
     static I64 cnt;
     I64 i1=0,i2=0,i2b,i1b,cmp,score,j1,j2,n,best1,best2,best_score=0;
     while(i1<N&&i2<M) {
@@ -104,15 +104,14 @@ CDiffItem *DiffSub(CDiffItem *res,CLine *str1,CLine *str2,I64 N,I64 M,CLine *sor
 }
 CDiffItem *Diff(U8 *f1,U8 *f2) {
     I64 N,M;
-    CLine *str1=SplitLines(f1,&N);
-    CLine *str2=SplitLines(f2,&M);
+    CDiffLine *str1=SplitLines(f1,&N);
+    CDiffLine *str2=SplitLines(f2,&M);
     CDiffItem *items=MAlloc(sizeof(CDiffItem)*(N+M)),*trimmed_items,*item_ptr;
-    CLine *sorted_a=MemCpy(MAlloc(N*sizeof(CLine)),str1,N*sizeof(CLine));
-    CLine *sorted_b=MemCpy(MAlloc(M*sizeof(CLine)),str2,M*sizeof(CLine));
-    QSort(sorted_a,N,sizeof(CLine),&SCmp);
-    QSort(sorted_b,M,sizeof(CLine),&SCmp);
+    CDiffLine *sorted_a=MemCpy(MAlloc(N*sizeof(CDiffLine)),str1,N*sizeof(CDiffLine));
+    CDiffLine *sorted_b=MemCpy(MAlloc(M*sizeof(CDiffLine)),str2,M*sizeof(CDiffLine));
+    QSort(sorted_a,N,sizeof(CDiffLine),&SCmp);
+    QSort(sorted_b,M,sizeof(CDiffLine),&SCmp);
     item_ptr=DiffSub(items,str1,str2,N,M,sorted_a,sorted_b,0,N,0,M);
-    "%d,%d\n",item_ptr-items,N+M;
     Free(sorted_a),Free(sorted_b);
     trimmed_items=MAlloc(sizeof(CDiffItem)*(item_ptr-items));
     MemCpy(trimmed_items,items,MSize(trimmed_items));
@@ -124,11 +123,6 @@ CDiffItem *Diff(U8 *f1,U8 *f2) {
     Free(str1),Free(str2);
     return trimmed_items;
 }
-I64 cnt1,cnt2,lc1,lc2;
-U8 *f1=FileRead("PARSER.HC",&cnt1);
-U8 *f2=FileRead("../Documents/3Days2/PARSER.HC",&cnt2);
-CDiffItem *diff=Diff(f1,f2);
-Free(f1),Free(f2);
 U0 ViewDiff(CDiffItem *diff) {
     I64 code,char,ptype=0,idx=0,cnt=MSize(diff)/sizeof(*diff);
     while(idx!=cnt) {
@@ -176,7 +170,6 @@ U0 SaveDiff(U8 *to,CDiffItem *item) {
     Free(comped);
     Free(oret);
 }
-SaveDiff("PARSER.DIFF",diff);
 U0 ApplyDiff(U8 *dst,U8 *src,U8 *diff,I64 *sz=NULL) {
     CArcCompress *comped=FileRead(diff,NULL);
     U8 *raw=ExpandBuf(comped),*cap,*oraw,*dptr,*odptr,*osrc=src;
@@ -186,7 +179,7 @@ U0 ApplyDiff(U8 *dst,U8 *src,U8 *diff,I64 *sz=NULL) {
     cap=MSize(raw)+raw;
     I64 dcnt,line,cur_ln=0,rsz=0;
     src=FileRead(src,NULL);
-    CLine *dlines=SplitLines(src,&dcnt);
+    CDiffLine *dlines=SplitLines(src,&dcnt);
     Free(comped);
     I64 chr;
     for(;raw+4<=cap;) {
@@ -237,5 +230,4 @@ U0 ApplyDiff(U8 *dst,U8 *src,U8 *diff,I64 *sz=NULL) {
         ApplyDiff(dst,osrc,diff,&rsz);
     }
 }
-ApplyDiff("PARSER2.HC","../Documents/3Days2/PARSER.HC","PARSER.DIFF");
 
