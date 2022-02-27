@@ -371,6 +371,8 @@ class CVariable:CHashSrcSym {
     Bool is_extern_ptr;
     //USed for debugger when looking for optimoized out values
     Bool is_opted_out;
+    //Used to linking to labels
+    Bool is_local_unlinked;
     union {
         I64 frame_off;
         I64 reg;
@@ -1590,7 +1592,7 @@ AST *Prec1(CCmpCtrl *cc) {
     CType *t;
     I64 idx=0;
     loop:
-    if(Compiler.no_array_access_mode&&cc->token=='[') return ret;
+    if(Compiler.no_array_access_mode&&cc->token=='[') return un;
     switch(cc->token) {
 start:
         ret=MAlloc(sizeof(*ret));
@@ -1886,7 +1888,7 @@ U8 *__PrintAST(AST *a) {
     I64 idx,cnt;
     U8 *tmp1,*tmp2,*tmp3,*tmp4;
     AST *ast;
-    if(!a) return StrNew(""    );
+    if(!a) return StrNew("");
     switch(a->type) {
     case AST_NOP:
         return StrNew("NOP");
@@ -3239,14 +3241,12 @@ U0 *ResolveLinkage(AST *at,CLinkage *link,U8 *name=NULL) {
             if(at)
                 ParserFail2(at,"Unable to resolve symbol \"%s\".",name);
             case LINK__IMPORT:
-            "%s\n",link->_link;
-	    if(lab=func=var=HashFind(link->_link,Compiler.globals)) {
+            if(lab=func=var=HashFind(link->_link,Compiler.globals)) {
                 goto resolve;
             }
             if(at)
                 ParserFail2(at,"Unable to resolve symbol \"%s\".",link->_link);
             case LINK__EXTERN:
-            "%s\n",link->_link;
             if(lab=func=var=HashFind(link->_link,Compiler.globals)) {
                 goto resolve;
             }
@@ -3979,33 +3979,40 @@ U0 PushIRString(U8 *data,I64 len) {
     Free(str);
 }
 U0 CompileAstWithBreakpoint(AST *oc);
-//Will add a patcher to the current function
+//Will add a patcher to the current functionX
 U0 CompileAsmConst(AST *mode,I64 width,Bool rel=FALSE,I64 label_scope=-2);
 U0 CompileOpcode(AST *oc) {
-    U8 buffer[32],*end_ptr;
+    U8 buffer[32],*end_ptr=NULL;
     CReg *mbase;
-    Bool is_jmp;
+    Bool is_jmp,bye_bye=FALSE;
     I64 idx,siboff,immoff,immsz,operand_cnt=MSize(oc->opcode->args)/sizeof(AST*);
     retry:
     try {
-        switch(operand_cnt) {
-            case 0:
-            end_ptr=EncodeOpcode(buffer,oc->opcode.opcode->str,&is_jmp,&siboff,&immoff,&immsz);
-            break;
-            case 1:
-            end_ptr=EncodeOpcode(buffer,oc->opcode.opcode->str,&is_jmp,&siboff,&immoff,&immsz,oc->opcode->args[0]->x64_mode);
-            break;
-            case 2:
-            end_ptr=EncodeOpcode(buffer,oc->opcode.opcode->str,&is_jmp,&siboff,&immoff,&immsz,oc->opcode->args[0]->x64_mode,oc->opcode->args[1]->x64_mode);
-            break;
-            case 3:
-            end_ptr=EncodeOpcode(buffer,oc->opcode.opcode->str,&is_jmp,&siboff,&immoff,&immsz,oc->opcode->args[0]->x64_mode,oc->opcode->args[1]->x64_mode,oc->opcode->args[2]->x64_mode);
-            break;
-            default:
+        try {
+            switch(operand_cnt) {
+                case 0:
+                end_ptr=EncodeOpcode(buffer,oc->opcode.opcode->str,&is_jmp,&siboff,&immoff,&immsz);
+                break;
+                case 1:
+                end_ptr=EncodeOpcode(buffer,oc->opcode.opcode->str,&is_jmp,&siboff,&immoff,&immsz,oc->opcode->args[0]->x64_mode);
+                break;
+                case 2:
+                end_ptr=EncodeOpcode(buffer,oc->opcode.opcode->str,&is_jmp,&siboff,&immoff,&immsz,oc->opcode->args[0]->x64_mode,oc->opcode->args[1]->x64_mode);
+                break;
+                case 3:
+                end_ptr=EncodeOpcode(buffer,oc->opcode.opcode->str,&is_jmp,&siboff,&immoff,&immsz,oc->opcode->args[0]->x64_mode,oc->opcode->args[1]->x64_mode,oc->opcode->args[2]->x64_mode);
+                break;
+                default:
+            }
+        } catch {
+            CatchIf('Asm');
+            bye_bye=TRUE;
+            ParserFail2(oc,"Assembler failure(%s).",AsmError);
         }
     } catch {
-        CatchIf('Asm');
+        CatchIf('Parser');
     }
+    if(bye_bye) return;
     if(!end_ptr) {
         //Try to shift down size of immedate to fit in smaller size
         for(idx=0;idx!=operand_cnt;idx++)
@@ -4014,10 +4021,14 @@ U0 CompileOpcode(AST *oc) {
                         oc->opcode.args[idx]->x64_mode.imm>>=8;
                         goto retry;
                     }
+        "SMALL\n";
         throw('Compile');
     }
     if(is_jmp)  {
-        if(operand_cnt!=1) throw('Compile');
+        if(operand_cnt!=1) {
+            "TOO MANY\n";
+            throw('Compile');
+        }
         jit_data_bytes(Compiler.jit,end_ptr-buffer,buffer);
         CompileAsmConst(oc->opcode->args[0]->x64_mode_offset,4,TRUE,oc->label_scope);
     } else if(immoff!=-1) {
@@ -4031,6 +4042,12 @@ U0 CompileOpcode(AST *oc) {
         jit_data_bytes(Compiler.jit,end_ptr-buffer-4,buffer);
         for(idx=0;idx!=operand_cnt;idx++) {
             if(oc->opcode.args[idx]->x64_mode.type==X64O_MEM) {
+                //Make a dummy value to not deal with NULLS
+                if(!oc->opcode.args[idx]->x64_mode_offset) {
+                    oc->opcode.args[idx]->x64_mode_offset=MAlloc(sizeof(AST));
+                    oc->opcode.args[idx]->x64_mode_offset->type=AST_INT;
+                    oc->opcode.args[idx]->x64_mode_offset->int=0;
+                }
                 mbase=oc->opcode.args[idx]->x64_mode.mem.base;
                 if(mbase&&(mbase==HashFind("RIP",regs)||mbase==HashFind("EIP",regs)))
                     CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,4,TRUE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
@@ -5687,6 +5704,12 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     Free(value_a);
     break;
     case AST_ADDROF:
+    if(Compiler.asm_mode&&ast->unopArg->type==AST_NAME) {
+        if(var=HashFind(ast->unopArg->name,Compiler.locals)) {
+            PushIRInt(var->frame_off);
+            break;
+        }
+    }
     CompileAST(ast->unopArg,TRUE,TRUE);
     if(Compiler.stack->type2->type==HTT_ARRAY_TYPE) {
         if(Compiler.stack->type!=IRV_REG) {
@@ -6452,7 +6475,11 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
             throw('Compile');
         }
         if(pass_by_ref) {
-            if(var->is_extern_ptr) {
+            if(var->is_local_unlinked) {
+                LoadSymPtrIntoReg(var->str,idx=GetFreeIReg);
+                PushIRReg(var->hc_type,idx);
+                break;
+            } else if(var->is_extern_ptr) {
                 PushIRIndirX(var->hc_type,idx=GetFreeIReg,0);
                 jit_movi(Compiler.jit,jit_R(idx),var->extern_ptr);
             } else if(var->is_static&&var->hc_type->type!=HTT_ARRAY_TYPE) {
@@ -6475,7 +6502,11 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
             }
             break;
         } else {
-            if(var->is_extern_ptr) {
+            if(var->is_local_unlinked) {
+                LoadSymPtrIntoReg(var->str,idx=GetFreeIReg);
+                PushIRReg(var->hc_type,idx);
+                break;
+            } else if(var->is_extern_ptr) {
                 if(IsF64(var->hc_type)) {
                     PushIRFReg(var->hc_type,GetFreeFReg);
                 } else {
@@ -7764,42 +7795,22 @@ U0 EnterFunc(U0 *frame) {
 U0 LeaveFunc() {
     VectorPop(_Debugger.call_stack),VectorPop(_Debugger.call_stack);
 }
-AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,Bool reg_only=FALSE) {
+AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,Bool reg_only=FALSE,Bool index_only=FALSE) {
     AST *ret=NULL;
     AST *binop_a,*binop_b;
     I64 cnt,s;
     CReg *reg;
     try {
         if(reg_only) goto rchk;
-        switch(a) {
+        switch(a->type) {
             //SIB
             case AST_ADD:
             binop_a=CompileX64Mode(a->binop.a,base,index,scale,offsets);
             binop_b=CompileX64Mode(a->binop.b,base,index,scale,offsets);
-            for(cnt=0;cnt!=2;cnt++) {
-                if(binop_a&&binop_a->x64_mode->type==X64O_REG) {
-                    if(binop_b&&binop_b->x64_mode->type==X64O_REG) {
-                        if(*base||*index) {
-                            ParserFail2(a,"Only one base and index register allowed.");
-                        }
-                        *base=binop_b->x64_mode->reg;
-                        *index=binop_a->x64_mode->reg;
-                        *scale=1;
-                        FreeAST(binop_a),FreeAST(binop_b);
-                        break;
-                    }
-                    if(!*base) *base=binop_a->x64_mode->reg;
-                    if(!*index) *index=binop_a->x64_mode->reg;
-                    FreeAST(binop_a);
-                    VectorPush(offsets,binop_b);
-                    break;
-                }
-                SwapI64(&binop_a,&binop_b);
-            }
             break;
             case AST_MUL:
-            binop_a=CompileX64Mode(a->binop.a,base,index,scale,offsets,TRUE);
-            binop_b=CompileX64Mode(a->binop.b,base,index,scale,offsets,TRUE);
+            binop_a=CompileX64Mode(a->binop.a,base,index,scale,offsets,TRUE,TRUE);
+            binop_b=CompileX64Mode(a->binop.b,base,index,scale,offsets,TRUE,TRUE);
             for(cnt=0;cnt!=2;cnt++) {
                 if(binop_a&&binop_a->x64_mode->type==X64O_REG) {
                     switch(s=EvalAST(binop_b)) {
@@ -7825,6 +7836,12 @@ AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,
                 ret=MAlloc(sizeof(AST));
                 ret->type=AST_X64_MODE;
                 ret->x64_mode=X64ModeReg(reg);
+                if((!index_only)&&base&&!*base) *base=reg;
+                else if(index&&!*index) *index=reg;
+                else {
+                    ParserFail2(a,"Only 1 base and index allowed for SIB.");
+                    
+                }
                 return ret;
             } else if(reg_only)
                 return NULL;
@@ -7836,8 +7853,8 @@ AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,
     }
     return NULL;
 }
-AST *ParseX64Mode(CCmpCtrl *cc) {
-    I64 scale=0,r;
+AST *ParseX64Mode(CCmpCtrl *cc,COpcode *opc) {
+    I64 scale=0,r,max_width;
     CCompilerState *cstate;
     CFunction *patcher;
     CReg *seg=NULL,*base=NULL,*index=NULL;
@@ -7846,19 +7863,28 @@ AST *ParseX64Mode(CCmpCtrl *cc) {
     CIRValue *ir_value;
     CType *addr_type=NULL;
     Bool is_indirect=FALSE;
-    addr_type=ParseType(NULL,cc,NULL);
+    if(cc->token==TK_IDENT&&GetType(cc->cur_str))
+        addr_type=GetType(cc->cur_str),Lex(cc);
+    Compiler.asm_mode=TRUE;
+    Compiler.no_array_access_mode=TRUE;
     tmp=ParseExprNoComma(cc); //Dont free as may contain the offset we need,leave it to the gc
+    Compiler.no_array_access_mode=FALSE;
+    Compiler.asm_mode=FALSE;
     offsets=VectorNew;
     if(!tmp) goto sib;
-    Compiler.asm_mode=TRUE;
     tmp2=CompileX64Mode(tmp,&base,&index,&scale,offsets,TRUE);
     loop:
     if(tmp2&&tmp2->type==AST_X64_MODE) {
         //Passed only_reg above
         if(!seg&&cc->token==':') {
-            seg=    tmp2->x64_mode->reg;
+            seg=tmp2->x64_mode->reg;
             FreeAST(tmp2);
             Lex(cc);
+            Compiler.asm_mode=TRUE;
+            Compiler.no_array_access_mode=TRUE;
+            tmp=ParseExprNoComma(cc);
+            Compiler.asm_mode=FALSE;
+            Compiler.no_array_access_mode=FALSE;
             tmp2=CompileX64Mode(tmp,&base,&index,&scale,offsets,TRUE);
             goto loop;
         } else {
@@ -7866,23 +7892,24 @@ AST *ParseX64Mode(CCmpCtrl *cc) {
         }
     } else {
         FreeAST(tmp2);
-        Compiler.no_array_access_mode=TRUE;
         //only_reg not passed
         tmp2=CompileX64Mode(tmp,&base,&index,&scale,offsets);
-        Compiler.no_array_access_mode=FALSE;
         FreeAST(tmp2);
         tmp2=NULL;
         sib:
         if(cc->token=='[') {
             is_indirect=TRUE;
             Lex(cc);
+            Compiler.asm_mode=TRUE;
             tmp=ParseExpr(cc);
+            Compiler.asm_mode=FALSE;
             if(!tmp) ParserFail(cc,"Expected an SIB expression with an optional offset.");
             tmp2=CompileX64Mode(tmp,&base,&index,&scale,offsets);
             if(cc->token!=']') ParserFail(cc,"Expected a ']'.");
             Lex(cc);
             goto gotsib;
         }
+        Compiler.asm_mode=FALSE;
         if(!tmp) return NULL;
     }
     if(cc->token=='[')
@@ -7895,7 +7922,6 @@ AST *ParseX64Mode(CCmpCtrl *cc) {
     FreeAST(tmp2);
     ret=MAlloc(sizeof(AST));
     ret->type=AST_X64_MODE;
-    ret->x64_mode_offset=NULL;
     while(offsets->size) {
         offset=VectorPop(offsets);
         if(!ret->x64_mode_offset)
@@ -7911,15 +7937,43 @@ AST *ParseX64Mode(CCmpCtrl *cc) {
     if(!is_indirect) {
         if(base)
             ret->x64_mode=X64ModeReg(base);
-        else
+        else {
             //See x64_mode_offsets;
-            ret->x64_mode=X64ModeImm(0x1122334455); //Will be trimmed down to fit in a lesser-sized value dft is 64bit
+            max_width=0;
+            for(;opc;opc=opc->next_op) {
+                if(opc->flags&OPC_F_IB)
+                    max_width=MaxI64(max_width,1);
+                else if(opc->flags&OPC_F_IW)
+                    max_width=MaxI64(max_width,2);
+                else if(opc->flags&OPC_F_ID)
+                    max_width=MaxI64(max_width,4);
+                else if(opc->flags&OPC_F_IQ)
+                    max_width=MaxI64(max_width,8);
+            }
+            switch (max_width) {
+                case 1:
+                ret->x64_mode=X64ModeImm(0xff);
+                break;
+                case 2:
+                ret->x64_mode=X64ModeImm(0xffff);
+                break;
+                case 4:
+                ret->x64_mode=X64ModeImm(0xffffFFFF);
+                break;
+                case 8:
+                ret->x64_mode=X64ModeImm(0xffffFFFFffff);
+                break;
+                default:
+                //???
+                ret->x64_mode=X64ModeImm(0);
+            }
+        }
     } else {
         if(addr_type)
-            r=addr_type->type;
+            r=addr_type->sz;
         else
             r=0;
-        if(!base&&!index)
+        if((!base)&&!index)
             base=HashFind("RIP",regs);
         ret->x64_mode=X64ModeMem(seg,scale,index,base,0x11223344,r);
     }
@@ -8018,18 +8072,56 @@ U0 PatchAsmPatcher(CFunction *parent,CAsmPatcher *patcher ) {
         }
     }
 }
+U0 InheritLocalsFromState(CCompilerState *state) {
+    I64 idx=state->locals->mask+1;
+    CVariable *var,*clone;
+    while(--idx>=0) {
+        for(var=state->locals->body[idx];var;var=var->next) {
+            clone=MAllocIdent(var);
+            clone->str=StrNew(clone->str);
+            HashAdd(clone,Compiler.locals);
+        }
+    }
+}
+U0 ImportLabelsFromStateAsVars(CCompilerState *state,I64 local_scope=-2) {
+    I64 idx=state->labels->mask+1,scope;
+    U8 buffer[256],*bptr,*end_ptr;
+    bptr=buffer;
+    CVariable *var;
+    CLabel *label;
+    while(--idx>=0) {
+        for(label=state->labels->body[idx];label;label=label->next) {
+            end_ptr=StrLen(label->str)+label->str;
+            if(StrScan(label->str,LOCAL_LAB_FMT,&bptr,&scope)!=end_ptr) {
+                var=MAlloc(sizeof(CVariable));
+                var->str=StrNew(label->str);
+                var->type=HTT_VAR;
+                var->link.type=LINK_EXTERN;
+                var->hc_type=GetType("U8i",1);
+                var->is_local_unlinked=TRUE;
+                HashAdd(var,Compiler.locals);
+            } else if(scope==local_scope) {
+                var=MAlloc(sizeof(CVariable));
+                var->str=StrNew(buffer);
+                var->type=HTT_VAR;
+                var->link.type=LINK_EXTERN;
+                var->is_local_unlinked=TRUE;
+                var->hc_type=GetType("U8i",1);
+                HashAdd(var,Compiler.locals);
+            }
+        }
+    }
+}
 U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
     AST *offset;
     Bool old_asm_mode=Compiler.asm_mode;
     CFunction *func;
     CCompilerState *cstate;
-    CHashTable *old_locs=Compiler.locals;
     I64 r,idx,*value,cnt=0,__local_scope=-1;
     CVariable *var,*nvar;
     CAsmPatcher *patcher;
     CLabel *lab;
     CIRValue *ir_value;
-    U8 *local_lab_name=MAlloc(128);
     I64 (*fptr)();
     if(1) {
         patcher=MAlloc(sizeof(CAsmPatcher));
@@ -8049,7 +8141,10 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
             break;
         }
         cstate=NewCompilerState;
+        InheritLocalsFromState(cstate);
+        ImportLabelsFromStateAsVars(cstate,local_scope);
         Compiler.asm_mode=TRUE;
+        Compiler.in_func=TRUE;
         Compiler.imports=cstate->imports;
         PushIRReg(GetType("I64i"),r=GetFreeIReg);
         try {
@@ -8079,7 +8174,6 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
     }
     patcher->next_patch=Compiler.asm_patches;
     Compiler.asm_patches=patcher;
-    Free(local_lab_name);
 }
 AST *ParseOpcode(CCmpCtrl *cc) {
     I64 acnt,idx;
@@ -8094,7 +8188,7 @@ AST *ParseOpcode(CCmpCtrl *cc) {
     Lex(cc);
     Compiler.asm_mode=TRUE;
     for(idx=0;idx!=acnt;idx++) {
-        if(!(args[idx]=ParseX64Mode(cc)))
+        if(!(args[idx]=ParseX64Mode(cc,opc)))
             ParserFail(cc,"Expected addressing mode.");
         if(idx+1<acnt)
             if(cc->token!=',')
@@ -8261,7 +8355,6 @@ AST *ParseAsmBlock(CCmpCtrl *cc) {
         Lex(cc);
         switch(cc->token) {
             start:
-            cur->name=name;
             label=MAlloc(sizeof(CLabel));
             label->type=HTT_LABEL;
             label->local_scope=Compiler.label_scope;
@@ -8283,6 +8376,7 @@ AST *ParseAsmBlock(CCmpCtrl *cc) {
                 Compiler.label_scope++;
             }
             end:
+            cur->name=name;
             label->str=StrNew(name);
             HashAdd(label,Compiler.labels);
             Lex(cc);
@@ -9141,6 +9235,8 @@ Bool ParseAndRun(CCmpCtrl *cc) {
     }
     return FALSE;
 }
+
+
 
 
 
