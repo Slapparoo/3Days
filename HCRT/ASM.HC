@@ -18,9 +18,6 @@ static U8 *SkipComment(U8 *text) {
 #define X87 5
 #define MM 6
 #define XMM 7
-class CReg:CHash {
-    I64 code,type;
-};
 CHashTable *regs=HashTableNew(64);
 CHashTable *opcodes=HashTableNew(1<<9);
 #define OPC_F_SR 1 // /R
@@ -45,54 +42,8 @@ CHashTable *opcodes=HashTableNew(1<<9);
 //Operand size prefix
 #define OPC_F_16 (1<<20)
 #define OPC_F_COND (1<<21)
-class COpcodeArg {
-    I64 type;
-    #define OPCA_NONE 0
-    #define OPCA_REG 1
-    #define OPCA_R8 2
-    #define OPCA_R16 3
-    #define OPCA_R32 4
-    #define OPCA_R64 5
-    #define OPCA_RM8 6
-    #define OPCA_RM16 7
-    #define OPCA_RM32 8
-    #define OPCA_RM64 9
-    #define OPCA_IMM8 10
-    #define OPCA_IMM16 11
-    #define OPCA_IMM32 12
-    #define OPCA_IMM64 13
-    #define OPCA_MOFFS8 14
-    #define OPCA_MOFFS16 15
-    #define OPCA_MOFFS32 16
-    #define OPCA_UIMM8 17
-    #define OPCA_UIMM16 18
-    #define OPCA_UIMM32 19
-    #define OPCA_UIMM64 20
-    #define OPCA_REL8 21
-    #define OPCA_REL16 22
-    #define OPCA_REL32 23
-    #define OPCA_M8 24
-    #define OPCA_M16 25
-    #define OPCA_M32 26
-    #define OPCA_M64 27
-    #define OPCA_STI 28
-    #define OPCA_SREG 29
-    union {
-        CReg *reg;
-    };
-};
 #define HASH_TYPE_OPCODE 0
 #define HASH_TYPE_OPCODE_ALIAS 1
-class COpcode:CHash {
-    COpcode *prev_op,*next_op;
-    U8 bytes[16];
-    I64 bcnt;
-    I64 flags,arg_count;
-    COpcodeArg args[3];
-};
-class COpcodeAlias:CHash {
-    COpcode *opcode;
-};
 U0 ParseOpcodes(U8 *text) {
     CReg *newreg;
     I64 len,rtype;
@@ -159,7 +110,6 @@ U0 ParseOpcodes(U8 *text) {
             U8 *orig="";
             opc->bytes[off]=Str2I64(text,16,&text);
         }
-
         I64 argument=0;
         attrloop:
         term:
@@ -378,6 +328,7 @@ U0 ParseOpcodes(U8 *text) {
             prev->next_op=opc;
         }
         while(opc) {
+            opc->arg_count=argument;
             prev=opc;opc=opc->prev_op;
         }
         HashAdd(prev,opcodes);
@@ -406,7 +357,6 @@ U0 ParseOpcodes(U8 *text) {
 }
 U8 *opcodesF=#include "Opcodes.STR.HC";
 ParseOpcodes(opcodesF);
-
 // See ext/x64.h
 Bool __X64RegIsIntExt(I64 code) {
     return code>0b111;
@@ -430,29 +380,6 @@ U8 X64Rex(U8 w,U8 r,U8 x,U8 b) {
     if(wrxb) return (0b0100<<4)|wrxb;
     return 0;
 }
-class X64Mode {
-    I64 type;
-    #define X64O_REG 0
-    #define X64O_MEM 1
-    #define X64O_IMM 2
-    #define X64O_LABEL 3
-    union {
-        CReg *reg;
-        class {
-	    CReg *segment;
-            CReg *base;
-            CReg *index;
-            I64 scale;
-            I32 disp;
-            I64 width;
-        } mem;
-        class {
-            U0 *jit_label;
-            I64 label_offset;
-        };
-        U64 imm;
-    };
-};
 CReg *Str2Reg(U8 *str) {
     return HashFind(str,regs);
 }
@@ -622,7 +549,7 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
     *it++=X64ModRM(mdrmcode,mdrmreg,mdrmrm);
     if(SIB) *it++=X64SIB(sibs,sibi,sibb);
     insdisp:
-    if(sibooff&&disps==4) *sibooff=it-orig_it;
+    if(sibooff) *sibooff=it-orig_it;
     switch(disps) {
         case 0: break;
         case 1:
@@ -693,7 +620,7 @@ U0 SibTests() {
         );
         "[%s+0xff]\n",RegArr[base];
         for(bstart=buffer;bstart!=bend;bstart++)
-        "%p\n",*bstart;
+            "%p\n",*bstart;
     }
     //Seems to work.
     for(index=0;index!=len;index++) {
@@ -717,13 +644,13 @@ U0 X64ModeFree(X64Mode *m) {
 /**
  * Jumps are not encoded here
  */
-U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
+U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,I64 *imm_sz,...) {
   if(sibooff) *sibooff=-1;
   if(immoff) *immoff=-1;
   U8 *origip=ip;
     if(is_jmp) *is_jmp=FALSE;
     U8 buffer[32];
-    Bool ret_after_encode=FALSE;
+    Bool ret_after_encode=FALSE,rexb=FALSE,rex48=FALSE,rexw=FALSE;
     X64Mode **modes=argv(U0*);
     COpcode *opc=HashFind(name,opcodes);
     if(opc->type==HASH_TYPE_OPCODE_ALIAS)
@@ -742,7 +669,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
     X64Mode *mem=NULL;
     I64 passed=1;
     I64 arg=0;
-    for(;arg!=3;arg++) {
+    for(;arg!=argc;arg++) {
         switch(opc->args[arg].type) {
             case OPCA_NONE: if(arg<argc) goto fail;
             goto pass;
@@ -848,7 +775,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
             case OPCA_MOFFS16:
             case OPCA_MOFFS32:
             if(modes[arg]->type==X64O_MEM) {
-                if(modes[arg]->mem.index==NULL&&modes[arg]->mem.base=NULL)
+                if(modes[arg]->mem.index==NULL&&modes[arg]->mem.base==NULL)
                     goto pass;
             }
             goto fail;
@@ -918,6 +845,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
     if(!passed) goto nextop;
     U8 *endptr=buffer;
     encode:
+    U8 *enc_begin=endptr;
     I64 op_sz=0;
     //Check for REL32
     if(is_jmp)
@@ -952,7 +880,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
     I64 add=0;
     I64 immsz=0;
     U64 imm=0x0;
-    Bool rexb=FALSE,rex48=FALSE,rexw=FALSE;
+    rexb=FALSE,rex48=FALSE,rexw=FALSE;
     //Detect MOFFS
     for(arg=0;arg!=argc;arg++) {
         switch(opc->args[arg].type) {
@@ -1142,34 +1070,38 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,...) {
 			       sibo,
 			       &_sibooff
         );
-	if(sibooff&&_sibooff!=-1) *sibooff=origendptr-origip;
+        if(sibooff&&_sibooff!=-1) *sibooff=endptr-enc_begin;
       }
     } else {
         MemNCpy(endptr,opcadd,opc->bcnt);
         endptr+=opc->bcnt;
     }
     if(immsz) {
-        if(ret_after_encode) if(immoff&&immsz==4) *immoff=endptr-origip;
-        switch(immsz) {
-            case 1:
-            *endptr++=imm;
-            break;
-            case 2:
-            endptr(U16*)[0]=imm;
-            endptr+=2;
-            break;
-            case 4:
-            endptr(U32*)[0]=imm;
-            endptr+=4;
-            break;
-            case 8:
-            endptr(U64*)[0]=imm;
-            endptr+=8;
-            break;
+        if(ret_after_encode) {
+            if(immoff) *immoff=endptr-origip;
+            switch(immsz) {
+                case 1:
+                *endptr++=imm;
+                break;
+                case 2:
+                endptr(U16*)[0]=imm;
+                endptr+=2;
+                break;
+                case 4:
+                endptr(U32*)[0]=imm;
+                endptr+=4;
+                break;
+                case 8:
+                endptr(U64*)[0]=imm;
+                endptr+=8;
+                break;
+            }
         }
     }
     if(ret_after_encode) {
-	return endptr;
+        if(imm_sz)
+            *imm_sz=immsz;
+        return endptr;
     }
     operand_sizes[item]=op_sz;
     sizes[item]=endptr-buffer;

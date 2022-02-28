@@ -57,7 +57,8 @@ epm
 *~
 !ext/wineditline-2.206/lib64/*
 !SDL2.dll
-HCRT/HCRT.BIN
-HCRT.BIN
 *.BIN
-3d.bootstrap
+!HCRT/HCRT.BIN
+3d_loader
+chroot/*
+proot

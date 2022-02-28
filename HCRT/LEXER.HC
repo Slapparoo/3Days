@@ -118,7 +118,6 @@ U0 LexSkipEol(CCmpCtrl *cc)
   do ch=LexGetChar(cc);
   while (Bt(char_bmp_non_eol,ch));
 }
-
 U0 LexBackupLastChar(CCmpCtrl *cc)
 {
     CLexFile *tmpf=cc->lex_include_stk;
@@ -188,7 +187,7 @@ U0 LexPopRestore(CCmpCtrl *cc)
     cc->lex_prs_stk=tmpf->next;
     Free(tmpf);
 }
-static CHashTable *lexer_macros=HashTableNew(0x100);
+CHashTable *lexer_macros=HashTableNew(0x100);
 class CHashSrcSym:CHash {
   U8 *src_link;
 };
@@ -339,7 +338,7 @@ CCmpCtrl *CmpCtrlNew(U8 *buf=NULL,I64 flags=0,U8 *filename=NULL)
 class CHashKeyword:CHash {
   I64 user_data0;
 };
-static CHashTable *keywords=HashTableNew(0x10);
+CHashTable *keywords=HashTableNew(0x10);
 class CCmpGlbls {
     U32 *dual_U16_tokens1;
     U32 *dual_U16_tokens2;
@@ -423,6 +422,17 @@ U0 CInit() {
     d['/']=TK_DIV_EQU<<16+'=';
 }
 CInit;
+Bool ParseAndRun(CCmpCtrl *cc);
+U0 __LexExe(CCmpCtrl *cc) {
+    Lex(cc);
+    if(cc->token!='{') LexExcept(cc,"Expected '{'.");
+    Lex(cc);
+    for(;cc->token!='}';) {
+        if(!ParseAndRun(cc))
+            LexExcept(cc,"Unable to parse stmt.");;
+    }
+    Lex(cc);
+}
 I64 Lex(CCmpCtrl *cc) {
     I64 i,j,k,l,ch;
     CHash *tmph;
@@ -885,13 +895,14 @@ lex_check_comment:
                 LexWarn(cc,"Unable to include file \"%q\".",cc->cur_str);
                 goto lex_cont;
               }
+              /*
               if(FileExtDot(buf2)) {
                   if(!StrCmp(FileExtDot(buf2),".BIN")) {
                     LoadBinFile(buf2);
                     Free(buf2);
                     goto lex_cont;
                   }
-              }
+              }*/
               buf3=buf2;
               if(IsWindows) {
                 if(StrOcc(buf2,'\\')) {
@@ -1076,7 +1087,7 @@ lex_ifndef:
                 (cc->exe_stream=(MAlloc(sizeof(CExeBlk))))->text=StrNew("");
                 if(tmpe) tmpe->next=cc->exe_stream;
                 cc->exe_stream->last=tmpe;
-                __LexExe();
+                __LexExe(cc);
                 cc->flags|=CCF_USE_EXE_TEXT;
             } else {
                 LexExcept(cc,"Invalid preproccessor directive \"%s\".",cc->cur_str);
@@ -1088,91 +1099,6 @@ lex_end:
     cc->flags|=CCF_USE_LAST_U16;
     return cc->token;
 }
-/*
-CCmpCtrl *ctrl=CmpCtrlNew("if(",0,NULL);
-"%d\n"
-,Lex(ctrl)==TK_IDENT;
-"%s\n",ctrl->cur_str;
-"%d\n"
-,LexGetChar(ctrl)=='(';
-CCmpCtrl *ctrl=CmpCtrlNew("#define ABC123 TOADS \\\nARE COOL\n",0,NULL);
-"%d\n"
-,Lex(ctrl)==TK_EOF;
-CHashDefineStr *macro;
-"%p\n"
-,macro=HashFind("ABC123",lexer_macros);
-if(macro) {
-    "%s,%s\n",macro->str,macro->data;
-}
-CCmpCtrl *ctrl=CmpCtrlNew("#define ABC if\nABC ABC",0,NULL);
-"%d\n"
-,Lex(ctrl)==TK_IDENT;
-"%s\n",ctrl->cur_str;
-"%d\n"
-,Lex(ctrl)==TK_IDENT;
-"%s\n",ctrl->cur_str;
-CCmpCtrl *ctrl=CmpCtrlNew("!= && *= ++ -> :: <= == >= ^= || %=");
-I64 tokens[]={
-  TK_NOT_EQU,
-  TK_AND_AND,
-  TK_MUL_EQU,
-  TK_PLUS_PLUS,
-  TK_DEREFERENCE,
-  TK_DBL_COLON,
-  TK_LESS_EQU,
-  TK_EQU_EQU,
-  TK_GREATER_EQU,
-  TK_XOR_EQU,
-  TK_OR_OR,
-  TK_MOD_EQU
-};
-I64 cnt=sizeof(tokens)/sizeof(*tokens),i;
-for(i=0;i!=cnt;i++) {
-  "%d\n"
-  ,Lex(ctrl)==tokens[i];
-}
-CCmpCtrl *ctrl=CmpCtrlNew("&= += -- << >> ^^ |= -= /=");
-I64 tokens[]={
-  TK_AND_EQU,
-  TK_ADD_EQU,
-  TK_MINUS_MINUS,
-  TK_SHL,
-  TK_SHR,
-  TK_XOR_XOR,
-  TK_OR_EQU,
-  TK_SUB_EQU,
-  TK_DIV_EQU,
-};
-I64 cnt=sizeof(tokens)/sizeof(*tokens),i;
-for(i=0;i!=cnt;i++) {
-  "%d\n"
-  ,Lex(ctrl)==tokens[i];
-}
-CCmpCtrl *ctrl=CmpCtrlNew("#if 1\ntoad\n#endif");
-"%d\n"
-,Lex(ctrl)==TK_IDENT;
-"%s\n",ctrl->cur_str;
-"%d\n"
-,Lex(ctrl)==TK_EOF;
-CCmpCtrl *ctrl=CmpCtrlNew("#if 0\ntoad\n#else\n frog\n#endif");
-"%d\n"
-,Lex(ctrl)==TK_IDENT;
-"%s\n",ctrl->cur_str;
-"%d\n"
-,Lex(ctrl)==TK_EOF;
-CCmpCtrl *ctrl=CmpCtrlNew("10 10.e10");
-"%d(%d)\n"
-,Lex(ctrl)==TK_I64,ctrl->cur_i64;
-"%d(%n)\n"
-,Lex(ctrl)==TK_F64,(ctrl->cur_f64);
-U8 *HelloWorld=MStrPrint("\"%q\";","HELLO WORLD\n");
-FileWrite("HELLO_WORLD.HC",HelloWorld,StrLen(HelloWorld));
-CCmpCtrl *ctrl=CmpCtrlNew("#include \"HELLO_WORLD.HC\"");
-"%d(%s)\n"
-,Lex(ctrl)==TK_STR,ctrl->cur_str;
-"%d\n"
-,Lex(ctrl)==';';
-*/
 U0 DbgPrintToken(CCmpCtrl *cc,I64 t) {
   switch(t) {
     case TK_EOF: "<EOF>\n"; break;
@@ -1217,32 +1143,6 @@ Bool LexSetReplMode(CCmpCtrl *ctrl,Bool set) {
         ctrl->flags&=~CCF_REPL_MODE;
     return ret;
 }
-U0 *LexItem(CCmpCtrl *ctrl) {
-    Fs->last_cc=ctrl;
-    I64 token=Lex(ctrl);
-    CHashSrcSym dummy;
-    MemSet(&dummy,0,sizeof(dummy));
-    HashSrcFileSet(ctrl,&dummy);
-    U0 *ret=NULL;
-    switch(token) {
-        start:
-        case TK_IDENT: ret=HC_CreateIdent(ctrl->cur_str); break;
-        case TK_CHAR_CONST:
-        case TK_I64: ret=HC_CreateI64(ctrl->cur_i64); break;
-        case TK_F64: ret=HC_CreateF64(ctrl->cur_f64); break;
-        case TK_STR: ret=HC_CreateStr(ctrl->cur_str); break;
-        default:
-        ret=HC_CreateToken(token);
-        break;
-        end:
-        I64 ln;
-        U8 *fn=MAlloc(StrLen(dummy.src_link));
-        StrScan(dummy.src_link,"%s,%d",&fn,&ln);
-        Free(dummy.src_link);
-        //DbgPrintToken(ctrl,token);
-        return HC_SetPosFromLexer(ret,fn,ln);
-    }
-}
 U8 *LexMatchFile(CCmpCtrl *cc,U8 *name) {
     I64 cnt=cc->file_lines->mask+1;
     U8 *delim,*bptr,*bptr2;
@@ -1267,7 +1167,7 @@ I64 *LexFileLines(CCmpCtrl *cc,U8 *name,I64 *cnt) {
     if(cnt) *cnt=MSize(lns->line_starts)/sizeof(I64);
     return lns->line_starts;
 }
-U0 __StreamPrint(U8 *fmt,...) {
+U0 StreamPrint(U8 *fmt,...) {
     CCmpCtrl *last_cc=Fs->last_cc;
     U8 *buf=StrPrintJoin(NULL,fmt,argc,argv),*st;
     if(last_cc) {
@@ -1281,4 +1181,3 @@ U0 __StreamPrint(U8 *fmt,...) {
     }
     Free(buf);
 }
-

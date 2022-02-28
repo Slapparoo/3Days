@@ -110,8 +110,8 @@ typedef struct jit_disasm {
 
 struct jit_disasm jit_disasm_general = {
 	.indent_template = "    ",
-	.reg_template = "r%i",
-	.freg_template = "fr%i",
+	.reg_template = "r%i<%i>",
+	.freg_template = "fr%i<%i>",
 	.arg_template = "arg%i",
 	.farg_template = "farg%i",
 	.reg_out_template = "out",
@@ -127,8 +127,8 @@ struct jit_disasm jit_disasm_general = {
 
 struct jit_disasm jit_disasm_compilable = {
 	.indent_template = "    ",
-	.reg_template = "R(%i)",
-	.freg_template = "FR(%i)",
+	.reg_template = "R(%i)<%i>",
+	.freg_template = "FR(%i)<%i>",
 	.arg_template = "arg(%i)",
 	.farg_template = "farg(%i)",
 	.reg_fp_template = "R_FP",
@@ -271,12 +271,12 @@ void jit_get_reg_name(struct jit_disasm *disasm, char * r, int reg)
 	else if (reg == FR_IMM) strcpy(r, disasm->reg_fimm_template);
 	else {
 		if (JIT_REG(reg).spec == JIT_RTYPE_REG) {
-			if (JIT_REG(reg).type == JIT_RTYPE_INT) sprintf(r, disasm->reg_template, JIT_REG(reg).id);
-			else sprintf(r, disasm->freg_template, JIT_REG(reg).id);
+			if (JIT_REG(reg).type == JIT_RTYPE_INT) sprintf(r, disasm->reg_template, JIT_REG(reg).id,JIT_REG(reg).ssa);
+			else sprintf(r, disasm->freg_template, JIT_REG(reg).id,JIT_REG(reg).ssa);
 		}
 		else if (JIT_REG(reg).spec == JIT_RTYPE_ARG) {
-			if (JIT_REG(reg).type == JIT_RTYPE_INT) sprintf(r, disasm->arg_template, JIT_REG(reg).id);
-			else sprintf(r, disasm->farg_template, JIT_REG(reg).id);
+			if (JIT_REG(reg).type == JIT_RTYPE_INT) sprintf(r, disasm->arg_template, JIT_REG(reg).id,JIT_REG(reg).ssa);
+			else sprintf(r, disasm->farg_template, JIT_REG(reg).id,JIT_REG(reg).ssa);
 		} else sprintf(r, "%s", disasm->reg_unknown_template);
 	}
 }
@@ -290,13 +290,13 @@ static void print_rmap_callback(jit_tree_key key, jit_tree_value value, void *di
 
 static void print_reg_liveness_callback(jit_tree_key key, jit_tree_value value, void *disasm)
 {
-	char buf[256];
+    char buf[256];
 	jit_get_reg_name(disasm, buf, key);
 	printf("%s ", buf);
 }
 
 #define print_rmap(disasm, n) jit_tree_walk(n, print_rmap_callback, disasm)
-#define print_reg_liveness(disasm, n) //jit_tree_walk(n, print_reg_liveness_callback, disasm)
+#define print_reg_liveness(disasm, n) {long iter;jit_value r;vec_foreach(&(n)->vec,r,iter) {char buf[256];jit_get_reg_name(disasm, buf, r);printf("%s ", buf);}}
 
 
 static inline int jit_op_is_cflow(jit_op * op)
@@ -650,9 +650,9 @@ static void jit_dump_ops_general(struct jit *jit, jit_tree *labels, int verbosit
 
 		if ((verbosity & JIT_DEBUG_LIVENESS) && (op->live_in) && (op->live_out)) {
 			printf("In: ");
-			print_reg_liveness(&jit_disasm_general, op->live_in->root);
+			print_reg_liveness(&jit_disasm_general, op->live_in);
 			printf("\tOut: ");
-			print_reg_liveness(&jit_disasm_general, op->live_out->root);
+			print_reg_liveness(&jit_disasm_general, op->live_out);
 		}
 
 		if ((verbosity & JIT_DEBUG_ASSOC) && (op->regmap)) {
@@ -682,6 +682,7 @@ static inline void print_op_bytes(FILE *f, struct jit *jit, jit_op *op) {
 }
 void jit_dump_ops(struct jit * jit, int verbosity)
 {
+    if(!jit) return;
 	if (!(verbosity & (JIT_DEBUG_CODE | JIT_DEBUG_COMPILABLE | JIT_DEBUG_COMBINED)))
 		verbosity |= JIT_DEBUG_OPS;
 

@@ -729,7 +729,7 @@ void jit_patch_local_addrs(struct jit *jit)
 		if ((GET_OP(op) == JIT_REF_CODE) || (GET_OP(op) == JIT_REF_DATA)) {
 			unsigned char *buf = jit->buf + (int64_t) op->patch_addr;
 			jit_value addr = jit_is_label(jit, (void *)op->arg[1]) ? ((jit_label *)op->arg[1])->pos : op->arg[1];
-			common86_mov_reg_imm(buf, op->r_arg[0], jit->buf + addr);
+			*(int32_t*)buf=((addr+jit->buf)-(buf+4)); //32 bit  displacement
 		}
 
 		if(GET_OP(op)==JIT_RELOCATION) {
@@ -772,6 +772,10 @@ void jit_gen_op(struct jit * jit, struct jit_op * op)
 	int found = 1;
 
 	switch (GET_OP(op)) {
+		case JIT_BREAKPOINT:
+		    op->bp_ptr=jit->ip-jit->buf;
+			jit_insert_breakpoint(jit,(void*)op->arg[0],(void*)op->arg[1],op->arg[2]);
+			break;
 		case JIT_ADD:
 			if ((a1 != a2) && (a1 != a3)) {
 				if (imm) common86_lea_membase(jit->ip, a1, a2, a3);
@@ -893,6 +897,11 @@ void jit_gen_op(struct jit * jit, struct jit_op * op)
 
 		case JIT_REF_CODE:
 		case JIT_REF_DATA:
+		    amd64_emit_rex(jit->ip, 8, (a1), 0, (AMD64_RIP));
+		    *(jit->ip++)=0x8D; //LEA
+			x86_membase_emit ((jit->ip), (a1) & 0x7, (AMD64_RIP), (0x112233)); //0x112233 Forces a 32bit displacement
+		    op->patch_addr = JIT_BUFFER_OFFSET(jit)-4;
+		    break;
         case JIT_RELOCATION:
 			op->patch_addr = JIT_BUFFER_OFFSET(jit);
 			common86_mov_reg_imm_size(jit->ip, a1, 0xdeadbeefcafebabe, sizeof(void *));

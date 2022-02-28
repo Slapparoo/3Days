@@ -30,7 +30,6 @@ static jit_set * jit_set_new()
 	vec_init(&s->vec);
 	return s;
 }
-
 static jit_set * jit_set_clone(jit_set * s)
 {
 	jit_set * clone = jit_set_new();
@@ -44,14 +43,14 @@ static void jit_set_free(jit_set * s)
 	JIT_FREE(s);
 }
 
-static int jit_set_get(jit_set * s, int value)
+static int jit_set_get(jit_set * s, jit_value value)
 {
 	int iter;
 	vec_find(&s->vec, value, iter);
 	return iter!=-1;
 }
 
-static void jit_set_add(jit_set * s, int value)
+static void jit_set_add(jit_set * s, jit_value  value)
 {
 	if(!jit_set_get(s, value))
 	vec_push(&s->vec,value);
@@ -64,7 +63,7 @@ static void jit_set_addall(jit_set * target, jit_set * s)
 	vec_foreach(&s->vec, v, iter) jit_set_add(target,v);
 }
 
-static void jit_set_remove(jit_set * s, int value)
+static void jit_set_remove(jit_set * s, jit_value  value)
 {
 	vec_remove(&s->vec,value);
 }
@@ -72,7 +71,7 @@ static int IntCmp(const void*a,const void *b) {
 	return *(int*)a-*(int*)b;
 }
 static int ContainsAll(jit_set * super, jit_set * sub) {
-	int v,iter;
+	jit_value v,iter;
 	vec_foreach(&super->vec,v,iter) {
 		int iter2;
 		vec_find(&sub->vec, v, iter2);
@@ -83,5 +82,15 @@ static int ContainsAll(jit_set * super, jit_set * sub) {
 static  int jit_set_equal(jit_set * s1, jit_set * s2)
 {
 	return ContainsAll(s1, s2)&&ContainsAll(s2, s1);
+}
+static jit_set *jit_set_intersect(jit_set * a,jit_set * b) {
+    struct jit_set *ret=jit_set_new();
+    jit_value v;
+    long i;
+    vec_foreach(&a->vec,v,i) {
+        if(jit_set_get(b,v))
+            jit_set_add(ret,v);
+    }
+    return ret;
 }
 #endif

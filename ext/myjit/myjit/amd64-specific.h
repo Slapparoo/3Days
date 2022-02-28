@@ -41,56 +41,6 @@
 #define GET_GPREG_POS(jit, r) (- ((JIT_REG(r).id + 1) * REG_SIZE) - jit_current_func_info(jit)->allocai_mem)
 #define GET_FPREG_POS(jit, r) (- jit_current_func_info(jit)->gp_reg_count * REG_SIZE - (JIT_REG(r).id + 1) * sizeof(jit_float) - jit_current_func_info(jit)->allocai_mem)
 #define GET_ARG_SPILL_POS(jit, info, arg) ((- (arg + info->gp_reg_count + info->fp_reg_count) * REG_SIZE) - jit_current_func_info(jit)->allocai_mem)
-//Regs is from ptrace
-#if 0
-int64_t jit_debugger_get_reg(struct jit *jit,struct jit_op *op,jit_value r,const struct user_regs_struct *regs,const struct user_fpregs_struct *fregs) {
-		jit_hw_reg *reg=rmap_get(op->regmap,r);
-		if(!reg) {
-			int64_t *fp=regs->rbp;
-			if(JIT_REG(r).type==JIT_RTYPE_FLOAT)
-				fp=(void*)fp+GET_FPREG_POS(jit, r);
-			else if(JIT_REG(r).type==JIT_RTYPE_INT)
-				fp=(void*)fp+GET_GPREG_POS(jit, r);
-			return *fp;
-		} else {
-			if(JIT_REG(r).type==JIT_RTYPE_INT) {
-				switch(reg->id) {
-					case AMD64_RBX:
-					return regs->rbx;
-					case AMD64_RCX:
-					return regs->rcx;
-					case AMD64_RDX:
-					return regs->rdx;
-					case AMD64_RSI:
-					return regs->rsi;
-					case AMD64_RDI:
-					return regs->rdi;
-					case AMD64_R8:
-					return regs->r8;
-					case AMD64_R9:
-					return regs->r9;
-					case AMD64_R10:
-					return regs->r10;
-					case AMD64_R11:
-					return regs->r11;
-					case AMD64_R12:
-					return regs->r12;
-					case AMD64_R13:
-					return regs->r13;
-					case AMD64_R14:
-					return regs->r14;
-					case AMD64_R15:
-					return regs->r15;
-					case AMD64_RBP:
-					return regs->rbp;
-				}
-			} else if(JIT_REG(r).type==JIT_RTYPE_FLOAT) {
-				//https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/x86/sys/user.h;h=02d3db78891a409c79571343cd732a9cdcdc868a;hb=eefa3be8e4c2c721a9f277d8ea2e11180231829f
-				return *((int64_t*)(16*reg->id+(void*)fregs->xmm_space));
-			}
-		}
-}
-#endif
 static inline int GET_REG_POS(struct jit * jit, int r)
 {
 	if (JIT_REG(r).spec == JIT_RTYPE_REG) {
@@ -100,7 +50,87 @@ static inline int GET_REG_POS(struct jit * jit, int r)
 }
 
 #include "x86-common-stuff.c"
-
+extern void jit_DebugggerHit();
+static void jit_insert_breakpoint(struct jit *jit,jit_breakpoint_t *bp,void(*routine)(jit_debugger_regs* regs),jit_debugger_ctrl *ctrl) {
+    amd64_mov_reg_imm(jit->ip,AMD64_RAX,ctrl);
+    amd64_push_reg(jit->ip,AMD64_RAX);
+    amd64_mov_reg_imm(jit->ip,AMD64_RAX,bp);
+    amd64_push_reg(jit->ip,AMD64_RAX);
+    amd64_mov_reg_imm(jit->ip,AMD64_RAX,routine);
+    amd64_push_reg(jit->ip,AMD64_RAX);
+    amd64_mov_reg_imm(jit->ip,AMD64_RAX,jit_DebugggerHit);
+    amd64_call_reg(jit->ip,AMD64_RAX);
+    amd64_alu_reg_imm(jit->ip, X86_ADD, AMD64_RSP, 3*8);
+}
+void *jit_debugger_get_vreg_ptr_from_parent(struct jit *jit,void *fptr,struct jit_op *op,jit_value r) {
+    jit_hw_reg *reg;
+	if(JIT_REG(r).type) {
+		if((reg=rmap_get(op->regmap,r))&&jit_set_get(op->live_in,r))
+            return NULL;
+	} else
+        if((reg=rmap_get(op->regmap,r))&&jit_set_get(op->live_in,r))
+            return NULL;
+	return (fptr+GET_REG_POS(jit,r));
+}
+void *jit_debugger_get_reg_ptr(struct jit *jit,jit_debugger_regs *regs,struct jit_op *op,jit_value r) {
+	jit_hw_reg *reg;
+	if(JIT_REG(r).type) {
+		if((reg=rmap_get(op->regmap,r))&&jit_set_get(op->live_in,r)) {
+        switch(reg->id) {
+        case AMD64_XMM0: return &regs->XMM0;
+        case AMD64_XMM1: return &regs->XMM1;
+        case AMD64_XMM2: return &regs->XMM2;
+        case AMD64_XMM3: return &regs->XMM3;
+        case AMD64_XMM4: return &regs->XMM4;
+        case AMD64_XMM5: return &regs->XMM5;
+        case AMD64_XMM6: return &regs->XMM6;
+        case AMD64_XMM7: return &regs->XMM7;
+        }
+    } else if(jit_set_get(op->live_in,r)) {
+        return (regs->RBP+GET_REG_POS(jit,r));
+    }
+	} else {
+		if((reg=rmap_get(op->regmap,r))&&jit_set_get(op->live_in,r)) {
+        switch(reg->id) {
+        case AMD64_RAX:
+            return &regs->RAX;
+        case AMD64_RBX:
+            return &regs->RBX;
+        case AMD64_RCX:
+            return &regs->RCX;
+        case AMD64_RDX:
+            return &regs->RDX;
+        case AMD64_RSI:
+            return &regs->RSI;
+        case AMD64_RDI:
+            return &regs->RDI;
+        case AMD64_RSP:
+            return &regs->RSP;
+        case AMD64_RBP:
+            return &regs->RBP;
+        case AMD64_R8:
+            return &regs->R8;
+        case AMD64_R9:
+            return &regs->R9;
+        case AMD64_R10:
+            return &regs->R10;
+        case AMD64_R11:
+            return &regs->R11;
+        case AMD64_R12:
+            return &regs->R12;
+        case AMD64_R13:
+            return &regs->R13;
+        case AMD64_R14:
+            return &regs->R14;
+        case AMD64_R15:
+            return &regs->R15;
+        }
+    } else if(jit_set_get(op->live_in,r)) {
+        return (regs->RBP+GET_REG_POS(jit,r));
+    }
+	}
+	return NULL;
+}
 void jit_init_arg_params(struct jit * jit, struct jit_func_info * info, int p, int * phys_reg)
 {
 	#ifndef TARGET_WIN32

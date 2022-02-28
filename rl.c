@@ -1,15 +1,14 @@
+#include "3d.h"
+#ifndef TARGET_WIN32
 #include <assert.h>
 #include "rl.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "alloc.h"
-#include "3d.h"
 #include "ext/linenoise/linenoise.h"
-#ifdef TARGET_WIN32
-#else
+
 #include <dirent.h>
-#endif
 CCompletion* (*rlACGen)(const char *buffer,long srcoff,const char* text,long *length);
 static int IsEscaped(const char *start,const char *at) {
   if(at-1>=start)
@@ -24,7 +23,7 @@ static void completion(const char *buf,linenoiseCompletions *lc) {
     int instr=0;
     const char *ptr=buf;
     sloop:;
-    if(ptr=strchr(ptr, '\"')) {
+    if(strchr(ptr, '\"')) {
       instr=1;
       ptr++;
       sloop2:;
@@ -92,9 +91,22 @@ static void completion(const char *buf,linenoiseCompletions *lc) {
     vec_deinit(&path);
     closedir(dir);
     #endif
+    CSymbol *hccomps;
+    if(hccomps=map_get(&Loader.symbols,"__HCCompetions")) {
+        char **res=((char**(*)(char*))(hccomps->value_ptr))(buf);
+        if(!res) return;
+        int64_t cnt=MSize(res)/sizeof(char*),idx;
+        for(idx=0;idx!=cnt;idx++) {
+            if(!res[idx]) continue;
+            linenoiseAddCompletion(lc,res[idx]);
+            TD_FREE(res[idx]);
+        }
+        TD_FREE(res);
+    }
 }
 char* rl(char* prompt) {
   char *fn=linenoise(prompt);
+  if(!fn) fn=strdup("");
   linenoiseHistoryAdd(fn);
   char *r=strdup(fn);
   linenoiseFree(fn);
@@ -103,3 +115,46 @@ char* rl(char* prompt) {
 void InitRL() {
     linenoiseSetCompletionCallback(completion);
 }
+#else
+#include "ext/wineditline-2.206/include/editline/readline.h"
+static long count;
+static char **cmps;
+static char *gen(const char *ul,int idx) {
+	if(idx>=count) return NULL;
+	return strcpy(malloc(strlen(cmps[idx])+1),cmps[idx]);
+}
+static char **AttemptComps(const char *buf,int s,int e) {
+	CSymbol *hccomps;
+	count=0;
+    if(hccomps=map_get(&Loader.symbols,"__HCCompetions")) {
+        char **res=((char**(*)(char*))(hccomps->value_ptr))(buf);
+        cmps=res;
+        if(!res)  {
+			count=0;
+			goto en;
+		}
+        int64_t cnt=MSize(res)/sizeof(char*),idx;
+        count=cnt;
+        char **ret=rl_completion_matches(NULL,&gen);
+        for(idx=0;idx!=cnt;idx++) {
+            if(!res[idx]) continue;
+            TD_FREE(res[idx]);
+        }
+        TD_FREE(res);
+        return ret;
+    }
+    en:
+    return rl_completion_matches(NULL,&gen);
+}
+void InitRL() {
+	rl_attempted_completion_function=AttemptComps;
+}
+char* rl(char* prompt) {
+  char *fn=readline(prompt);
+  if(!fn) fn=strdup("");
+  add_history(fn);
+  char *r=strdup(fn);
+  rl_free(fn);
+  return r;
+}
+#endif
