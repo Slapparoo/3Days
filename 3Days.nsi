@@ -6,11 +6,11 @@
 
 !define APP_NAME "3Days"
 !define COMP_NAME "nrootconauto@gmail.com"
-!define VERSION "00.00.05.00"
+!define VERSION "00.00.99.00"
 !define COPYRIGHT "None"
 !define DESCRIPTION "A HolyC Compiler"
-!define INSTALLER_NAME "setup.exe"
-!define MAIN_APP_EXE "3d.exe"
+!define INSTALLER_NAME "3d_setup.exe"
+!define MAIN_APP_EXE "3d_loader.exe"
 !define INSTALL_TYPE "SetShellVarContext current"
 !define REG_ROOT "HKCU"
 !define REG_APP_PATH "Software\Microsoft\Windows\CurrentVersion\App Paths\${MAIN_APP_EXE}"
@@ -82,7 +82,7 @@ Section -MainProgram
 ${INSTALL_TYPE}
 SetOverwrite ifnewer
 SetOutPath "$INSTDIR"
-File "3d.exe"
+File "3d_loader.exe"
 File "SDL2.dll"
 SetOutPath "$INSTDIR\HCRT"
 File "HCRT\HCRT.BIN"
