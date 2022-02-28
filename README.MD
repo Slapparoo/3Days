@@ -77,6 +77,13 @@ I64 x=#exe{StreamPrint("10");};
  pi==(0x400921FB54442D18(F64));
  I64 int_pi=ToI64(pi);
  ```
+# Type Member Offsets
+You can get a type's member offset by doing this:
+```
+class ABC {I64 a,b,c;};
+"%d\n",ABC.b;
+```
+
 # Assembler
 This compiler includes an assembler. **Global variables and Functions arent put in the first 32bits of address space like TempleOS,load their pointer into a register before addressing them**(Most memory operations use 32bit offsets,see `MOFFSxx` in `HCRT/Opcodes.DD` if you really want to.).
 ```
@@ -116,7 +123,6 @@ Error checking is mostly done in `AssignTypeToNode`. But other error checks can 
 `CompileAST` is the bread and butter of the Compiler. A set of bindings for `myjit` in `ext/myjit` are provided for the Compiler. This library has been modified with bug fixes,relocations and bodacious debugging capacities (see `jit_debugger_get_reg_ptr`  and `jit_debugger_get_vreg_ptr_from_parent` more on them later). `__CompileAST` is mostly a gaint switch statement with most of the AST types. `CompileAST` is the frontend to `__CompileAST`. It has a buddy named `CompileAstWithBreakpoint` which does the debugger magic. `Assign` does some lifting for the compiler too.
 
 And the debugger(and bounds checker) are here too. `DebuggerRoutine` is aliased to `Debugger`,but you will step out of it for epicness( as `Debugger` is a function ,TODO make `Debugger` secretly trigger the next breakpoint ). The breakpoints are stored in `Compiler.breakpoints` which contain  `CBreakpoints` which are a specialization of `CHash`. The reason there are multiple breakpoints in `CBreakpoints.bps` is that a single line may have multiple breakpoints at one source location. `jit_FunctionParents` and `GetFunctionByPtr` are your friend when getting a backtrace. And  `jit_ParentFramePtrs` is usefull for getting the base pointers of the callers for the debugger(use `jit_debugger_get_reg_ptr` get a spilled registers location for the current function,and `jit_debugger_get_vreg_ptr_from_parent` when you have the parent's base pointer).
-
 
 # Credits
  - http://myjit.sourceforge.net/index.htm

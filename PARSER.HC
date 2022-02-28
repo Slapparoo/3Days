@@ -1069,10 +1069,19 @@ CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
     break;
     case AST_MEMBER:
     try {
+        if(a->member_acc.base->type==AST_NAME) {
+            if(type1=GetType(a->member_acc.base->name)) {
+                //Test for members existance
+                MemberOffset(type1,a->member_acc.member);
+                ret=GetType("I64i");
+                goto moff;
+            }
+        }
         ret=AssignTypeToNode(a->member_acc.base);
         if(IsPtrType(ret))
             ret=DerefedType(ret);
         ret=MemberType(ret,a->member_acc.member);
+        moff:
     } catch {
         ParserFail2(a,"Missing member '%s'.",a->member_acc.member);
         ret=HashFind("I64i",Compiler.globals);
@@ -4344,6 +4353,12 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     throw('Compile');
     break;
     case AST_MEMBER: {
+        if(ast->member_acc.base->type==AST_NAME) {
+            if(type1=GetType(ast->member_acc.base->name)) {
+                PushIRInt(MemberOffset(type1,ast->member_acc.member));
+                break;
+            }
+        }
         type1=AssignTypeToNode(ast->member_acc.base);
         CompileAST(ast->member_acc.base,TRUE);
         PopIRValue(&value_a);
