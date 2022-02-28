@@ -278,11 +278,27 @@ CCompilerState *NewCompilerState() {
     Compiler.first_avail_freg=2,Compiler.first_avail_ireg=3;
     return ret;
 }
-U0 CCompStringDestroy(CCompString *str) {
-    Free(str->data);
-    //TODO free refs
-}
 U0 HTT_LocalDestroy(CHash *);
+U0 CompStringDestroy(CCompString *str) {
+    Free(str->data);
+}
+U0 ResetCompilerData() {
+    HashTableDel(Compiler.locals,&HTT_LocalDestroy);
+    HashTableDel(Compiler.labels,&HTT_LocalDestroy);
+    HashTableDel(Compiler.asm_tainted_label_names);
+    HashTableDel(Compiler.unresolved_labels);
+    if(Compiler.aot_mode)
+        HashTableDel(Compiler.cur_strings,&CompStringDestroy);
+    if(Compiler.jit)
+        jit_free(Compiler.jit),Compiler.jit=NULL;
+    Compiler.locals=HashTableNew(0x100);
+    Compiler.asm_tainted_label_names=HashTableNew(0x10);
+    Compiler.cur_strings=HashTableNew(0x100);
+    Compiler.labels=HashTableNew(0x10);
+    Compiler.unresolved_labels=HashTableNew(0x10);
+    Compiler.in_func=0;
+    Compiler.frame_off=0;
+}
 U0 RestoreCompilerState(CCompilerState *state) {
     if(state!=GlobalCompiler)
     HashTableDel(Compiler.asm_tainted_label_names);
@@ -3298,9 +3314,13 @@ AST *ParseDecls(CCmpCtrl *cc,Bool instant_eval=FALSE) {
         }
         fbody=NULL;
         if(t->type==HTT_FUNC_TYPE&&!first) {
-            if(Compiler.in_func)
-                ParserFail(cc,"No nested functions.");
-            if(cc->token=='{') {
+            if(Compiler.in_func) {
+                try {
+                    ParserFail(cc,"No nested functions.");
+                } catch {
+                    throw('ParseFtl');
+                }
+            } if(cc->token=='{') {
                 CompileFunction(name,cc,t,name->name,instant_eval);
                 first=MAlloc(sizeof(AST));
                 first->type=AST_NOP;
@@ -3328,8 +3348,13 @@ AST *ParseDecls(CCmpCtrl *cc,Bool instant_eval=FALSE) {
                 ;
             goto func_fwd_end;
         } else if(t->type==HTT_FUNC_TYPE) {
-            if(Compiler.in_func)
-                ParserFail(cc,"No nested functions.");
+            if(Compiler.in_func) {
+                try {
+                    ParserFail(cc,"No nested functions.");
+                } catch {
+                    throw('ParseFtl');
+                };
+            } 
             func=MAlloc(sizeof(CFunction));
             cur_pos=LSP(cc);
             func->src_link=MStrPrint("%s,%d",cur_pos->fn,cur_pos->ln);
@@ -8442,7 +8467,6 @@ U0 REPL(U8 *init=NULL,I64 flags=PF_DEBUGGER,U8 *body=NULL) {
     //Load Forward declarations before assigning values
     Lex(cc);
     try {
-        
         while(ast=ParseStmt(cc)) {
             EvalAST(ast);
             FreeAST(ast);
@@ -8465,6 +8489,11 @@ U0 REPL(U8 *init=NULL,I64 flags=PF_DEBUGGER,U8 *body=NULL) {
                 FreeAST(ast);
             }
         } catch {
+            if(Fs->except_ch=='ParseFtl') {
+                //Flush lexer
+                while(Lex(cc));
+                ResetCompilerData;
+            }
             Fs->catch_except=TRUE;
             "Caught a %c.\n",Fs->except_ch;
             #ifdef SIGNAL
@@ -9235,6 +9264,7 @@ Bool ParseAndRun(CCmpCtrl *cc) {
     }
     return FALSE;
 }
+
 
 
 
