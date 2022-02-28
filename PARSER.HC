@@ -4843,10 +4843,10 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     CompileAST(ast->binop.b);
     value_b=IRValueClone(Compiler.stack);
     value_a=IRValueClone(Compiler.stack->last);
-    PopIRValue,PopIRValue;
     if(IsF64(AssignTypeToNode(ast))) {
         value_a=MoveToFReg(value_a,0);
         value_b=MoveToFReg(value_b,1);
+        PopIRValue,PopIRValue;
         LoadSymPtrIntoReg("Pow",0);
         jit_prepare(Compiler.jit);
         jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
@@ -4858,6 +4858,7 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
         LoadSymPtrIntoReg("PowI64",2);
         value_a=MoveToReg(value_a,0);
         value_b=MoveToReg(value_b,1);
+        PopIRValue,PopIRValue;
         jit_prepare(Compiler.jit);
         jit_putargr(Compiler.jit,jit_R(value_a->reg));
         jit_putargr(Compiler.jit,jit_R(value_b->reg));
@@ -9279,6 +9280,7 @@ Bool ParseAndRun(CCmpCtrl *cc) {
     }
     return FALSE;
 }
+
 
 
 

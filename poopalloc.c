@@ -20,12 +20,26 @@ static void LockHeap() {
 static void UnlockHeap() {
 		uint32_t zero=0;
 		if(atomic_compare_exchange_strong(&fmtx,&zero,1))  {
-			assert(-1!=syscall(SYS_futex,&fmtx,FUTEX_WAKE,0,NULL,NULL,0));
+			assert(-1!=syscall(SYS_futex,&fmtx,FUTEX_WAKE,1,NULL,NULL,0));
 		}
 }
 #elif defined __FreeBSD__
-static void LockHeap(uint32_t *fmtx) {
-	
+#include <sys/types.h>
+#include <sys/umtx.h>
+static long fmtx=1;
+static void LockHeap() {
+    long one=1;
+    for(;;) {
+        if(atomic_compare_exchange_strong(&fmtx,&one,0)) 
+            break;
+        assert(-1!=_umtx_op(&fmtx,UMTX_OP_WAIT_UINT_PRIVATE,0,NULL,NULL));
+    }
+}
+static void UnlockHeap() {
+    long zero=0;
+    if(atomic_compare_exchange_strong(&fmtx,&zero,1))  {
+        assert(-1!=_umtx_op(&fmtx,UMTX_OP_WAKE_PRIVATE,1,NULL,NULL));
+    }
 }
 #else
 #error "Not supported platfrom,feel free to port this mutex code to your platform."

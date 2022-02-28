@@ -6,8 +6,9 @@ mkdir -p ${STAGEDIR}/usr
 mkdir -p ${STAGEDIR}/usr/local
 mkdir -p ${STAGEDIR}/usr/local/bin
 mkdir -p ${STAGEDIR}/usr/local/include/HolyC
-cp 3d ${STAGEDIR}/usr/local/bin/
+cp 3d_loader ${STAGEDIR}/usr/local/bin/3d
 strip ${STAGEDIR}/usr/local/bin/3d
+chmod +x ${STAGEDIR}/usr/local/bin/3d
 set files = ( \
     HCRT.BIN \
     )
