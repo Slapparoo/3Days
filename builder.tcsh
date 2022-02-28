@@ -55,11 +55,11 @@ end
 
 ./proot -R chroot/ apk add gcc sdl2-dev tcsh yasm musl-dev
 ./proot -r chroot/ -w /3Days tcsh "make.tcsh"
-./proot -r chroot -w /3Days ./3d_loader --noruntime MAKE_HCRT.HC
-cp chroot/3Days/REPL.VBIN ./HCRT/HCRT.BIN
+./proot -r chroot -w /3Days ./3d_loader --noruntime -c REPL.VBIN2 --binheader HCRT/HCRT.HH FULL_RUNTIME.HC
+cp chroot/3Days/REPL.VBIN2 ./HCRT/HCRT.BIN
 source make.tcsh
 
 echo "Recompiling HCRT/HCRT.BIN for non-chroot's SDL2"
-./3d_loader --noruntime FULL_RUNTIME.HC
+./3d_loader --noruntime -c HCRT/HCRT.BIN --binheader HCRT/HCRT.HH FULL_RUNTIME.HC
 
 echo "Congradulations,you compiled a runtime and loader."

@@ -38,7 +38,6 @@ set HolyCFiles = ( \
   "./HCRT/HCRT.HC" \
   "./HCRT/LEXER.HC" \
   "./HCRT/PRINT.HC" \
-  "./MAKE_HCRT.HC" \
   "./VECTOR.HC" \
   "./HolyEd/EDITOR.HC" \
   "./HolyEd/ROPE.HC" \
