@@ -242,7 +242,7 @@ class CAsmPatcher:CFunction {
     U0 *ptr;
     CAsmPatcher *next_patch;
     I64 width,label_scope;
-    Bool is_rel;
+    Bool is_rel,is_const;
 };
 U0 EnterFunc(U0 *func,U0 *frame);
 U0 LeaveFunc();
@@ -1004,6 +1004,104 @@ Bool CheckForCaseOverlap(AST *a,I64 lo,I64 hi,AST **cases,Bool has_dft) {
         }
     }
 }
+//Use with asm patcher to detirmine if a value needs to be "Patched" with global values
+//Also,statics are treated as globals,as they stay resident in memory like globals.
+Bool AsmReferencesNonLocals(AST *a,Bool inc_labels=FALSE) {
+    Bool ret=FALSE;
+    I64 cnt;
+    CVariable *local;
+    switch(a->type) {
+    case AST_MEMBER:
+    ret|=AsmReferencesNonLocals(a->member_acc.base,inc_labels);
+    break;
+    case AST_PRE_DEC:
+    case AST_PRE_INC:
+    case AST_POS:
+    case AST_NEG:
+    case AST_LNOT:
+    case AST_BNOT:
+    case AST_DERREF:
+    case AST_ADDROF:
+    case AST_PAREN:
+    case AST_POST_INC:
+    case AST_POST_DEC:
+    ret|=AsmReferencesNonLocals(a->unopArg,inc_labels);
+    break;
+    case AST_COMMA:
+    case AST_ADD:
+    case AST_SUB:
+    case AST_MUL:
+    case AST_DIV:
+    case AST_MOD:
+    case AST_LSHIFT:
+    case AST_RSHIFT:
+    case AST_POW:
+    case AST_BAND:
+    case AST_BXOR:
+    case AST_BOR:
+    case AST_LT:
+    case AST_GT:
+    case AST_LE:
+    case AST_EQ:
+    case AST_NE:
+    case AST_GE:
+    case AST_LAND:
+    case AST_LOR:
+    case AST_LXOR:
+    case AST_ASSIGN:
+    case AST_ASSIGN_SHL:
+    case AST_ASSIGN_SHR:
+    case AST_ASSIGN_MUL:
+    case AST_ASSIGN_DIV:
+    case AST_ASSIGN_BAND:
+    case AST_ASSIGN_BOR:
+    case AST_ASSIGN_BXOR:
+    case AST_ASSIGN_ADD:
+    case AST_ASSIGN_SUB:
+    case AST_ASSIGN_MOD:
+    ret|=AsmReferencesNonLocals(a->binop.a,inc_labels);
+    ret|=AsmReferencesNonLocals(a->binop.b,inc_labels);
+    break;
+    case AST_ARRAY_ACCESS:
+    ret|=AsmReferencesNonLocals(a->arr_acc.base,inc_labels);
+    ret|=AsmReferencesNonLocals(a->arr_acc.index,inc_labels);
+    break;
+    case AST_NAME:
+    if(!inc_labels) {
+        if(local=HashFind(a->name,Compiler.locals))
+            return !!(local->link.type&LINK_STATIC);
+        else if(HashFind(a->name,Compiler.globals)||HashFind(a->name,Compiler.labels))
+            return TRUE;
+        //Could be a label
+        return TRUE;
+    } else {
+        if((local=HashFind(a->name,Compiler.locals))||HashFind(a->name,Compiler.labels)) {
+            if(local&&(local->link.type&LINK_STATIC))
+                return TRUE;
+        } else if(HashFind(a->name,Compiler.globals))
+            return TRUE;
+        //Could be a label
+        return FALSE;
+    }
+    break;
+    case AST_RANGE:
+    cnt=MSize(a->range.values)/sizeof(AST*);
+    while(--cnt>=0)
+        ret|=AsmReferencesNonLocals(a->range.values[cnt],inc_labels);
+    break;
+    case AST_IMPLICIT_TC:
+    case AST_EXPLICIT_TC:
+    ret|=AsmReferencesNonLocals(a->typecast.base,inc_labels);
+    break;
+    case AST_FUNC_CALL:
+    ret|=AsmReferencesNonLocals(a->func_call.base,inc_labels);
+    cnt=MSize(a->func_call.args)/sizeof(AST*);
+    while(--cnt>=0)
+        if(a->func_call.args[cnt])
+            ret|=AsmReferencesNonLocals(a->func_call.args[cnt],inc_labels);
+    }
+    return ret;
+}
 CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
     if(a->type!=AST_SIZEOF&&a->type2) return a->type2;
     I64 dim,sdim,cnt,idx,lo,hi;
@@ -1355,10 +1453,8 @@ CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
         if(var=HashFind(a->name,Compiler.locals)) {
             ret=GetType("U8i")+1;
             var->isReg=FALSE;
-        } else if(var=HashFind(a->name,Compiler.globals)) {
-            ret=GetType("U8i")+1;
-        } else
-            ParserFail2(a,"Unknown symbol for import '%s'.",a->name);
+        }
+        ret=GetType("U8i")+1;
     } else if(Compiler.in_func) {
         if(var=HashFind(a->name,Compiler.locals)) {
             if(var->type==HTT_VAR) {
@@ -4065,33 +4161,33 @@ U0 CompileOpcode(AST *oc) {
         }
         jit_data_bytes(Compiler.jit,end_ptr-buffer,buffer);
         CompileAsmConst(oc->opcode->args[0]->x64_mode_offset,4,TRUE,oc->label_scope);
+        return;
     } else if(immoff!=-1) {
-        jit_data_bytes(Compiler.jit,immoff,buffer);
         for(idx=0;idx!=operand_cnt;idx++) {
             if(oc->opcode.args[idx]->x64_mode.type==X64O_IMM) {
-                CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,immsz,FALSE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
+                if(oc->opcode.args[idx]->x64_mode_offset) {
+                    jit_data_bytes(Compiler.jit,immoff,buffer);
+                    CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,immsz,FALSE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
+                    return;
+                }
             }
         }
     } else if(siboff!=-1) {
-        jit_data_bytes(Compiler.jit,end_ptr-buffer-4,buffer);
         for(idx=0;idx!=operand_cnt;idx++) {
             if(oc->opcode.args[idx]->x64_mode.type==X64O_MEM) {
-                //Make a dummy value to not deal with NULLS
-                if(!oc->opcode.args[idx]->x64_mode_offset) {
-                    oc->opcode.args[idx]->x64_mode_offset=MAlloc(sizeof(AST));
-                    oc->opcode.args[idx]->x64_mode_offset->type=AST_INT;
-                    oc->opcode.args[idx]->x64_mode_offset->int=0;
+                if(oc->opcode.args[idx]->x64_mode_offset) {
+                    jit_data_bytes(Compiler.jit,end_ptr-buffer-4,buffer);
+                    mbase=oc->opcode.args[idx]->x64_mode.mem.base;
+                    if(mbase&&(mbase==HashFind("RIP",regs)||mbase==HashFind("EIP",regs)))
+                        CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,4,TRUE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
+                    else
+                        CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,4,FALSE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
+                    return;
                 }
-                mbase=oc->opcode.args[idx]->x64_mode.mem.base;
-                if(mbase&&(mbase==HashFind("RIP",regs)||mbase==HashFind("EIP",regs)))
-                    CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,4,TRUE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
-                else
-                    CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,4,FALSE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
             }
         }
-    } else {
-        jit_data_bytes(Compiler.jit,end_ptr-buffer,buffer);
     }
+    jit_data_bytes(Compiler.jit,end_ptr-buffer,buffer);
 }
 U0 SetCallStackSize(I64);
 U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) {
@@ -5747,6 +5843,11 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     case AST_ADDROF:
     if(Compiler.asm_mode&&ast->unopArg->type==AST_NAME) {
         if(var=HashFind(ast->unopArg->name,Compiler.locals)) {
+            if(var->is_local_unlinked) {
+                LoadSymPtrIntoReg(ast->unopArg->name,idx=GetFreeIReg);
+                PushIRReg(ast->type2,idx);
+                break;
+            }
             PushIRInt(var->frame_off);
             break;
         }
@@ -6495,17 +6596,16 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     if(Compiler.asm_mode&&HashFind(ast->name,Compiler.imports)) {
         if(var=HashFind(ast->name,Compiler.locals)) {
             if(var->isReg) throw('Compile');
-            PushIRInt(var->frame_off);
+            if(var->is_local_unlinked) {
+                LoadSymPtrIntoReg(var->str,idx=GetFreeIReg);
+                PushIRReg(var->hc_type,idx);
+            }  else 
+                PushIRInt(var->frame_off);
             break;
         } else if(func=var=HashFind(ast->name,Compiler.globals)) {
-            if(var->type==HTT_VAR) {
-                PushIRInt(var->global_ptr);
-                break;
-            } else if(var->type==HTT_FUNC) {
-                PushIRInt(func->func_ptr);
-                break;
-            } else 
-                throw('Compiler');
+            LoadSymPtrIntoReg(var->str,idx=GetFreeIReg);
+            PushIRReg(var->hc_type,idx);
+            break;
         }
     }
     if(Compiler.in_func) {
@@ -7455,7 +7555,7 @@ U0 FillInRelocations(CFunction *f) {
         loop:
         *relocs->ptr=NULL;
         lab=func=var=HashFind(relocs->name,Compiler.globals);
-	if(!var) goto skip;
+        if(!var) goto skip;
         if(var->type==HTT_VAR)
             *relocs->ptr=ResolveLinkage(NULL,&var->link,var->str);
         else if(func->type==HTT_FUNC)
@@ -7500,6 +7600,7 @@ CFunction *CompilerEmitCode() {
                     pat=VectorPop(var->static_refs);
                     jit_patch(Compiler.jit,pat);
                 }
+                jit_dump_ptr(Compiler.jit,&var->static_ptr);
                 zeros=MAlloc(var->hc_type->sz);
                 jit_data_bytes(Compiler.jit,MSize(zeros),zeros);
                 Free(zeros);
@@ -7848,21 +7949,31 @@ AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,
             case AST_ADD:
             binop_a=CompileX64Mode(a->binop.a,base,index,scale,offsets);
             binop_b=CompileX64Mode(a->binop.b,base,index,scale,offsets);
+            if(binop_a||binop_b) {
+                FreeAST(binop_a),FreeAST(binop_b);
+                ret=MAlloc(sizeof(AST));
+                ret->type=AST_X64_MODE;
+                ret->x64_mode=X64ModeMem(*scale,*index,*base,0,0);
+                return ret;                        
+            }
             break;
             case AST_MUL:
-            binop_a=CompileX64Mode(a->binop.a,base,index,scale,offsets,TRUE,TRUE);
-            binop_b=CompileX64Mode(a->binop.b,base,index,scale,offsets,TRUE,TRUE);
+            binop_a=a->binop.a;
+            binop_b=a->binop.b;
             for(cnt=0;cnt!=2;cnt++) {
-                if(binop_a&&binop_a->x64_mode->type==X64O_REG) {
+                if(binop_a->type==AST_NAME&&Str2Reg(binop_a->name)) {
                     switch(s=EvalAST(binop_b)) {
                         case 1:
                         case 2:
                         case 4:
                         case 8:
-                        if(!*index) index=binop_a->x64_mode->reg;
+                        if(!*index) *index=Str2Reg(binop_a->name);
                         else ParserFail2(a,"Only 1 SIB Index allowed.");
                         *scale=s;
-                        return;
+                        ret=MAlloc(sizeof(AST));
+                        ret->type=AST_X64_MODE;
+                        ret->x64_mode=X64ModeMem(s,*index,*base,0,0);
+                        return ret;
                         default:
                         ParserFail2(binop_b,"SIB offset must be 1,2,4 or 8(got %d).",s);
                     }
@@ -7878,7 +7989,7 @@ AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,
                 ret->type=AST_X64_MODE;
                 ret->x64_mode=X64ModeReg(reg);
                 if((!index_only)&&base&&!*base) *base=reg;
-                else if(index&&!*index) *index=reg;
+                else if(index&&!*index) *index=reg,*scale=1;
                 else {
                     ParserFail2(a,"Only 1 base and index allowed for SIB.");
                     
@@ -7887,15 +7998,34 @@ AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,
             } else if(reg_only)
                 return NULL;
             default:
-            VectorPush(offsets,a);
+            if(offsets)
+                VectorPush(offsets,a);
         }
     } catch {
         CatchIf('Parser','Lexer');
     }
     return NULL;
 }
+U0 AsmInheritLocalsFromState(CCompilerState *state) {
+    I64 idx=state->locals->mask+1;
+    CVariable *var,*clone;
+    while(--idx>=0) {
+        for(var=state->locals->body[idx];var;var=var->next) {
+            clone=MAllocIdent(var);
+            clone->str=StrNew(clone->str);
+            if(clone->is_static&&!clone->static_ptr) {
+                clone->is_static=FALSE;
+                clone->is_local_unlinked=TRUE;
+            } else if(clone->is_static) {
+                clone->is_static=FALSE;
+                clone->global_ptr=clone->static_ptr;
+            }
+            HashAdd(clone,Compiler.locals);
+        }
+    }
+}
 AST *ParseX64Mode(CCmpCtrl *cc,COpcode *opc) {
-    I64 scale=0,r,max_width;
+    I64 scale=0,r,max_width,aconst;
     CCompilerState *cstate;
     CFunction *patcher;
     CReg *seg=NULL,*base=NULL,*index=NULL;
@@ -7920,14 +8050,16 @@ AST *ParseX64Mode(CCmpCtrl *cc,COpcode *opc) {
         if(!seg&&cc->token==':') {
             seg=tmp2->x64_mode->reg;
             FreeAST(tmp2);
+            tmp2=NULL;
             Lex(cc);
             Compiler.asm_mode=TRUE;
             Compiler.no_array_access_mode=TRUE;
             tmp=ParseExprNoComma(cc);
             Compiler.asm_mode=FALSE;
             Compiler.no_array_access_mode=FALSE;
-            tmp2=CompileX64Mode(tmp,&base,&index,&scale,offsets,TRUE);
-            goto loop;
+            if(tmp)
+                tmp2=CompileX64Mode(tmp,&base,&index,&scale,offsets,TRUE);
+            goto sib;
         } else {
             base=tmp2->x64_mode->reg;
         }
@@ -7980,33 +8112,52 @@ AST *ParseX64Mode(CCmpCtrl *cc,COpcode *opc) {
             ret->x64_mode=X64ModeReg(base);
         else {
             //See x64_mode_offsets;
-            max_width=0;
-            for(;opc;opc=opc->next_op) {
-                if(opc->flags&OPC_F_IB)
-                    max_width=MaxI64(max_width,1);
-                else if(opc->flags&OPC_F_IW)
-                    max_width=MaxI64(max_width,2);
-                else if(opc->flags&OPC_F_ID)
-                    max_width=MaxI64(max_width,4);
-                else if(opc->flags&OPC_F_IQ)
-                    max_width=MaxI64(max_width,8);
-            }
-            switch (max_width) {
-                case 1:
-                ret->x64_mode=X64ModeImm(0xff);
-                break;
-                case 2:
-                ret->x64_mode=X64ModeImm(0xffff);
-                break;
-                case 4:
-                ret->x64_mode=X64ModeImm(0xffffFFFF);
-                break;
-                case 8:
-                ret->x64_mode=X64ModeImm(0xffffFFFFffff);
-                break;
-                default:
-                //???
-                ret->x64_mode=X64ModeImm(0);
+            if(AsmReferencesNonLocals(ret->x64_mode_offset)) {
+                max_width=0;
+                for(;opc;opc=opc->next_op) {
+                    if(opc->flags&OPC_F_IB)
+                        max_width=MaxI64(max_width,1);
+                    else if(opc->flags&OPC_F_IW)
+                        max_width=MaxI64(max_width,2);
+                    else if(opc->flags&OPC_F_ID)
+                        max_width=MaxI64(max_width,4);
+                    else if(opc->flags&OPC_F_IQ)
+                        max_width=MaxI64(max_width,8);
+                }
+                switch (max_width) {
+                    case 1:
+                    ret->x64_mode=X64ModeImm(0xff);
+                    break;
+                    case 2:
+                    ret->x64_mode=X64ModeImm(0xffff);
+                    break;
+                    case 4:
+                    ret->x64_mode=X64ModeImm(0xffffFFFF);
+                    break;
+                    case 8:
+                    ret->x64_mode=X64ModeImm(0xffffFFFFffff);
+                    break;
+                    default:
+                    //???
+                    ret->x64_mode=X64ModeImm(0);
+                }
+            } else {
+                cstate=NewCompilerState;
+                AsmInheritLocalsFromState(cstate);
+                Compiler.asm_mode=Compiler.in_func=TRUE;
+                tmp=MAlloc(sizeof(AST));
+                tmp->type=AST_RETURN;
+                tmp->unopArg=ret->x64_mode_offset;
+                Compiler.ret_type=GetType("I64i");
+                CompileAST(tmp);
+                patcher=CompilerEmitCode;
+                I64 (*fptr)()=patcher->func_ptr;
+                aconst=(*fptr)(); 
+                FreeFunction(patcher);
+                RestoreCompilerState(cstate);
+                ret->x64_mode=X64ModeImm(aconst);
+                FreeAST(tmp);
+                ret->x64_mode_offset=NULL;
             }
         }
     } else {
@@ -8016,45 +8167,75 @@ AST *ParseX64Mode(CCmpCtrl *cc,COpcode *opc) {
             r=0;
         if((!base)&&!index)
             base=HashFind("RIP",regs);
-        ret->x64_mode=X64ModeMem(seg,scale,index,base,0x11223344,r);
+        if(ret->x64_mode_offset&&AsmReferencesNonLocals(ret->x64_mode_offset)) {
+            ret->x64_mode=X64ModeMem(seg,scale,index,base,0x11223344,r);
+        } else if(ret->x64_mode_offset&&!AsmReferencesNonLocals(ret->x64_mode_offset)) {
+            cstate=NewCompilerState;
+            AsmInheritLocalsFromState(cstate);
+            Compiler.asm_mode=Compiler.in_func=TRUE;
+            tmp=MAlloc(sizeof(AST));
+            tmp->type=AST_RETURN;
+            tmp->unopArg=ret->x64_mode_offset;
+            Compiler.ret_type=GetType("I64i");
+            CompileAST(tmp);
+            patcher=CompilerEmitCode;
+            fptr=patcher->func_ptr;
+            aconst=(*fptr)();
+            FreeFunction(patcher);
+            RestoreCompilerState(cstate);
+            ret->x64_mode=X64ModeMem(seg,scale,index,base,aconst,r);
+            FreeAST(tmp);
+            ret->x64_mode_offset=NULL;
+        } else 
+            ret->x64_mode=X64ModeMem(seg,scale,index,base,0x0,r);
     }
     VectorFree(offsets);
     Compiler.asm_mode=FALSE;
     return ret;
 }
 U0 ApplyAsmPatches(CFunction *f) {
-    CAsmPatcher *patcher=f->asm_patches,*next;
+    CAsmPatcher *patcher=f->asm_patches,*next,*first=NULL;
     I64 value;
     I64 (*fptr)();
+    Bool fully_patched;
     for(;patcher;) {
-        PatchAsmPatcher(f,patcher);
-        value=(*(fptr=patcher->func_ptr))();
-        if(patcher->is_rel)
-            value-=patcher->ptr(I64)+patcher->width;
-        switch(patcher->width) {
-            case 1:
-            patcher->ptr(U8*)[0]=value;
-            break;
-            case 2:
-            patcher->ptr(U16*)[0]=value;
-            break;
-            case 4:
-            patcher->ptr(U32*)[0]=value;
-            break;
-            case 8:
-            patcher->ptr(U64*)[0]=value;
-            break;
+        fully_patched=PatchAsmPatcher(f,patcher);
+        if(fully_patched) {
+            value=(*(fptr=patcher->func_ptr))();
+            if(patcher->is_rel)
+                value-=patcher->ptr(I64)+patcher->width;
+            switch(patcher->width) {
+                case 1:
+                patcher->ptr(U8*)[0]=value;
+                break;
+                case 2:
+                patcher->ptr(U16*)[0]=value;
+                break;
+                case 4:
+                patcher->ptr(U32*)[0]=value;
+                break;
+                case 8:
+                patcher->ptr(U64*)[0]=value;
+                break;
+            }
         }
-        next=patcher->next_patch;
-        FreeFunction(patcher);
-        patcher=next;
+        if(fully_patched&&patcher->is_const) {
+            next=patcher->next_patch;
+            FreeFunction(patcher);
+            patcher=next;
+        } else {
+            if(!first) first=patcher;
+            patcher=patcher->next;
+        }
     }
-    if(!Compiler.aot_mode);
-    f->asm_patches=NULL;
+    if(!Compiler.aot_mode)
+        f->asm_patches=NULL;
+    else
+        f->asm_patches=first;
 }
 //Name Compiler.label_scope
 #define LOCAL_LAB_FMT "%s.%d"
-U0 PatchAsmPatcher(CFunction *parent,CAsmPatcher *patcher ) {
+Bool PatchAsmPatcher(CFunction *parent,CAsmPatcher *patcher ) {
     I64 idx,__local_scope;
     U8 *local_lab_name=MAlloc(STR_LEN);
     CRelocation *reloc;
@@ -8069,13 +8250,10 @@ U0 PatchAsmPatcher(CFunction *parent,CAsmPatcher *patcher ) {
                 nvar=MAlloc(sizeof(CVariable));
                 nvar->str=StrNew(var->str);
                 nvar->type=HTT_VAR;
-                nvar->is_static=TRUE;
-                nvar->static_refs=VectorNew;
-                nvar->is_extern_ptr=TRUE;
                 if(var->is_static) {
-                    nvar->static_ptr=var->static_ptr;
+                    nvar->global_ptr=var->static_ptr;
                 } if(!var->isReg) {
-                    nvar->static_ptr=var->frame_off;
+                    nvar->global_ptr=var->frame_off;
                 }
                 HashAdd(nvar,Compiler.globals);
             }
@@ -8093,36 +8271,18 @@ U0 PatchAsmPatcher(CFunction *parent,CAsmPatcher *patcher ) {
             nvar=MAlloc(sizeof(CVariable));
             nvar->str=StrNew(local_lab_name);
             nvar->type=HTT_VAR;
-            nvar->is_static=TRUE;
-            nvar->static_ptr=lab->ptr;
+            nvar->extern_ptr=lab->ptr;
             nvar->is_extern_ptr=TRUE;
             nvar->hc_type=GetType("U8i")+1;
-            nvar->static_refs=VectorNew;
             HashAdd(nvar,Compiler.globals);
             next:
         }
     }
     FillInRelocations(patcher);
     Free(local_lab_name);
-    HashTableDel(Compiler.globals,&HTT_LocalDestroy);
     Compiler.globals=old_globs;
     FillInRelocations(patcher);
-    for(reloc=patcher->relocs;reloc;reloc=reloc->next) {
-        if(!HashFind(reloc->name,Compiler.globals)) {
-            //ParserFail2(cc,"Function '%s' has undefined reference to non-existant label '%s'.",f->str,reloc->name);
-        }
-    }
-}
-U0 InheritLocalsFromState(CCompilerState *state) {
-    I64 idx=state->locals->mask+1;
-    CVariable *var,*clone;
-    while(--idx>=0) {
-        for(var=state->locals->body[idx];var;var=var->next) {
-            clone=MAllocIdent(var);
-            clone->str=StrNew(clone->str);
-            HashAdd(clone,Compiler.locals);
-        }
-    }
+    return !patcher->relocs;
 }
 U0 ImportLabelsFromStateAsVars(CCompilerState *state,I64 local_scope=-2) {
     I64 idx=state->labels->mask+1,scope;
@@ -8181,8 +8341,9 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
             jit_data_qword(Compiler.jit,0);
             break;
         }
+        patcher->is_const=!AsmReferencesNonLocals(mode,TRUE);
         cstate=NewCompilerState;
-        InheritLocalsFromState(cstate);
+        AsmInheritLocalsFromState(cstate);
         ImportLabelsFromStateAsVars(cstate,local_scope);
         Compiler.asm_mode=TRUE;
         Compiler.in_func=TRUE;
@@ -8195,6 +8356,7 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
             CompileAST(mode);
         } catch {
             Compiler.asm_mode=old_asm_mode;
+            CatchIf('Parser','Compile');
         }
         Compiler.asm_mode=old_asm_mode;
         Assign(Compiler.stack->last,Compiler.stack);
@@ -8224,6 +8386,8 @@ AST *ParseOpcode(CCmpCtrl *cc) {
     if(!HashFind(cc->cur_str,opcodes)) return NULL;
     ret=LSP(cc,MAlloc(sizeof(AST)));
     COpcode *opc=HashFind(cc->cur_str,opcodes);
+    if(opc->type==HASH_TYPE_OPCODE_ALIAS)
+        opc=opc(COpcodeAlias*)->opcode;
     acnt=opc->arg_count;
     args=MAlloc(sizeof(AST*)*acnt);
     Lex(cc);
@@ -9280,6 +9444,13 @@ Bool ParseAndRun(CCmpCtrl *cc) {
     }
     return FALSE;
 }
+
+
+
+
+
+
+
 
 
 

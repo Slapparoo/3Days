@@ -89,6 +89,7 @@ U0 ParseOpcodes(U8 *text) {
         text=SkipComment(text);
         COpcode *prev=NULL;
         oloop:
+        I64 argument=0;
         if(*text==';') {
             text++;
             goto addop;
@@ -110,7 +111,7 @@ U0 ParseOpcodes(U8 *text) {
             U8 *orig="";
             opc->bytes[off]=Str2I64(text,16,&text);
         }
-        I64 argument=0;
+        argument=0;
         attrloop:
         term:
         text=SkipComment(text);
@@ -313,7 +314,7 @@ U0 ParseOpcodes(U8 *text) {
             text+=2;
             goto attrloop;
         } else {
-            throw('asm');
+            throw('Asm');
         }
         oen:
         if(prev) {
@@ -424,7 +425,7 @@ U8 X64SIB(I64 s,I64 i,I64 b) {
         case 4: s=2; break;
         case 8: s=3; break;
 	  AsmError="Invalid SIB scale";
-        default: throw('asm');
+        default: throw('Asm');
     }
     return (s<<6)|((i&7)<<3)|(b&7);
 }
@@ -465,13 +466,13 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
     if(base==HashFind("RIP",regs)) {
       if(scale||index) {
 	AsmError="RIP addressing must not have a scale.";
-	throw('asm');
+	throw('Asm');
       }
         mdrmcode=X64ModRMIndir;
         mdrmrm=HashFind("RBP",regs)(CReg*)->code;
         disps=4;
     } else if(!index) {
-        if(scale) throw('asm');
+        if(scale) throw('Asm');
         sibi=HashFind("RSP",regs)(CReg*)->code;
         if(!base) {
             SIB=TRUE;
@@ -481,7 +482,7 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
             disps=4;
         } else if(base==HashFind("RBP",regs)||base==HashFind("R13",regs)) {
             if(mdrmcode==X64ModRMIndir) {
-                if(disp) throw('asm');
+                if(disp) throw('Asm');
                 disps=1;
                 mdrmcode=X64ModRMIndir8;
             }
@@ -503,11 +504,11 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
             for(byte=0;byte!=opc_len;byte++) *it++=opcode[byte];
             *it++=X64ModRM(mdrmcode,rrc,base->code);
             goto insdisp;
-            if(SIB) throw('asm');
-            if(!mdrmrm) throw('asm');
+            if(SIB) throw('Asm');
+            if(!mdrmrm) throw('Asm');
         }
     } else if(index==HashFind("RSP",regs)) {
-        if(scale!=1) throw('asm');
+        if(scale!=1) AsmError="RSP Must have no scale or a scale of 1.",throw('Asm');
         SIB=TRUE;
         mdrmrm=HashFind("RSP",regs)(CReg*).code;
         sibb=HashFind("RSP",regs)(CReg*).code;
@@ -564,7 +565,7 @@ U8 *X86ModRMSIBDisp(U8 *it,I64 size,U8 *opcode,I64 opc_len,CReg *reg,I64 scale,C
         it+=4;
         break;
 	AsmError="Displacement is too big.";
-        default: throw('asm');
+        default: throw('Asm');
     }
     return it;
 }
@@ -993,7 +994,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,I64 *imm
     }
     if(opc->flags&OPC_F_32bit) {
       AsmError="Instruction is 32bit only.";
-      throw('asm');
+      throw('Asm');
     }
     if(opc->flags&OPC_F_48REX) {
         rex48=TRUE;
@@ -1138,7 +1139,7 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,I64 *imm
     Free(sizes),Free(operand_sizes);
     if(min==-1) {
       AsmError="Invalid opcode usage.";
-      throw('asm');
+      throw('Asm');
     }
     if(ip) {
         opc=finalop;
@@ -1200,3 +1201,5 @@ EncodeOpcode(buffer,"ADD",rm8,r8);
 "MOVSX R64,RM8\n";
 EncodeOpcode(buffer,"MOVSX",r64,rm8);
 */
+
+

@@ -1,7 +1,6 @@
 U0 HelloWorld() {
 	"HELLO WORLD\n";
 }
-/*
 U0 Pile() {
   asm {
     PUSH 0x7f;
@@ -67,13 +66,13 @@ U0 Pile() {
     MOV RAX, I64 GS:[RAX];
   };
 }
-*/
 class ABC{I64i a,b,c;};
 U0 Dummy() {
   ABC x={0,0,0};
   asm {
-    LEA RAX,I64 &x[RBP+ABC.b];
-    MOV I64 [RAX],10;
+    LEA RSI,I64 &x[RBP+ABC.b];
+    MOV RAX,10;
+    MOV I64 [RSI],RAX;
   };
   "\n\n\n\n%d\n",x.b;
 }
@@ -84,7 +83,8 @@ asm {
   PUSH R12;
   MOV R12,10;
  @@Loop:
-  CALL &HelloWorld;
+  MOV RAX,&HelloWorld;
+  CALL RAX;
   DEC R12;
   CMP R12,0;
   JNE @@Loop;
@@ -100,3 +100,15 @@ asm {
 _import C_HELLO U0 Hi();
 Dummy;
 Hi;
+U0 Stat() {
+    static I64 soop;
+    asm {
+        IMPORT soop;
+        MOV RSI,soop;
+        MOV RAX,101;
+        MOV I64 [RSI],RAX;
+    };
+    return soop;
+}
+"%d\n",Stat;
+

@@ -135,7 +135,6 @@ int main(int argc,char **argv) {
           */
         }
     #else
-      assert(SymInitialize(GetCurrentProcess(),NULL,TRUE));
       char buffer[1024];
       GetModuleFileNameA(NULL,buffer,sizeof(buffer));
       dirname(buffer);
