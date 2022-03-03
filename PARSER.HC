@@ -7953,7 +7953,7 @@ AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,
                 FreeAST(binop_a),FreeAST(binop_b);
                 ret=MAlloc(sizeof(AST));
                 ret->type=AST_X64_MODE;
-                ret->x64_mode=X64ModeMem(*scale,*index,*base,0,0);
+                ret->x64_mode=X64ModeMem(NULL,*scale,*index,*base,0);
                 return ret;                        
             }
             break;
@@ -7972,7 +7972,7 @@ AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,
                         *scale=s;
                         ret=MAlloc(sizeof(AST));
                         ret->type=AST_X64_MODE;
-                        ret->x64_mode=X64ModeMem(s,*index,*base,0,0);
+                        ret->x64_mode=X64ModeMem(NULL,s,*index,*base,0);
                         return ret;
                         default:
                         ParserFail2(binop_b,"SIB offset must be 1,2,4 or 8(got %d).",s);
@@ -8225,7 +8225,7 @@ U0 ApplyAsmPatches(CFunction *f) {
             patcher=next;
         } else {
             if(!first) first=patcher;
-            patcher=patcher->next;
+            patcher=patcher->next_patch;
         }
     }
     if(!Compiler.aot_mode)
@@ -8234,6 +8234,7 @@ U0 ApplyAsmPatches(CFunction *f) {
         f->asm_patches=first;
 }
 //Name Compiler.label_scope
+//Dont change,see aot.c
 #define LOCAL_LAB_FMT "%s.%d"
 Bool PatchAsmPatcher(CFunction *parent,CAsmPatcher *patcher ) {
     I64 idx,__local_scope;
@@ -8891,7 +8892,7 @@ U8 *LoadFunction(U8 *from,Bool verbose=FALSE,CFunction **dump_to=NULL) {
     if(dump_to) *dump_to=func;
     return from;
 }
-I64 SerializeFunc(U8 *to,CFunction *func) {
+I64 SerializeFunc(U8 *to,CFunction *func,Bool naked=FALSE) {
     I64 size,idx,written=0,tmp,label_context;
     CRelocation *reloc;
     CBinPatch patch1;
@@ -8902,12 +8903,18 @@ I64 SerializeFunc(U8 *to,CFunction *func) {
     CCompStringRef *cs_ref;
     CAsmPatcher *asm_patch;
     CBinAsmPatch asm_bin_patch;
-    //ident
-    tmp=1;
-    to=WriteIfPresent(to,&tmp,1,&written);
+    CVariable *var;
+    if(!naked) {
+        //ident
+        tmp=1;
+        to=WriteIfPresent(to,&tmp,1,&written);
+    }
     //name
-    size=StrLen(func->str);
-    to=WriteIfPresent(to,func->str,size+1,&written);
+    if(func->str) {
+        size=StrLen(func->str);
+        to=WriteIfPresent(to,func->str,size+1,&written);
+    } else
+        to=WriteIfPresent(to,"",1,&written);
     //patches
     size=0;
     for(reloc=func->relocs;reloc;reloc=reloc->next) {
@@ -8943,6 +8950,7 @@ I64 SerializeFunc(U8 *to,CFunction *func) {
     //statics(are append at end of function binary)
     tmp=0;
     to=WriteIfPresent(to,&tmp,8,&written);
+    //NOTE!!! We treat statics as labels as they are appended to the end of the function.
     //Labels
     idx=func->labels->mask+1,size=0;
     while(--idx>=0) {
@@ -8950,6 +8958,13 @@ I64 SerializeFunc(U8 *to,CFunction *func) {
             if(label->type==HTT_LABEL) {
                 size++;
             }
+        }
+    }
+    idx=func->locals->mask+1;
+    while(--idx>=0) {
+        for(var=func->locals->body[idx];var;var=var->next) {
+            if(var->is_static)
+                size++;
         }
     }
     tmp=size;
@@ -8970,6 +8985,17 @@ I64 SerializeFunc(U8 *to,CFunction *func) {
             }
         }
     }
+    idx=func->locals->mask+1;
+    while(--idx>=0) {
+        for(var=func->locals->body[idx];var;var=var->next) {
+            if(var->is_static) {
+                bin_label.type=BIN_LABEL_NORMAL;
+                bin_label.offset=var->static_ptr(U8*)-func->func_ptr(U8*);
+                to=WriteIfPresent(to,&bin_label,2*sizeof(I64),&written);
+                to=WriteIfPresent(to,var->str,StrLen(var->str)+1,&written);
+            }
+        }
+    }
     //Function binary
     if(!func->func_ptr) throw('BinMod');
     size=jit_bin_size(func->jit);
@@ -8978,17 +9004,19 @@ I64 SerializeFunc(U8 *to,CFunction *func) {
     to=WriteIfPresent(to,func->func_ptr,size,&written);
     //Asm Patches
     tmp=0;
-    for(asm_patch=func->asm_patches;asm_patch;asm_patch=asm_patch->next)
+    for(asm_patch=func->asm_patches;asm_patch;asm_patch=asm_patch->next_patch)
         tmp++;
     to=WriteIfPresent(to,&tmp,8,&written);
-    for(asm_patch=func->asm_patches;asm_patch;asm_patch=asm_patch->next) {
+    for(asm_patch=func->asm_patches;asm_patch;asm_patch=asm_patch->next_patch) {
         asm_bin_patch.is_rel=asm_patch->is_rel;
-        asm_bin_patch->rel_offset=asm_patch->width;
-        asm_bin_patch->width=asm_patch->width;
-        asm_bin_patch->offset=asm_patch->ptr(U8*)-func->func_ptr(U8*);
-        asm_bin_patch->labelContext=asm_patch->label_scope;
+        asm_bin_patch.rel_offset=asm_patch->width;
+        asm_bin_patch.width=asm_patch->width;
+        asm_bin_patch.offset=asm_patch->ptr(U8*)-func->func_ptr(U8*);
+        asm_bin_patch.labelContext=asm_patch->label_scope;
         to=WriteIfPresent(to,&asm_bin_patch,sizeof(asm_bin_patch),&written);
-        written+=SerializeFunc(to,asm_patch);
+        size=SerializeFunc(to,asm_patch,TRUE);
+        if(to) to+=size;
+        written+=size;
     }
     return written;
 }
@@ -9444,6 +9472,8 @@ Bool ParseAndRun(CCmpCtrl *cc) {
     }
     return FALSE;
 }
+
+
 
 
 

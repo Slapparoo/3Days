@@ -10,6 +10,7 @@ typedef int8_t ExceptBuf[216];
 #include "ext/myjit/myjit/jitlib.h"
 #include "rl.h"
 #define AOT_NO_IMPORT_SYMS (1<<0)
+#define AOT_MALLOCED_SYM (1<<1)
 extern char CompilerPath[1024];
 typedef vec_t(struct jit_op*) vec_jit_op_t;
 typedef map_t(vec_jit_op_t) map_vec_jit_op_t;
@@ -18,8 +19,20 @@ typedef struct CRelocation {
     void **ptr;
 } CRelocation;
 typedef vec_t(CRelocation*) vec_CRelocationp_t;
-typedef map_t(vec_CRelocationp_t) map_vec_CRelocationp_t;
+typedef struct  {
+    int64_t is_rel;
+    int64_t rel_offset;
+    int64_t width;
+    int64_t offset;
+    int64_t labelContext;
+ } CBinAsmPatch;
 struct CSymbol;
+typedef struct {
+    CBinAsmPatch patch;
+    struct CSymbol *func;
+} CAsmRelocation;
+typedef vec_t(CAsmRelocation) vec_CAsmRelocation_t;
+typedef map_t(vec_CRelocationp_t) map_vec_CRelocationp_t;
 typedef struct CSymbol {
     enum {
         SYM_VAR,
@@ -32,6 +45,7 @@ typedef struct CSymbol {
     map_vec_CRelocationp_t relocs;
     map_void_t label_ptrs;
     map_void_t statics;
+    vec_CAsmRelocation_t asm_relocs;
     char *strings;
 } CSymbol;
 typedef map_t(struct CSymbol) map_CSymbol_t;

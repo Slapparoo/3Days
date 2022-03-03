@@ -5,6 +5,24 @@
 #include <sys/mman.h>
 #endif
 static char *MStrCat(char *a,char *b);
+static void FreeAsmPatcherSym(CSymbol *sym) {
+    long iter;
+    map_iter_t miter;
+    CAsmRelocation *areloc;
+    const char *key;
+    vec_foreach_ptr(&sym->asm_relocs,areloc,iter) {
+	FreeAsmPatcherSym(areloc->func);
+    }
+    miter=map_iter(&sym->relocs);
+    while(key=map_next(&sym->relocs,&miter))
+    	vec_deinit(map_get(&sym->relocs,key));
+    map_deinit(&sym->relocs);
+    vec_deinit(&sym->asm_relocs);
+    map_deinit(&sym->label_ptrs);
+    map_deinit(&sym->statics);
+    TD_FREE(sym->value_ptr);
+    TD_FREE(sym);
+}
 /**
  * BinFunc:
  *          U8 ident=1;
@@ -25,13 +43,6 @@ static char *MStrCat(char *a,char *b);
  #define LABEL_LOCAL 0
  #define LABEL_NORMAL 1
  #define LABEL_EXPORTED 2
- typedef struct  {
-    int64_t is_rel;
-    int64_t rel_offset;
-    int64_t width;
-    int64_t offset;
-    int64_t labelContext;
- } CBinAsmPatch;
  typedef struct {
     int64_t offset;
     //0 for local
@@ -75,7 +86,7 @@ typedef map_t(vec_vec_int_t) map_vec_vec_int_t;
 static int longCmp(const void *a,const void *b) {
     return *(long*)a-*(long*)b;
 }
-void LoadAOTFunction(FILE *f,int verbose,int flags) {
+CSymbol *LoadAOTFunction(FILE *f,int verbose,int flags) {
     char buffer[256],sym_name[256];
     vec_CBinPatchp_t patches;
     vec_init(&patches);
@@ -144,6 +155,7 @@ void LoadAOTFunction(FILE *f,int verbose,int flags) {
     map_void_t labels;
     map_init(&labels);
     map_str_t exported;
+    map_init(&exported);
     {
         //LABELS
         char buffer[128];
@@ -164,6 +176,7 @@ void LoadAOTFunction(FILE *f,int verbose,int flags) {
                 new.is_importable=!(flags&AOT_NO_IMPORT_SYMS);
                 new.value_ptr=(void*)offset;
                 map_set(&Loader.symbols,buffer,new);
+                map_set(&exported,buffer,NULL);
             }
             //Will be added to function pointer later
             map_set(&labels,buffer,(void*)offset);
@@ -173,12 +186,7 @@ void LoadAOTFunction(FILE *f,int verbose,int flags) {
     int64_t code_size;
     fread(&code_size,1,sizeof(code_size),f);
     CSymbol v;
-    void * mem;
-    #ifndef TARGET_WIN32
-    mem=mmap(NULL,code_size,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
-    #else
-    mem=VirtualAlloc(NULL,code_size,MEM_COMMIT | MEM_RESERVE,PAGE_EXECUTE_READWRITE);
-    #endif
+    void * mem=TD_MALLOC(code_size);
     fread(mem,1,code_size,f);
     v.value_ptr=mem;
     v.type=SYM_FUNC;
@@ -224,6 +232,11 @@ void LoadAOTFunction(FILE *f,int verbose,int flags) {
             char**lab=(char**)map_get(&labels,key);
             *lab+=(int64_t)mem;
     }
+    miter=map_iter(&exported);
+    while(key=map_next(&exported,&miter)) {
+        map_get(&Loader.symbols,key)->value_ptr+=(int64_t)mem;
+    }
+    map_deinit(&exported);
     v.label_ptrs=labels;
     //FILL IN FUNCTION STATICS
     sloop:;
@@ -243,23 +256,83 @@ void LoadAOTFunction(FILE *f,int verbose,int flags) {
         }
     }
     //ASM PTCHES
-    map_set(&Loader.symbols,buffer,v);
+    vec_init(&v.asm_relocs);
     int64_t asmpatch_count;
     fread(&asmpatch_count,1,sizeof(asmpatch_count),f);
-    assert(asmpatch_count==0);
+    while(--asmpatch_count>=0) {
+        CAsmRelocation apatch;
+        fread(&apatch.patch,1,sizeof(apatch.patch),f);
+        apatch.func=LoadAOTFunction(f,verbose,flags|AOT_MALLOCED_SYM);
+        vec_push(&v.asm_relocs,apatch);
+    }
+    if(!(flags&AOT_MALLOCED_SYM)) {
+        map_set(&Loader.symbols,buffer,v);
+        return map_get(&Loader.symbols,buffer);
+    } else {
+        CSymbol *ret=TD_MALLOC(sizeof(v));
+        *ret=v;
+        return ret;
+    }
 }
-void FillInRelocations(CSymbol *sym) {
+//See PARSER.HC
+#define LOCAL_LAB_FMT "%s.%d"
+void FillInRelocations(CSymbol *sym,int label_scope) {
     map_iter_t iter=map_iter(&sym->relocs);
+    char buffer[128];
     const char *key;
     while(key=map_next(&sym->relocs,&iter)) {
             long i;
+            int scope;
             CRelocation *reloc;
-            vec_foreach(map_get(&sym->relocs,key),reloc,i)
-                if(map_get(&Loader.symbols,key))
+            sprintf(buffer,LOCAL_LAB_FMT,key,label_scope);
+            vec_foreach(map_get(&sym->relocs,key),reloc,i) {
+                if(map_get(&sym->label_ptrs,key)) {
+                    *reloc->ptr=*map_get(&sym->label_ptrs,key);
+                } else if(map_get(&sym->label_ptrs,buffer)) {
+                    *reloc->ptr=*map_get(&sym->label_ptrs,buffer);
+                } else if(map_get(&sym->statics,key)) {
+                    *reloc->ptr=*map_get(&sym->statics,key);
+                } else if(map_get(&Loader.symbols,key)) {
                     *reloc->ptr=map_get(&Loader.symbols,key)->value_ptr;
-                else
+                } else
                     fprintf(stderr,"Missing symbol %s at %p.\n",key,reloc->ptr);
+            }
     }
+    long iter2;
+    CAsmRelocation areloc;
+    vec_foreach(&sym->asm_relocs,areloc,iter2) {
+        //Use label pointers from parent function
+        iter=map_iter(&sym->label_ptrs);
+        while(key=map_next(&sym->label_ptrs,&iter)) {
+            map_set(&areloc.func->label_ptrs,key,*map_get(&sym->label_ptrs,key));
+        }
+        iter=map_iter(&sym->statics);
+        while(key=map_next(&sym->statics,&iter)) {
+            map_set(&areloc.func->statics,key,*map_get(&sym->statics,key));
+        }
+        FillInRelocations(areloc.func,areloc.patch.labelContext);
+        void *ptr=((void*(*)())areloc.func->value_ptr)();
+        void *dptr=sym->value_ptr+areloc.patch.offset;
+        if(areloc.patch.is_rel) {
+            ptr-=dptr+areloc.patch.width;
+        }
+        switch(areloc.patch.width) {
+            case 1:
+            *(uint8_t*)dptr=ptr;
+            break;
+            case 2:
+            *(uint16_t*)dptr=ptr;
+            break;
+            case 4:
+            *(uint32_t*)dptr=ptr;
+            break;
+            case 8:
+            *(uint64_t*)dptr=ptr;
+            break;
+        }
+        FreeAsmPatcherSym(areloc.func);
+    }
+    vec_deinit(&sym->asm_relocs);
 }
 void LoadAOTBin(FILE *f,int flags,char **header) {
     char buffer[256];
@@ -305,7 +378,8 @@ void LoadAOTBin(FILE *f,int flags,char **header) {
     while(key=map_next(&Loader.symbols,&iter)) {
         if(!strcmp(key,"@@Main"))
             aaMain=map_get(&Loader.symbols,key);
-        FillInRelocations(map_get(&Loader.symbols,key));
+        if(map_get(&Loader.symbols,key)->type==SYM_FUNC)
+            FillInRelocations(map_get(&Loader.symbols,key),-100);
     }
     if(aaMain)
         ((void(*)())aaMain->value_ptr)(0);
