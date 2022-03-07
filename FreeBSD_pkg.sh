@@ -1,5 +1,8 @@
 #/bin/tcsh
 set STAGEDIR = `pwd`/stagedir
+if ! -e $STAGEDIR then
+	mkdir stagedir
+endif
 cp "+MANIFEST" ${STAGEDIR}/
 mkdir -p ${STAGEDIR}
 mkdir -p ${STAGEDIR}/usr

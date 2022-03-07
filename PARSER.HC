@@ -981,7 +981,7 @@ Bool CheckForCaseOverlap(AST *a,I64 lo,I64 hi,AST **cases,Bool has_dft) {
     for(;cur;cur=cur->next) {
         if(cur->type==AST_CASE) {
             overlap=FALSE;
-            for(idx=cur->cs._li-lo;idx<=cur->cs._hi-hi;idx++) {
+            for(idx=cur->cs._li-lo;idx<=cur->cs._hi-lo;idx++) {
                 if(cases[idx]) overlap=TRUE;
                 cases[idx]=cur;
             }
@@ -9472,6 +9472,7 @@ Bool ParseAndRun(CCmpCtrl *cc) {
     }
     return FALSE;
 }
+
 
 
 
