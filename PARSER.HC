@@ -700,7 +700,7 @@ AST *LSP(CCmpCtrl *ctrl,AST *a=NULL) {
 }
 extern I64 EvalAST(AST *a);
 extern F64 EvalASTF64(AST *a);
-U0 __ScanForCases(AST *a,I64 last=0,I64 *min,I64 *max,Bool *has_dft) {
+I64 __ScanForCases(AST *a,I64 last=0,I64 *min,I64 *max,Bool *has_dft) {
     I64 lo,hi;
     for(;a;a=a->next) {
         if(has_dft&&a->type==AST_DFT)
@@ -726,9 +726,10 @@ U0 __ScanForCases(AST *a,I64 last=0,I64 *min,I64 *max,Bool *has_dft) {
             if(max) *max=MaxI64(*max,hi);
             a->cs._li=lo,a->cs._hi=hi;
         } else if(a->type==AST_SUBSWIT) {
-            __ScanForCases(a->sub_swit.body,last,min,max,has_dft);
+            last=__ScanForCases(a->sub_swit.body,last,min,max,has_dft);
         }
     }
+    return last;
 }
 U0 ScanForCases(AST *a,I64 *min,I64 *max,Bool *has_dft) {
     if(min) *min=I64_MAX;
@@ -736,28 +737,33 @@ U0 ScanForCases(AST *a,I64 *min,I64 *max,Bool *has_dft) {
     if(has_dft) *has_dft=FALSE;
     __ScanForCases(a,,min,max,has_dft);
 }
-U0 __GetCases(AST *a,I64 last=0,I64 min,I64 max,U0 **tab) {
+I64 __GetCases(AST *a,I64 last=0,I64 min,I64 max,U0 **tab) {
     I64 lo,hi;
     for(;a;a=a->next) {
         if(a->type==AST_CASE) {
-            if(a->cs.low)
-                last=lo=EvalAST(a->cs.low);
-            else
-                lo=++last;
-            if(a->cs.high)
-                last=hi=EvalAST(a->cs.high);
-            else
-                hi=lo;
+            if(Compiler.error_count) {
+                lo=hi=++last;
+            } else {
+                if(a->cs.low)
+                    last=lo=EvalAST(a->cs.low);
+                else
+                    lo=++last;
+                if(a->cs.high)
+                    last=hi=EvalAST(a->cs.high);
+                else
+                    hi=lo;
+            }
             for(;lo<=hi;lo++)
                 tab[lo-min]=a;
         } else if(a->type==AST_SUBSWIT) {
-            __GetCases(a->sub_swit.body,last,min,max,tab);
+            last=__GetCases(a->sub_swit.body,last,min,max,tab);
         } else if(a->type==AST_DFT) {
             for(lo=min;lo<max;lo++)
                 if(!tab[lo-min])
                     tab[lo-min]=a;
         }
     }
+    return last;
 }
 
 U0 **__CreateCaseTable(AST *a) {
@@ -9472,6 +9478,8 @@ Bool ParseAndRun(CCmpCtrl *cc) {
     }
     return FALSE;
 }
+
+
 
 
 
