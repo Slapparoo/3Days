@@ -2583,7 +2583,7 @@ AST *ParseSubswit(CCmpCtrl *cc) {
             goto en;
     if(!(tmp2=ParseStmt(cc,,TRUE))) ParserFail(cc,"Expected statement.");
     if(in_start_code) {
-        if(tmp2->type==AST_DFT||tmp2->type==AST_CASE) {
+        if(tmp2->type==AST_DFT||tmp2->type==AST_CASE||tmp2->type==AST_SUBSWIT) {
             st_code=first;
             tmp=first=NULL;
             in_start_code=FALSE;
@@ -6236,13 +6236,13 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     swit_table->table=MAlloc(sizeof(U0*)*(hi-lo+1));
     swit_table->ast_table=table;
     Assign(value_a,value_c);
-    jit_ref_data(Compiler.jit,jit_R(GetFreeIReg),op3);
     jit_subi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),lo);
     //
+    
     op4=table[idx=hi-lo];
     for(idx;idx>=0;) {
         idx2=idx;
-        while(op4==table[idx]&&idx>=0) {
+        while(idx>=0&&op4==table[idx]) {
             --idx;
         }
         op3=jit_bgti(Compiler.jit,NULL,jit_R(value_a->reg),idx);
@@ -6334,9 +6334,10 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     case AST_CASE:
     lo=ast->cs._li;
     hi=ast->cs._hi;
-    for(;lo<=hi;lo++)
+    for(;lo<=hi;lo++) {
         if(Compiler.swit_table->table[lo-Compiler.swit_table->lo])
             jit_patch(Compiler.jit,Compiler.swit_table->table[lo-Compiler.swit_table->lo]);
+    }
     //Check if in subswit
     if(Compiler.cur_breaks->start_code_label) {
         jit_ldxi(Compiler.jit,jit_R(0),R_FP,Compiler.swit_table->subswit_var_offset,8);
@@ -9287,7 +9288,7 @@ U0 CompileBoundsCheck(I64 r,I64 sz,I64 off=0){}
 #ifdef STAGE1
 GC_Collect;
 RegisterRuntimeClasses(&GetType,&LoaderCreateTypeFwd,&LoaderAddMember,&LoaderCreateArrayType);
-CompileBinModule("#define BOUNDS_CHECK\n#define SIGNAL\n#define RUNTIME_C\n#include \"PARSER.HC\"#include \"HolyEd/EDITOR.HC\";","REPL.BIN","HCRT/HCRT.HH");
+CompileBinModule("#define BOUNDS_CHECK\n#define SIGNAL\n#define RUNTIME_C\n#include \"CODEGEN.HC\";","CG.BIN","HCRT/HCRT.HH");
 #endif
 //See rl.c
 I64 __HCCompetions2(U8 *buf,U8 **dst) {
@@ -9478,6 +9479,8 @@ Bool ParseAndRun(CCmpCtrl *cc) {
     }
     return FALSE;
 }
+
+
 
 
 
