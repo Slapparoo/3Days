@@ -4,10 +4,6 @@ set CC = "x86_64-w64-mingw32-gcc"
 
 set CFlags = "-DTARGET_WIN32 -I./SDL2-mingw64/include -I./SDL2-mingw64/include/SDL2 -Os -g3 -lm -fno-omit-frame-pointer"
 
-if ! -e HCRT/HCRT.BIN then
-	cp REPL.WBIN HCRT/HCRT.BIN
-endif
-
 if ! -e 3d_loader.exe then
   foreach f ( $CFiles )
     $CC $CFlags -c $f -o $f.obj || rm $f.obj

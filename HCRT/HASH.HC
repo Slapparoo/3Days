@@ -12,7 +12,6 @@ I64 HashStr(U8* str) {
     r *= 31;
     r += str[l];
   }
-
   return r;
 }
 CHash* HashFind(U8* needle, CHashTable* table) {
@@ -60,4 +59,6 @@ loop:
   Free(table->body);
   Free(table);
 }
+
+
 

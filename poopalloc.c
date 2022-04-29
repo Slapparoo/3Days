@@ -198,9 +198,9 @@ static CPoopSlab2 *GetSlabByPtr(void *ptr) {
                 return slab;
         }
     }
-    if(scale*4096<=(1<<17))
-        goto loop;
     if(LargestAlloc>=scale*4096)
+        goto loop;
+    if(scale*4096<=(1<<17))
         goto loop;
     return NULL;
 }
@@ -529,11 +529,12 @@ void *PoopMAlloc(int64_t size) {
   assert(MSize(ret)==size);
   return ret;
 }
-int InBounds(void *ptr,int64_t size) {
+void *BoundsCheck(void *ptr,int64_t size) {
 	void *fptr;
+    CSymbol *bt;
 	asm ("movq %%rsp, %0" : "=r" (fptr) );
     if(StackStart>=ptr&&ptr>=fptr)
-    	return 1;
+    	return ptr;
     LockHeap();
     int64_t idx,cnt,size2;
     CPoopSlab2 *cur_slab=GetSlabByPtr(ptr);
@@ -585,20 +586,28 @@ int InBounds(void *ptr,int64_t size) {
             break;
         }
         if(!((base+cnt>=ptr+size)&&(base<=ptr))) {
+            bt=map_get(&Loader.symbols,"Backtrace");
+            UnlockHeap();
+            FFI_CALL_TOS_2(bt->value_ptr,-1,0);
             if(ptr-(base+cnt)>=0)
                 fprintf(stderr,"Access is %ld bytes beyond %ld byte area.\n",ptr-(base+cnt),cnt);
             else
                 fprintf(stderr,"Access is %ld bytes before %ld byte area.\n",base-(ptr),cnt);
+			return ptr;
         } else {
-			UnlockHeap();
-            return 1;
+            UnlockHeap();
+            return ptr;
 		}
     } else {
         oob:
+        UnlockHeap();
+        bt=map_get(&Loader.symbols,"Backtrace");
+        FFI_CALL_TOS_2(bt->value_ptr,-1,0);
         fprintf(stderr,"Access is out of bounds.\n");
+        return ptr;
     }
-    UnlockHeap();        
-    return 0;
+          
+    return ptr;
 }
 static int64_t __ScanPtr(void **ptr,int64_t len) {
     int64_t idx,cnt=0;

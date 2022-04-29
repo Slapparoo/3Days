@@ -1,5 +1,5 @@
-#include "HCRT/HCRT.HC" //Requires nitty gritty of the runtime
-#include "VECTOR.HC"
+#include "HCRT/HCRT.HC"
+#include "CODEGEN.HC"
 #ifdef SIGNAL
 #include "SIGNAL.HC"
 ArmSignals;
@@ -34,12 +34,10 @@ Bool IsHTTType(I64 t) {
     return FALSE;
 }
 class _CBreakpoint;
-class jit_debugger_regs;
-U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr);
+U0 DebuggerRoutine(CDebuggerRegs *regs,_CBreakpoint *bp,U8 *caller_ptr);
 class CType;
 class AST;
 class CRelocation;
-CType *AssignTypeToNode(AST *a,CType *arr_t=NULL);
 extern U0 FreeAST(AST *a);
 class CCompStringRef {
     CCompStringRef *next;
@@ -49,31 +47,6 @@ class CCompString:CHash {
     U8 *data;
     CCompStringRef *refs;
 };
-class CIRValue {
-    CIRValue *last;
-    #define IRV_INT 1
-    #define IRV_FLOAT 2
-    #define IRV_FREG 3
-    #define IRV_REG 4
-    #define IRV_STR 5
-    #define IRV_INDIRX 6 //Comes with offsett
-    I64 type;
-    union {
-        I64 reg;
-        F64 flt;
-        I64 int;
-        class {
-            CType *type;
-            I64 reg;
-            I64 offset;
-        } indirx;
-        U0 *indir;
-    };
-    CType *type2;
-};
-CIRValue *IRValueClone(CIRValue *v) {
-    return MemCpy(MAlloc(sizeof(*v)),v,sizeof(*v));
-}
 class CBreakLst {
     CBreakLst *last;
     U0 *start_code_label; //This is used for sub-switches
@@ -116,8 +89,7 @@ class CUnresolvedLabel:CHash {
     AST *stmt;
 };
 class CCompiler {
-    CIRValue *stack;
-    U0 *jit;
+    JIT *jit;
     CHashTable *globals,*locals,
     //See HexifyString and CCompString
     *cur_strings,*breakpoints,*labels,
@@ -136,11 +108,11 @@ class CCompiler {
     CSwitchTable *swit_table;
     CType *ret_type;
     CRelocation *relocations;
-    I64 first_avail_ireg;
-    I64 first_avail_freg,
+    I64 first_avail_reg,
     error_count,
     //Used for local labels in assembler
-    label_scope;
+    label_scope,
+    cur_tmp_reg;
     U0 *func_ptr;
     I64 frame_off;
     CCmpCtrl *cc;
@@ -226,7 +198,7 @@ class CLinkage {
 };
 class CFunction:CHashSrcSym {
     CLinkage link;
-    U0 *jit;
+    JIT *jit;
     U0 *func_ptr;
     CType *hc_type;
     U0 *func_ptr;
@@ -253,7 +225,6 @@ CCompilerState *NewCompilerState() {
     *ret=Compiler;
     if(GlobalCompiler==&Compiler)
         GlobalCompiler=ret;
-    Compiler.stack=NULL;
     Compiler.locals=HashTableNew(0x100);
     Compiler.labels=HashTableNew(0x10);
     Compiler.asm_tainted_label_names=HashTableNew(0x10);
@@ -263,19 +234,18 @@ CCompilerState *NewCompilerState() {
     Compiler.swit_table=NULL;
     Compiler.asm_patches=NULL;
     Compiler.in_func=0;
-    Compiler.jit=jit_init();
+    Compiler.jit=jit_Init;
     Compiler.frame_off=0;
     Compiler.unresolved_labels=HashTableNew(0x10);
     if(Compiler.aot_mode)
         Compiler.cur_strings=HashTableNew(0x10);
-    jit_prolog(Compiler.jit,&Compiler.func_ptr);
+    jit_rpnBodyStart(Compiler.jit);
     if(Compiler.debug_mode) {
-      jit_movr(Compiler.jit,jit_R(1),R_FP);
-      jit_prepare(Compiler.jit);
-      jit_putargr(Compiler.jit,jit_R(1));
-      jit_call(Compiler.jit,&EnterFunc);
+        JIT_FUNC_CALL(Compiler.jit,1);
+        JIT_RBP(Compiler.jit);
+        JIT_I64(Compiler.jit,&EnterFunc);
     }
-    Compiler.first_avail_freg=2,Compiler.first_avail_ireg=3;
+    Compiler.first_avail_reg=1;
     return ret;
 }
 U0 HTT_LocalDestroy(CHash *);
@@ -290,7 +260,7 @@ U0 ResetCompilerData() {
     if(Compiler.aot_mode)
         HashTableDel(Compiler.cur_strings,&CompStringDestroy);
     if(Compiler.jit)
-        jit_free(Compiler.jit),Compiler.jit=NULL;
+        JIT_FREE(Compiler.jit),Compiler.jit=NULL;
     Compiler.locals=HashTableNew(0x100);
     Compiler.asm_tainted_label_names=HashTableNew(0x10);
     Compiler.cur_strings=HashTableNew(0x100);
@@ -419,7 +389,7 @@ Bool IsPtrType(CType *t) {
 Bool IsF64(CType *t) {
     if(t->is_flt) return TRUE;
     if(IsStructType(t))
-        if(t->base)
+        if(t->base)    
             return IsF64(t->base);
     return FALSE;
 }
@@ -444,9 +414,8 @@ CType *DerefedType(CType *t) {
         return t(CType*)->base;
     }
     if(t->star_cnt==0) {
-        "DEREF NONPTR,%s\n",t->str;
-        Backtrace(0,0);
-        throw('Compile');
+        //Error should be raised elsewhere
+        return HashFind("I64i",Compiler.globals);
     }
     //Pointer types appear after base type in memory
     return t-1;
@@ -682,7 +651,7 @@ U0 HTT_LocalDestroy(CHash *h) {
 }
 U0 FreeFunction(CFunction *f) {
     if(f->locals) HashTableDel(f->locals,&HTT_LocalDestroy);
-    if(f->jit) jit_free(f->jit);
+    if(f->jit) JIT_FREE(f->jit);
 }
 U0 PatchAsmPatcher(CFunction *parent,CAsmPatcher *patcher);
 AST *LSP(CCmpCtrl *ctrl,AST *a=NULL) {
@@ -698,7 +667,7 @@ AST *LSP(CCmpCtrl *ctrl,AST *a=NULL) {
     Free(dummy.src_link);
     return a;
 }
-extern I64 EvalAST(AST *a);
+extern I64 EvalAST(AST *a,Bool no_eval=FALSE);
 extern F64 EvalASTF64(AST *a);
 I64 __ScanForCases(AST *a,I64 last=0,I64 *min,I64 *max,Bool *has_dft) {
     I64 lo,hi;
@@ -741,18 +710,14 @@ I64 __GetCases(AST *a,I64 last=0,I64 min,I64 max,U0 **tab) {
     I64 lo,hi;
     for(;a;a=a->next) {
         if(a->type==AST_CASE) {
-            if(Compiler.error_count) {
-                lo=hi=++last;
-            } else {
-                if(a->cs.low)
-                    last=lo=EvalAST(a->cs.low);
-                else
-                    lo=++last;
-                if(a->cs.high)
-                    last=hi=EvalAST(a->cs.high);
-                else
-                    hi=lo;
-            }
+            if(a->cs.low)
+                last=lo=EvalAST(a->cs.low);
+            else
+                lo=++last;
+            if(a->cs.high)
+                last=hi=EvalAST(a->cs.high);
+            else
+                hi=lo;
             for(;lo<=hi;lo++)
                 tab[lo-min]=a;
         } else if(a->type==AST_SUBSWIT) {
@@ -763,7 +728,6 @@ I64 __GetCases(AST *a,I64 last=0,I64 min,I64 max,U0 **tab) {
                     tab[lo-min]=a;
         }
     }
-    return last;
 }
 
 U0 **__CreateCaseTable(AST *a) {
@@ -921,6 +885,34 @@ en:
     return ret;
 }
 CType *GetType(U8 *name,I64 ptr_lvl=0);
+CType *AssignTypeToNode(AST *a,CType *arr_t=NULL,Bool dont_call_lone_name=FALSE);
+U0 WarnOnWeirdPass(CType *want,AST *have);
+Bool IsLValue(AST *a) {
+    CVariable *var;
+    CType *t;
+    switch(a->type) {
+        case AST_EXPLICIT_TC:
+            return IsLValue(a->typecast.base);
+        case AST_NAME:
+        if(Compiler.in_func)
+            if(var=HashFind(a->name,Compiler.locals))
+                return var->type==HTT_VAR;
+        if(var=HashFind(a->name,Compiler.globals))
+            return var->type==HTT_VAR;
+        break;
+        case AST_DERREF:
+        if(DerefedType(t=AssignTypeToNode(a->unopArg))->type!=HTT_ARRAY_TYPE)
+            return t->type!=HTT_FUNC_TYPE;
+        break;
+        case AST_ARRAY_ACCESS:
+            if(DerefedType(t=AssignTypeToNode(a->binop.a))->type!=HTT_ARRAY_TYPE)
+                return t->type!=HTT_FUNC_TYPE;
+        break;
+        case AST_MEMBER:
+            return AssignTypeToNode(a->member_acc.base)->type!=HTT_ARRAY_TYPE;
+    }
+    return FALSE;
+}
 U0 WarnOnWeirdPass(CType *want,AST *have) {
     CType *have2=AssignTypeToNode(have);
     CType *ow=want,*oh=have2;
@@ -949,32 +941,6 @@ U0 WarnOnWeirdPass(CType *want,AST *have) {
                 CatchIf('Parser','Lexer');
             }
     }
-}
-Bool IsLValue(AST *a) {
-    CVariable *var;
-    CType *t;
-    switch(a->type) {
-        case AST_EXPLICIT_TC:
-            return IsLValue(a->typecast.base);
-        case AST_NAME:
-        if(Compiler.in_func)
-            if(var=HashFind(a->name,Compiler.locals))
-                return var->type==HTT_VAR;
-        if(var=HashFind(a->name,Compiler.globals))
-            return var->type==HTT_VAR;
-        break;
-        case AST_DERREF:
-        if(DerefedType(t=AssignTypeToNode(a->unopArg))->type!=HTT_ARRAY_TYPE)
-            return t->type!=HTT_FUNC_TYPE;
-        break;
-        case AST_ARRAY_ACCESS:
-            if(DerefedType(t=AssignTypeToNode(a->binop.a))->type!=HTT_ARRAY_TYPE)
-                return t->type!=HTT_FUNC_TYPE;
-        break;
-        case AST_MEMBER:
-            return AssignTypeToNode(a->member_acc.base)->type!=HTT_ARRAY_TYPE;
-    }
-    return FALSE;
 }
 Bool CheckForCaseOverlap(AST *a,I64 lo,I64 hi,AST **cases,Bool has_dft) {
     AST *cur;
@@ -1010,105 +976,8 @@ Bool CheckForCaseOverlap(AST *a,I64 lo,I64 hi,AST **cases,Bool has_dft) {
         }
     }
 }
-//Use with asm patcher to detirmine if a value needs to be "Patched" with global values
-//Also,statics are treated as globals,as they stay resident in memory like globals.
-Bool AsmReferencesNonLocals(AST *a,Bool inc_labels=FALSE) {
-    Bool ret=FALSE;
-    I64 cnt;
-    CVariable *local;
-    switch(a->type) {
-    case AST_MEMBER:
-    ret|=AsmReferencesNonLocals(a->member_acc.base,inc_labels);
-    break;
-    case AST_PRE_DEC:
-    case AST_PRE_INC:
-    case AST_POS:
-    case AST_NEG:
-    case AST_LNOT:
-    case AST_BNOT:
-    case AST_DERREF:
-    case AST_ADDROF:
-    case AST_PAREN:
-    case AST_POST_INC:
-    case AST_POST_DEC:
-    ret|=AsmReferencesNonLocals(a->unopArg,inc_labels);
-    break;
-    case AST_COMMA:
-    case AST_ADD:
-    case AST_SUB:
-    case AST_MUL:
-    case AST_DIV:
-    case AST_MOD:
-    case AST_LSHIFT:
-    case AST_RSHIFT:
-    case AST_POW:
-    case AST_BAND:
-    case AST_BXOR:
-    case AST_BOR:
-    case AST_LT:
-    case AST_GT:
-    case AST_LE:
-    case AST_EQ:
-    case AST_NE:
-    case AST_GE:
-    case AST_LAND:
-    case AST_LOR:
-    case AST_LXOR:
-    case AST_ASSIGN:
-    case AST_ASSIGN_SHL:
-    case AST_ASSIGN_SHR:
-    case AST_ASSIGN_MUL:
-    case AST_ASSIGN_DIV:
-    case AST_ASSIGN_BAND:
-    case AST_ASSIGN_BOR:
-    case AST_ASSIGN_BXOR:
-    case AST_ASSIGN_ADD:
-    case AST_ASSIGN_SUB:
-    case AST_ASSIGN_MOD:
-    ret|=AsmReferencesNonLocals(a->binop.a,inc_labels);
-    ret|=AsmReferencesNonLocals(a->binop.b,inc_labels);
-    break;
-    case AST_ARRAY_ACCESS:
-    ret|=AsmReferencesNonLocals(a->arr_acc.base,inc_labels);
-    ret|=AsmReferencesNonLocals(a->arr_acc.index,inc_labels);
-    break;
-    case AST_NAME:
-    if(!inc_labels) {
-        if(local=HashFind(a->name,Compiler.locals))
-            return !!(local->link.type&LINK_STATIC);
-        else if(HashFind(a->name,Compiler.globals)||HashFind(a->name,Compiler.labels))
-            return TRUE;
-        //Could be a label
-        return TRUE;
-    } else {
-        if((local=HashFind(a->name,Compiler.locals))||HashFind(a->name,Compiler.labels)) {
-            if(local&&(local->link.type&LINK_STATIC))
-                return TRUE;
-        } else if(HashFind(a->name,Compiler.globals))
-            return TRUE;
-        //Could be a label
-        return FALSE;
-    }
-    break;
-    case AST_RANGE:
-    cnt=MSize(a->range.values)/sizeof(AST*);
-    while(--cnt>=0)
-        ret|=AsmReferencesNonLocals(a->range.values[cnt],inc_labels);
-    break;
-    case AST_IMPLICIT_TC:
-    case AST_EXPLICIT_TC:
-    ret|=AsmReferencesNonLocals(a->typecast.base,inc_labels);
-    break;
-    case AST_FUNC_CALL:
-    ret|=AsmReferencesNonLocals(a->func_call.base,inc_labels);
-    cnt=MSize(a->func_call.args)/sizeof(AST*);
-    while(--cnt>=0)
-        if(a->func_call.args[cnt])
-            ret|=AsmReferencesNonLocals(a->func_call.args[cnt],inc_labels);
-    }
-    return ret;
-}
-CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
+extern U8 *PrintAST(AST *a);
+CType *AssignTypeToNode(AST *a,CType *arr_t=NULL,Bool dont_call_lone_name=FALSE) {
     if(a->type!=AST_SIZEOF&&a->type2) return a->type2;
     I64 dim,sdim,cnt,idx,lo,hi;
     CType *ret=HashFind("I64i",Compiler.globals),*type1,*type2;
@@ -1461,6 +1330,7 @@ CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
             var->isReg=FALSE;
         }
         ret=GetType("U8i")+1;
+        break;
     } else if(Compiler.in_func) {
         if(var=HashFind(a->name,Compiler.locals)) {
             if(var->type==HTT_VAR) {
@@ -1472,18 +1342,21 @@ CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
                 ParserFail2(a,"Expected variable.");
         }
     }
-    if(var=HashFind(a->name,Compiler.globals)) {
+    if((var=HashFind(a->name,Compiler.globals))&&!dont_call_lone_name) {
             if(var->type==HTT_VAR) {
                 ret=var->hc_type;
+                break;
             } else if(var->type==HTT_FUNC) {
                 func=var;
                 //Ensure all arguments are implicit
                 idx=MSize(func->hc_type->arg_values)/sizeof(I64**);
                 while(--idx>=0)
-                    if(!func->hc_type->arg_values[idx])
+                    if(!func->hc_type->arg_values[idx]) 
                         ParserFail2(a,"Implicit function call is missing defualt arguments.");
+                    
                 //Functions on their own are impliclty called
                 ret=func->hc_type->ret_type;
+                break;
             } else
                 ParserFail2(a,"Expected variable.");
     } else if(Compiler.asm_mode) {
@@ -1494,8 +1367,12 @@ CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
         //May be a label
         ret=GetType("U8i")+1;
         break;
-    } else
+    } else if(!var)
         ParserFail2(a,"Unknown symbol '%s'.",a->name);
+    else if(var->type==HTT_VAR)
+        ret=var->hc_type;
+    else if(var->type==HTT_FUNC)
+        ret=var(CFunction*)->hc_type;
     break;
     case AST_IMPLICIT_TC:
     //TODO
@@ -1647,6 +1524,8 @@ CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
     case AST_ASSIGN_MOD:
     goto asn_binop;
     break;
+    default:
+    ret=GetType("U0");
     }
     } catch {
         ret=HashFind("I64i",Compiler.globals);
@@ -1654,6 +1533,104 @@ CType *AssignTypeToNode(AST *a,CType *arr_t=NULL) {
     }
     a->type2=ret;
     return a->type2;
+}
+//Use with asm patcher to detirmine if a value needs to be "Patched" with global values
+//Also,statics are treated as globals,as they stay resident in memory like globals.
+Bool AsmReferencesNonLocals(AST *a,Bool inc_labels=FALSE) {
+    Bool ret=FALSE;
+    I64 cnt;
+    CVariable *local;
+    switch(a->type) {
+    case AST_MEMBER:
+    ret|=AsmReferencesNonLocals(a->member_acc.base,inc_labels);
+    break;
+    case AST_PRE_DEC:
+    case AST_PRE_INC:
+    case AST_POS:
+    case AST_NEG:
+    case AST_LNOT:
+    case AST_BNOT:
+    case AST_DERREF:
+    case AST_ADDROF:
+    case AST_PAREN:
+    case AST_POST_INC:
+    case AST_POST_DEC:
+    ret|=AsmReferencesNonLocals(a->unopArg,inc_labels);
+    break;
+    case AST_COMMA:
+    case AST_ADD:
+    case AST_SUB:
+    case AST_MUL:
+    case AST_DIV:
+    case AST_MOD:
+    case AST_LSHIFT:
+    case AST_RSHIFT:
+    case AST_POW:
+    case AST_BAND:
+    case AST_BXOR:
+    case AST_BOR:
+    case AST_LT:
+    case AST_GT:
+    case AST_LE:
+    case AST_EQ:
+    case AST_NE:
+    case AST_GE:
+    case AST_LAND:
+    case AST_LOR:
+    case AST_LXOR:
+    case AST_ASSIGN:
+    case AST_ASSIGN_SHL:
+    case AST_ASSIGN_SHR:
+    case AST_ASSIGN_MUL:
+    case AST_ASSIGN_DIV:
+    case AST_ASSIGN_BAND:
+    case AST_ASSIGN_BOR:
+    case AST_ASSIGN_BXOR:
+    case AST_ASSIGN_ADD:
+    case AST_ASSIGN_SUB:
+    case AST_ASSIGN_MOD:
+    ret|=AsmReferencesNonLocals(a->binop.a,inc_labels);
+    ret|=AsmReferencesNonLocals(a->binop.b,inc_labels);
+    break;
+    case AST_ARRAY_ACCESS:
+    ret|=AsmReferencesNonLocals(a->arr_acc.base,inc_labels);
+    ret|=AsmReferencesNonLocals(a->arr_acc.index,inc_labels);
+    break;
+    case AST_NAME:
+    if(!inc_labels) {
+        if(local=HashFind(a->name,Compiler.locals))
+            return local->isReg=FALSE,!!(local->link.type&LINK_STATIC);
+        else if(HashFind(a->name,Compiler.globals)||HashFind(a->name,Compiler.labels))
+            return TRUE;
+        //Could be a label
+        return TRUE;
+    } else {
+        if((local=HashFind(a->name,Compiler.locals))||HashFind(a->name,Compiler.labels)) {
+            if(local&&(local->link.type&LINK_STATIC))
+                return local->isReg=FALSE,TRUE;
+        } else if(HashFind(a->name,Compiler.globals))
+            return TRUE;
+        //Could be a label
+        return FALSE;
+    }
+    break;
+    case AST_RANGE:
+    cnt=MSize(a->range.values)/sizeof(AST*);
+    while(--cnt>=0)
+        ret|=AsmReferencesNonLocals(a->range.values[cnt],inc_labels);
+    break;
+    case AST_IMPLICIT_TC:
+    case AST_EXPLICIT_TC:
+    ret|=AsmReferencesNonLocals(a->typecast.base,inc_labels);
+    break;
+    case AST_FUNC_CALL:
+    ret|=AsmReferencesNonLocals(a->func_call.base,inc_labels);
+    cnt=MSize(a->func_call.args)/sizeof(AST*);
+    while(--cnt>=0)
+        if(a->func_call.args[cnt])
+            ret|=AsmReferencesNonLocals(a->func_call.args[cnt],inc_labels);
+    }
+    return ret;
 }
 _extern Prec14 AST * ParseExprNoComma(CCmpCtrl *cc);
 _extern Prec15 AST * ParseExpr(CCmpCtrl *cc);
@@ -1671,8 +1648,8 @@ AST *Prec0(CCmpCtrl *cc) {
         if(cc->token==TK_STR) {
             //-1 ignores nul byte
             tmp_s=MAlloc(MSize(ret->string)-1+cc->cur_str_len);
-            StrNCpy(tmp_s,ret->string,MSize(ret->string)-1);
-            StrNCpy(tmp_s+MSize(ret->string)-1,cc->cur_str,cc->cur_str_len);
+            MemCpy(tmp_s,ret->string,MSize(ret->string)-1);
+            MemCpy(tmp_s+MSize(ret->string)-1,cc->cur_str,cc->cur_str_len);
             Free(ret->string);
             ret->string=tmp_s;
             goto sloop;
@@ -1715,6 +1692,7 @@ extern CType *ParseType(CType *_bt=NULL,CCmpCtrl *cc,AST **name,Bool base_type_o
 AST *Prec1(CCmpCtrl *cc) {
     AST *un=Prec0(cc),*args[0xff];
     if(!un) return NULL;
+    MemSet(args,0,sizeof(args));
     AST *ret=NULL,*tmp,*tmp2;
     CType *t;
     I64 idx=0;
@@ -2010,7 +1988,6 @@ Bool IsForward(CHash *item) {
     }
     return FALSE;
 }
-extern U8 *PrintAST(AST *a);
 U8 *__PrintAST(AST *a) {
     I64 idx,cnt;
     U8 *tmp1,*tmp2,*tmp3,*tmp4;
@@ -2020,7 +1997,7 @@ U8 *__PrintAST(AST *a) {
     case AST_NOP:
         return StrNew("NOP");
     case AST_DECL:
-        tmp3=MStrPrint("%s %s=%s",a->decl.type->str,a->decl.name,tmp2=PrintAST(a->decl.dft));
+        tmp3=MStrPrint("%s %s=%s",a->decl.type->str,a->decl.name->name,tmp2=PrintAST(a->decl.dft));
         Free(tmp1),Free(tmp2);
         return tmp3;
     case AST_ARRAY_LITERAL:
@@ -2320,9 +2297,8 @@ unop:
                );
     case AST_LASTCLASS:
         return StrNew("Lastclass\n");
-    default:
-        throw('AST');
     }
+    return StrNew("UNK");
 }
 U8 *HexifyString(U8 *str,I64 len) {
     U8 *ret=MAlloc(2*len+1);
@@ -2409,7 +2385,7 @@ AST *ParsePrint(CCmpCtrl *cc,Bool instant_eval=FALSE) {
         len=MSize(ret->print.text)-1+cc->cur_str_len;
         old=ret->print.text;
         ret->print.text=StrNCpy(MAlloc(len),ret->print.text,MSize(old)); //Ignore NULL byte
-        StrNCpy(ret->print.text+MSize(old)-1,cc->cur_str,cc->cur_str_len);
+        MemCpy(ret->print.text+MSize(old)-1,cc->cur_str,cc->cur_str_len);
         Free(old);
     }
     loop:
@@ -2434,6 +2410,9 @@ AST *ParseGoto(CCmpCtrl *cc) {
     AST *r;
     CUnresolvedLabel *unresolved;
     if(cc->token==TK_IDENT&&!StrCmp("goto",cc->cur_str)) {
+        r=MAlloc(sizeof(AST));
+        r->type=AST_GOTO;
+        LSP(cc,r);
         Lex(cc);
         if(cc->token!=TK_IDENT) ParserFail(cc,"Expected name.");
         name=StrNew(cc->cur_str);
@@ -2441,8 +2420,6 @@ AST *ParseGoto(CCmpCtrl *cc) {
         Lex(cc);
         if(cc->token!=';') ParserFail(cc,"Expected ';'.");
         Lex(cc);
-        r=MAlloc(sizeof(AST));
-        r->type=AST_GOTO;
         r->name=name;
         if(HashFind(name,Compiler.labels)) {
         } else {
@@ -2539,7 +2516,7 @@ AST *ParseFor(CCmpCtrl *cc,Bool instant_eval=FALSE) {
     AssignTypeToNode(ret);
     return ret;
 }
-CFunction *CompilerEmitCode();
+CFunction *CompilerEmitCode(I64 arity);
 AST *ParseWhile(CCmpCtrl *cc,Bool instant_eval=FALSE) {
     AST *cond=NULL,*body=NULL,*ret,*posit;
     I64 old;
@@ -2774,7 +2751,7 @@ CTypeMember *ParseMembers(CCmpCtrl *cc,CTypeMember *inher=NULL) {
             cur_pos=LSP(cc);
             Lex(cc);
             FreeAST(cur_pos);
-            meta_exp=ParseExpr(cc),AssignTypeToNode(meta_exp);
+            meta_exp=ParseExprNoComma(cc),AssignTypeToNode(meta_exp);
             meta->value=EvalAST(meta_exp);
             meta->last=tmp->meta;
             if(tmp->meta)
@@ -2872,7 +2849,7 @@ CType *ParseType(CType *_bt=NULL,CCmpCtrl *cc,AST **name,Bool base_type_only=FAL
                 if(tname)
                 forward_t=GetType(tname);
                 else forward_t=NULL;
-                if(Compiler.aot_mode&&forward_t&&!forward_t->is_fwd) ParserFail2(LSP(cc,NULL),"Redefinition of class %s.",forward_t->str);
+                //if(Compiler.aot_mode&&forward_t&&!forward_t->is_fwd) ParserFail2(LSP(cc,NULL),"Redefinition of class %s.",forward_t->str);
                 if(tname) HashAdd(_bt,Compiler.globals);
                 forward_t=NULL;
                 if(inher) {
@@ -2983,7 +2960,7 @@ CType *ParseType(CType *_bt=NULL,CCmpCtrl *cc,AST **name,Bool base_type_only=FAL
                 if(tname)
                 ftype=GetType(tname);
                 else ftype=NULL;
-                if(Compiler.aot_mode&&ftype&&!ftype->is_fwd) ParserFail2(LSP(cc,NULL),"Redefinition of union %s.",ftype->str);
+                //if(Compiler.aot_mode&&ftype&&!ftype->is_fwd) ParserFail2(LSP(cc,NULL),"Redefinition of union %s.",ftype->str);
                 if(tname) HashAdd(_bt,Compiler.globals);
                 if(inher) {
                     _bt->inher=inher;
@@ -3052,7 +3029,7 @@ CType *ParseType(CType *_bt=NULL,CCmpCtrl *cc,AST **name,Bool base_type_only=FAL
             bt=_bt;
             goto loop1;
         }
-        if(cc->token==TK_IDENT&&(find=HashFind(cc->cur_str,Compiler.globals))    );
+        if(cc->token==TK_IDENT&&(find=HashFind(cc->cur_str,Compiler.globals)));
         else return NULL;
         if(!IsHTTType(find->type)) return NULL;
         Lex(cc);
@@ -3244,6 +3221,7 @@ CType *ParseType(CType *_bt=NULL,CCmpCtrl *cc,AST **name,Bool base_type_only=FAL
             ftype[idx+1]->str=MStrPrint("%s*",ftype[idx]->str);
             ftype[idx+1]->sz=ftype[idx+1]->align=8;
         }
+        //"%d,%d\n",idx,cnt;
         //Prevent from getting sweep away by gc
         HashAdd(ftype,Compiler.globals);
         bt=ftype+star_cnt;
@@ -3522,7 +3500,7 @@ AST *ParseDecls(CCmpCtrl *cc,Bool instant_eval=FALSE) {
         if(link) var->link=*link;
         try {
             if(Compiler.in_func) {
-                if(IsInteger(var->hc_type)||IsF64(var->hc_type))
+                if(IsInteger(var->hc_type))
                     if(var->hc_type->type!=HTT_ARRAY_TYPE)
                         var->isReg=TRUE;
                 if(HashFind(var->str,Compiler.locals))
@@ -3673,63 +3651,7 @@ AST *ParseStmt(CCmpCtrl *cc,Bool instant_eval=FALSE,Bool allow_cases=FALSE) {
     }
     return NULL;
 }
-U0 PushIRReg(CType *type,I64 reg) {
-    CIRValue *new=MAlloc(sizeof(CIRValue));
-    new->type=IRV_REG;
-    new->reg=reg;
-    new->last=Compiler.stack;
-    Compiler.stack=new;
-    new->type2=type;
-}
-U0 PushIRFReg(CType *type,I64 reg) {
-    CIRValue *new=MAlloc(sizeof(CIRValue));
-    new->type=IRV_FREG;
-    new->reg=reg;
-    new->last=Compiler.stack;
-    Compiler.stack=new;
-    new->type2=type;
-}
-U0 PushIRInt(I64 i) {
-    CIRValue *new=MAlloc(sizeof(CIRValue));
-    new->type=IRV_INT;
-    new->int=i;
-    new->last=Compiler.stack;
-    new->type2=HashFind("I64i",Compiler.globals);
-    Compiler.stack=new;
-}
-U0 PushIRFlt(F64 f) {
-    CIRValue *new=MAlloc(sizeof(CIRValue));
-    new->type=IRV_FLOAT;
-    new->flt=f;
-    new->last=Compiler.stack;
-    new->type2=HashFind("F64",Compiler.globals);
-    Compiler.stack=new;
-}
-U0 PushIRIndirX(CType *type,I64 reg,I64 off) {
-    CIRValue *new=MAlloc(sizeof(CIRValue));
-    new->type=IRV_INDIRX;
-    new->indirx.reg=reg;
-    new->indirx.offset=off;
-    new->indirx.type=type;
-    new->last=Compiler.stack;
-    new->type2=type;
-    Compiler.stack=new;
-}
-U0 PopIRValue(CIRValue **top=NULL) {
-    CIRValue *ret=Compiler.stack;
-    if(!ret) {
-        "NO VALUE ON STACK\n";
-        throw('Compile');
-    }
-    Compiler.stack=ret->last;
-    if(top) {
-        *top=ret;
-        ret->last=NULL;
-    } else {
-        Free(ret);
-    }
-}
-I64 LoadSymPtrIntoReg(U8 *name,I64 reg) {
+I64 LoadSymPtr(U8 *name) {
     CVariable *var=HashFind(name,Compiler.globals);
     CFunction *func=var;
     if(var&&var->type==HTT_VAR) {
@@ -3747,14 +3669,13 @@ I64 LoadSymPtrIntoReg(U8 *name,I64 reg) {
     }
     CRelocation *new=MAlloc(sizeof(CRelocation)),*last=Compiler.relocations;
     StrCpy(new->name,name);
-    jit_relocation(Compiler.jit,jit_R(reg),&new->ptr);
+    JIT_RELOCATION(Compiler.jit,&new->ptr);
     if(!last)
         Compiler.relocations=new;
     else {
         new->next=last;
         Compiler.relocations=new;
     }
-    return jit_R(reg);
 }
 CType *GetType(U8 *name,I64 ptr_level=0) {
     CType *ret=HashFind(name,Compiler.globals);
@@ -3762,264 +3683,11 @@ CType *GetType(U8 *name,I64 ptr_level=0) {
         return ret+ptr_level;
     return NULL;
 }
-I64 GetFreeIReg(I64 off=0) {
-    I64 max=Compiler.first_avail_ireg;
-    CIRValue *cur=Compiler.stack;
-    while(cur) {
-        if(cur->type==IRV_REG) {
-            max=MaxI64(cur->reg,max);
-        } else if(cur->type==IRV_INDIRX) {
-            max=MaxI64(cur->indirx.reg,max);
-        }
-        cur=cur->last;
-    }
-    return max+1+off;
-}
-I64 GetFreeFReg(I64 off=0) {
-    I64 max=Compiler.first_avail_freg;
-    CIRValue *cur=Compiler.stack;
-    while(cur) {
-        if(cur->type==IRV_FREG) {
-            max=MaxI64(cur->reg,max);
-        }
-        cur=cur->last;
-    }
-    return max+1+off;
-}
-CIRValue *MovePtrToReg(CIRValue *var,I64 r=-1) {
-    CIRValue *ret;
-    if(r==-1) r=GetFreeIReg;
-    if(var->type!=IRV_INDIRX) {
-        "VAIRALBLE INSNT INDIRECT\n";
-        throw('Compile');
-    }
-    if(!var->indirx.offset) {
-        jit_movr(Compiler.jit,jit_R(r),jit_R(var->indirx.reg));
-    } else {
-        jit_movr(Compiler.jit,jit_R(r),jit_R(var->indirx.reg));
-        jit_addi(Compiler.jit,jit_R(r),jit_R(r),var->indirx.offset);
-    }
-    PushIRReg(var->type2,r);
-    PopIRValue(&ret);
-    return ret;
-}
-U0 CompileBoundsCheck(I64 r,I64 sz,I64 off=0);
 /* 0 is b registeddddr
  * 1 is a destination register(if needed)
  * 2 is func ptr register
  */
-U0 Assign(CIRValue *a,CIRValue *b) {
-    if(Compiler.error_count) return;
-    I64 br,ar,fr;
-    //Load b into register(0) first,then load into a
-    if(IsInteger(b->type2)||IsPtrType(b->type2)) {
-        br=jit_R(0);
-        switch(b->type) {
-            case IRV_INT:
-            jit_movi(Compiler.jit,jit_R(0),b->int);
-            break;
-            case IRV_FLOAT:
-            jit_movi(Compiler.jit,jit_R(0),b->flt);
-            break;
-            case IRV_FREG:
-            "GOT FREG\n";
-            throw('Compile');
-            break;
-            case IRV_REG:
-            br=jit_R(b->reg);
-            break;
-            case IRV_STR:
-            //TODO register string
-            jit_movi(Compiler.jit,jit_R(0),b->int);
-            break;
-            case IRV_INDIRX: //Comes with offsett
-            if(IsSigned(b->type2)) {
-                if(!b->indirx.offset) {
-                    CompileBoundsCheck(b->indirx.reg,b->type2->sz);
-                    jit_ldr(Compiler.jit,jit_R(0),jit_R(b->indirx.reg),b->type2->sz);
-                } else {
-                    CompileBoundsCheck(b->indirx.reg,b->type2->sz,b->indirx.offset);
-                    jit_ldxi(Compiler.jit,jit_R(0),jit_R(b->indirx.reg),b->indirx.offset,b->type2->sz);
-                }
-            } else {
-                if(!b->indirx.offset) {
-                    CompileBoundsCheck(b->indirx.reg,b->type2->sz);
-                    jit_ldr_u(Compiler.jit,jit_R(0),jit_R(b->indirx.reg),b->type2->sz);
-                } else {
-                    CompileBoundsCheck(b->indirx.reg,b->type2->sz,b->indirx.offset);
-                    jit_ldxi_u(Compiler.jit,jit_R(0),jit_R(b->indirx.reg),b->indirx.offset,b->type2->sz);
-                }
-            }
-            break;
-        }
-        switch(a->type) {
-            case IRV_INT:
-            "GOT IRV_INT\n";
-            throw('Compile');
-            break;
-            case IRV_FLOAT:
-            "GOT IRV_FLOAT\n";
-            throw('Compile');
-            break;
-            case IRV_FREG:
-            jit_extr(Compiler.jit,jit_FR(a->reg),br);
-            break;
-            case IRV_REG:
-            jit_movr(Compiler.jit,jit_R(a->reg),br);
-            break;
-            case IRV_STR:
-            "GOT IRV_STR\n";
-            throw('Compile')    ;
-            break;
-            case IRV_INDIRX:
-            if(!IsF64(a->type2)) {
-                CompileBoundsCheck(a->indirx.reg,a->type2->sz,a->indirx.offset);
-                    if(!a->indirx.offset) {
-                        jit_str(Compiler.jit,jit_R(a->indirx.reg),br,a->type2->sz);
-                    } else {
-                        jit_stxi(Compiler.jit,a->indirx.offset,jit_R(a->indirx.reg),br,a->type2->sz);
-                    }
-            } else {
-                jit_extr(Compiler.jit,jit_FR(0),br);
-                br=jit_FR(0);
-                CompileBoundsCheck(a->indirx.reg,8,a->indirx.offset);
-                if(!a->indirx.offset) {
-                    jit_fstr(Compiler.jit,jit_R(a->indirx.reg),br,8);
-                } else {
-                    jit_fstxi(Compiler.jit,a->indirx.offset,jit_R(a->indirx.reg),br,8);
-                }
-            }
-            break;
-        }
-    } else if(IsF64(b->type2)) {
-        br=jit_FR(0);
-        switch(b->type) {
-            case IRV_INT:
-            jit_fmovi(Compiler.jit,jit_FR(0),b->int);
-            break;
-            case IRV_FLOAT:
-            jit_fmovi(Compiler.jit,jit_FR(0),b->flt);
-            break;
-            case IRV_FREG:
-            br=jit_FR(b->reg);
-            break;
-            case IRV_REG:
-            jit_extr(Compiler.jit,jit_FR(0),jit_R(b->reg));
-            break;
-            case IRV_STR:
-            //str->flt??? have fun
-            //TODO register string
-            jit_fmovi(Compiler.jit,jit_FR(0),b->int);
-            break;
-            case IRV_INDIRX: //Comes with offsett
-            CompileBoundsCheck(b->indirx.reg,8,b->indirx.offset);
-            if(!b->indirx.offset) {
-                jit_fldr(Compiler.jit,jit_FR(0),jit_R(b->indirx.reg),8);
-            } else {
-                jit_fldxi(Compiler.jit,jit_FR(0),jit_R(b->indirx.reg),b->indirx.offset,8);
-            }
-            break;
-        }
-        switch(a->type) {
-            case IRV_INT:
-            "GOT IRV_INT\n";
-            throw('Compile');
-            break;
-            case IRV_FLOAT:
-            "GOT IRV_FLOAT\n";
-            throw('Compile');
-            break;
-            case IRV_FREG:
-            jit_fmovr(Compiler.jit,jit_FR(a->reg),br);
-            break;
-            case IRV_REG:
-            jit_truncr(Compiler.jit,jit_R(a->reg),br);
-            break;
-            case IRV_STR:
-            "GOT IRV_STR\n";
-            throw('Compile');
-            break;
-            case IRV_INDIRX:
-            if(IsF64(a->type2)) {
-                if(!a->indirx.offset) {
-                    jit_fstr(Compiler.jit,jit_R(a->indirx.reg),br,8);
-                } else {
-                    jit_fstxi(Compiler.jit,a->indirx.offset,jit_R(a->indirx.reg),br,8);
-                }
-            } else {
-                jit_truncr(Compiler.jit,jit_R(0),br);
-                br=jit_R(0);
-                CompileBoundsCheck(a->indirx.reg,a->type2->sz,a->indirx.offset);
-                if(!a->indirx.offset) {
-                    jit_str(Compiler.jit,jit_R(a->indirx.reg),br,a->type2->sz);
-                } else {
-                    jit_stxi(Compiler.jit,a->indirx.offset,jit_R(a->indirx.reg),br,a->type2->sz);
-                }
-            }
-            break;
-        }
-    } else {
-        //Is an object so copy using MemCpy
-        fr=LoadSymPtrIntoReg("MemCpy",2);
-        br=jit_R(MovePtrToReg(b,0)->reg);
-        ar=jit_R(MovePtrToReg(a,1)->reg);
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,ar);
-        jit_putargr(Compiler.jit,br);
-        jit_putargi(Compiler.jit,b->type2->sz);
-        jit_callr(Compiler.jit,fr);
-        return;
-    }
-}
-CIRValue *MoveToFReg(CIRValue *value_a,I64 off) {
-    if(value_a->type==IRV_FREG)
-        return value_a;
-    CIRValue *value_b;
-    PushIRFReg(GetType("F64"),GetFreeFReg+off);
-    PopIRValue(&value_b);
-    Assign(value_b,value_a);
-    Free(value_a);
-    return value_b;
-}
-CIRValue *MoveToReg(CIRValue *value_a,I64 off) {
-    if(value_a->type==IRV_REG)
-        return value_a;
-    if(value_a->type==IRV_INDIRX&&value_a->type2->type==HTT_ARRAY_TYPE) {
-        value_a->type=IRV_REG;
-        value_a->reg=value_a->indirx.reg;
-        return value_a;
-    }
-    CIRValue *value_b;
-    if(!(IsInteger(value_a->type2)||IsPtrType(value_a->type2)))
-        PushIRReg(value_a->type2,GetFreeIReg(off));
-    else
-        PushIRReg(value_a->type2,GetFreeIReg(off));
-    PopIRValue(&value_b);
-    Assign(value_b,value_a);
-    Free(value_a);
-    return value_b;
-}
-CIRValue *BoolifyValue(CIRValue *value) {
-    CIRValue *ret;
-    I64 r,fr;
-    U0 *pat;
-    PushIRReg(GetType("I64i"),r=GetFreeIReg);
-    if(IsF64(value->type2)) {
-        fr=GetFreeFReg;
-        value=MoveToFReg(IRValueClone(value),0);
-        jit_movi(Compiler.jit,jit_R(r),1);
-        pat=jit_fbnei(Compiler.jit,NULL,jit_FR(value->reg),0.0);
-        jit_movi(Compiler.jit,jit_R(r),0);
-        jit_patch(Compiler.jit,pat);
-    } else {
-        value=MoveToReg(IRValueClone(value),0);
-        jit_nei(Compiler.jit,jit_R(r),jit_R(value->reg),0);
-    }
-    Free(value);
-    PopIRValue(&ret);
-    return ret;
-}
-U0 CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE);
+U0 CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE,Bool get_ptr=FALSE);
 U0 CompileArrayLiteral(CType *type,I64 pointer_reg,AST *literal,I64 offset=0) {
     I64 cnt=MSize(literal->arr_lit)/sizeof(AST*),idx,o_off=offset;
     CTypeMember *mem;
@@ -4029,10 +3697,17 @@ U0 CompileArrayLiteral(CType *type,I64 pointer_reg,AST *literal,I64 offset=0) {
         for(idx=0;mem&&idx!=cnt;idx++) {
             if(!literal->arr_lit[idx]) {
             } if(literal->arr_lit[idx]->type!=AST_ARRAY_LITERAL) {
-                PushIRIndirX(mem->type,pointer_reg,offset+mem->offset);
-                CompileAST(literal->arr_lit[idx]);
-                Assign(Compiler.stack->last,Compiler.stack);
-                PopIRValue,PopIRValue;
+                if(IsF64(mem->type)) {
+                    JIT_FMOV(Compiler.jit);
+                    JIT_FDEREF(Compiler.jit,offset+mem->offset);
+                    JIT_R(Compiler.jit,pointer_reg);
+                    CompileAST(literal->arr_lit[idx]);
+                } else {
+                    JIT_MOV(Compiler.jit);
+                    JIT_DEREF(Compiler.jit,offset+mem->offset,mem->type->sz);
+                    JIT_R(Compiler.jit,pointer_reg);
+                    CompileAST(literal->arr_lit[idx]);
+                }
             } else if(literal->arr_lit[idx]->type==AST_ARRAY_LITERAL) {
                 CompileArrayLiteral(mem->type,pointer_reg,literal->arr_lit[idx],offset+mem->offset);
             }
@@ -4043,40 +3718,18 @@ U0 CompileArrayLiteral(CType *type,I64 pointer_reg,AST *literal,I64 offset=0) {
         for(idx=0;idx!=cnt;idx++) {
             if(!literal->arr_lit[idx]) {
             } else if(literal->arr_lit[idx]->type!=AST_ARRAY_LITERAL) {
-                PushIRIndirX(d,pointer_reg,offset);
+                if(IsF64(d))
+                    JIT_FMOV(Compiler.jit),JIT_FDEREF(Compiler.jit,offset);
+                else
+                    JIT_MOV(Compiler.jit),JIT_DEREF(Compiler.jit,offset,d->sz);
+                JIT_R(Compiler.jit,pointer_reg);
                 CompileAST(literal->arr_lit[idx]);
-                Assign(Compiler.stack->last,Compiler.stack);
-                PopIRValue,PopIRValue;
             } else {
-                    CompileArrayLiteral(d,pointer_reg,literal->arr_lit[idx],offset);
+                CompileArrayLiteral(d,pointer_reg,literal->arr_lit[idx],offset);
             }
-                offset+=d->sz;
+            offset+=d->sz;
         }
     }
-}
-Bool FoldIRF64() {
-    CIRValue *a;
-    if(Compiler.stack->type==IRV_FLOAT)
-        return TRUE;
-    else if(Compiler.stack->type==IRV_INT) {
-        PopIRValue(&a);
-        PushIRFlt(a->int);
-        Free(a);
-        return TRUE;
-    }
-    return FALSE;
-}
-Bool FoldIRInt() {
-    CIRValue *a;
-    if(Compiler.stack->type==IRV_INT)
-        return TRUE;
-    else if(Compiler.stack->type==IRV_FLOAT) {
-        PopIRValue(&a);
-        PushIRInt(a->flt);
-        Free(a);
-        return TRUE;
-    }
-    return FALSE;
 }
 U0 PushIRString(U8 *data,I64 len) {
     U8 *str=HexifyString(data,len);
@@ -4087,8 +3740,7 @@ U0 PushIRString(U8 *data,I64 len) {
     if(!Compiler.aot_mode) {
         reg_str:
         if(comp_str=HashFind(str,Compiler.cur_strings)) {
-            jit_movi(Compiler.jit,jit_R(idx=GetFreeIReg),comp_str->data);
-            PushIRReg(GetType("U8i")+1,idx);
+            JIT_I64(Compiler.jit,comp_str->data);
         } else {
             comp_str=MAlloc(sizeof(CCompString));
             comp_str->data=MemCpy(MAlloc(len),data,len);
@@ -4102,8 +3754,7 @@ U0 PushIRString(U8 *data,I64 len) {
             ref=MAlloc(sizeof(CCompStringRef));
             ref->next=comp_str->refs;
             comp_str->refs=ref;
-            jit_relocation(Compiler.jit,jit_R(idx=GetFreeIReg),&ref->ptr);
-            PushIRReg(GetType("U8i")+1,idx);
+            JIT_RELOCATION(Compiler.jit,&ref->ptr);
         } else {
             comp_str=MAlloc(sizeof(CCompString));
             comp_str->data=MemCpy(MAlloc(len),data,len);
@@ -4115,14 +3766,37 @@ U0 PushIRString(U8 *data,I64 len) {
     Free(str);
 }
 U0 CompileAstWithBreakpoint(AST *oc);
-//Will add a patcher to the current functionX
-U0 CompileAsmConst(AST *mode,I64 width,Bool rel=FALSE,I64 label_scope=-2);
+//Will add a patcher to the current function if eval_only is not set
+CAsmPatcher *CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2,Bool eval_only=FALSE);
 U0 CompileOpcode(AST *oc) {
     U8 buffer[32],*end_ptr=NULL;
     CReg *mbase;
     Bool is_jmp,bye_bye=FALSE;
-    I64 idx,siboff,immoff,immsz,operand_cnt=MSize(oc->opcode->args)/sizeof(AST*);
+    I64 idx,idx2,siboff,immoff,immsz,operand_cnt=MSize(oc->opcode->args)/sizeof(AST*);
+    CAsmPatcher *a_eval;
+    U0 (*fptr)();
     retry:
+    for(idx=0;idx!=operand_cnt;idx++) {
+        if(oc->opcode->args[idx]->x64_mode_offset) {
+            AssignTypeToNode(oc->opcode->args[idx]->x64_mode_offset);
+            if(!AsmReferencesNonLocals(oc->opcode->args[idx]->x64_mode_offset)) {
+                switch(oc->opcode->args[idx]->x64_mode->type) {
+                    start:
+                    a_eval=CompileAsmConst(oc->opcode->args[idx]->x64_mode_offset,-1,FALSE,oc->label_scope,TRUE);
+                    case X64O_IMM:
+                    oc->opcode->args[idx]->x64_mode->imm=(*(fptr=a_eval->func_ptr))();
+                    break;
+                    case X64O_MEM:
+                    oc->opcode->args[idx]->x64_mode->mem.disp=(*(fptr=a_eval->func_ptr))();
+                    break;
+                    end:
+                    FreeAST(oc->opcode->args[idx]->x64_mode_offset);
+                    oc->opcode->args[idx]->x64_mode_offset=NULL;
+                    FreeFunction(a_eval);
+                }
+            }
+        }
+    }
     try {
         try {
             switch(operand_cnt) {
@@ -4157,7 +3831,6 @@ U0 CompileOpcode(AST *oc) {
                         oc->opcode.args[idx]->x64_mode.imm>>=8;
                         goto retry;
                     }
-        "SMALL\n";
         throw('Compile');
     }
     if(is_jmp)  {
@@ -4165,42 +3838,54 @@ U0 CompileOpcode(AST *oc) {
             "TOO MANY\n";
             throw('Compile');
         }
-        jit_data_bytes(Compiler.jit,end_ptr-buffer,buffer);
+        for(idx=0;idx!=end_ptr-buffer;idx++)
+            JIT_DU8(Compiler.jit,buffer[idx]);
         CompileAsmConst(oc->opcode->args[0]->x64_mode_offset,4,TRUE,oc->label_scope);
         return;
-    } else if(immoff!=-1) {
-        for(idx=0;idx!=operand_cnt;idx++) {
-            if(oc->opcode.args[idx]->x64_mode.type==X64O_IMM) {
-                if(oc->opcode.args[idx]->x64_mode_offset) {
-                    jit_data_bytes(Compiler.jit,immoff,buffer);
-                    CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,immsz,FALSE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
-                    return;
-                }
-            }
-        }
-    } else if(siboff!=-1) {
+    }
+    idx2=0; 
+    if(siboff!=-1) {
         for(idx=0;idx!=operand_cnt;idx++) {
             if(oc->opcode.args[idx]->x64_mode.type==X64O_MEM) {
                 if(oc->opcode.args[idx]->x64_mode_offset) {
-                    jit_data_bytes(Compiler.jit,end_ptr-buffer-4,buffer);
+                    for(idx2;idx2<siboff-4;idx2++)
+                        JIT_DU8(Compiler.jit,buffer[idx2]);
                     mbase=oc->opcode.args[idx]->x64_mode.mem.base;
                     if(mbase&&(mbase==HashFind("RIP",regs)||mbase==HashFind("EIP",regs)))
                         CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,4,TRUE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
                     else
                         CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,4,FALSE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
-                    return;
+                    idx2+=4;
+                    break;
                 }
             }
         }
     }
-    jit_data_bytes(Compiler.jit,end_ptr-buffer,buffer);
+    if(immoff!=-1) {
+        for(idx=0;idx!=operand_cnt;idx++) {
+            if(oc->opcode.args[idx]->x64_mode.type==X64O_IMM) {
+                if(oc->opcode.args[idx]->x64_mode_offset) {
+                    for(;idx2<immoff;idx2++) {
+                        JIT_DU8(Compiler.jit,buffer[idx2]);
+                    }
+                    CompileAsmConst(oc->opcode.args[idx]->x64_mode_offset,immsz,FALSE,oc->label_scope); //See the plato-pus!! Seriously,its above someewhere
+                    idx2+=immsz;
+                    break;
+                }
+            }
+        }
+    } 
+    for(;idx2<end_ptr-buffer;idx2++)
+        JIT_DU8(Compiler.jit,buffer[idx2]);
 }
 U0 SetCallStackSize(I64);
-U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) {
-    CIRValue *fargs[0xff];
+I64 GetFreeIReg() {
+    return ++Compiler.cur_tmp_reg;
+}
+U0 CreateBreakpointFor(AST *a);
+U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE,Bool get_ptr=FALSE) {
     CHashTable *tar_tab,*old_asm_imports;
     CVariable *var;
-    CIRValue *value_a,*value_b,*value_c;
     I64 idx,cnt,reg_a,reg_b,offset,mult,hi,lo,idx2;
     CTypeMember *mem1;
     CType *type1,*type2;
@@ -4212,882 +3897,419 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     CFunction *func;
     CVector *to_patch;
     AST *dummy;
-    U0 *op1,*op2,*op3,*op4;
+    CRPN *op1,*op2,*op3,*op4,*op5;
     U8 *str;
     CCompString *comp_str;
-    Bool has_dft;
+    Bool has_dft,is_flt_style;
     switch(ast->type) {
         case AST_ASM_BLK:
         Compiler.asm_mode=TRUE;
         old_asm_imports=Compiler.imports;
         Compiler.imports=HashTableNew(0x10);
+        op1=jit_rpnBodyStart(Compiler.jit);
         if(Compiler.in_func) {
             CompileAST(ast->asm_blk_body);
         } else {
-            op1=jit_jmpi(Compiler.jit,NULL);
+            op1=JIT_JMP(Compiler.jit,NULL);
             CompileAST(ast->asm_blk_body);
-            jit_patch(Compiler.jit,op1);
+            JIT_PATCH(Compiler.jit,op1);
         }
+        jit_rpnBodyEnd(Compiler.jit,op1);
         HashTableDel(Compiler.imports);
         Compiler.imports=old_asm_imports;
         Compiler.asm_mode=FALSE;
-        PopIRValue;
-        PushIRInt(0);
         break;
         case AST_OPCODE:
         CompileOpcode(ast);
-        PushIRInt(0);
         break;
         case AST_GLOBAL_LABEL:
         lab=HashFind(ast->name,Compiler.labels);
         if(!lab) throw('Compile');
         if(lab->type!=HTT_LABEL||lab->op) throw('Compile');
-        jit_dump_ptr(Compiler.jit,&lab->ptr);
+        JIT_DUMP_PTR(Compiler.jit,&lab->ptr);
         while(lab->refs->size) {
             op1=VectorPop(lab->refs);
-            jit_patch(Compiler.jit,op1);
+            JIT_PATCH(Compiler.jit,op1);
         }
-        lab->op=jit_get_label(Compiler.jit);
-        PushIRInt(0);
+        lab->op=JIT_LABEL(Compiler.jit);
         break;
         case AST_LOCAL_LABEL:
         lab=HashFind(ast->name,Compiler.labels);
         if(!lab) throw('Compile');
         if(lab->type!=HTT_LABEL||lab->op) throw('Compile');
-        jit_dump_ptr(Compiler.jit,&lab->ptr);
+        JIT_DUMP_PTR(Compiler.jit,&lab->ptr);
         while(lab->refs->size) {
             op1=VectorPop(lab->refs);
-            jit_patch(Compiler.jit,op1);
+            JIT_PATCH(Compiler.jit,op1);
         }
-        lab->op=jit_get_label(Compiler.jit);
-        PushIRInt(0);
+        lab->op=JIT_LABEL(Compiler.jit);
         break;
         case AST_DU8:
         cnt=MSize(ast->arr_lit)/sizeof(AST*);
         for(idx=0;idx!=cnt;idx++) {
             if(ast->arr_lit[idx]->type==AST_STRING) {
-                jit_data_bytes(Compiler.jit,ast->arr_lit[idx]->string,MSize(ast->arr_lit[idx]->string)-1); //-1 Ignores NULL terminator
+                for(idx2=0;idx2!=MSize(ast->arr_lit[idx]->string)-1;idx2++)
+                    JIT_DU8(Compiler.jit,ast->arr_lit[idx]->string(U8*)[idx2]);
             } else {
                 CompileAsmConst(ast->arr_lit[idx],1,ast->label_scope);
             }
         }
-        PushIRInt(0);
         break;
         case AST_DU16:
         cnt=MSize(ast->arr_lit)/sizeof(AST*);
         for(idx=0;idx!=cnt;idx++) {
             if(ast->arr_lit[idx]->type==AST_STRING) {
-                hi=MSize(str=ast->arr_lit[idx]->string)-1; //-1 Ignores NULL terminator
-                for(lo=0;lo!=hi;lo++)
-                    jit_data_word(Compiler.jit,str[lo]);
+                for(idx2=0;idx2!=MSize(ast->arr_lit[idx]->string)-1;idx2++)
+                    JIT_DU16(Compiler.jit,ast->arr_lit[idx]->string(U8*)[idx2]);
             } else {
                 CompileAsmConst(ast->arr_lit[idx],2,ast->label_scope);
             }
         }
-        PushIRInt(0);
         break;
         case AST_DU32:
         cnt=MSize(ast->arr_lit)/sizeof(AST*);
         for(idx=0;idx!=cnt;idx++) {
             if(ast->arr_lit[idx]->type==AST_STRING) {
-                hi=MSize(str=ast->arr_lit[idx]->string)-1; //-1 Ignores NULL terminator
-                for(lo=0;lo!=hi;lo++)
-                    jit_data_dword(Compiler.jit,str[lo]);
+                for(idx2=0;idx2!=MSize(ast->arr_lit[idx]->string)-1;idx2++)
+                    JIT_DU32(Compiler.jit,ast->arr_lit[idx]->string(U8*)[idx2]);
             } else {
                 CompileAsmConst(ast->arr_lit[idx],4,ast->label_scope);
             }
         }
-        PushIRInt(0);
         break;
         case AST_DU64:
         cnt=MSize(ast->arr_lit)/sizeof(AST*);
         for(idx=0;idx!=cnt;idx++) {
             if(ast->arr_lit[idx]->type==AST_STRING) {
-                hi=MSize(str=ast->arr_lit[idx]->string)-1; //-1 Ignores NULL terminator
-                for(lo=0;lo!=hi;lo++)
-                    jit_data_qword(Compiler.jit,str[lo]);
+                for(idx2=0;idx2!=MSize(ast->arr_lit[idx]->string)-1;idx2++)
+                    JIT_DU64(Compiler.jit,ast->arr_lit[idx]->string(U8*)[idx2]);
             } else {
                 CompileAsmConst(ast->arr_lit[idx],8,FALSE,ast->label_scope);
             }
         }
-        PushIRInt(0);
         break;
         case AST_IMPORT:
         imp=MAlloc(sizeof(CHash));
         imp->str=StrNew(ast->name);
         HashAdd(imp,Compiler.imports);
-        PushIRInt(0);
         break;
         case AST_ALIGN:
-        jit_code_align_fill(Compiler.jit,ast->align.to,ast->align.fill);
-        PushIRInt(0);
+        JIT_ALIGN_FILL(Compiler.jit,ast->align.to,ast->align.fill);
         break;
         case AST_BINFILE:
         str=FileRead(ast->name,&cnt);
-        jit_data_bytes(Compiler.jit,str,cnt);
+        for(idx=0;idx!=8;idx++)
+            JIT_DU8(Compiler.jit,str[idx]);
         Free(str);
-        PushIRInt(0);
         break;
         case AST_PRINT:
-    PushIRString(ast->print.text,MSize(ast->print.text));
-    PushIRReg(HashFind("I64i",Compiler.globals),GetFreeIReg);
-    LoadSymPtrIntoReg("Print",Compiler.stack->reg);
-    cnt=MSize(ast->print.args)/sizeof(AST*);
-    if(cnt) {
-        Compiler.frame_off=jit_allocai(Compiler.jit,8*cnt);
-        value_b=Compiler.stack;
-        for(idx=cnt-1;idx>=0;idx--) {
+        cnt=MSize(ast->print.args)/sizeof(AST*);
+        JIT_FUNC_CALL(Compiler.jit,cnt+2); //+1 for str,+1 for count
+        for(idx=cnt-1;idx>=0;idx--)
             CompileAST(ast->print.args[idx]);
-            switch(Compiler.stack->type) {
-                start:
-                case IRV_INDIRX:
-                PopIRValue(&value_a);
-                if(IsF64(value_a->type2)) {
-                    value_a=MoveToFReg(value_a,0);
-                } else
-                    value_a=MoveToReg(value_a,0);
-                break;
-                end:
-                value_a->last=Compiler.stack;
-                Compiler.stack=value_a;
-            }
-            hi=GetFreeIReg;
-            value_b=Compiler.stack;
-            switch(value_b->type) {
-                case IRV_INT:
-                case IRV_STR: //TODO register string
-                jit_movi(Compiler.jit,jit_R(hi),value_b->int);
-                jit_stxi(Compiler.jit,Compiler.frame_off+8*idx,R_FP,jit_R(hi),8);
-                break;
-                case IRV_REG:
-                jit_stxi(Compiler.jit,Compiler.frame_off+8*idx,R_FP,jit_R(value_b->reg),8);
-                break;
-                case IRV_FLOAT:
-                hi=GetFreeFReg;
-                jit_fmovi(Compiler.jit,jit_FR(hi),value_b->flt);
-                jit_fstxi(Compiler.jit,Compiler.frame_off+8*idx,R_FP,jit_FR(hi),8);
-                break;
-                case IRV_FREG:
-                jit_fstxi(Compiler.jit,Compiler.frame_off+8*idx,R_FP,jit_FR(value_b->reg),8);
-                break;
-            }
-            PopIRValue;
-        }
-        hi=GetFreeIReg;
-        jit_addi(Compiler.jit,jit_R(hi),R_FP,Compiler.frame_off);
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,jit_R(Compiler.stack->last.reg));
-        jit_putargi(Compiler.jit,cnt);
-        jit_putargr(Compiler.jit,jit_R(hi));
-    } else {
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,jit_R(Compiler.stack->last.reg));
-        jit_putargi(Compiler.jit,0);
-    }
-    jit_callr(Compiler.jit,jit_R(Compiler.stack->reg));
-    PopIRValue,PopIRValue;
-    PushIRInt(0);
-    break;
-    case AST_NOP:
-    PushIRInt(0);
-    break;
-    case AST_DECL:
-    if(Compiler.in_func) {
-        tar_tab=Compiler.locals;
-    } else {
-        tar_tab=Compiler.globals;
-    }
-    var=HashFind(ast->decl.name->name,tar_tab);
-    if(ast->decl.dft) {
-        if(ast->decl.dft.type==AST_ARRAY_LITERAL) {
-            if(Compiler.in_func) {
-                var=HashFind(ast->decl.name.name,Compiler.locals);
-                if(var&&var->type==HTT_VAR) {
-                    PushIRReg(var->hc_type,idx=GetFreeIReg);
-                    jit_addi(Compiler.jit,jit_R(idx),R_FP,var->frame_off);
-                    arr_assign:
-                    CompileArrayLiteral(var->hc_type,idx,ast->decl.dft);
-                    PopIRValue;
-                    PushIRInt(0);
-                    break;
-                }
-            }
-            LoadSymPtrIntoReg(ast->decl.name->name,idx=GetFreeIReg);
-            PushIRReg(ast->decl.type,idx)    ;
-            goto arr_assign;
-        }
-        dummy=MAlloc(sizeof(AST));
-        dummy->type=AST_NAME;
-        dummy->name=StrNew(var->str);
-        CompileAST(dummy,TRUE);
-        FreeAST(dummy);
-        CompileAST(ast->decl.dft);
-    } else if(IsPtrType(var->hc_type)||IsInteger(var->hc_type)) {
-        if((!var->is_local)||(var->link.type&LINK_STATIC)||var->hc_type->type==HTT_ARRAY_TYPE) goto no_init;
-        dummy=MAlloc(sizeof(AST));
-        dummy->type=AST_NAME;
-        dummy->name=StrNew(var->str);
-        CompileAST(dummy,TRUE);
-        FreeAST(dummy);
-        PushIRInt(0);
-    } else if(IsF64(var->hc_type)) {
-        if((!var->is_local)||(var->link.type&LINK_STATIC)) goto no_init;
-        dummy=MAlloc(sizeof(AST));
-        dummy->type=AST_NAME;
-        dummy->name=StrNew(var->str);
-        CompileAST(dummy,TRUE);
-        FreeAST(dummy);
-        PushIRFlt(0.0);
-    } else {
-        no_init:;
-        PushIRInt(0);
+        JIT_I64(Compiler.jit,MSize(ast->print.args)/sizeof(AST*));
+        PushIRString(ast->print.text,MSize(ast->print.text));
+        LoadSymPtr("Print");
         break;
-    }
-    PopIRValue(&value_b);
-    PopIRValue(&value_a);
-    Assign(value_a,value_b);
-    Free(value_a),Free(value_b);
-    PushIRInt(0);
-    break;
-    //Expected the pointer to already be on the stack
-    case AST_ARRAY_LITERAL:
-    "ARRAY_LITERLA\n";
-    throw('Compile');
-    break;
-    case AST_MEMBER: {
+        case AST_NOP:
+        JIT_I64(Compiler.jit,-1);
+        break;
+        case AST_DECL:
+        if(Compiler.in_func) {
+            tar_tab=Compiler.locals;
+        } else {
+            tar_tab=Compiler.globals;
+        }
+        var=HashFind(ast->decl.name->name,tar_tab);
+        if(!Compiler.in_func&&IsForward(var))
+            goto no_init;
+        if(ast->decl.dft) {
+            if(ast->decl.dft.type==AST_ARRAY_LITERAL) {
+				op1=jit_rpnBodyStart(Compiler.jit);
+                if(Compiler.in_func) {
+                    var=HashFind(ast->decl.name.name,Compiler.locals);
+                    if(var&&var->type==HTT_VAR) {
+                        JIT_MOV(Compiler.jit);
+                        JIT_R(Compiler.jit,lo=GetFreeIReg);
+                        JIT_ADDI(Compiler.jit);
+                        JIT_RBP(Compiler.jit);
+                        JIT_I64(Compiler.jit,var->frame_off);
+                        CompileArrayLiteral(var->hc_type,lo,ast->decl.dft);
+                        jit_rpnBodyEnd(Compiler.jit,op1);
+                        break;
+                    }
+                }
+                JIT_MOV(Compiler.jit);
+                JIT_R(Compiler.jit,lo=GetFreeIReg);
+                LoadSymPtr(ast->decl.name->name);
+                CompileArrayLiteral(var->hc_type,lo,ast->decl.dft);
+                jit_rpnBodyEnd(Compiler.jit,op1);
+                break;
+            }
+        }
+        if(IsPtrType(var->hc_type)||IsInteger(var->hc_type)) {
+            if((var->is_local)&&(var->link.type&LINK_STATIC)) goto 
+            no_init;
+            JIT_MOV(Compiler.jit);
+            dummy=MAlloc(sizeof(AST));
+            dummy->type=AST_NAME;
+            dummy->name=StrNew(var->str);
+            CompileAST(dummy,TRUE);
+            FreeAST(dummy);
+        } else if(IsF64(var->hc_type)) {
+            if((var->is_local)&&(var->link.type&LINK_STATIC)) goto no_init;
+            JIT_FMOV(Compiler.jit);
+            dummy=MAlloc(sizeof(AST));
+            dummy->type=AST_NAME;
+            dummy->name=StrNew(var->str);
+            CompileAST(dummy,TRUE);
+            FreeAST(dummy);
+        } else if(IsStructType(var->hc_type)) {
+            JIT_MOV(Compiler.jit);
+            dummy=MAlloc(sizeof(AST));
+            dummy->type=AST_NAME;
+            dummy->name=StrNew(var->str);
+            CompileAST(dummy,TRUE);
+            FreeAST(dummy);
+        } else {
+            no_init:;
+            JIT_I64(Compiler.jit,-1);
+            break;
+        }
+        if(ast->decl.dft)
+            CompileAST(ast->decl.dft);
+        else
+            JIT_I64(Compiler.jit,0);
+        break;
+        break;
+        //Expected the pointer to already be on the stack
+        case AST_ARRAY_LITERAL:
+        "ARRAY_LITERLA\n";
+        throw('Compile');
+        break;
+        case AST_MEMBER:
         if(ast->member_acc.base->type==AST_NAME) {
             if(type1=GetType(ast->member_acc.base->name)) {
-                PushIRInt(MemberOffset(type1,ast->member_acc.member));
+                JIT_I64(Compiler.jit,MemberOffset(type1,ast->member_acc.member));
                 break;
             }
         }
         type1=AssignTypeToNode(ast->member_acc.base);
-        CompileAST(ast->member_acc.base,TRUE);
-        PopIRValue(&value_a);
-        if(IsPtrType(value_a->type2)) {
+        if(IsPtrType(type1)) {
             type1=DerefedType(type1);
             if(IsPtrType(type1)) {
                 "LOTS OF POINTER MEMBER\n";
                 throw('Compile');
             }
-            PushIRReg(type1+1,GetFreeIReg);
-            PopIRValue(&value_b);
-            Assign(value_b,value_a);
-            PushIRIndirX(MemberType(type1,ast->member_acc.member),value_b->reg,MemberOffset(type1,ast->member_acc.member));
-            Free(value_a),Free(value_b);
-        } else {
-            if(value_a->type==IRV_INDIRX) {
-                value_b=IRValueClone(value_a);
-                value_b->indirx.offset+=MemberOffset(type1,ast->member_acc.member);
-                value_b->type2=MemberType(type1,ast->member_acc.member);
-            } else {
-                value_b=MoveToReg(IRValueClone(value_a),0);
-                PushIRIndirX(MemberType(type1,ast->member_acc.member),value_b->reg,0);
-                Free(value_b);
-                PopIRValue(&value_b);
-            }
-            Free(value_a);
-            value_a=value_b;
-            value_a->last=Compiler.stack;
-            Compiler.stack=value_a;
-        }
-    }
-    //Turn arrays into pointers
-    type1=type1=AssignTypeToNode(ast);
-    if(type1->type==HTT_ARRAY_TYPE) {
-        PopIRValue(&value_a);
-        PushIRReg(type1,idx=value_a->indirx.reg);
-        if(value_a->indirx.offset)
-            jit_addi(Compiler.jit,jit_R(idx),jit_R(idx),value_a->indirx.offset);
-
-        }
-    break;
-    case AST_PAREN:
-    CompileAST(ast->unopArg);
-    break;
-    case AST_INT:
-    PushIRInt(ast->int);
-    break;
-    case AST_FLOAT:
-    PushIRFlt(ast->floating);
-    break;
-    case AST_CHAR:
-    PushIRInt(ast->int);
-    break;
-    case AST_STRING:
-    PushIRString(ast->string,MSize(ast->string));
-    break;
-    case AST_COMMA:
-    CompileAST(ast->binop.a);
-    PopIRValue;
-    CompileAST(ast->binop.b);
-    break;
-    case AST_ADD:
-    CompileAST(ast->binop.a);
-    CompileAST(ast->binop.b);
-    value_a=IRValueClone(Compiler.stack->last);
-    value_b=IRValueClone(Compiler.stack);
-    if(IsF64(ast->type2)) {
-        if(FoldIRF64) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRF64) {
-                Free(value_a),PopIRValue(&value_a);
-                PushIRFlt(value_a->flt+value_b->flt);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            value_a=MoveToFReg(value_a,0);
-            jit_faddi(Compiler.jit,jit_FR(value_a->reg),jit_FR(value_a->reg),value_b->flt);
-            Free(value_b);
-            PopIRValue;
-            value_a->last=Compiler.stack;
-            Compiler.stack=value_a;
-            break;
-        }
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        jit_faddr(Compiler.jit,jit_FR(value_a->reg),jit_FR(value_a->reg),jit_FR(value_b->reg));
-        PopIRValue,PopIRValue;
-        Free(value_b);
-        value_a->last=Compiler.stack;
-        Compiler.stack=value_a;
-        break;
-    }
-    if(IsPtrType(value_a->type2)) {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRInt) {
-                Free(value_a),PopIRValue(&value_a);
-                PushIRInt(value_a->int+value_b->int*DerefedType(value_a->type2)->sz);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            value_a=MoveToReg(value_a,0);
-            jit_addi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int*DerefedType(value_a->type2)->sz);
-            Free(value_b);
-            PopIRValue;
-            value_a->last=Compiler.stack;
-            Compiler.stack=value_a;
-            break;
-        }
-        value_c=MoveToReg(value_b,1);
-        jit_muli(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),DerefedType(value_a->type2)->sz);
-        value_b=value_c;
-    } else if(IsPtrType(value_b->type2)) {
-        value_c=MoveToReg(value_a,0);
-        jit_muli(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),DerefedType(value_b->type2)->sz);
-        value_a=value_c;
-    }
-    if(FoldIRInt) {
-        Free(value_b),PopIRValue(&value_b);
-        if(FoldIRInt) {
-            Free(value_a),PopIRValue(&value_a);
-            PushIRInt(value_a->int+value_b->int);
-            Free(value_a),Free(value_b);
-            break;
-        }
-        value_a=MoveToReg(value_a,0);
-        jit_addi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-        Free(value_b);
-        PopIRValue;
-        value_a->last=Compiler.stack;
-        Compiler.stack=value_a;
-        break;
-    }
-    if(value_a->type!=IRV_REG) {
-        value_c=MoveToReg(value_a,0);
-        Free(value_a),value_a=value_c;
-    }
-    if(value_b->type!=IRV_REG) {
-        value_c=MoveToReg(value_b,1);
-        Free(value_b),value_b=value_c;
-    }
-    jit_addr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    PopIRValue,PopIRValue;
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    break;
-    case AST_SUB:
-    CompileAST(ast->binop.a);
-    CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(ast->type2)) {
-        if(FoldIRF64) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRF64) {
-                Free(value_a),PopIRValue(&value_a);
-                PushIRFlt(value_a->flt-value_b->flt);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            PopIRValue;
-            value_a=MoveToFReg(value_a,0);
-            jit_fsubi(Compiler.jit,jit_FR(value_a->reg),jit_FR(value_a->reg),value_b->flt);
-            Free(value_b);
-            value_a->last=Compiler.stack;
-            Compiler.stack=value_a;
-            break;
-        }
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        jit_fsubr(Compiler.jit,jit_FR(value_a->reg),jit_FR(value_a->reg),jit_FR(value_b->reg));
-        PopIRValue,PopIRValue;
-        Free(value_b);
-        value_a->last=Compiler.stack;
-        Compiler.stack=value_a;
-        break;
-    }
-    if(IsPtrType(value_a->type2)) {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRInt) {
-                Free(value_a),PopIRValue(&value_a);
-                if(IsPtrType(value_b->type2))
-                    PushIRInt((value_a->int-value_b->int)/DerefedType(value_a->type2)->sz);
+            if(AssignTypeToNode(ast)->type==HTT_ARRAY_TYPE)
+                get_ptr=TRUE;
+            if(!get_ptr) {
+                if(IsF64(ast->type2))
+                    JIT_FDEREF(Compiler.jit);
+                else if(IsInteger(ast->type2)&&!IsSigned(ast->type2))
+                    JIT_UDEREF(Compiler.jit,,ast->type2->sz);
                 else
-                    PushIRInt(value_a->int-value_b->int*DerefedType(value_a->type2)->sz);
-                Free(value_a),Free(value_b);
-                break;
+                    JIT_DEREF(Compiler.jit,,ast->type2->sz);
             }
-            value_a=MoveToReg(value_a,0);
-            jit_subi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int*DerefedType(value_a->type2)->sz);
-            Free(value_b);
-            PopIRValue;
-            value_a->last=Compiler.stack;
-            Compiler.stack=value_a;
+            if(Compiler.bounds_check_mode&&!get_ptr) {
+                JIT_FUNC_CALL(Compiler.jit,2);
+                JIT_I64(Compiler.jit,ast->type2->sz);
+                JIT_ADDI(Compiler.jit);
+                CompileAST(ast->member_acc.base,TRUE,);
+                JIT_I64(Compiler.jit,MemberOffset(type1,ast->member_acc.member));
+                JIT_I64(Compiler.jit,&WhineOnOutOfBounds);
+            } else {
+                JIT_ADDI(Compiler.jit);
+                CompileAST(ast->member_acc.base,TRUE,);
+                JIT_I64(Compiler.jit,MemberOffset(type1,ast->member_acc.member));
+            }
+        } else {
+            //Turn arrays into pointers
+            type1=AssignTypeToNode(ast);
+            type2=AssignTypeToNode(ast->member_acc.base);
+            if(type1->type==HTT_ARRAY_TYPE)
+                get_ptr=TRUE;
+            if(!get_ptr) {
+                if(IsF64(ast->type2))
+                    JIT_FDEREF(Compiler.jit);
+                else if(!IsSigned(ast->type2)&&IsInteger(ast->type2))
+                    JIT_UDEREF(Compiler.jit,,ast->type2->sz);
+                else
+                    JIT_DEREF(Compiler.jit,,ast->type2->sz);
+            }
+            if(Compiler.bounds_check_mode&&!get_ptr) {
+                JIT_FUNC_CALL(Compiler.jit,2);
+                JIT_I64(Compiler.jit,ast->type2->sz);
+                JIT_ADDI(Compiler.jit);
+                CompileAST(ast->member_acc.base,TRUE,,TRUE);
+                JIT_I64(Compiler.jit,MemberOffset(type2,ast->member_acc.member));
+                JIT_I64(Compiler.jit,&WhineOnOutOfBounds);
+            } else {
+                JIT_ADDI(Compiler.jit);
+                CompileAST(ast->member_acc.base,TRUE,,TRUE);
+                JIT_I64(Compiler.jit,MemberOffset(type2,ast->member_acc.member));
+            }
+        }
+        break;
+        case AST_PAREN:
+        CompileAST(ast->unopArg);
+        break;
+        case AST_INT:
+        JIT_I64(Compiler.jit,ast->int);
+        break;
+        case AST_FLOAT:
+        JIT_F64(Compiler.jit,ast->floating);
+        break;
+        case AST_CHAR:
+        JIT_I64(Compiler.jit,ast->int);
+        break;
+        case AST_STRING:
+        PushIRString(ast->string,MSize(ast->string));
+        break;
+        case AST_COMMA:
+        JIT_COMMAI(Compiler.jit);
+        CompileAST(ast->binop.a);
+        CompileAST(ast->binop.b);
+        break;
+        case AST_ADD:
+        if(IsF64(ast->type2)) {
+            JIT_FADD(Compiler.jit);
+            CompileAST(ast->binop.a);
+            CompileAST(ast->binop.b);
             break;
         }
-        if(!IsPtrType(value_b->type2)) {
-            value_c=MoveToReg(value_b,1);
-            jit_muli(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),DerefedType(value_a->type2)->sz);
-            value_b=value_c;
-        }
-    } else if(IsPtrType(value_b->type2)) {
-        //value_a is not a ptr if here
-        value_c=MoveToReg(value_a,0);
-        jit_muli(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),DerefedType(value_b->type2)->sz);
-        value_a=value_c;
-    }
-    if(value_a->type!=IRV_REG) {
-        value_a=MoveToReg(value_a,0);
-    }
-    if(value_b->type!=IRV_REG) {
-        value_b=MoveToReg(value_b,1);
-    }
-    jit_subr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    if(IsPtrType(value_a->type2)&&IsPtrType(value_b->type2))
-        jit_divi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),DerefedType(value_a->type2)->sz);
-    PopIRValue,PopIRValue;
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    break;
-    case AST_MUL:
-    CompileAST(ast->binop.a);
-    CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(ast->type2)) {
-        if(FoldIRF64) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRF64) {
-                PopIRValue(&value_a);
-                PushIRFlt(value_a->flt*value_b->flt);
-                Free(value_b),Free(value_a);
-                break;
-            }
-            PopIRValue;
-            value_a=MoveToFReg(value_a,0);
-            jit_fmuli(Compiler.jit,jit_FR(value_a->reg),jit_FR(value_a->reg),value_b->flt);
-            value_a->last=Compiler.stack;
-            Free(value_b),Compiler.stack=value_a;
+        if(IsPtrType(ast->binop.a->type2)) {
+            JIT_ADDI(Compiler.jit);
+            JIT_MULI(Compiler.jit);
+            CompileAST(ast->binop.b);
+            JIT_I64(Compiler.jit,DerefedType(ast->binop.a->type2)->sz);
+            CompileAST(ast->binop.a);
+            break;
+        } else if(IsPtrType(ast->binop.b->type2)) {
+            JIT_ADDI(Compiler.jit);
+            JIT_MULI(Compiler.jit);
+            CompileAST(ast->binop.a);
+            JIT_I64(Compiler.jit,DerefedType(ast->binop.b->type2)->sz);
+            CompileAST(ast->binop.b);
             break;
         }
-        value_b=MoveToFReg(value_b,1);
-        value_a=MoveToFReg(value_a,0);
-        PopIRValue,PopIRValue;
-        jit_fmulr(Compiler.jit,jit_FR(value_a->reg),jit_FR(value_a->reg),jit_FR(value_b->reg));
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRInt) {
-                PopIRValue(&value_a);
-                PushIRInt(value_a->int*value_b->int);
-                Free(value_b),Free(value_a);
-                break;
-            }
-            PopIRValue;
-            value_a=MoveToReg(value_a,0);
-            jit_muli(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-            value_a->last=Compiler.stack;
-            Free(value_b),Compiler.stack=value_a;
+        JIT_ADDI(Compiler.jit);
+        CompileAST(ast->binop.a);
+        CompileAST(ast->binop.b);
+        break;
+        case AST_SUB:
+        if(IsF64(ast->type2)) {
+            JIT_FSUB(Compiler.jit);
+            CompileAST(ast->binop.a);
+            CompileAST(ast->binop.b);
             break;
         }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_mulr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    }
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    break;
-    case AST_DIV:
-    CompileAST(ast->binop.a);
-    CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(ast->type2)) {
-        if(FoldIRF64) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRF64) {
-                PopIRValue(&value_a);
-                PushIRFlt(value_a->flt/value_b->flt);
-                Free(value_b),Free(value_a);
-                break;
-            }
-            PopIRValue;
-            value_a=MoveToFReg(value_a,0);
-            jit_fdivi(Compiler.jit,jit_FR(value_a->reg),jit_FR(value_a->reg),value_b->flt);
-            value_a->last=Compiler.stack;
-            Free(value_b),Compiler.stack=value_a;
+        if(IsPtrType(ast->binop.a->type2)&&IsPtrType(ast->binop.b->type2)) {
+            JIT_DIVI(Compiler.jit);
+            JIT_SUBI(Compiler.jit);
+            CompileAST(ast->binop.a);
+            CompileAST(ast->binop.b);
+            JIT_I64(Compiler.jit,DerefedType(ast->binop.a->type2)->sz);
             break;
         }
-        value_b=MoveToFReg(value_b,1);
-        value_a=MoveToFReg(value_a,0);
-        PopIRValue,PopIRValue;
-        jit_fdivr(Compiler.jit,jit_FR(value_a->reg),jit_FR(value_a->reg),jit_FR(value_b->reg));
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRInt) {
-                PopIRValue(&value_a);
-                PushIRInt(value_a->int/value_b->int);
-                Free(value_b),Free(value_a);
-                break;
-            }
-            PopIRValue;
-            value_a=MoveToReg(value_a,0);
-            jit_divi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-            value_a->last=Compiler.stack;
-            Free(value_b),Compiler.stack=value_a;
+        if(IsPtrType(ast->binop.a->type2)) {
+            JIT_SUBI(Compiler.jit);
+            CompileAST(ast->binop.a);
+            JIT_MULI(Compiler.jit);
+            CompileAST(ast->binop.b);
+            JIT_I64(Compiler.jit,DerefedType(ast->binop.a->type2)->sz);
             break;
+        } 
+        JIT_SUBI(Compiler.jit);
+        CompileAST(ast->binop.a);
+        CompileAST(ast->binop.b);
+        break;
+        case AST_MUL:
+        if(IsF64(ast->type2))
+            JIT_FMUL(Compiler.jit);
+        else
+            JIT_MULI(Compiler.jit);
+        CompileAST(ast->binop.a);
+        CompileAST(ast->binop.b);
+        break;
+        case AST_DIV:
+        if(IsF64(ast->type2))
+            JIT_FDIV(Compiler.jit);
+        else
+            JIT_DIVI(Compiler.jit);
+        CompileAST(ast->binop.a);
+        CompileAST(ast->binop.b);
+        break;    
+        case AST_MOD:
+        if(IsF64(ast->type2))
+            JIT_FMOD(Compiler.jit);
+        else
+            JIT_MODI(Compiler.jit);
+        CompileAST(ast->binop.a);
+        CompileAST(ast->binop.b);
+        break;
+        case AST_LSHIFT:
+        if(IsF64(ast->type2))
+            JIT_FSHL(Compiler.jit);
+        else
+            JIT_LSHI(Compiler.jit);
+        CompileAST(ast->binop.a);
+        CompileAST(ast->binop.b);
+        break;
+        case AST_RSHIFT:
+        if(IsF64(ast->type2))
+            JIT_FSHR(Compiler.jit);
+        else if(IsSigned(ast->type2))
+            JIT_RSHI(Compiler.jit);
+        else
+            JIT_RSHU(Compiler.jit);    
+        CompileAST(ast->binop.a);
+        CompileAST(ast->binop.b);
+        break;
+        case AST_POW:
+        if(IsF64(ast->type2)) {
+			JIT_FCALL(Compiler.jit,2);
+			if(!IsF64(ast->binop.b->type2))
+				JIT_FPOS(Compiler.jit);
+			CompileAST(ast->binop.b);
+			if(!IsF64(ast->binop.a->type2))
+				JIT_FPOS(Compiler.jit);
+			CompileAST(ast->binop.a);
+			LoadSymPtr("Pow");
+        } else  {
+			JIT_FUNC_CALL(Compiler.jit,2);
+            if(!IsInteger(ast->binop.b->type2))
+				JIT_POSI(Compiler.jit);
+            CompileAST(ast->binop.b);
+			if(!IsInteger(ast->binop.a->type2))
+				JIT_POSI(Compiler.jit);
+			CompileAST(ast->binop.a);
+			LoadSymPtr("PowI64");
         }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_divr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    }
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    break;
-    case AST_MOD:
-    CompileAST(ast->binop.a);
-    CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(ast->type2)) {
-        if(FoldIRF64) {
-            PopIRValue(&value_b);
-            if(FoldIRF64) {
-                PopIRValue(&value_a);
-                PushIRFlt(FMod(value_a->flt,value_b->flt));
-                Free(value_a),Free(value_b);
-                break;
-            }
-            PopIRValue;
-            value_a=MoveToFReg(value_a,0);
-            LoadSymPtrIntoReg("FMod",0);
-            jit_prepare(Compiler.jit);
-            jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
-            jit_fputargr(Compiler.jit,jit_FR(value_b->reg),8);
-            jit_callr(Compiler.jit,jit_R(0));
-            jit_fretval(Compiler.jit,jit_FR(value_a->reg),8);
-            goto mod_end;
-        }
-        PopIRValue,PopIRValue;
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        LoadSymPtrIntoReg("FMod",0);
-        jit_prepare(Compiler.jit);
-        jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
-        jit_fputargr(Compiler.jit,jit_FR(value_b->reg),8);
-        jit_callr(Compiler.jit,jit_R(0));
-        jit_fretval(Compiler.jit,jit_FR(value_a->reg),8);
-        Free(value_b);
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRInt) {
-                PopIRValue(&value_a);
-                PushIRInt(value_a->int%value_b->int);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            PopIRValue;
-            value_a=MoveToReg(value_a,0);
-            jit_modi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-            goto mod_end;
-        }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_modr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    }
-    mod_end:
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    break;
-    case AST_LSHIFT:
-    CompileAST(ast->binop.a);
-    CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(ast->type2)) {
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        PopIRValue,PopIRValue;
-        LoadSymPtrIntoReg("F64Shl",0);
-        jit_prepare(Compiler.jit);
-        jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
-        jit_fputargr(Compiler.jit,jit_FR(value_b->reg),8);
-        jit_callr(Compiler.jit,jit_R(0));
-        jit_fretval(Compiler.jit,jit_FR(value_a->reg),8);
-        Free(value_b);
-    } else {
-        if(FoldIRInt) {
-            PopIRValue(&value_b);
-            if(FoldIRInt) {
-                PopIRValue(&value_a);
-                PushIRInt(value_a->int<<value_b->int);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            PopIRValue;
-            value_a=MoveToReg(value_a,0);
-            jit_lshi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-            goto lsh_end;
-        }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_lshr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    }
-    lsh_end:
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    break;
-    case AST_RSHIFT:
-    CompileAST(ast->binop.a);
-    CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(ast->type2)) {
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        PopIRValue,PopIRValue;
-        LoadSymPtrIntoReg("F64Shr",0);
-        jit_prepare(Compiler.jit);
-        jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
-        jit_fputargr(Compiler.jit,jit_FR(value_b->reg),8);
-        jit_callr(Compiler.jit,jit_R(0));
-        jit_fretval(Compiler.jit,jit_FR(value_a->reg),8);
-        Free(value_b);
-    } else if(IsSigned(ast->type2)) {
-        if(FoldIRInt) {
-            PopIRValue(&value_b);
-            if(FoldIRInt) {
-                PopIRValue(&value_a);
-                PushIRInt(value_a->int>>value_b->int);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            value_a=MoveToReg(value_a,0);
-            PopIRValue;
-            jit_rshi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-            goto rsh_end;
-        }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_rshr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    } else {
-        if(FoldIRInt) {
-            PopIRValue(&value_b);
-            if(FoldIRInt) {
-                PopIRValue(&value_a);
-                PushIRInt(value_a->int(U64)>>value_b->int);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            value_a=MoveToReg(value_a,0);
-            PopIRValue;
-            jit_rshi_u(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-            goto rsh_end;
-        }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_rshr_u(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    }
-    rsh_end:
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    break;
-    case AST_POW:
-    CompileAST(ast->binop.a);
-    CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(AssignTypeToNode(ast))) {
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        PopIRValue,PopIRValue;
-        LoadSymPtrIntoReg("Pow",0);
-        jit_prepare(Compiler.jit);
-        jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
-        jit_fputargr(Compiler.jit,jit_FR(value_b->reg),8);
-        jit_callr(Compiler.jit,jit_R(0));
-        jit_fretval(Compiler.jit,jit_FR(value_a->reg),8);
-        Free(value_b);
-    } else {
-        LoadSymPtrIntoReg("PowI64",2);
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,jit_R(value_a->reg));
-        jit_putargr(Compiler.jit,jit_R(value_b->reg));
-        jit_callr(Compiler.jit,jit_R(2));
-        jit_retval(Compiler.jit,jit_R(value_a->reg));
-        Free(value_b);
-    }
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    break;
+        break;
     case AST_BAND:
+    if(IsF64(ast->type2))
+        JIT_FAND(Compiler.jit);
+    else
+        JIT_ANDI(Compiler.jit);
     CompileAST(ast->binop.a);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(AssignTypeToNode(ast))) {
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        PopIRValue,PopIRValue;
-        LoadSymPtrIntoReg("F64And",0);
-        jit_prepare(Compiler.jit);
-        jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
-        jit_fputargr(Compiler.jit,jit_FR(value_b->reg),8);
-        jit_callr(Compiler.jit,jit_R(0));
-        jit_fretval(Compiler.jit,jit_FR(value_a->reg),8);
-    } else {
-        if(FoldIRInt) {
-            PopIRValue(&value_b);
-            if(FoldIRInt) {
-                PopIRValue(&value_a);
-                PushIRInt(value_a->int&value_b->int);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            PopIRValue;
-            value_a=MoveToReg(value_a,0);
-            jit_andi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-            goto band_end;
-        }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_andr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-        Free(value_b);
-    }
-    band_end:
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
     break;
     case AST_BXOR:
+    if(IsF64(ast->type2))
+        JIT_FXOR(Compiler.jit);
+    else
+        JIT_XORI(Compiler.jit);
     CompileAST(ast->binop.a);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(AssignTypeToNode(ast))) {
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        PopIRValue,PopIRValue;
-        LoadSymPtrIntoReg("F64Xor",0);
-        jit_prepare(Compiler.jit);
-        jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
-        jit_fputargr(Compiler.jit,jit_FR(value_b->reg),8);
-        jit_callr(Compiler.jit,jit_R(0));
-        jit_fretval(Compiler.jit,jit_FR(value_a->reg),8);
-    } else {
-        if(FoldIRInt) {
-            PopIRValue(&value_b);
-            if(FoldIRInt) {
-                PopIRValue(&value_a);
-                PushIRInt(value_a->int^value_b->int);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            value_a=MoveToReg(value_a,0);
-            PopIRValue;
-            jit_xori(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-            goto band_end;
-        }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_xorr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    }
-    bxor_end:
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
     break;
     case AST_BOR:
+    if(IsF64(ast->type2))
+        JIT_FOR(Compiler.jit);
+    else
+        JIT_ORI(Compiler.jit);
     CompileAST(ast->binop.a);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(AssignTypeToNode(ast))) {
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        PopIRValue,PopIRValue;
-        LoadSymPtrIntoReg("F64Or",0);
-        jit_prepare(Compiler.jit);
-        jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
-        jit_fputargr(Compiler.jit,jit_FR(value_b->reg),8);
-        jit_callr(Compiler.jit,jit_R(0));
-        jit_fretval(Compiler.jit,jit_FR(value_a->reg),8);
-    } else {
-        if(FoldIRInt) {
-            PopIRValue(&value_b);
-            if(FoldIRInt) {
-                PopIRValue(&value_a);
-                PushIRInt(value_a->int|value_b->int);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            value_a=MoveToReg(value_a,0);
-            PopIRValue;
-            jit_ori(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-            goto bor_end;
-        }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_orr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-            }
-    bor_end:
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
     break;
     case AST_LT:
     //Handled in AST_RANGE
@@ -5099,854 +4321,334 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     //Handled in AST_RANGE
     break;
     case AST_EQ:
-    PushIRReg(GetType("Bool"),GetFreeIReg);
-    value_c=Compiler.stack;
+    if(IsF64(ast->binop.a->type2)||IsF64(ast->binop.b->type2))
+        JIT_FEQ(Compiler.jit);
+    else
+        JIT_EQI(Compiler.jit);
     CompileAST(ast->binop.a);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(AssignTypeToNode(ast->binop.a))) {
-        if(FoldIRF64) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRF64) {
-                Free(value_a),PopIRValue(&value_a);
-                PopIRValue;
-                PushIRInt(value_a->flt==value_b->flt);
-                goto eq_end;
-            }
-            value_a=MoveToFReg(value_a,0);
-            PopIRValue;
-            jit_movi(Compiler.jit,jit_R(value_c->reg),1);
-            op1=jit_fbeqi(Compiler.jit,NULL,jit_FR(value_a->reg),value_b->flt);
-            jit_movi(Compiler.jit,jit_R(value_c->reg),0);
-            jit_patch(Compiler.jit,op1);
-            goto eq_end;
-        }
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_movi(Compiler.jit,jit_R(value_c->reg),1);
-        op1=jit_fbeqr(Compiler.jit,NULL,jit_FR(value_a->reg),jit_FR(value_b->reg));
-        jit_movi(Compiler.jit,jit_R(value_c->reg),0);
-        jit_patch(Compiler.jit,op1);
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRInt) {
-                Free(value_a),PopIRValue(&value_a);
-                PopIRValue;
-                PushIRInt(value_a->int==value_b->int);
-                goto eq_end;
-            }
-            value_a=MoveToReg(value_a,0);
-            PopIRValue;
-            jit_eqi(Compiler.jit,jit_R(value_c->reg),jit_R(value_a->reg),value_b->int);
-            goto eq_end;
-        }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_eqr(Compiler.jit,jit_R(value_c->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    }
-    eq_end:
-    Free(value_b),Free(value_b);
     break;
     case AST_NE:
+    if(IsF64(ast->binop.a->type2)||IsF64(ast->binop.b->type2))
+        JIT_FNE(Compiler.jit);
+    else
+        JIT_NEI(Compiler.jit);
     CompileAST(ast->binop.a);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(AssignTypeToNode(ast->binop.a))||IsF64(AssignTypeToNode(ast->binop.b))) {
-        //TODO const fold
-        PopIRValue,PopIRValue;
-        value_a=MoveToFReg(value_a,0);
-        value_b=MoveToFReg(value_b,1);
-        PushIRReg(HashFind("I64i",Compiler.globals),GetFreeIReg);
-        value_c=Compiler.stack;
-        jit_movi(Compiler.jit,jit_R(value_c->reg),1);
-        op1=jit_fbner(Compiler.jit,NULL,jit_FR(value_a->reg),jit_FR(value_b->reg));
-        jit_movi(Compiler.jit,jit_R(value_c->reg),0);
-        jit_patch(Compiler.jit,op1);
-        break;
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            if(FoldIRInt) {
-                Free(value_a),PopIRValue(&value_a);
-                PushIRInt(value_a->int!=value_b->int);
-                Free(value_a),Free(value_b);
-                break;
-            }
-            PopIRValue;
-            value_a=MoveToReg(value_a,0);
-            jit_nei(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),value_b->int);
-            goto neq_end;
-        }
-        value_a=MoveToReg(value_a,0);
-        value_b=MoveToReg(value_b,1);
-        PopIRValue,PopIRValue;
-        jit_ner(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    }
-    neq_end:
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
+    break;
     break;
     case AST_GE:
     //Will be handled in AST_RANGE
     break;
     case AST_LAND:
-    PushIRReg(GetType("I64i"),GetFreeIReg);
-    value_c=Compiler.stack;
+    lo=GetFreeIReg;
+    JIT_COMMAI(Compiler.jit);
+    jit_rpnIf(Compiler.jit);
     CompileAST(ast->binop.a);
-    value_a=IRValueClone(Compiler.stack);
-    value_a=BoolifyValue(value_a);
-    op1=jit_beqi(Compiler.jit,NULL,jit_R(value_a->reg),0);
-    PopIRValue,Free(value_a);
+    //if(t)
+    JIT_MOV(Compiler.jit);
+    JIT_R(Compiler.jit,lo);
+    JIT_NEI(Compiler.jit);
     CompileAST(ast->binop.b);
-    value_b=BoolifyValue(IRValueClone(Compiler.stack));
-    Assign(value_c,value_b);
-    jit_nei(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),0);
-    op2=jit_jmpi(Compiler.jit,NULL);
-    jit_patch(Compiler.jit,op1);
-    PushIRInt(0);
-    Assign(value_c,Compiler.stack),PopIRValue;
-    jit_patch(Compiler.jit,op2);
-    PopIRValue,Free(value_b);
+    JIT_I64(Compiler.jit,0);
+    //if(f)
+    JIT_MOV(Compiler.jit);
+    JIT_R(Compiler.jit,lo);
+    JIT_I64(Compiler.jit,0);
+    //COMMA
+    JIT_R(Compiler.jit,lo);
     break;
     case AST_LOR:
-    PushIRReg(GetType("I64i"),GetFreeIReg);
-    jit_movi(Compiler.jit,jit_R(Compiler.stack->reg),1);
+    lo=GetFreeIReg;
+    JIT_COMMAI(Compiler.jit);
+    jit_rpnIf(Compiler.jit);
     CompileAST(ast->binop.a);
-    value_a=IRValueClone(Compiler.stack);
-    value_a=BoolifyValue(value_a);
-    op1=jit_bnei(Compiler.jit,NULL,jit_R(value_a->reg),0);
-    PopIRValue;
+    //if(t)
+    JIT_MOV(Compiler.jit);
+    JIT_R(Compiler.jit,lo);
+    JIT_I64(Compiler.jit,1);
+    //if(f)
+    JIT_MOV(Compiler.jit);
+    JIT_R(Compiler.jit,lo);
+    JIT_NEI(Compiler.jit);
     CompileAST(ast->binop.b);
-    value_b=BoolifyValue(IRValueClone(Compiler.stack));
-    op2=jit_bnei(Compiler.jit,NULL,jit_R(value_b->reg),0);
-    PopIRValue;
-    jit_movi(Compiler.jit,jit_R(Compiler.stack->reg),0);
-    jit_patch(Compiler.jit,op1);
-    jit_patch(Compiler.jit,op2);
+    JIT_I64(Compiler.jit,0);
+    //COMMA
+    JIT_R(Compiler.jit,lo);
     break;
     case AST_LXOR:
+    JIT_XORI(Compiler.jit);
+    JIT_NEI(Compiler.jit);
     CompileAST(ast->binop.a);
-    value_a=BoolifyValue(IRValueClone(Compiler.stack));
-    PopIRValue;
-    value_c=IRValueClone(value_a);
-    value_c->last=Compiler.stack;
-    Compiler.stack=value_c;
+    JIT_I64(Compiler.jit,0);
+    JIT_NEI(Compiler.jit);
     CompileAST(ast->binop.b);
-    value_b=BoolifyValue(IRValueClone(Compiler.stack));
-    PopIRValue,PopIRValue;
-    jit_xorr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    value_a->last=Compiler.stack;
-    Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
+    JIT_I64(Compiler.jit,0);
     break;
     case AST_ASSIGN:
+    if(IsF64(ast->type2))
+        JIT_FMOV(Compiler.jit);
+    else
+        JIT_MOV(Compiler.jit);
     CompileAST(ast->binop.a,TRUE);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    PopIRValue,PopIRValue;
-    Assign(value_a,value_b),Free(value_b);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    asn_end:
-    if(!pass_by_ref&&IsF64(value_a->type2)) {
-        PopIRValue(&value_a);
-        PushIRFReg(value_a->type2,GetFreeFReg);
-        Assign(Compiler.stack,value_a);
-        Free(value_a);
-    } else if(!pass_by_ref&&(IsPtrType(value_a->type2)||IsInteger(value_a->type2))) {
-        PopIRValue(&value_a);
-        PushIRReg(value_a->type2,GetFreeIReg);
-        Assign(Compiler.stack,value_a);
-        Free(value_a);
-    }
     break;
     case AST_ASSIGN_SHL:
+    if(IsF64(ast->type2))
+        JIT_FASSIGN_SHL(Compiler.jit);
+    else
+        JIT_ASSIGN_SHLI(Compiler.jit);
     CompileAST(ast->binop.a,TRUE);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(value_a->type2)) {
-        value_b=MoveToFReg(value_b,1);
-        value_c=MoveToFReg(IRValueClone(value_a),0);
-        LoadSymPtrIntoReg("F64Shl",0);
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,jit_FR(value_c->reg));
-        jit_putargr(Compiler.jit,jit_FR(value_b->reg));
-        jit_callr(Compiler.jit,jit_R(0));
-        PushIRFReg(GetType("F64"),GetFreeFReg);
-        jit_fretval(Compiler.jit,jit_FR(Compiler.stack->reg),8);
-        Assign(value_a,Compiler.stack);
-        PopIRValue;
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToReg(IRValueClone(value_a),0);
-            PopIRValue;
-            jit_lshi(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->int);
-            Assign(value_a,value_c);
-            Free(value_c),Free(value_b);
-            goto ashl_end;
-        }
-        value_c=MoveToReg(IRValueClone(value_a),0),value_b=MoveToReg(value_b,1);
-        jit_lshr(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
-    }
-    PopIRValue,PopIRValue;
-    ashl_end:
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    goto asn_end;
+    break;
     case AST_ASSIGN_SHR:
+    if(IsF64(ast->type2))
+        JIT_FASSIGN_SHR(Compiler.jit);
+    else
+        JIT_ASSIGN_SHRI(Compiler.jit);   
     CompileAST(ast->binop.a,TRUE);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(value_a->type2)) {
-        value_b=MoveToFReg(value_b,1);
-        value_c=MoveToFReg(IRValueClone(value_a),0);
-        LoadSymPtrIntoReg("F64Shr",0);
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,jit_FR(value_c->reg));
-        jit_putargr(Compiler.jit,jit_FR(value_b->reg));
-        jit_callr(Compiler.jit,jit_R(0));
-        PushIRFReg(GetType("F64"),GetFreeFReg);
-        jit_fretval(Compiler.jit,jit_FR(Compiler.stack->reg),8);
-        Assign(value_a,Compiler.stack);
-        PopIRValue;
-    } else if(IsSigned(value_a->type2)) {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToReg(IRValueClone(value_a),0);
-            jit_rshi(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->int);
-            Assign(value_a,value_c);
-            Free(value_c),Free(value_c);
-            PopIRValue;
-            goto ashl_end;
-        }
-        value_c=MoveToReg(IRValueClone(value_a),0),value_b=MoveToReg(value_b,1);
-        jit_rshr(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Free(value_b);
-        Assign(value_a,value_c);
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToReg(IRValueClone(value_a),0);
-            jit_rshi_u(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->int);
-            Assign(value_a,value_c);
-            Free(value_c),Free(value_b);
-            PopIRValue;
-            goto ashl_end;
-        }
-        value_c=MoveToReg(IRValueClone(value_a),0),value_b=MoveToReg(value_b,1);
-        jit_rshr_u(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Free(value_b);
-        Assign(value_a,value_c);
-    }
-    PopIRValue,PopIRValue;
-    arshr_end:
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    goto asn_end;
+    break;
     case AST_ASSIGN_MUL:
+    if(IsF64(ast->type2))
+        JIT_FASSIGN_MUL(Compiler.jit);
+    else
+        JIT_ASSIGN_MULI(Compiler.jit);   
     CompileAST(ast->binop.a,TRUE);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(value_a->type2)) {
-        if(FoldIRF64) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToFReg(IRValueClone(value_a),0);
-            jit_fmuli(Compiler.jit,jit_FR(value_c->reg),jit_FR(value_c->reg),value_b->flt);
-            Assign(value_a,value_c);
-            Free(value_c);
-            PopIRValue;
-            goto amul_end;
-        }
-        value_c=MoveToFReg(IRValueClone(value_a),0),value_b=MoveToFReg(value_b,1);
-        jit_fmulr(Compiler.jit,jit_FR(value_c->reg),jit_FR(value_c->reg),jit_FR(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b),Free(value_c);
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToReg(IRValueClone(value_a),0);
-            jit_muli(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->int);
-            Assign(value_a,value_c);
-            Free(value_c);
-            PopIRValue;
-            goto amul_end;
-        }
-        value_c=MoveToReg(IRValueClone(value_a),0),value_b=MoveToReg(value_b,1);
-        jit_mulr(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
-    }
-    PopIRValue,PopIRValue;
-    amul_end:
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    goto asn_end;
+    break;
     case AST_ASSIGN_DIV:
+    if(IsF64(ast->type2))
+        JIT_FASSIGN_DIV(Compiler.jit);
+    else
+        JIT_ASSIGN_DIVI(Compiler.jit);   
     CompileAST(ast->binop.a,TRUE);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(value_a->type2)) {value_c=MoveToFReg(IRValueClone(value_a),0),value_b=MoveToFReg(value_b,1);
-        jit_fdivr(Compiler.jit,jit_FR(value_c->reg),jit_FR(value_c->reg),jit_FR(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
-    } else {
-        value_c=MoveToReg(IRValueClone(value_a),0),value_b=MoveToReg(value_b,1);
-        jit_divr(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
-    }
-    PopIRValue,PopIRValue;
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    goto asn_end;
+    break;
     case AST_ASSIGN_BAND:
+    if(IsF64(ast->type2))
+        JIT_FASSIGN_AND(Compiler.jit);
+    else
+        JIT_ASSIGN_ANDI(Compiler.jit);   
     CompileAST(ast->binop.a,TRUE);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(value_a->type2)) {
-        value_b=MoveToFReg(value_b,1);
-        value_c=MoveToFReg(IRValueClone(value_a),0);
-        LoadSymPtrIntoReg("F64And",0);
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,jit_FR(value_c->reg));
-        jit_putargr(Compiler.jit,jit_FR(value_b->reg));
-        jit_callr(Compiler.jit,jit_R(0));
-        PushIRFReg(GetType("F64"),GetFreeFReg);
-        jit_fretval(Compiler.jit,jit_FR(Compiler.stack->reg),8);
-        Assign(value_a,Compiler.stack);
-        PopIRValue;
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToReg(IRValueClone(value_a),0);
-            jit_andi(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->int);
-            Assign(value_a,value_c);
-            Free(value_c);
-            PopIRValue;
-            goto aband_end;
-        }
-        value_c=MoveToReg(IRValueClone(value_a),0),value_b=MoveToReg(value_b,1);
-        jit_andr(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
-    }
-    PopIRValue,PopIRValue;
-    aband_end:
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    goto asn_end;
+    break;
     case AST_ASSIGN_BOR:
+    if(IsF64(ast->type2))
+        JIT_FASSIGN_OR(Compiler.jit);
+    else
+        JIT_ASSIGN_ORI(Compiler.jit);   
     CompileAST(ast->binop.a,TRUE);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(value_a->type2)) {
-        value_b=MoveToFReg(value_b,1);
-        value_c=MoveToFReg(IRValueClone(value_a),0);
-        LoadSymPtrIntoReg("F64Or",0);
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,jit_FR(value_c->reg));
-        jit_putargr(Compiler.jit,jit_FR(value_b->reg));
-        jit_callr(Compiler.jit,jit_R(0));
-        PushIRFReg(GetType("F64"),GetFreeFReg);
-        jit_fretval(Compiler.jit,jit_FR(Compiler.stack->reg),8);
-        Assign(value_a,Compiler.stack);
-        PopIRValue;
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToReg(IRValueClone(value_a),0);
-            jit_ori(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->int);
-            Assign(value_a,value_c);
-            Free(value_c);
-            PopIRValue;
-            goto abor_end;
-        }
-        value_c=MoveToReg(IRValueClone(value_a),0),value_b=MoveToReg(value_b,1);
-        jit_orr(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
-    }
-    PopIRValue,PopIRValue;
-    abor_end:
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    goto asn_end;
+    break;
     case AST_ASSIGN_BXOR:
+    if(IsF64(ast->type2))
+        JIT_FASSIGN_XOR(Compiler.jit);
+    else
+        JIT_ASSIGN_XORI(Compiler.jit);   
     CompileAST(ast->binop.a,TRUE);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(value_a->type2)) {
-        value_b=MoveToFReg(value_b,1);
-        value_c=MoveToFReg(IRValueClone(value_a),0);
-        LoadSymPtrIntoReg("F64Xor",0);
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,jit_FR(value_c->reg));
-        jit_putargr(Compiler.jit,jit_FR(value_b->reg));
-        jit_callr(Compiler.jit,jit_R(0));
-        PushIRFReg(GetType("F64"),GetFreeFReg);
-        jit_fretval(Compiler.jit,jit_FR(Compiler.stack->reg),8);
-        Assign(value_a,Compiler.stack);
-        PopIRValue;
-    } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToReg(IRValueClone(value_a),0);
-            jit_xori(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->int);
-            Assign(value_a,value_c);
-            Free(value_c);
-            PopIRValue;
-            goto abxor_end;
-        }
-        value_c=MoveToReg(IRValueClone(value_a),0),value_b=MoveToReg(value_b,1);
-        jit_xorr(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
-    }
-    PopIRValue,PopIRValue;
-    abxor_end:
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    goto asn_end;
+    break;
     case AST_ASSIGN_ADD:
     type1=AssignTypeToNode(ast->binop.a);
     if(IsPtrType(type1))
         mult=DerefedType(type1)->sz;
     else
         mult=1;
-    CompileAST(ast->binop.a,TRUE);
-    CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(value_a->type2)) {
-        if(FoldIRF64) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToFReg(IRValueClone(value_a),0);
-            jit_faddi(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->flt);
-            Assign(value_a,value_c);
-            Free(value_c);
-            PopIRValue;
-            goto aadd_end;
-        }
-        value_c=MoveToFReg(IRValueClone(value_a),0),value_b=MoveToFReg(value_b,1);
-        jit_faddr(Compiler.jit,jit_FR(value_c->reg),jit_FR(value_c->reg),jit_FR(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
+    if(IsF64(ast->type2)) {
+        JIT_FASSIGN_ADD(Compiler.jit);
+        CompileAST(ast->binop.a,TRUE);
+        CompileAST(ast->binop.b);    
     } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToReg(IRValueClone(value_a),0);
-            jit_addi(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->int*mult);
-            Assign(value_a,value_c);
-            Free(value_c);
-            PopIRValue;
-            goto aadd_end;
-        }
-        value_c=MoveToReg(IRValueClone(value_a),0),value_b=MoveToReg(value_b,1);
-        if(mult)
-            jit_muli(Compiler.jit,jit_R(value_b->reg),jit_R(value_b->reg),mult);
-        jit_addr(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
+        JIT_ASSIGN_ADDI(Compiler.jit);
+        CompileAST(ast->binop.a,TRUE);
+        if(mult) {
+            JIT_MULI(Compiler.jit);
+            CompileAST(ast->binop.b);
+            JIT_I64(Compiler.jit,mult);
+        } else
+            CompileAST(ast->binop.b);
     }
-    PopIRValue,PopIRValue;
-    aadd_end:
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    goto asn_end;
+    break;
     case AST_ASSIGN_SUB:
     type1=AssignTypeToNode(ast->binop.a);
     if(IsPtrType(type1))
         mult=DerefedType(type1)->sz;
     else
         mult=1;
-    CompileAST(ast->binop.a,TRUE);
-    CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    value_a=IRValueClone(Compiler.stack->last);
-    if(IsF64(value_a->type2)) {
-        value_c=MoveToFReg(IRValueClone(value_a),0),value_b=MoveToFReg(value_b,1);
-        jit_fsubr(Compiler.jit,jit_FR(value_c->reg),jit_FR(value_c->reg),jit_FR(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
+    if(IsF64(ast->type2)) {
+        JIT_FASSIGN_SUB(Compiler.jit);
+        CompileAST(ast->binop.a,TRUE);
+        CompileAST(ast->binop.b);    
     } else {
-        if(FoldIRInt) {
-            Free(value_b),PopIRValue(&value_b);
-            value_c=MoveToReg(IRValueClone(value_a),0);
-            jit_subi(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->int*mult);
-            Assign(value_a,value_c);
-            Free(value_c);
-            PopIRValue;
-            goto asub_end;
-        }
-        value_c=MoveToReg(IRValueClone(value_a),0),value_b=MoveToReg(value_b,1);
-        if(mult)
-            jit_muli(Compiler.jit,jit_R(value_b->reg),jit_R(value_b->reg),mult);
-        jit_subr(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Assign(value_a,value_c);
-        Free(value_b);
+        JIT_ASSIGN_SUBI(Compiler.jit);
+        CompileAST(ast->binop.a,TRUE);
+        if(mult) {
+            JIT_MULI(Compiler.jit);
+            CompileAST(ast->binop.b);
+            JIT_I64(Compiler.jit,mult);
+        } else
+            CompileAST(ast->binop.b);
     }
-    PopIRValue,PopIRValue;
-    asub_end:
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    goto asn_end;
+    break;
     case AST_POST_INC:
+    if(IsF64(ast->type2))
+        JIT_FPOST_INC(Compiler.jit);
+    else if(!IsPtrType(ast->type2))
+        JIT_POST_INCI(Compiler.jit);
+    else {
+        mult=DerefedType(ast->type2)->sz;
+        JIT_POST_INCI(Compiler.jit,mult);
+    }        
     CompileAST(ast->unopArg,TRUE);
-    value_a=IRValueClone(Compiler.stack);
-    if(IsF64(value_a->type2)) {
-        PushIRFReg(value_a->type2,GetFreeFReg);
-        Assign(value_b=Compiler.stack,value_a);
-        PushIRFReg(value_a->type2,GetFreeFReg);
-        Assign(value_c=Compiler.stack,value_a);
-        jit_faddi(Compiler.jit,jit_FR(value_c->reg),jit_FR(value_c->reg),1.0);
-        Assign(value_a,value_c);
-        PopIRValue; //value_c
-        value_b=IRValueClone(value_b); //Make unique
-        PopIRValue; //value_b
-    } else {
-        PushIRReg(value_a->type2,GetFreeIReg);
-        Assign(value_b=Compiler.stack,value_a);
-        PushIRReg(value_a->type2,GetFreeIReg);
-        Assign(value_c=Compiler.stack,value_a);
-        mult=1;
-        if(IsPtrType(value_a->type2)) {
-            mult=DerefedType(value_a->type2)->sz;
-        }
-        jit_addi(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),mult);
-        Assign(value_a,value_c);
-        PopIRValue; //value_c
-        value_b=IRValueClone(value_b); //MAke unique
-        PopIRValue; //value_b
-    }
-    Free(value_a);
-    PopIRValue; //value_a;
-    value_b->last=Compiler.stack;
-    Compiler.stack=value_b;
     break;
     case AST_POST_DEC:
-    CompileAST(ast->unopArg,TRUE);
-    value_a=IRValueClone(Compiler.stack);
-    if(IsF64(value_a->type2)) {
-        PushIRFReg(value_a->type2,GetFreeFReg);
-        Assign(value_b=Compiler.stack,value_a);
-        PushIRFReg(value_a->type2,GetFreeFReg);
-        Assign(value_c=Compiler.stack,value_a);
-        jit_fsubi(Compiler.jit,jit_FR(value_c->reg),jit_FR(value_c->reg),1.0);
-        Assign(value_a,value_c);
-        PopIRValue; //value_c
-        value_b=IRValueClone(value_b); //Make unique
-        PopIRValue; //value_b
-    } else {
-        PushIRReg(value_a->type2,GetFreeIReg);
-        Assign(value_b=Compiler.stack,value_a);
-        PushIRReg(value_a->type2,GetFreeIReg);
-        Assign(value_c=Compiler.stack,value_a);
-        mult=1;
-        if(IsPtrType(value_a->type2)) {
-            mult=DerefedType(value_a->type2)->sz;
-        }
-        jit_subi(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),mult);
-        Assign(value_a,value_c);
-        PopIRValue; //value_c
-        value_b=IRValueClone(value_b); //MAke unique
-        PopIRValue; //value_b
+    if(IsF64(ast->type2))
+        JIT_FPOST_DEC(Compiler.jit);
+    else if(!IsPtrType(ast->type2))
+        JIT_POST_DECI(Compiler.jit);
+    else {
+        mult=DerefedType(ast->type2)->sz;
+        JIT_POST_DECI(Compiler.jit,mult);
     }
-    PopIRValue; //value_a;
-    value_b->last=Compiler.stack;
-    Compiler.stack=value_b;
+    CompileAST(ast->unopArg,TRUE);
     break;
     case AST_ARRAY_ACCESS:
-    CompileAST(ast->arr_acc.base);
-    CompileAST(ast->arr_acc.index);
-    mult=DerefedType(Compiler.stack->last->type2)->sz;
-    if(FoldIRInt) {
-        PopIRValue(&value_b);
-        hi=mult*value_b->int;
-        Free(value_b);
-        PopIRValue(&value_a);
-        value_a=MoveToReg(value_a,0);
-        jit_addi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),hi);
-        goto arr_acc_end;
+    if(ast->type2->type==HTT_ARRAY_TYPE)
+        get_ptr=TRUE;
+    if(!get_ptr) {
+        if(IsF64(ast->type2))
+            JIT_FDEREF(Compiler.jit);
+        else if(IsInteger(ast->type2)&&!IsSigned(ast->type2))
+            JIT_UDEREF(Compiler.jit,,ast->type2->sz);
+        else
+            JIT_DEREF(Compiler.jit,,ast->type2->sz);
     }
-    value_b=IRValueClone(Compiler.stack);
-    value_b=MoveToReg(value_b,1); //To integer
-    value_a=IRValueClone(Compiler.stack->last);
-    value_a=MoveToReg(value_a,0);
-    jit_muli(Compiler.jit,jit_R(value_b->reg),jit_R(value_b->reg),mult);
-    jit_addr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),jit_R(value_b->reg));
-    PopIRValue,PopIRValue;
-    Free(value_b);
-    arr_acc_end:
-    if(DerefedType(value_a->type2)->type==HTT_ARRAY_TYPE) {
-        PushIRReg(DerefedType(value_a->type2),value_a->reg);
-    } else
-        PushIRIndirX(DerefedType(value_a->type2),value_a->reg,0);
-    Free(value_a);
+    JIT_ADDI(Compiler.jit);
+    CompileAST(ast->arr_acc.base);
+    JIT_MULI(Compiler.jit);
+    JIT_I64(Compiler.jit,ast->type2->sz);
+    CompileAST(ast->arr_acc.index);
     break;
     case AST_PRE_DEC:
-    CompileAST(ast->unopArg,TRUE);
-    value_a=IRValueClone(Compiler.stack);
-    if(IsF64(value_a->type2)) {
-        PushIRFReg(value_a->type2,GetFreeFReg);
-        value_b=IRValueClone(Compiler.stack);
-        Assign(value_b,value_a);
-        jit_fsubi(Compiler.jit,jit_FR(value_b->reg),jit_FR(value_b->reg),1.0);
-        PopIRValue;
-    } else {
-        PushIRReg(value_a->type2,GetFreeIReg);
-        value_b=IRValueClone(Compiler.stack);
-        Assign(value_b,value_a);
-        mult=1;
-        if(IsPtrType(value_a->type2)) {
-            mult=DerefedType(value_a->type2)->sz;
-        }
-        jit_subi(Compiler.jit,jit_R(value_b->reg),jit_R(value_b->reg),mult);
-        PopIRValue;
+    if(IsF64(ast->type2))
+        JIT_FPRE_DEC(Compiler.jit);
+    else if(!IsPtrType(ast->type2))
+        JIT_PRE_DECI(Compiler.jit);
+    else {
+        mult=DerefedType(ast->type2)->sz;
+        JIT_PRE_DECI(Compiler.jit,mult);
     }
-    PopIRValue; //value_a;
-    Assign(value_a,value_b);
-    Free(value_a);
-    value_b->last=Compiler.stack;
-    Compiler.stack=value_b;
+    CompileAST(ast->unopArg,TRUE);
     break;
     case AST_PRE_INC:
-    CompileAST(ast->unopArg,TRUE);
-    value_a=IRValueClone(Compiler.stack);
-    if(IsF64(value_a->type2)) {
-        PushIRFReg(value_a->type2,GetFreeFReg);
-        value_b=IRValueClone(Compiler.stack);
-        Assign(value_b,value_a);
-        jit_faddi(Compiler.jit,jit_FR(value_b->reg),jit_FR(value_b->reg),1.0);
-        PopIRValue;
-    } else {
-        PushIRReg(value_a->type2,GetFreeIReg);
-        value_b=IRValueClone(Compiler.stack);
-        Assign(value_b,value_a);
-        mult=1;
-        if(IsPtrType(value_a->type2)) {
-            mult=DerefedType(value_a->type2)->sz;
-        }
-        jit_addi(Compiler.jit,jit_R(value_b->reg),jit_R(value_b->reg),mult);
-        PopIRValue;
+    if(IsF64(ast->type2))
+        JIT_FPRE_INC(Compiler.jit);
+    else if(!IsPtrType(ast->type2))
+        JIT_PRE_INCI(Compiler.jit);
+    else {
+        mult=DerefedType(ast->type2)->sz;
+        JIT_PRE_INCI(Compiler.jit,mult);
     }
-    PopIRValue; //value_a;
-    Assign(value_a,value_b),Free(value_a);
-    value_b->last=Compiler.stack;
-    Compiler.stack=value_b;
+    CompileAST(ast->unopArg,TRUE);
     break;
     case AST_POS:
     CompileAST(ast->unopArg);
     break;
     case AST_NEG:
+    if(IsF64(ast->type2))
+        JIT_FNEG(Compiler.jit);
+    else
+        JIT_NEGI(Compiler.jit);
     CompileAST(ast->unopArg);
-    value_a=IRValueClone(Compiler.stack);
-    if(IsF64(value_a->type2)) {
-        if(FoldIRF64) {
-            Free(value_a);
-            PopIRValue(&value_a);
-            PushIRFlt(-value_a->flt);
-            Free(value_a);
-            break;
-        }
-        Free(value_a);
-        PopIRValue(&value_a);
-        value_a=MoveToFReg(value_a,0);
-        jit_fnegr(Compiler.jit,jit_FR(value_a->reg),jit_FR(value_a->reg));
-    } else {
-        if(FoldIRInt) {
-            Free(value_a);
-            PopIRValue(&value_a);
-            PushIRInt(-value_a->int);
-            Free(value_a);
-            break;
-        }
-        Free(value_a);
-        PopIRValue(&value_a);
-        value_a=MoveToReg(value_a,0);
-        jit_negr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg));
-    }
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
     break;
     case AST_LNOT:
+    if(IsF64(ast->type2))
+        JIT_FEQ(Compiler.jit),JIT_F64(Compiler.jit,0.0);
+    else
+        JIT_EQI(Compiler.jit),JIT_I64(Compiler.jit,0);
     CompileAST(ast->unopArg);
-    value_a=IRValueClone(Compiler.stack);
-    if(IsF64(ast->unopArg->type2)) {
-        if(FoldIRF64) {
-            PopIRValue(&value_a);
-            PushIRInt(!value_a->flt);
-            Free(value_a);
-            break;
-        }
-        value_a=MoveToFReg(value_a,0);
-        PopIRValue;
-        PushIRReg(GetType("I64i"),idx=GetFreeIReg);
-        jit_movi(Compiler.jit,jit_R(idx),1);
-        op1=jit_fbeqi(Compiler.jit,NULL,jit_FR(value_a->reg),0.0);
-        jit_movi(Compiler.jit,jit_R(idx),0);
-        jit_patch(Compiler.jit,op1);
-        PopIRValue(&value_a);
-    } else {
-        if(FoldIRInt) {
-            PopIRValue(&value_a);
-            PushIRInt(!value_a->int);
-            Free(value_a);
-            break;
-        }
-        PopIRValue;
-        value_a=MoveToReg(value_a,0);
-        jit_eqi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),0);
-    }
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
     break;
     case AST_BNOT:
+    if(IsF64(ast->type2))
+        JIT_FNOT(Compiler.jit);
+    else
+        JIT_NOTI(Compiler.jit);
     CompileAST(ast->unopArg);
-    if(IsF64(ast->unopArg->type2)) {
-        //TODO
-    } else {
-        if(FoldIRInt) {
-            PopIRValue(&value_a);
-            PushIRInt(~value_a->int);
-            Free(value_a);
-            break;
-        }
-        PopIRValue(&value_a);
-        value_a=MoveToReg(value_a,0);
-        jit_notr(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg));
-    }
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
     break;
     case AST_DERREF:
-    CompileAST(ast->unopArg);
-    PopIRValue(&value_a);
-    value_a=MoveToReg(value_a,0);
-    if(DerefedType(value_a->type2)->type==HTT_ARRAY_TYPE)
-        PushIRReg(DerefedType(value_a->type2),value_a->reg);
-    else
-        PushIRIndirX(DerefedType(value_a->type2),value_a->reg,0);
-    Free(value_a);
+    if(!get_ptr) {
+        if(IsF64(ast->type2))
+            JIT_FDEREF(Compiler.jit);
+        else if(IsInteger(ast->type2)&&!IsSigned(ast->type2)) 
+            JIT_UDEREF(Compiler.jit,,ast->type2->sz);
+        else
+            JIT_DEREF(Compiler.jit,,ast->type2->sz);
+    }
+    if(Compiler.bounds_check_mode) {
+        JIT_FUNC_CALL(Compiler.jit,2);
+        JIT_I64(Compiler.jit,ast->type2->sz);
+        CompileAST(ast->unopArg);
+        JIT_I64(Compiler.jit,&WhineOnOutOfBounds);
+    } else
+        CompileAST(ast->unopArg);
     break;
     case AST_ADDROF:
     if(Compiler.asm_mode&&ast->unopArg->type==AST_NAME) {
         if(var=HashFind(ast->unopArg->name,Compiler.locals)) {
             if(var->is_local_unlinked) {
-                LoadSymPtrIntoReg(ast->unopArg->name,idx=GetFreeIReg);
-                PushIRReg(ast->type2,idx);
+                LoadSymPtr(ast->unopArg->name);
                 break;
             }
-            PushIRInt(var->frame_off);
+            JIT_I64(Compiler.jit,var->frame_off);
             break;
         }
     }
-    CompileAST(ast->unopArg,TRUE,TRUE);
-    if(Compiler.stack->type2->type==HTT_ARRAY_TYPE) {
-        if(Compiler.stack->type!=IRV_REG) {
-            "STRANGE ADDROF\n";
-            throw('Compile');
-        }
-        Compiler.stack->type2++;
-        break;
-    }
-    if(Compiler.stack->type!=IRV_INDIRX) {
-        "NEEDS INDIRX\n";
-        throw('Compile');
-    }
-    PopIRValue(&value_a);
-    PushIRReg(ast->type2,idx=value_a->indirx.reg);
-    if(value_a->indirx.offset)
-        jit_addi(Compiler.jit,jit_R(idx),jit_R(idx),value_a->indirx.offset);
-    Free(value_a);
+    CompileAST(ast->unopArg,TRUE,TRUE,TRUE);
     break;
     case AST_SIZEOF:
-    PushIRInt(ast->type2->sz);
+    JIT_I64(Compiler.jit,ast->type2->sz);
     break;
     case AST_IMPLICIT_TC:
     break;
     case AST_EXPLICIT_TC:
+    if(IsF64(ast->typecast.to_type)&&!IsF64(ast->typecast.base->type2)) {
+        JIT_FTYPECAST(Compiler.jit);
+    } else
+		JIT_TYPECAST(Compiler.jit,ast->type2->sz);
     CompileAST(ast->typecast.base,pass_by_ref);
-    if(IsF64(Compiler.stack->type2)) {
-        if(IsF64(ast->typecast.to_type))
-            Compiler.stack->type2=ast->typecast.to_type;
-        else if(IsInteger(ast->typecast.to_type)) {
-            if(FoldIRF64) {
-                PopIRValue(&value_a);
-                PushIRInt(value_a->flt(I64));
-            } else {
-                PopIRValue(&value_a);
-                value_a=MoveToFReg(value_a,0);
-                LoadSymPtrIntoReg("Bit4BitF64ToU64",0);
-                PushIRReg(ast->typecast.to_type,idx=GetFreeIReg);
-                jit_prepare(Compiler.jit);
-                jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
-                jit_callr(Compiler.jit,jit_R(0));
-                jit_retval(Compiler.jit,jit_R(idx));
-            }
-            Free(value_a);
-        }
-    } else if(IsInteger(Compiler.stack->type2)) {
-        if(IsF64(ast->typecast.to_type)) {
-            if(FoldIRInt) {
-                PopIRValue(&value_a);
-                PushIRFlt(value_a->int(F64));
-            } else {
-                PopIRValue(&value_a);
-                value_a=MoveToReg(value_a,0);
-                LoadSymPtrIntoReg("Bit4BitU64ToF64",0);
-                PushIRFReg(ast->typecast.to_type,idx=GetFreeFReg);
-                jit_prepare(Compiler.jit);
-                jit_putargr(Compiler.jit,jit_R(value_a->reg));
-                jit_callr(Compiler.jit,jit_R(0));
-                jit_fretval(Compiler.jit,jit_FR(idx),8);
-            }
-            Free(value_a);
-        } else if(IsInteger(ast->typecast.to_type)) {
-            Compiler.stack->type2=ast->typecast.to_type;
-        }
-    }
     break;
     case AST_FUNC_CALL:
-    CompileAST(ast->func_call.base,,TRUE);
-    value_a=IRValueClone(Compiler.stack);
-    if(IsPtrType(value_a->type2)) {
-        type1=DerefedType(value_a->type2);
-    } else {
-        if(value_a->type==IRV_INDIRX) {
-            value_a->reg=value_a->indirx.reg;
-            value_a->type=IRV_REG;
-        }
-        type1=value_a->type2;
-    }
+    type1=AssignTypeToNode(ast->func_call.base,,TRUE);
+    if(IsPtrType(type1))
+        type1=DerefedType(type1);
     cnt=MSize(type1->arg_types)/sizeof(CType*);
-    for(idx=0;idx!=cnt;idx++) {
-        if(MSize(ast->func_call.args)/sizeof(AST*)>idx&&ast->func_call.args[idx]) {
+    idx=MaxI64(cnt,MSize(ast->func_call.args)/sizeof(AST*));
+    if(type1->has_vargs)
+        ++idx,++cnt;
+    if(IsF64(AssignTypeToNode(ast)))
+        op1=JIT_FCALL(Compiler.jit,idx,cnt); //Floating point version
+    else
+        op1=JIT_FUNC_CALL(Compiler.jit,idx,cnt);
+    cnt=MaxI64(MSize(type1->arg_types)/sizeof(CType*),idx);
+    if(type1->has_vargs) {
+        offset=0;
+        cnt=MSize(ast->func_call.args)/sizeof(AST*);
+        for(idx=cnt-1;idx>=MSize(type1->arg_types)/sizeof(CType*);idx--)
             CompileAST(ast->func_call.args[idx]);
-            PopIRValue(&fargs[idx]);
-            if(IsF64(type1->arg_types[idx])) {
-                fargs[idx]=MoveToFReg(fargs[idx],0);
-            }else
-                fargs[idx]=MoveToReg(fargs[idx],0);
-            fargs[idx].last=Compiler.stack;
-            Compiler.stack=fargs[idx];
+        //!!! Push the argc as per TempleOS ABI
+        JIT_I64(Compiler.jit,cnt-idx-1);
+    } 
+    cnt=MSize(type1->arg_types)/sizeof(CType*);
+    for(idx=cnt-1;idx>=0;idx--) {
+        if(MSize(ast->func_call.args)/sizeof(AST*)>idx&&ast->func_call.args[idx]) {
+            if(IsF64(type1->arg_types[idx])!=IsF64(AssignTypeToNode(ast->func_call.args[idx]))) {
+                if(IsF64(type1->arg_types[idx]))
+                    JIT_FPOS(Compiler.jit);
+                else 
+                    JIT_POSI(Compiler.jit);
+            }
+            CompileAST(ast->func_call.args[idx]);
         } else {
             if(type1->arg_values[idx]) {
                 if(type1->arg_values[idx]==&Lastclass) {
@@ -5969,28 +4671,19 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
                         }
                     }
                     PushIRString(type2->str,MSize(type2->str));
-                    fargs[idx]=Compiler.stack;
                 } else if(!Compiler.aot_mode) {
                     if(IsF64(type1->arg_types[idx])) {
-                        PushIRFReg(GetType("F64"),GetFreeFReg);
-                        jit_fmovi(Compiler.jit,jit_FR(Compiler.stack->reg),type1->arg_values[idx][0](F64));
-                        fargs[idx]=Compiler.stack;
+                        JIT_F64(Compiler.jit,type1->arg_values[idx][0](F64));
                     } else {
-                        PushIRReg(type1->arg_types[idx],GetFreeIReg);
-                        jit_movi(Compiler.jit,jit_R(Compiler.stack->reg),type1->arg_values[idx][0]);
-                        fargs[idx]=Compiler.stack;
+                        JIT_I64(Compiler.jit,type1->arg_values[idx][0]);
                     }
                 } else if(Compiler.aot_mode) {
                     if(IsF64(type1->arg_types[idx])) {
-                        PushIRFReg(GetType("F64"),GetFreeFReg);
-                        LoadSymPtrIntoReg(type1->aot_arg_names[idx],0);
-                        jit_fldr(Compiler.jit,jit_FR(Compiler.stack->reg),jit_R(0),8);
-                        fargs[idx]=Compiler.stack;
+                        JIT_FDEREF(Compiler.jit);
+                        LoadSymPtr(type1->aot_arg_names[idx]);
                     } else {
-                        PushIRReg(type1->arg_types[idx],GetFreeIReg);
-                        LoadSymPtrIntoReg(type1->aot_arg_names[idx],0);
-                        jit_ldr(Compiler.jit,jit_R(Compiler.stack->reg),jit_R(0),8);
-                        fargs[idx]=Compiler.stack;
+                        JIT_DEREF(Compiler.jit,,8);
+                        LoadSymPtr(type1->aot_arg_names[idx]);
                     }
                 }
             } else {
@@ -5999,222 +4692,133 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
             }
         }
     }
-    cnt=MSize(type1->arg_types)/sizeof(CType*);
-    for(;idx<cnt;idx++) {
-        if(type1->arg_values[idx]==&Lastclass) {
-            if(ast->func_call.args[idx-1])
-                type2=ast->func_call.args[idx-1]->type2;
-            else
-                type2=type1->arg_types[idx-1];
-            lc_type2:
-            switch(type2->type) {
-                case HTT_ARRAY_TYPE:
-                type2=DerefedType(type2);
-                goto lc_type2;
-                case HTT_FUNC_TYPE:
-                type2=type2->ret_type;
-                goto lc_type2;
-                default:
-                if(type2->star_cnt) {
-                    type2-=type2->star_cnt;
-                    goto lc_type2;
-                }
-                }
-            PushIRString(type2->str,MSize(type2->str));
-        } else if(!Compiler.aot_mode) {
-            if(IsF64(type1->arg_types[idx])) {
-                PushIRFReg(type1->arg_types[idx],GetFreeFReg);
-                jit_fmovi(Compiler.jit,jit_FR(Compiler.stack->reg),type1->arg_values[idx][0](F64));;
-            } else {
-                PushIRReg(type1->arg_types[idx],GetFreeIReg);
-                jit_movi(Compiler.jit,jit_R(Compiler.stack->reg),type1->arg_values[idx][0]);
-            }
-        } else if(Compiler.aot_mode) {
-            if(IsF64(type1->arg_types[idx])) {
-                PushIRFReg(GetType("F64"),GetFreeFReg);
-                LoadSymPtrIntoReg(type1->aot_arg_names[idx],0);
-                jit_fldr(Compiler.jit,jit_FR(Compiler.stack->reg),jit_R(0),8);
-                fargs[idx]=Compiler.stack;
-            } else {
-                PushIRReg(type1->arg_types[idx],GetFreeIReg);
-                LoadSymPtrIntoReg(type1->aot_arg_names[idx],0);
-                jit_ldr(Compiler.jit,jit_R(Compiler.stack->reg),jit_R(0),8);
-                fargs[idx]=Compiler.stack;
-            }
-        }
-        fargs[idx]=Compiler.stack;
-    }
-    if(type1->has_vargs) {
-        offset=0;
-        cnt=MSize(ast->func_call.args)/sizeof(AST*);
-        //Look here at the meta sponge,he has something youll want to hear
-        //   _______
-        //  /^     ^\
-        // | *-[w]-* | <lo is used to point to the register containing argv>
-        // |         |
-        // |_/     \-|
-        //  \_______/
-        //
-        lo=jit_allocai(Compiler.jit,8*(cnt-idx));
-        for(;idx!=cnt;idx++,++offset) {
-            CompileAST(ast->func_call.args[idx]);
-            PopIRValue(&fargs[idx]);
-            if(IsF64(ast->func_call.args[idx]->type2)) {
-                fargs[idx]=MoveToFReg(fargs[idx],0);
-                jit_fstxi(Compiler.jit,lo+offset*8,R_FP,jit_FR(fargs[idx]->reg),8);
-            } else {
-                fargs[idx]=MoveToReg(fargs[idx],0);
-                jit_stxi(Compiler.jit,lo+offset*8,R_FP,jit_R(fargs[idx]->reg),8);
-            }
-        }
-        //Look at metasponge above
-        jit_addi(Compiler.jit,jit_R(offset=GetFreeIReg),R_FP,lo);
-        lo=offset;
-    }
-    jit_prepare(Compiler.jit);
-    cnt=MSize(type1->arg_types)/sizeof(CType*);
-    for(idx=0;idx<cnt;idx++) {
-        if(fargs[idx].type==IRV_FREG) {
-            jit_fputargr(Compiler.jit,jit_FR(fargs[idx]->reg),8);
-        } else {
-            jit_putargr(Compiler.jit,jit_R(fargs[idx]->reg));
-        }
-    }
-    if(type1->has_vargs) {
-        jit_putargi(Compiler.jit,MSize(ast->func_call.args)/sizeof(AST*)-cnt);
-        jit_putargr(Compiler.jit,jit_R(lo));
-    }
-    idx=cnt;
-    while(--idx>=0)
-        PopIRValue;
-    PopIRValue;
-    value_a=MoveToReg(value_a,0);
-    jit_callr(Compiler.jit,jit_R(value_a->reg));
-    Free(value_a);
-    if(IsF64(type1(CType*)->ret_type)) {
-        PushIRFReg(GetType("F64"),GetFreeFReg);
-        jit_fretval(Compiler.jit,jit_FR(Compiler->stack->reg),8);
-    } else if(IsInteger(type1->ret_type)) {
-        PushIRReg(type1->ret_type,GetFreeIReg);
-        jit_retval(Compiler.jit,jit_R(Compiler->stack->reg));
-    }
-    Compiler.stack->type2=type1->ret_type;
+    if(IsPtrType(ast->func_call.base->type2))
+        CompileAST(ast->func_call.base,,TRUE);
+    else
+        CompileAST(ast->func_call.base,,TRUE,TRUE);
     break;
     case AST_IF:
+    jit_rpnIf(Compiler.jit);
     CompileAST(ast->if_stmt->cond);
-    PopIRValue(&value_a);
-    value_a=MoveToReg(value_a,0);
-    op1=jit_beqi(Compiler.jit,NULL,jit_R(value_a->reg),0);
-    Free(value_a);
-    if(ast->if_stmt->body) {
-        CompileAstWithBreakpoint(ast->if_stmt->body);
-        PopIRValue;
-    }
-    if(ast->if_stmt->el) {
-        op2=jit_jmpi(Compiler.jit,NULL);
-        jit_patch(Compiler.jit,op1);
-        CompileAstWithBreakpoint(ast->if_stmt->el);
-        PopIRValue;
-        jit_patch(Compiler.jit,op2);
-    } else {
-        jit_patch(Compiler.jit,op1);
-    }
-    PushIRInt(0);
+    if(ast->if_stmt.body)
+        CompileAstWithBreakpoint(ast->if_stmt.body);
+    else
+        JIT_I64(Compiler.jit,-1);
+    if(ast->if_stmt.el)
+        CompileAstWithBreakpoint(ast->if_stmt.el);
+    else
+        JIT_I64(Compiler.jit,-1);
+    
     break;
+    //TODO add breakpoint
     case AST_FOR:
+    op4=jit_rpnBodyStart(Compiler.jit);
     if(ast->for_stmt->init)
-        CompileAstWithBreakpoint(ast->for_stmt->init),PopIRValue;
-    op1=jit_get_label(Compiler.jit);
-    if(ast->for_stmt->cond) {
-        CompileAstWithBreakpoint(ast->for_stmt->cond);
-        PopIRValue(&value_a);
-        value_a=MoveToReg(value_a,0);
-        op2=jit_beqi(Compiler.jit,NULL,jit_R(value_a->reg),0);
-    } else {
-        //Nothing to do
-    }
-    Free(value_a);
+        CompileAST(ast->for_stmt->init);
     breaks=MAlloc(sizeof(*breaks));
     breaks->breaks=VectorNew;
     breaks->last=Compiler.cur_breaks;
     Compiler.cur_breaks=breaks;
-    CompileAST(ast->for_stmt->body);
-    Compiler.cur_breaks=breaks->last;
-    PopIRValue;
-    if(ast->for_stmt->inc)
-        CompileAST(ast->for_stmt->inc),PopIRValue;
-    jit_jmpi(Compiler.jit,op1);
     if(ast->for_stmt->cond) {
-        jit_patch(Compiler.jit,op2);
+        op1=jit_rpnBodyStart(Compiler.jit);
+        if(Compiler.debug_mode)
+            CreateBreakpointFor(ast->for_stmt->cond);
+        jit_rpnIf(Compiler.jit);
+        CompileAST(ast->for_stmt->cond);
+        //t
+        op2=jit_rpnBodyStart(Compiler.jit);
+        if(ast->for_stmt->body)
+            CompileAstWithBreakpoint(ast->for_stmt->body);
+        if(ast->for_stmt.inc)
+            CompileAstWithBreakpoint(ast->for_stmt->inc);
+        JIT_JMP(Compiler.jit,op1);
+        jit_rpnBodyEnd(Compiler.jit,op2);
+        //f
+        JIT_I64(Compiler.jit,-1);
+        jit_rpnBodyEnd(Compiler.jit,op1);
+    } else {
+        op1=JIT_LABEL(Compiler.jit);
+        if(ast->for_stmt->body)
+            CompileAST(ast->for_stmt->body);
+        if(ast->for_stmt->inc)
+            CompileAST(ast->for_stmt->inc);
+        JIT_JMP(Compiler.jit,op1);
     }
+    Compiler.cur_breaks=breaks->last;
     while(breaks->breaks->size) {
         op3=VectorPop(breaks->breaks);
-        jit_patch(Compiler.jit,op3);
+        JIT_PATCH(Compiler.jit,op3);
     }
     VectorFree(breaks->breaks);
     Free(breaks);
-    PushIRInt(0);
+    jit_rpnBodyEnd(Compiler.jit,op4);
     break;
     case AST_DO:
-    op1=jit_get_label(Compiler.jit);
+    op1=op4=jit_rpnBodyStart(Compiler.jit);
     breaks=MAlloc(sizeof(*breaks));
     breaks->breaks=VectorNew;
     breaks->last=Compiler.cur_breaks;
     Compiler.cur_breaks=breaks;
+    //TODO add breakpoints
     CompileAstWithBreakpoint(ast->do_stmt.body);
-    PopIRValue;
     Compiler->cur_breaks=breaks->last;
-    CompileAstWithBreakpoint(ast->do_stmt.cond);
-    PopIRValue(&value_a);
-    value_a=MoveToReg(value_a,0);
-    jit_bnei(Compiler.jit,op1,jit_R(value_a->reg),0);
-    Free(value_a);
+    if(Compiler.debug_mode)
+        CreateBreakpointFor(ast->do_stmt->cond);
+    jit_rpnIf(Compiler.jit);
+    CompileAST(ast->do_stmt.cond);
+    //t    
+    JIT_JMP(Compiler.jit,op1);
+    //f
+    JIT_I64(Compiler.jit,-1);
+    
     while(breaks->breaks->size) {
         op3=VectorPop(breaks->breaks);
-        jit_patch(Compiler.jit,op3);
+        JIT_PATCH(Compiler.jit,op3);
     }
     Compiler.cur_breaks=breaks->last;
     VectorFree(breaks->breaks);
     Free(breaks);
-    PushIRInt(0);
+    jit_rpnBodyEnd(Compiler.jit,op4);
     break;
     case AST_WHILE:
-    op1=jit_get_label(Compiler.jit);
-    CompileAstWithBreakpoint(ast->while_stmt.cond);
-    PopIRValue(&value_a);
-    value_a=BoolifyValue(value_a);
-    op2=jit_beqi(Compiler.jit,NULL,jit_R(value_a->reg),0);
-    Free(value_a);
+    op4=jit_rpnBodyStart(Compiler.jit);
+    //TODO add breakpoints
+    op1=op4;
+    if(Compiler.debug_mode)
+        CreateBreakpointFor(ast->while_stmt->cond);
+    jit_rpnIf(Compiler.jit);
+    CompileAST(ast->while_stmt.cond);
     breaks=MAlloc(sizeof(*breaks));
     breaks->breaks=VectorNew;
     breaks->last=Compiler.cur_breaks;
     Compiler.cur_breaks=breaks;
+    //t
+    op2=jit_rpnBodyStart(Compiler.jit);
     CompileAstWithBreakpoint(ast->while_stmt.body);
-    PopIRValue;
-    jit_jmpi(Compiler.jit,op1);
+    JIT_JMP(Compiler.jit,op1);
+    jit_rpnBodyEnd(Compiler.jit,op2);
+    //f
+    JIT_I64(Compiler.jit,-1);
     Compiler.cur_breaks=breaks->last;
-    jit_patch(Compiler.jit,op2);
     while(breaks->breaks->size) {
         op3=VectorPop(breaks->breaks);
-        jit_patch(Compiler.jit,op3);
+        JIT_PATCH(Compiler.jit,op3);
     }
     VectorFree(breaks->breaks);
     Free(breaks);
-    PushIRInt(0);
+    jit_rpnBodyEnd(Compiler.jit,op4);
     break;
     case AST_META_DATA:
     break;
     case AST_SWITCH:
-    CompileAstWithBreakpoint(ast->switch_stmt.cond); //Conditon
-    value_a=IRValueClone(Compiler.stack);
-    value_a=MoveToReg(value_a,0);
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    value_c=IRValueClone(value_a);
-    //Make a backup register for our condition
-    PushIRReg(HashFind("I64i",Compiler.globals),GetFreeIReg); //subswit
-    Assign(Compiler.stack,value_a);
-    value_a=IRValueClone(Compiler.stack);
+    op5=jit_rpnBodyStart(Compiler.jit);
+    //TODO add breakpoints
+    if(Compiler.debug_mode)
+        CreateBreakpointFor(ast->switch_stmt->cond);
+    reg_a=GetFreeIReg;
+    JIT_MOV(Compiler.jit);
+    JIT_R(Compiler.jit,reg_a);
+    CompileAST(ast->switch_stmt.cond); //Conditon
     swit_table=MAlloc(sizeof(*swit_table));
     ScanForCases(ast->switch_stmt.body,&lo,&hi,&has_dft);
     table=__CreateCaseTable(ast->switch_stmt.body);
@@ -6226,61 +4830,57 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     breaks->last=Compiler.cur_breaks;
     Compiler.cur_breaks=breaks;
     //
-    op1=jit_blti(Compiler.jit,NULL,jit_R(value_a->reg),lo);
-    op2=jit_bgti(Compiler.jit,NULL,jit_R(value_a->reg),hi);
-    swit_table->dft1=op1,swit_table->dft2=op2;
-    swit_table->subswit_var_offset=jit_allocai(Compiler.jit,8);
-    jit_movi(Compiler.jit,jit_R(0),0);
-    jit_stxi(Compiler.jit,swit_table->subswit_var_offset,R_FP,jit_R(0),8);
-    swit_table->enter_point=jit_get_label(Compiler.jit);
+    jit_rpnIf(Compiler.jit);
+    JIT_ORI(Compiler.jit);
+    JIT_GTI(Compiler.jit);
+    JIT_R(Compiler.jit,reg_a);
+    JIT_I64(Compiler.jit,hi);
+    JIT_LTI(Compiler.jit);
+    JIT_R(Compiler.jit,reg_a);
+    JIT_I64(Compiler.jit,lo);
+    //t
+    swit_table->dft1=JIT_JMP(Compiler.jit,NULL);
+    //f
+    JIT_I64(Compiler.jit,-1);
+    swit_table->subswit_var_offset=JIT_ALLOCAI(Compiler.jit,8);
+    JIT_MOV(Compiler.jit);
+    JIT_DEREF(Compiler.jit,swit_table->subswit_var_offset,8);
+    JIT_RBP(Compiler.jit);
+    JIT_I64(Compiler.jit,0);
     swit_table->table=MAlloc(sizeof(U0*)*(hi-lo+1));
     swit_table->ast_table=table;
-    Assign(value_a,value_c);
-    jit_subi(Compiler.jit,jit_R(value_a->reg),jit_R(value_a->reg),lo);
+    JIT_PRE_DECI(Compiler.jit,lo);
+    JIT_R(Compiler.jit,reg_a);
+    swit_table->enter_point=JIT_LABEL(Compiler.jit);
     //
-    
-    op4=table[idx=hi-lo];
-    for(idx;idx>=0;) {
-        idx2=idx;
-        while(idx>=0&&op4==table[idx]) {
-            --idx;
-        }
-        op3=jit_bgti(Compiler.jit,NULL,jit_R(value_a->reg),idx);
-        swit_table->table[idx2]=op3;
-        if(idx!=-1) op4=table[idx];
-    }
+    op2=JIT_JMP_TABLE(Compiler.jit,hi-lo+1);
+    JIT_R(Compiler.jit,reg_a);
     //
     CompileAstWithBreakpoint(ast->switch_stmt.body);
-
     if(!has_dft) {
-        jit_patch(Compiler.jit,op1);
-        jit_patch(Compiler.jit,op2);
+        op4=JIT_PATCH(Compiler.jit,swit_table->dft1);
         idx=hi-lo+1;
         while(--idx>=0) {
-            if((!table[idx])&&swit_table->table[idx])
-                jit_patch(Compiler.jit,swit_table->table[idx]);
-            else if(table[idx]&&table[idx]->type==AST_DFT&&swit_table->table[idx])
-                jit_patch(Compiler.jit,swit_table->table[idx]);
+            if((!table[idx])&&!swit_table->table[idx])
+                swit_table->table[idx]=op4;
         }
     }
     Free(table);
-    PopIRValue; //Body
-    PopIRValue; //Condition clone
-    PopIRValue; //Condition
-    PopIRValue;
     Compiler.cur_breaks=breaks->last;
     Compiler.swit_table=swit_table->last;
+    MemCpy(op2->jmp_table,swit_table->table,MSize(swit_table->table));
     Free(swit_table->table);
     Free(swit_table);
     while(breaks->breaks->size) {
         op1=VectorPop(breaks->breaks);
-        jit_patch(Compiler.jit,op1);
+        JIT_PATCH(Compiler.jit,op1);
     }
     VectorFree(breaks->breaks);
-    Free(breaks),Free(value_a),Free(value_c);
-    PushIRInt(0);
+    Free(breaks);
+    jit_rpnBodyEnd(Compiler.jit,op5);
     break;
     case AST_SUBSWIT:
+    //TODO add breakpoints
     if(!Compiler.swit_table) {
         "STRAY SUBSIW;\n";
         throw('Compile');
@@ -6288,110 +4888,102 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     breaks=MAlloc(sizeof(*breaks));
     breaks->breaks=VectorNew;
     breaks->last=Compiler.cur_breaks;
-    breaks->start_code_label=jit_get_label(Compiler.jit);
+    breaks->start_code_label=JIT_LABEL(Compiler.jit);
     //
     Compiler.cur_breaks=breaks;
-    jit_movi(Compiler.jit,jit_R(0),1);
-    jit_stxi(Compiler.jit,Compiler.swit_table->subswit_var_offset,R_FP,jit_R(0),8);
-    if(ast->sub_swit.start_code) {
+    JIT_MOV(Compiler.jit);
+    JIT_DEREF(Compiler.jit,Compiler.swit_table->subswit_var_offset);
+    JIT_RBP(Compiler.jit);
+    JIT_I64(Compiler.jit,1);
+    if(ast->sub_swit.start_code)
         CompileAstWithBreakpoint(ast->sub_swit.start_code);
-        PopIRValue;
-    }
-    jit_jmpi(Compiler.jit,Compiler.swit_table->enter_point);
-    if(ast->sub_swit.body) {
+    JIT_JMP(Compiler.jit,Compiler.swit_table->enter_point);
+    if(ast->sub_swit.body)
         CompileAstWithBreakpoint(ast->sub_swit.body);
-        PopIRValue;
-    }
     Compiler.cur_breaks=breaks->last;
     while(breaks->breaks->size) {
         op1=VectorPop(breaks->breaks);
-        jit_patch(Compiler.jit,op1);
+        JIT_PATCH(Compiler.jit,op1);
     }
     VectorFree(breaks->breaks);
     Free(breaks);
-    PushIRInt(0);
     break;
     case AST_BREAK:
-    VectorPush(Compiler.cur_breaks->breaks,jit_jmpi(Compiler.jit,NULL));
-    PushIRInt(0);
+    VectorPush(Compiler.cur_breaks->breaks,JIT_JMP(Compiler.jit,NULL));
     break;
     case AST_DFT:
-    jit_patch(Compiler.jit,Compiler.swit_table->dft1);
-    jit_patch(Compiler.jit,Compiler.swit_table->dft2);
+    op4=JIT_PATCH(Compiler.jit,Compiler.swit_table->dft1);
     cnt=Compiler.swit_table->hi-Compiler.swit_table->lo+1;
     while(--cnt>=0) {
         if(Compiler.swit_table->ast_table[cnt]==ast)
-            if(Compiler.swit_table->table[cnt])
-                jit_patch(Compiler.jit,Compiler.swit_table->table[cnt]);
+            Compiler.swit_table->table[cnt]=op4;
     }
     //Check if in subswit
     if(Compiler.cur_breaks->start_code_label) {
-        jit_ldxi(Compiler.jit,jit_R(0),R_FP,Compiler.swit_table->subswit_var_offset,8);
-        jit_beqi(Compiler.jit,Compiler.cur_breaks->start_code_label,jit_R(0),0);
+        jit_rpnIf(Compiler.jit);
+        JIT_DEREF(Compiler.jit,Compiler.swit_table->subswit_var_offset);
+        JIT_RBP(Compiler.jit);
+        //t
+        JIT_I64(Compiler.jit,-1);
+        //f
+        JIT_JMP(Compiler.jit,Compiler.cur_breaks->start_code_label);
     }
-    PushIRInt(0);
     break;
     case AST_CASE:
+    op4=JIT_LABEL(Compiler.jit);
     lo=ast->cs._li;
     hi=ast->cs._hi;
-    for(;lo<=hi;lo++) {
-        if(Compiler.swit_table->table[lo-Compiler.swit_table->lo])
-            jit_patch(Compiler.jit,Compiler.swit_table->table[lo-Compiler.swit_table->lo]);
-    }
+    for(;lo<=hi;lo++)
+        Compiler.swit_table->table[lo-Compiler.swit_table->lo]=op4;
     //Check if in subswit
     if(Compiler.cur_breaks->start_code_label) {
-        jit_ldxi(Compiler.jit,jit_R(0),R_FP,Compiler.swit_table->subswit_var_offset,8);
-        jit_beqi(Compiler.jit,Compiler.cur_breaks->start_code_label,jit_R(0),0);
+        jit_rpnIf(Compiler.jit);
+        JIT_DEREF(Compiler.jit,Compiler.swit_table->subswit_var_offset);
+        JIT_RBP(Compiler.jit);
+        //t
+        JIT_I64(Compiler.jit,-1);
+        //f
+        JIT_JMP(Compiler.jit,Compiler.cur_breaks->start_code_label);
     }
-    PushIRInt(0);
     break;
     case AST_RETURN:
     if(!Compiler.ret_type) {
         "NO REUTRN TYPE;\n";
         throw('Compile');
     }
-    if(IsInteger(Compiler.ret_type)) {
-        if(!ast->unopArg) {
-            if(Compiler.debug_mode) {
-                jit_prepare(Compiler.jit);
-                jit_call(Compiler.jit,&LeaveFunc);
-            }
-            jit_reti(Compiler.jit,0);
-            PushIRInt(0);
-            break;
+    if(Compiler.debug_mode) {
+        lo=GetFreeIReg;
+        
+        JIT_MOV(Compiler.jit);
+        JIT_R(Compiler.jit,lo);
+        if(ast->unopArg) {
+            if(IsF64(Compiler.ret_type))
+                JIT_TYPECAST(Compiler.jit);
+            CompileAST(ast->unopArg);
+        } else {
+            JIT_I64(Compiler.jit,0);
         }
-        CompileAST(ast->unopArg);
-        PopIRValue(&value_a);
-        value_a=MoveToReg(value_a,0);
-        if(Compiler.debug_mode) {
-            jit_prepare(Compiler.jit);
-            jit_call(Compiler.jit,&LeaveFunc);
-        }
-        jit_retr(Compiler.jit,jit_R(value_a->reg));
-    } else if(IsF64(Compiler.ret_type)) {
-        if(!ast->unopArg) {
-            if(Compiler.debug_mode) {
-                jit_prepare(Compiler.jit);
-                jit_call(Compiler.jit,&LeaveFunc);
-            }
-            jit_freti(Compiler.jit,0.0,8);
-            PushIRInt(0);
-            break;
-        }
-        CompileAstWithBreakpoint(ast->unopArg);
-        PopIRValue(&value_a);
-        value_a=MoveToFReg(value_a,0);
-        if(Compiler.debug_mode) {
-            jit_prepare(Compiler.jit);
-            jit_call(Compiler.jit,&LeaveFunc);
-        }
-        jit_fretr(Compiler.jit,jit_FR(value_a->reg),8);
+        //
+        JIT_FUNC_CALL(Compiler.jit,0);
+        JIT_I64(Compiler.jit,&LeaveFunc);
+        //
+        JIT_RET(Compiler.jit);
+        JIT_R(Compiler.jit,lo);
+        break;
     }
-    PushIRInt(0);
+    if(!ast->unopArg) {
+        JIT_RETI(Compiler.jit);
+        JIT_I64(Compiler.jit,0);
+    } else if(IsInteger(Compiler.ret_type)) {
+        JIT_RETI(Compiler.jit);
+        CompileAST(ast->unopArg);
+    } else if(IsF64(Compiler.ret_type)) {
+        JIT_FRET(Compiler.jit);
+        CompileAST(ast->unopArg);
+    }
     break;
     case AST_TYPE:
     //What do you want me to do
-    PushIRInt(0);
     break;
     case AST_GOTO:
     lab=HashFind(ast->name,Compiler.labels);
@@ -6404,11 +4996,10 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
         throw('Compile');
     }
     if(lab->op) {
-        jit_jmpi(Compiler.jit,lab->op);
+        JIT_JMP(Compiler.jit,lab->op);
     } else {
-        VectorPush(lab->refs,jit_jmpi(Compiler.jit,NULL));
+        VectorPush(lab->refs,JIT_JMP(Compiler.jit,NULL));
     }
-    PushIRInt(0);
     break;
     case AST_LABEL:
     lab=HashFind(ast->name,Compiler.labels);
@@ -6420,198 +5011,260 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
         "NONO_ALBLE\n";
         throw('Compile');
     }
-    jit_dump_ptr(Compiler.jit,&lab->ptr);
+    JIT_DUMP_PTR(Compiler.jit,&lab->ptr);
     while(lab->refs->size) {
         op1=VectorPop(lab->refs);
-        jit_patch(Compiler.jit,op1);
+        JIT_PATCH(Compiler.jit,op1);
     }
-    lab->op=jit_get_label(Compiler.jit);
-    PushIRInt(0);
+    lab->op=JIT_LABEL(Compiler.jit);
     break;
     case AST_TRY:
     //If we are debugging,make a spot to store our call_stack depth,because I am sick of trying to make a SEH compliant things
     if(Compiler.debug_mode) {
-        lo=jit_allocai(Compiler.jit,8);
-        jit_prepare(Compiler.jit);
-        jit_call(Compiler.jit,&CallStackSize);
-        jit_retval(Compiler.jit,jit_R(0));
-        jit_stxi(Compiler.jit,lo,R_FP,jit_R(0),8);
+        lo=GetFreeIReg;
+        JIT_MOV(Compiler.jit);
+        JIT_R(Compiler.jit,lo);
+        JIT_FUNC_CALL(Compiler.jit,0);
+        JIT_I64(Compiler.jit,&CallStackSize);
     }
-    LoadSymPtrIntoReg("EnterTry",0);
-    jit_prepare(Compiler.jit);
-    jit_callr(Compiler.jit,jit_R(0));
-    jit_retval(Compiler.jit,jit_R(0));
-    LoadSymPtrIntoReg("HCSetJmp",1);
-    jit_prepare(Compiler.jit);
-    jit_putargr(Compiler.jit,jit_R(0));
-    jit_putargi(Compiler.jit,1);
-    jit_callr(Compiler.jit,jit_R(1));
-    jit_retval(Compiler.jit,jit_R(0));
-    op1=jit_bnei(Compiler.jit,NULL,jit_R(0),0);
-    CompileAstWithBreakpoint(ast->try_block.body);
-    PopIRValue;
-    LoadSymPtrIntoReg("PopTryFrame",0);
-    jit_prepare(Compiler.jit);
-    jit_callr(Compiler.jit,jit_R(0));
-    op2=jit_jmpi(Compiler.jit,NULL);
-    jit_patch(Compiler.jit,op1);
+    jit_rpnIf(Compiler.jit);
+    JIT_FUNC_CALL(Compiler.jit,1);
+    JIT_FUNC_CALL(Compiler.jit,0);
+    LoadSymPtr("EnterTry");
+    LoadSymPtr("HCSetJmp");
+    //t
+    op1=jit_rpnBodyStart(Compiler.jit);
     if(Compiler.debug_mode) {
-        jit_ldxi(Compiler.jit,jit_R(0),R_FP,lo,8);
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,jit_R(0));
-        jit_call(Compiler.jit,&SetCallStackSize);
+        JIT_FUNC_CALL(Compiler.jit,1);
+        JIT_R(Compiler.jit,lo);
+        JIT_I64(Compiler.jit,&SetCallStackSize);
     }
     CompileAstWithBreakpoint(ast->try_block.cat);
-    PopIRValue;
-    LoadSymPtrIntoReg("ExitCatch",0);
-    jit_prepare(Compiler.jit);
-    jit_callr(Compiler.jit,jit_R(0));
-    jit_patch(Compiler.jit,op2);
-    PushIRInt(0);
+    JIT_FUNC_CALL(Compiler.jit,0);
+    LoadSymPtr("ExitCatch");
+    jit_rpnBodyEnd(Compiler.jit,op1);
+    //f
+    op1=jit_rpnBodyStart(Compiler.jit);
+    CompileAstWithBreakpoint(ast->try_block.body);
+    JIT_FUNC_CALL(Compiler.jit,0);
+    LoadSymPtr("PopTryFrame");
+    jit_rpnBodyEnd(Compiler.jit,op1);
     break;
     case AST_LASTCLASS:
     //Is symbolic
     break;
     case AST_RANGE:
-    to_patch=VectorNew;
-    PushIRReg(GetType("I64i"),hi=GetFreeIReg);
-    jit_movi(Compiler.jit,jit_R(hi),1);
-    value_c=Compiler.stack;
     cnt=MSize(ast->range.values)/sizeof(AST*);
-    CompileAST(ast->range.values[0]);
-    op1=NULL;
-    for(idx=1;idx<cnt;idx++) {
-        if(op1) jit_patch(Compiler.jit,op1);
-        CompileAST(ast->range.values[idx]);
-        if(IsF64(Compiler.stack->last->type2)||IsF64(Compiler.stack->type2)) {
-            value_a=MoveToFReg(IRValueClone(Compiler.stack->last),0);
-            value_b=MoveToFReg(IRValueClone(Compiler.stack),1);
-            PopIRValue,PopIRValue;
+    if(cnt==2) {
+        idx=1;
+        if(IsF64(ast->range.values[idx-1]->type2)||IsF64(ast->range.values[idx]->type2)) {
             switch(ast->range.types[idx-1]) {
                 case AST_LT:
-                op1=jit_fbltr(Compiler.jit,NULL,jit_FR(value_a->reg),jit_FR(value_b->reg));
+                op1=JIT_FLT(Compiler.jit);
                 break;
                 case AST_GT:
-                op1=jit_fbgtr(Compiler.jit,NULL,jit_FR(value_a->reg),jit_FR(value_b->reg));
+                op1=JIT_FGT(Compiler.jit);
                 break;
                 case AST_LE:
-                op1=jit_fbler(Compiler.jit,NULL,jit_FR(value_a->reg),jit_FR(value_b->reg));
+                op1=JIT_FLE(Compiler.jit);
                 break;
                 case AST_GE:
-                op1=jit_fbger(Compiler.jit,NULL,jit_FR(value_a->reg),jit_FR(value_b->reg));
+                op1=JIT_FGE(Compiler.jit);
                 break;
             }
-            Free(value_a);
-            value_b->last=Compiler.stack;
-            Compiler.stack=value_b;
-        } else if(!IsSigned(Compiler.stack->last->type2)||!IsSigned(Compiler.stack->type2)) {
+        } else if(!IsSigned(ast->range.values[idx-1]->type2)||!IsSigned(ast->range.values[idx]->type2)) {
             //Types below 64bits are promoted so treat them as 64bit signed if small
-            if((Compiler.stack->last->type2->sz==8&&!IsSigned(Compiler.stack->last->type2))||(Compiler.stack->type2->sz==8&&!IsSigned(Compiler.stack->type2)))
+            if((ast->range.values[idx-1]->type2->sz==8&&!IsSigned(ast->range.values[idx-1]->type2))||(ast->range.values[idx]->type2->sz==8&&!IsSigned(ast->range.values[idx]->type2)))
                 ;
             else
                 goto cmp_signed;
-            value_a=MoveToReg(IRValueClone(Compiler.stack.last),0);
-            value_b=MoveToReg(IRValueClone(Compiler.stack),1);
-            PopIRValue,PopIRValue;
             switch(ast->range.types[idx-1]) {
                 case AST_LT:
-                op1=jit_bltr_u(Compiler.jit,NULL,jit_R(value_a->reg),jit_R(value_b->reg));
+                op1=JIT_LTU(Compiler.jit);
                 break;
                 case AST_GT:
-                op1=jit_bgtr_u(Compiler.jit,NULL,jit_R(value_a->reg),jit_R(value_b->reg));
+                op1=JIT_GTU(Compiler.jit);
                 break;
                 case AST_LE:
-                op1=jit_bler_u(Compiler.jit,NULL,jit_R(value_a->reg),jit_R(value_b->reg));
+                op1=JIT_LEU(Compiler.jit);
                 break;
                 case AST_GE:
-                op1=jit_bger_u(Compiler.jit,NULL,jit_R(value_a->reg),jit_R(value_b->reg));
+                op1=JIT_GEU(Compiler.jit);
                 break;
             }
-            Free(value_a);
-            value_b->last=Compiler.stack;
-            Compiler.stack=value_b;
         } else {
             cmp_signed:
-            value_a=MoveToReg(IRValueClone(Compiler.stack.last),0);
-            value_b=MoveToReg(IRValueClone(Compiler.stack),1);
-            PopIRValue,PopIRValue;
             switch(ast->range.types[idx-1]) {
                 case AST_LT:
-                op1=jit_bltr(Compiler.jit,NULL,jit_R(value_a->reg),jit_R(value_b->reg));
+                JIT_LTI(Compiler.jit);
                 break;
                 case AST_GT:
-                op1=jit_bgtr(Compiler.jit,NULL,jit_R(value_a->reg),jit_R(value_b->reg));
+                JIT_GTI(Compiler.jit);
                 break;
                 case AST_LE:
-                op1=jit_bler(Compiler.jit,NULL,jit_R(value_a->reg),jit_R(value_b->reg));
+                JIT_LEI(Compiler.jit);
                 break;
                 case AST_GE:
-                op1=jit_bger(Compiler.jit,NULL,jit_R(value_a->reg),jit_R(value_b->reg));
+                JIT_GEI(Compiler.jit);
                 break;
             }
-            Free(value_a);
-            value_b->last=Compiler.stack;
-            Compiler.stack=value_b;
         }
-        jit_movi(Compiler.jit,jit_R(hi),0);
-        VectorPush(to_patch,jit_jmpi(Compiler.jit,NULL));
+        CompileAST(ast->range.values[0]);
+        CompileAST(ast->range.values[1]);
+        break;
     }
-    jit_patch(Compiler.jit,op1);
+    //Check for floating point and if so,make a tempoary zone for the cloned flaoting point value
+    cnt=MSize(ast->range.values)/sizeof(AST*);
+    while(--cnt>=0) {
+        if(IsF64(AssignTypeToNode(ast->range.values[cnt]))) {
+            offset=JIT_ALLOCAI(Compiler.jit,16);
+            break;
+        }
+    }
+    to_patch=VectorNew;
+    hi=GetFreeIReg;
+    reg_a=GetFreeIReg;
+    reg_b=GetFreeIReg;
+    JIT_COMMAI(Compiler.jit);
+    op2=jit_rpnBodyStart(Compiler.jit);
+    JIT_MOV(Compiler.jit);
+    JIT_R(Compiler.jit,hi);
+    JIT_I64(Compiler.jit,1);
+    if(IsF64(AssignTypeToNode(ast->range.values[0]))) {
+        JIT_FMOV(Compiler.jit);
+        JIT_FDEREF(Compiler.jit,offset);
+        JIT_RBP(Compiler.jit);
+    } else {
+        JIT_MOV(Compiler.jit);
+        JIT_R(Compiler.jit,reg_a);
+    }
+    CompileAST(ast->range.values[0]);
+    op1=NULL;
+    cnt=MSize(ast->range.values)/sizeof(AST*);
+    for(idx=1;idx<cnt;idx++) {
+        jit_rpnIf(Compiler.jit);
+        is_flt_style=FALSE;
+        if(IsF64(ast->range.values[idx-1]->type2)||IsF64(ast->range.values[idx]->type2)) {
+            is_flt_style=TRUE;
+            switch(ast->range.types[idx-1]) {
+                case AST_LT:
+                op1=JIT_FGT(Compiler.jit);
+                break;
+                case AST_GT:
+                op1=JIT_FLT(Compiler.jit);
+                break;
+                case AST_LE:
+                op1=JIT_FGE(Compiler.jit);
+                break;
+                case AST_GE:
+                op1=JIT_FLE(Compiler.jit);
+                break;
+            }
+        } else if(!IsSigned(ast->range.values[idx-1]->type2)||!IsSigned(ast->range.values[idx]->type2)) {
+            //Types below 64bits are promoted so treat them as 64bit signed if small
+            if((ast->range.values[idx-1]->type2->sz==8&&!IsSigned(ast->range.values[idx-1]->type2))||(ast->range.values[idx]->type2->sz==8&&!IsSigned(ast->range.values[idx]->type2)))
+                ;
+            else
+                goto cmp_signed0;
+            switch(ast->range.types[idx-1]) {
+                case AST_LT:
+                op1=JIT_GTU(Compiler.jit);
+                break;
+                case AST_GT:
+                op1=JIT_LTU(Compiler.jit);
+                break;
+                case AST_LE:
+                op1=JIT_GEU(Compiler.jit);
+                break;
+                case AST_GE:
+                op1=JIT_LEU(Compiler.jit);
+                break;
+            }
+        } else {
+            cmp_signed0:
+            switch(ast->range.types[idx-1]) {
+                case AST_LT:
+                op1=JIT_GTI(Compiler.jit);
+                break;
+                case AST_GT:
+                op1=JIT_LTI(Compiler.jit);
+                break;
+                case AST_LE:
+                op1=JIT_GEI(Compiler.jit);
+                break;
+                case AST_GE:
+                op1=JIT_LEI(Compiler.jit);
+                break;
+            }
+        }
+        if(!is_flt_style) {
+            //conditon
+            JIT_MOV(Compiler.jit);
+            JIT_R(Compiler.jit,reg_b);
+            CompileAST(ast->range.values[idx]);
+            JIT_R(Compiler.jit,reg_a);
+            //t
+            JIT_MOV(Compiler.jit);
+            JIT_R(Compiler.jit,reg_a);
+            JIT_R(Compiler.jit,reg_b);
+            //f
+            op3=jit_rpnBodyStart(Compiler.jit);
+            JIT_MOV(Compiler.jit);
+            JIT_R(Compiler.jit,hi);
+            JIT_I64(Compiler.jit,0);
+            VectorPush(to_patch,JIT_JMP(Compiler.jit,NULL));
+            jit_rpnBodyEnd(Compiler.jit,op3);
+        } else {
+            //conditon
+            JIT_FMOV(Compiler.jit);
+            JIT_FDEREF(Compiler.jit,offset+8);
+            JIT_RBP(Compiler.jit);
+            CompileAST(ast->range.values[idx]);
+            JIT_FDEREF(Compiler.jit,offset);
+            JIT_RBP(Compiler.jit);
+            //t
+            JIT_FMOV(Compiler.jit);
+            JIT_FDEREF(Compiler.jit,offset);
+            JIT_RBP(Compiler.jit);
+            JIT_FDEREF(Compiler.jit,offset+8);
+            JIT_RBP(Compiler.jit);
+            //f
+            op3=jit_rpnBodyStart(Compiler.jit);
+            JIT_MOV(Compiler.jit);
+            JIT_R(Compiler.jit,hi);
+            JIT_I64(Compiler.jit,0);
+            VectorPush(to_patch,JIT_JMP(Compiler.jit,NULL));
+            jit_rpnBodyEnd(Compiler.jit,op3);
+
+        }
+    }
     while(to_patch->size) {
-        op2=VectorPop(to_patch);
-        jit_patch(Compiler.jit,op2);
+        op3=VectorPop(to_patch);
+        JIT_PATCH(Compiler.jit,op3);
     }
-    PopIRValue;
+    jit_rpnBodyEnd(Compiler.jit,op2);
+    JIT_R(Compiler.jit,hi);
     VectorFree(to_patch);
     break;
     case AST_ASSIGN_MOD:
+    if(IsF64(ast->type2))
+        JIT_FASSIGN_MOD(Compiler.jit);
+    else
+        JIT_ASSIGN_MODI(Compiler.jit);
     CompileAST(ast->binop.a,TRUE);
-    value_a=IRValueClone(Compiler.stack);
     CompileAST(ast->binop.b);
-    value_b=IRValueClone(Compiler.stack);
-    if(IsF64(value_a->type2)) {
-        value_b=MoveToFReg(value_b,1);
-        value_c=MoveToFReg(IRValueClone(value_a),0);
-        Assign(value_c,value_a);
-        LoadSymPtrIntoReg("FMod",0);
-        jit_prepare(Compiler.jit);
-        jit_fputargr(Compiler.jit,jit_FR(value_c->reg),8);
-        jit_fputargr(Compiler.jit,jit_FR(value_b->reg),8);
-        jit_callr(Compiler.jit,jit_R(0))    ;
-        jit_fretval(Compiler.jit,jit_FR(value_b->reg),8);
-        Assign(value_a,value_b);
-    } else {
-        value_c=MoveToReg(IRValueClone(value_a),0);
-        if(FoldIRInt) {
-            jit_modi(Compiler.jit,jit_R(value_c->reg),jit_R(value_c->reg),value_b->int);
-            Assign(value_a,value_c);
-            PopIRValue,PopIRValue;
-            Free(value_b),Free(value_c);
-            goto amod_end;
-        }
-        value_b=MoveToFReg(value_b,1);
-        jit_modr(Compiler.jit,jit_R(value_b->reg),jit_R(value_c->reg),jit_R(value_b->reg));
-        Assign(value_a,value_b);
-    }
-    PopIRValue,PopIRValue;
-    Free(value_c),Free(value_b);
-    amod_end:
-    value_a->last=Compiler.stack;
-    Compiler.stack=value_a;
-    goto asn_end;
+    break;
     case AST_NAME:
     if(Compiler.asm_mode&&HashFind(ast->name,Compiler.imports)) {
         if(var=HashFind(ast->name,Compiler.locals)) {
             if(var->isReg) throw('Compile');
             if(var->is_local_unlinked) {
-                LoadSymPtrIntoReg(var->str,idx=GetFreeIReg);
-                PushIRReg(var->hc_type,idx);
+                LoadSymPtr(var->str);
             }  else 
-                PushIRInt(var->frame_off);
+                JIT_I64(Compiler.jit,var->frame_off);
             break;
         } else if(func=var=HashFind(ast->name,Compiler.globals)) {
-            LoadSymPtrIntoReg(var->str,idx=GetFreeIReg);
-            PushIRReg(var->hc_type,idx);
+            LoadSymPtr(var->str);
             break;
         }
     }
@@ -6622,86 +5275,53 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
             "NOT A VAR\n";
             throw('Compile');
         }
-        if(pass_by_ref) {
-            if(var->is_local_unlinked) {
-                LoadSymPtrIntoReg(var->str,idx=GetFreeIReg);
-                PushIRReg(var->hc_type,idx);
-                break;
-            } else if(var->is_extern_ptr) {
-                PushIRIndirX(var->hc_type,idx=GetFreeIReg,0);
-                jit_movi(Compiler.jit,jit_R(idx),var->extern_ptr);
-            } else if(var->is_static&&var->hc_type->type!=HTT_ARRAY_TYPE) {
-                PushIRIndirX(var->hc_type,idx=GetFreeIReg,0);
-                VectorPush(var->static_refs,jit_ref_data(Compiler.jit,jit_R(idx),NULL));
-            } else if(var->is_static&&var->hc_type->type==HTT_ARRAY_TYPE) {
-                PushIRReg(var->hc_type,idx=GetFreeIReg);
-                VectorPush(var->static_refs,jit_ref_data(Compiler.jit,jit_R(idx),NULL));
-            } else if(var->isReg) {
-                if(IsF64(var->hc_type))
-                    PushIRFReg(var->hc_type,var->reg);
-                else
-                    PushIRReg(var->hc_type,var->reg);
-            } else if(var->hc_type->type!=HTT_ARRAY_TYPE) {
-                PushIRIndirX(var->hc_type,idx=GetFreeIReg,var->frame_off);
-                jit_movr(Compiler.jit,jit_R(idx),R_FP);
-            } else {
-                PushIRReg(var->hc_type,idx=GetFreeIReg);
-                jit_addi(Compiler.jit,jit_R(idx),R_FP,var->frame_off);
-            }
+        if(var->is_local_unlinked) {
+            LoadSymPtr(var->str);
             break;
+        } else if(var->is_extern_ptr) {
+            if(!get_ptr) {
+            if(IsF64(var->hc_type))
+                    JIT_FDEREF(Compiler.jit);
+            else if(IsInteger(var->hc_type)&&!IsSigned(var->hc_type))
+                JIT_UDEREF(Compiler.jit,,var->hc_type->sz);
+            else 
+                JIT_DEREF(Compiler.jit,,var->hc_type->sz);
+            }
+            JIT_I64(Compiler.jit,var->extern_ptr);
+        } else if(var->is_static&&var->hc_type->type!=HTT_ARRAY_TYPE) {
+            if(!get_ptr) {
+                if(IsF64(var->hc_type))
+                    JIT_FDEREF(Compiler.jit);
+                else if(IsInteger(var->hc_type)&&!IsSigned(var->hc_type))
+                    JIT_UDEREF(Compiler.jit,,var->hc_type->sz);
+                else 
+                    JIT_DEREF(Compiler.jit,,var->hc_type->sz);
+            
+            }
+            VectorPush(var->static_refs,JIT_REF_DATA(Compiler.jit,NULL));
+        } else if(var->is_static&&var->hc_type->type==HTT_ARRAY_TYPE) {
+            VectorPush(var->static_refs,JIT_REF_DATA(Compiler.jit,NULL));
+        } else if(var->isReg) {
+            JIT_R(Compiler.jit,var->reg);
+        } else if(var->hc_type->type!=HTT_ARRAY_TYPE) {
+            if(!get_ptr) {
+                if(IsF64(var->hc_type))
+                    JIT_FDEREF(Compiler.jit);
+                else if(IsInteger(var->hc_type)&&!IsSigned(var->hc_type))
+                    JIT_UDEREF_NO_TC(Compiler.jit,,var->hc_type->sz);
+                else 
+                    JIT_DEREF_NO_TC(Compiler.jit,,var->hc_type->sz);
+            
+            }
+            JIT_ADDI(Compiler.jit);
+            JIT_I64(Compiler.jit,var->frame_off);
+            JIT_RBP(Compiler.jit);
         } else {
-            if(var->is_local_unlinked) {
-                LoadSymPtrIntoReg(var->str,idx=GetFreeIReg);
-                PushIRReg(var->hc_type,idx);
-                break;
-            } else if(var->is_extern_ptr) {
-                if(IsF64(var->hc_type)) {
-                    PushIRFReg(var->hc_type,GetFreeFReg);
-                } else {
-                    PushIRReg(var->hc_type,GetFreeIReg);
-                }
-                PushIRIndirX(var->hc_type,idx=GetFreeIReg,0);
-                jit_movi(Compiler.jit,jit_R(idx),var->extern_ptr);
-            } else if(var->is_static) {
-                if(IsF64(var->hc_type)) {
-                    PushIRFReg(var->hc_type,GetFreeFReg);
-                } else {
-                    PushIRReg(var->hc_type,GetFreeIReg);
-                }
-                if(var->hc_type->type!=HTT_ARRAY_TYPE)
-                    PushIRIndirX(var->hc_type,idx=GetFreeIReg,0);
-                else
-                    PushIRReg(var->hc_type,idx=GetFreeIReg);
-                VectorPush(var->static_refs,jit_ref_data(Compiler.jit,jit_R(idx),NULL));
-            } else if(var->isReg) {
-                if(IsF64(var->hc_type)) {
-                    PushIRFReg(var->hc_type,GetFreeFReg);
-                    PushIRFReg(var->hc_type,var->reg);
-                } else {
-                    PushIRReg(var->hc_type,GetFreeIReg);
-                    PushIRReg(var->hc_type,var->reg);
-                }
-            } else if(var->hc_type->type!=HTT_ARRAY_TYPE) {
-                if(IsF64(var->hc_type))
-                    PushIRFReg(var->hc_type,GetFreeFReg);
-                else if(IsInteger(var->hc_type)||IsPtrType(var->hc_type))
-                    PushIRReg(var->hc_type,GetFreeIReg);
-                else {
-                    PushIRIndirX(var->hc_type,idx=GetFreeIReg,var->frame_off);
-                    jit_movr(Compiler.jit,jit_R(idx),R_FP);
-                    break;
-                }
-                PushIRIndirX(var->hc_type,idx=GetFreeIReg,var->frame_off);
-                jit_movr(Compiler.jit,jit_R(idx),R_FP);
-            } else {
-                PushIRReg(var->hc_type,idx=GetFreeIReg);
-                jit_addi(Compiler.jit,jit_R(idx),R_FP,var->frame_off);
-                break;
-            }
-            Assign(Compiler.stack->last,Compiler.stack);
-            PopIRValue;
-            break;
+            JIT_ADDI(Compiler.jit);
+            JIT_I64(Compiler.jit,var->frame_off);
+            JIT_RBP(Compiler.jit);
         }
+        break;
     }
     glob_var:
     func=var=HashFind(ast->name,Compiler.globals);
@@ -6711,172 +5331,84 @@ U0 __CompileAST(AST *ast,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) 
     }
     if(var&&var->type==HTT_FUNC) {
         if(dont_call_lone_name) {
-            LoadSymPtrIntoReg(func->str,idx=GetFreeIReg);
-            PushIRIndirX(func->hc_type,idx,0);
+            LoadSymPtr(func->str);
         } else {
             type1=func->hc_type;
+            idx2=MSize(type1->arg_types)/sizeof(CType*);
+            if(type1->has_vargs) idx2++;
+            if(IsF64(type1->ret_type))
+                JIT_FCALL(Compiler.jit,idx2);
+            else
+                JIT_FUNC_CALL(Compiler.jit,idx2);
+            if(type1->has_vargs)
+                JIT_I64(Compiler.jit,0);
             cnt=MSize(type1->arg_types)/sizeof(AST*);
-            while(--cnt>=0) {
-                if(!type1->arg_values[cnt]) {
-                        "Expected dft\n";
-                    throw('Compile');
-                }
-                if(!Compiler.aot_mode) {
-                    if(IsF64(type1->arg_types[cnt]))
-                        PushIRFlt(type1->arg_values[cnt][0](F64));
-                    else
-                        PushIRInt(type1->arg_values[cnt][0](I64));
+            for(idx=cnt-1;idx>=0;--idx) {
+                if(Compiler.aot_mode) {
+                    JIT_DEREF(Compiler.jit,,8);
+                    LoadSymPtr(type1->aot_arg_names[idx]);
                 } else {
-                    if(IsF64(type1->arg_types[cnt])) {
-                        PushIRFReg(GetType("F64"),GetFreeFReg);
-                        LoadSymPtrIntoReg(type1->aot_arg_names[cnt],0);
-                        jit_fldr(Compiler.jit,jit_FR(Compiler.stack->reg),jit_R(0),8);
-                    } else {
-                        PushIRReg(type1->arg_types[cnt],GetFreeIReg);
-                        LoadSymPtrIntoReg(type1->aot_arg_names[cnt],0);
-                        jit_ldr(Compiler.jit,jit_R(Compiler.stack->reg),jit_R(0),8);
-                    }
+                    JIT_I64(Compiler.jit,type1->arg_values[idx][0]);
                 }
             }
-            cnt=MSize(type1->arg_types)/sizeof(AST*);
-            LoadSymPtrIntoReg(func->str,0);
-            jit_prepare(Compiler.jit);
-            cnt=MSize(type1->arg_types)/sizeof(AST*);
-            while(--cnt>=0) {
-                PopIRValue(&value_a);
-                switch(value_a->type) {
-                case IRV_INT:
-                    jit_putargi(Compiler.jit,value_a->int);
-                    break;
-                case IRV_FLOAT:
-                    jit_fputargi(Compiler.jit,value_a->flt,8);
-                    break;
-                case IRV_REG:
-                    jit_putargr(Compiler.jit,jit_R(value_a->reg));
-                    break;
-                case IRV_FREG:
-                    jit_fputargr(Compiler.jit,jit_FR(value_a->reg),8);
-                    break;
-                }
-                Free(value_a);
-            }
-            if(type1->has_vargs) {
-                jit_putargi(Compiler.jit,0);
-                jit_putargi(Compiler.jit,0);
-            }
-            jit_callr(Compiler.jit,jit_R(0));
-            if(IsF64(func->hc_type->ret_type)) {
-                PushIRFReg(func->hc_type->ret_type,idx=GetFreeFReg);
-                jit_fretval(Compiler.jit,jit_FR(idx),8);
-            } else {
-                PushIRReg(func->hc_type->ret_type,idx=GetFreeIReg);
-                jit_retval(Compiler.jit,jit_R(idx));
-            }
+            LoadSymPtr(func->str);
         }
     } else if(var&&var->type==HTT_VAR) {
-        LoadSymPtrIntoReg(var->str,idx=GetFreeIReg);
-        if(var->hc_type->type==HTT_ARRAY_TYPE) {
-            PushIRReg(var->hc_type,idx);
-            break;
+        if(var->hc_type->type==HTT_ARRAY_TYPE)
+            get_ptr=TRUE;
+        if(!get_ptr) {
+            if(IsF64(var->hc_type))
+                JIT_FDEREF(Compiler.jit);
+            else if(IsInteger(var->hc_type)&&!IsSigned(var->hc_type))
+                JIT_UDEREF(Compiler.jit,,var->hc_type->sz);
+            else 
+                JIT_DEREF(Compiler.jit,,var->hc_type->sz);
+            
         }
-        PushIRIndirX(var->hc_type,idx,0);
-        if(IsF64(var->hc_type)||IsInteger(var->hc_type)||IsPtrType(var->hc_type))
-            if(!IsF64(var->hc_type)) {
-                if(!pass_by_ref) {
-                    PopIRValue(&value_a);
-                    PushIRReg(var->hc_type,idx);
-                    Assign(Compiler.stack,value_a);
-                    Free(value_a);
-                }
-            } else if(!pass_by_ref) {
-                PopIRValue(&value_a);
-                PushIRFReg(var->hc_type,GetFreeFReg);
-                Assign(Compiler.stack,value_a);
-                Free(value_a);
-            }
+        LoadSymPtr(var->str);
     } else {
-        //May be an unresolved label
-        PushIRReg(GetType("I64"),idx=GetFreeIReg);
-        LoadSymPtrIntoReg(ast->name,idx);
+        LoadSymPtr(ast->name);
     }
     break;
     }
 }
-U0 CompileAST(AST *a,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE) {
-    if(Compiler.error_count) {
-    	PushIRInt(0);
+U0 CompileAST(AST *a,Bool pass_by_ref=FALSE,Bool dont_call_lone_name=FALSE,Bool get_ptr=FALSE) {
+    CRPN *st=NULL;
+    I64 avail_reg;
+    if(a->next) st=jit_rpnBodyStart(Compiler.jit);
+    if(Compiler.error_count)
     	return;
-    }
     loop:
-    CIRValue *to_validate=Compiler.stack;
-    __CompileAST(a,pass_by_ref,dont_call_lone_name);
+    avail_reg=Compiler.cur_tmp_reg;
+    __CompileAST(a,pass_by_ref,dont_call_lone_name,get_ptr);
+    Compiler.cur_tmp_reg=avail_reg;
     if(a->type==AST_OPCODE) {
         if(a->next&&a->next->type==AST_OPCODE) {
         } else {
-            jit_end_asm_blk(Compiler.jit);
+            JIT_ASM_TAINT_LABEL(JIT_LABEL(Compiler.jit));
         }
     } else if(a->type!=AST_OPCODE&&a->next&&a->next->type==AST_OPCODE) {
         //If is a group of opcodes,taint at first
         //taint at enter
-        jit_taint_label(Compiler.jit,jit_get_label(Compiler.jit));
-    }
-    if(to_validate!=Compiler.stack->last) {
-        "Fail @%d\n",a->type;
-        throw('Compile');
+        JIT_ASM_TAINT_LABEL(JIT_LABEL(Compiler.jit));
     }
     if(a->next) {
-        PopIRValue;
         a=a->next;
         goto loop;
     }
+    if(st) jit_rpnBodyEnd(Compiler.jit,st);
 }
 //See jitlib.h
 class _CBreakpoint {
     U8 enabled;
     U0 *jit_op;
     CFunction *f;
+    I64 num;
     U8 path[256];
     _CBreakpoint *prev,*next;
 };
 class CBreakpoints:CHash {
     _CBreakpoint *bps;
-};
-class jit_debugger_regs {
-    //Prefix with "_" to allow bootstrap compiler to not recognize them as registers
-    I64 _RAX;
-    I64 _RBX;
-    I64 _RCX;
-    I64 _RDX;
-    I64 _RSI;
-    I64 _RDI;
-    I64 _RSP;
-    I64 _RBP;
-    I64 _R8;
-    I64 _R9;
-    I64 _R10;
-    I64 _R11;
-    I64 _R12;
-    I64 _R13;
-    I64 _R15;
-    F64 _XMM0;
-    F64 _XMM1;
-    F64 _XMM2;
-    F64 _XMM3;
-    F64 _XMM4;
-    F64 _XMM5;
-    F64 _XMM6;
-    F64 _XMM7;
-    I64 _R14;
-};
-//See ext/myjit/myjit/jitlib.h for the C definition which is only put there for show.
-class jit_debugger_ctrl {
-    #define JIT_DBG_STEP 1
-    #define JIT_DBG_NEXT 2
-    #define JIT_DBG_FIN 3
-    I64 code;
-    U0 *prev_stack_ptr;
-    //Our silly debugger "enters" into functions,but we will need the last known RIP to compute which breakpoint we were at before entering a breakpoint.
-    U0 *last_rip;
 };
 class CDebugger {
     jit_debugger_ctrl ctrl;
@@ -6884,8 +5416,24 @@ class CDebugger {
     //Im am sorry,I actually tried to get SEH working on windows but im flabergasted
     //So we will stick to a explicit call stack,it goes like this [func1,frame1,func2,func2,...]
     CVector *call_stack;
+    CVector *enabled_bps;
 } _Debugger;
-_Debugger.call_stack=VectorNew;
+I64 FunctionParents(U0 **ptrs,I64 max,CDebuggerRegs *regs) {
+    --max;
+    I64 top=_Debugger.call_stack->size-2,cnt=0;
+    *ptrs++=_Debugger.ctrl->last_rip;
+    for(;top>=0<max;top-=2) {
+        ptrs[--max,cnt++]=_Debugger.call_stack->data[top+2-1](U0**)[1];
+    }
+    return cnt;
+}
+I64 ParentFramePtrs(U0 **ptrs,I64 max,CDebuggerRegs *regs) {
+    --max;
+    I64 top=_Debugger.call_stack->size-2,cnt=0;
+    for(;top>=0<max;top-=2)
+        ptrs[--max,cnt++]=_Debugger.call_stack->data[top+1];
+    return cnt;
+}
 CFunction *GetFunctionByPtr(U0 *ptr) {
     I64 idx=Compiler.globals->mask+1;
     U8 *bptr;
@@ -6895,7 +5443,7 @@ CFunction *GetFunctionByPtr(U0 *ptr) {
             if(func->type==HTT_FUNC) {
                 if(func->jit) {
                     bptr=func->func_ptr;
-                    if(bptr<=ptr<=bptr+jit_bin_size(func->jit))
+                    if(bptr<=ptr<=bptr+func->jit->buf_size)
                         return func;
                 } else if(func->is_aot) {
                     bptr=func->func_ptr;
@@ -6910,8 +5458,39 @@ CFunction *GetFunctionByPtr(U0 *ptr) {
 _CBreakpoint *GetBreakpointByPtr(U0 *ptr) {
     CFunction *func=GetFunctionByPtr(ptr);
     if((!func)||func->is_aot) return NULL;
-    return jit_get_breakpoint_by_ptr(func->jit,ptr);
+    return JIT_GetBreakpointByPtr(func->jit,ptr);
 }
+
+U0 Backtrace(I64 hl_at,I64 trim=0) {
+    CDebuggerRegs regs;
+    regs.RBP=_Debugger.call_stack->data[_Debugger.call_stack->size-1];
+    U0 *backtrace[0x100];
+    try {
+        I64 idx,stk_sz=FunctionParents(backtrace,0x100,&regs);
+    } catch {
+        Fs->catch_except=TRUE;
+        "CORRUPT STACK\n";
+        return;
+    }
+    CFunction *func;
+    _CBreakpoint *bp;
+    U8 chr;
+    for(idx=trim;idx<stk_sz;idx++) {
+        if(hl_at==idx-trim) chr='*';
+        else chr=' ';
+        func=GetFunctionByPtr(backtrace[idx]);
+        if(func) {
+            if(bp=GetBreakpointByPtr(backtrace[idx]))
+                "[%d] %c %s %s\n",idx-trim,chr,func->str,bp->path;
+            else
+                "[%d] %c %s ???\n",idx-trim,chr,func->str;
+        } else
+            "[%d] %c ???\n",idx-trim,chr;
+        next:
+    }
+}
+_Debugger.call_stack=VectorNew;
+_Debugger.enabled_bps=VectorNew;
 U8 *DbgSkipWhitespace(U8 *str) {
     while(*str&&Bt(char_bmp_white_space,*str))
         str++;
@@ -6949,34 +5528,6 @@ U0 ListLines(U8 *fn,I64 s,I64 e) {
     en:
     Free(ftext);
 }
-I64 ParentFramePtrs(U0 **ptrs,I64 max,jit_debugger_regs *regs);
-I64 FunctionParents(U0 **ptrs,I64 max);
-U0 Backtrace(I64 hl_at,I64 trim=0) {
-    U0 *backtrace[0x100];
-    try {
-        I64 idx,stk_sz=FunctionParents(backtrace,0x100);
-    } catch {
-        Fs->catch_except=TRUE;
-        "CORRUPT STACK\n";
-        return;
-    }
-    CFunction *func;
-    _CBreakpoint *bp;
-    U8 chr;
-    for(idx=trim;idx<stk_sz;idx++) {
-        if(hl_at==idx-trim) chr='*';
-        else chr=' ';
-        func=GetFunctionByPtr(backtrace[idx]);
-        if(func) {
-            if(bp=GetBreakpointByPtr(backtrace[idx]))
-                "[%d] %c %s %s\n",idx-trim,chr,func->str,bp->path;
-            else
-                "[%d] %c %s ???\n",idx-trim,chr,func->str;
-        } else
-            "[%d] %c ???\n",idx-trim,chr;
-        next:
-    }
-}
 U0 DebugPrint(U0 *ptr,CType *type) {
     loop:
     if(type->type==HTT_UNION&&type->base) {
@@ -6993,18 +5544,34 @@ U0 DebugPrint(U0 *ptr,CType *type) {
         } else if(IsPtrType(type)) {
             "%x",ptr(U0**)[0];
         } else {
-            switch(type->sz) {
-                case 1:
-                "%d",ptr(I8*)[0];
-                break;
-                case 2:
-                "%d",ptr(I16*)[0];
-                break;
-                case 4:
-                "%d",ptr(I32*)[0];
-                break;
-                case 8:
-                "%d",ptr(I64*)[0];
+            if(IsSigned(type)) {
+                switch(type->sz) {
+                    case 1:
+                    "%d",ptr(I8*)[0];
+                    break;
+                    case 2:
+                    "%d",ptr(I16*)[0];
+                    break;
+                    case 4:
+                    "%d",ptr(I32*)[0];
+                    break;
+                    case 8:
+                    "%d",ptr(I64*)[0];
+                }
+            } else {
+                switch(type->sz) {
+                    case 1:
+                    "%d",ptr(U8*)[0];
+                    break;
+                    case 2:
+                    "%d",ptr(U16*)[0];
+                    break;
+                    case 4:
+                    "%d",ptr(U32*)[0];
+                    break;
+                    case 8:
+                    "%d",ptr(U64*)[0];
+                }
             }
         }
         break;
@@ -7033,34 +5600,37 @@ U0 DebugPrint(U0 *ptr,CType *type) {
         break;
     }
 }
-U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
+U0 DebuggerRoutine(CDebuggerRegs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
     "Welcome to debugger land.\n";
     U0 *backtrace[0x100];
     U0 *base_ptrs[0x100];
     static U8 list_fn[256];
     static U8 last_command[1024];
+    static I64 bp_num;
     static I64 list_ln;
     Bool leave=FALSE;
     CCompilerState *cstate;
-    I64 stk_sz,stk_pos,com_len,bp_ln,idx,cidx;
+    I64 stk_sz,stk_pos,com_len,bp_ln,idx,cidx,idx2;
     U8 *command,*o_command,*fn_end,*fmt,*bp_fn;
     CFunction *cur_func;
     CVariable *local_var,*new_var;
     CType *expr_type;
     CCmpCtrl *cc;
     AST *debug_expr;
-    CIRValue *debug_value;
     _CBreakpoint *_bp;
     CBreakpoints *bps;
     U0 (*fptr)();
-    stk_sz=FunctionParents(backtrace,0x100);
+    stk_sz=FunctionParents(backtrace,0x100,regs);
     ParentFramePtrs(base_ptrs,0x100,regs);
     cidx=0;
+    if(cidx)
     for(idx=cidx;idx<stk_sz;idx++) {
         backtrace[idx-cidx]=backtrace[idx];
         base_ptrs[idx-cidx]=base_ptrs[idx];
     }
     stk_sz-=cidx,stk_pos=0;
+    if(!bp)
+        bp=GetBreakpointByPtr(backtrace[stk_pos]);
     _Debugger.cur_bp=bp;
     if(bp) {
         fmt=list_fn;
@@ -7099,6 +5669,31 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
         "exit\t--Exit debugger.\n"
         "Press enter for last command.\n"
         ;
+    } else if(!StrNCmp(command,"listb",com_len)&&com_len==5) {
+        for(idx=0;idx!=_Debugger.enabled_bps->size;idx++) {
+            _bp=_Debugger.enabled_bps->data[idx](_CBreakpoint*);
+            "%d: %s\n",_bp->num,_bp->path;
+        }
+    } else if(!StrNCmp(command,"d",com_len)&&com_len==1) {
+        command=DbgSkipWhitespace(command+com_len);
+        if(*command) {
+            idx=Str2I64(command);
+            for(idx2=0;idx2!=_Debugger.enabled_bps->size;idx2++) {
+                if(idx==_Debugger.enabled_bps->data[idx2](_CBreakpoint*)->num) {
+                    _Debugger.enabled_bps->data[idx2](_CBreakpoint*)->enabled=FALSE;
+                    VectorRemove(_Debugger.enabled_bps,_Debugger.enabled_bps->data[idx2]);
+                    break;
+                }
+            }
+        } else {
+            "Do you really want to delete all breakpoints?\n";
+            if(YorN) {
+                for(idx2=0;idx2!=_Debugger.enabled_bps->size;idx2++) {
+                    _Debugger.enabled_bps->data[idx2](_CBreakpoint*)->enabled=FALSE;
+                }
+                _Debugger.enabled_bps->size=0;
+            }
+        }
     } else if(!StrNCmp(command,"up",com_len)&&com_len==2) {
         if(stk_pos+1>=stk_sz) {
             "At topmost stack item.\n";
@@ -7138,6 +5733,9 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
             list_ln=LIST_LINE_COUNT;
         ListLines(list_fn,list_ln-LIST_LINE_COUNT,list_ln+LIST_LINE_COUNT);
         list_ln+=2*LIST_LINE_COUNT+1;
+        //Copy "last" to last_command(which will contain the contents of o_command),not the file/line number
+        Free(o_command);
+        o_command=StrNew("list");
     } else if(!StrNCmp(command,"b",com_len)&&com_len==1) {
         bp_fn=NULL;
         command=DbgSkipWhitespace(command+StrLen("b"));
@@ -7169,7 +5767,7 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
         if(bp_fn) {
             fmt=LexMatchFile(Compiler.cc,bp_fn);
             Free(bp_fn);
-        }     else
+        } else
             fmt=NULL;
         if(fmt) {
             bp_fn=MStrPrint("%s,%d",fmt,bp_ln);
@@ -7177,11 +5775,16 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
             if(bps) {
                 "Match at %s\n",bp_fn;
                 for(_bp=bps->bps;_bp;_bp=_bp->next) {
+                    _bp->num=++bp_num;
                     _bp->enabled=TRUE;
+                    VectorPush(_Debugger.enabled_bps,_bp(I64));
                 }
+                Free(bp_fn);
+                goto found;
             }
-            Free(bp_fn);
         }
+        "No breakpoint found for %s:%d\n",fmt,bp_ln;
+        found:
         Free(fmt);
     } else if(!StrNCmp(command,"s",com_len)&&com_len==1) {
         _Debugger.ctrl->code=JIT_DBG_STEP;
@@ -7219,9 +5822,9 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
                         new_var->extern_ptr=base_ptrs[stk_pos](U8*)+local_var->frame_off;
                     } else {
                         if(stk_pos==0) {
-                            new_var->extern_ptr=jit_debugger_get_reg_ptr(cur_func->jit,regs,_Debugger.cur_bp->jit_op,jit_R(local_var->reg));
+                            new_var->extern_ptr=JIT_GetVregPtr(cur_func->jit,regs,caller_ptr,local_var->reg);
                         } else {
-                            new_var->extern_ptr=jit_debugger_get_vreg_ptr_from_parent(cur_func->jit,base_ptrs[stk_pos],_Debugger.cur_bp->jit_op,jit_R(local_var->reg));
+                            new_var->extern_ptr=JIT_GetVregPtrFromParent(cur_func->jit,backtrace[stk_pos],base_ptrs[stk_pos],local_var->reg);
                         }
                         if(new_var->extern_ptr==NULL)
                             new_var->is_opted_out=TRUE;
@@ -7233,51 +5836,39 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
         }
         //TODO free cc
         cc=CmpCtrlNew(NULL);
-        LexIncludeStr(cc,NULL,StrNew(command),FALSE);
-        Lex(cc);
-        debug_expr=ParseExpr(cc);
+        LexIncludeStr(cc,NULL,MStrPrint("%s;",command),FALSE);
         try {
+            Lex(cc);
+            debug_expr=ParseExpr(cc);
             expr_type=AssignTypeToNode(debug_expr);
+            if(expr_type->sz)
+                idx=JIT_ALLOCAI(Compiler.jit,expr_type->sz);
+            else
+                //Beware the sneaky weaky "U0"'s who have no size
+                idx=JIT_ALLOCAI(Compiler.jit,1);
+            if(IsF64(expr_type)) {
+                JIT_FMOV(Compiler.jit);
+                JIT_FDEREF(Compiler.jit);
+            } else 
+                JIT_MOV(Compiler.jit),JIT_DEREF(Compiler.jit);
+            JIT_ADDI(Compiler.jit);
+            JIT_RBP(Compiler.jit);
+            JIT_I64(Compiler.jit,idx);
             CompileAST(debug_expr);
-            PopIRValue(&debug_value);
-            switch(debug_value->type) {
-                case IRV_INT:
-                "%d\n",debug_value->int;
-                break;
-                case IRV_FLOAT:
-                "%n\n",debug_value->flt;
-                start:
-                idx=jit_allocai(Compiler.jit,8);
-                case IRV_FREG:
-                jit_fstxi(Compiler.jit,idx,R_FP,jit_FR(debug_value->reg),8);
-                break;
-                case IRV_REG:
-                jit_stxi(Compiler.jit,idx,R_FP,jit_R(debug_value->reg),8);
-                break;
-                end:
-                jit_addi(Compiler.jit,jit_R(0),R_FP,idx);
-                jit_prepare(Compiler.jit);
-                jit_putargr(Compiler.jit,jit_R(0));
-                jit_putargi(Compiler.jit,expr_type);
-                jit_call(Compiler.jit,&DebugPrint);
-                break;
-                case IRV_STR:
-                "%s\n",debug_value->int;
-                break;
-                case IRV_INDIRX:
-                jit_addi(Compiler.jit,jit_R(debug_value->indirx.reg),jit_R(debug_value->indirx.reg),debug_value->indirx.offset);
-                jit_prepare(Compiler.jit);
-                jit_putargr(Compiler.jit,jit_R(debug_value->indirx.reg));
-                jit_putargi(Compiler.jit,expr_type);
-                jit_call(Compiler.jit,&DebugPrint);
-            }
-            Free(debug_value);
+            //
+            JIT_FUNC_CALL(Compiler.jit,2);
+            JIT_I64(Compiler.jit,expr_type);
+            JIT_ADDI(Compiler.jit);
+            JIT_RBP(Compiler.jit);
+            JIT_I64(Compiler.jit,idx);
+            JIT_I64(Compiler.jit,&DebugPrint);
             if(Compiler.debug_mode) {
-                jit_prepare(Compiler.jit);
-                jit_call(Compiler.jit,&LeaveFunc);
+                JIT_FUNC_CALL(Compiler.jit,0);
+                JIT_I64(Compiler.jit,&LeaveFunc);
             }
-            jit_reti(Compiler.jit,1);
-            cur_func=CompilerEmitCode;
+            JIT_RETI(Compiler.jit);
+            JIT_I64(Compiler.jit,0);
+            cur_func=CompilerEmitCode(0);
             if(cur_func) {
                 fptr=cur_func->func_ptr;
   		            "=";
@@ -7304,21 +5895,7 @@ U0 DebuggerRoutine(jit_debugger_regs *regs,_CBreakpoint *bp,U8 *caller_ptr) {
     Free(o_command);
     goto loop;
 }
-U0 CompileAstWithBreakpoint(AST *a) {
-    if(Compiler.error_count) {
-        PushIRInt(0);
-        return;
-    }
-    if(!Compiler.debug_mode) {
-        naked:
-        CompileAST(a);
-        return;
-    }
-    if(a->type==AST_OPCODE)
-        goto naked;
-    if(a->next&&a->next->type==AST_OPCODE)
-        goto naked;
-    re:
+U0 CreateBreakpointFor(AST *a) {
     U8 *path_str=MStrPrint("%s,%d",a->fn,a->ln);
     _CBreakpoint *bp=MAlloc(sizeof(_CBreakpoint));
     CBreakpoints *tail;
@@ -7334,14 +5911,32 @@ U0 CompileAstWithBreakpoint(AST *a) {
         HashAdd(tail,Compiler.breakpoints);
         goto loop;
     }
-    jit_breakpoint(Compiler.jit,bp,&DebuggerRoutine,&_Debugger.ctrl);
-    __CompileAST(a);
+    JIT_BREAKPOINT(Compiler.jit,&_Debugger.ctrl,bp,&DebuggerRoutine);
     Free(path_str);
+} 
+U0 CompileAstWithBreakpoint(AST *a) {
+    CRPN *op;
+    if(Compiler.error_count) {
+        return;
+    }
+    if(!Compiler.debug_mode) {
+        naked:
+        CompileAST(a);
+        return;
+    }
+    if(a->type==AST_OPCODE)
+        goto naked;
+    if(a->next&&a->next->type==AST_OPCODE)
+        goto naked;
+    op=jit_rpnBodyStart(Compiler.jit);
+    re:
+    CreateBreakpointFor(a);
+    __CompileAST(a);
     if(a->next) {
-        PopIRValue;
         a=a->next;
         goto re;
     }
+    jit_rpnBodyEnd(Compiler.jit,op);
 }
 U0 Debugger() {
     DebuggerRoutine(NULL,NULL,NULL);
@@ -7359,11 +5954,10 @@ U0 GlobalCompileASTTo(U8 *to,AST *ast) {
     var->str=StrNew(to);
     var->global_ptr=MAlloc(AssignTypeToNode(ast)->sz);
     HashAdd(var,Compiler.globals);
+    JIT_MOV(Compiler.jit);
+    JIT_DEREF(Compiler.jit);
+    LoadSymPtr(to);
     CompileAST(ast);
-    PushIRIndirX(AssignTypeToNode(ast),reg=GetFreeIReg,0);
-    LoadSymPtrIntoReg(to,reg);
-    Assign(Compiler.stack,Compiler.stack->last);
-    PopIRValue,PopIRValue;
     if(replace) {
         *GlobalCompiler=Compiler;
         Compiler=old;
@@ -7587,7 +6181,7 @@ U0 FillInRelocations(CFunction *f) {
     f->relocs=first;
 }
 U0 ApplyAsmPatches(CFunction *f);
-CFunction *CompilerEmitCode() {
+CFunction *CompilerEmitCode(I64 arity) {
     if(Compiler. error_count) return NULL;
     Bool has_exports=FALSE;
     CFunction *ret;
@@ -7595,28 +6189,25 @@ CFunction *CompilerEmitCode() {
     CCompStringRef *str_ref;
     CVariable *var;
     CLabel *label,*new_label;
-    I64 idx=Compiler.cur_strings->mask+1;
+    I64 idx=Compiler.cur_strings->mask+1,idx2;
+    CRPN *patch_to;
     U0 *pat;
-    U8 *zeros;
     idx=Compiler.locals->mask+1;
     while(--idx>=0) {
         for(var=Compiler.locals->body[idx];var;var=var->next) {
             if(var->type==HTT_VAR&&var->is_static) {
-                jit_code_align_fill(Compiler.jit,var->hc_type->align,0);
-                while(var->static_refs->size) {
-                    pat=VectorPop(var->static_refs);
-                    jit_patch(Compiler.jit,pat);
-                }
-                jit_dump_ptr(Compiler.jit,&var->static_ptr);
-                zeros=MAlloc(var->hc_type->sz);
-                jit_data_bytes(Compiler.jit,MSize(zeros),zeros);
-                Free(zeros);
+                JIT_ALIGN_FILL(Compiler.jit,var->hc_type->align,0);
+                patch_to=JIT_DUMP_PTR(Compiler.jit,&var->static_ptr);
+                while(var->static_refs->size)
+                    JIT_PATCH(Compiler.jit,VectorPop(var->static_refs),patch_to);
+                for(idx2=var->hc_type->sz;idx2>0;idx2-=8)
+                    JIT_DU64(Compiler.jit,0);
             }
         }
     }
+    jit_rpnBodyEnd(Compiler.jit,FirstRPN(Compiler.jit->cur_rpn_start));
     ret=MAlloc(sizeof(CFunction));
-    jit_disable_optimization(Compiler.jit,0xff);
-    jit_generate_code(Compiler.jit);
+    ret->func_ptr=JitEmitCode(Compiler.jit,arity);
     //Run this after the label pointers are computed
     idx=Compiler.labels->mask+1;
     while(--idx>=0) {
@@ -7633,7 +6224,6 @@ CFunction *CompilerEmitCode() {
     ret->type=HTT_FUNC;
     ret->has_exports=has_exports;
     ret->jit=Compiler.jit;
-    ret->func_ptr=Compiler.func_ptr;
     ret->relocs=Compiler.relocations;
     ret->locals=Compiler.locals;
     ret->labels=Compiler.labels;
@@ -7653,6 +6243,7 @@ CFunction *CompilerEmitCode() {
         }
         Compiler.cur_strings=HashTableNew(0x40);
     }
+    //JIT_RemoveNonDebuggerInfo(ret->jit);
     return ret;
 }
 F64 EvalASTF64(AST *ast) {
@@ -7664,7 +6255,7 @@ F64 EvalASTF64(AST *ast) {
     CCompilerState *state=NewCompilerState;
     Compiler.ret_type=HashFind("F64",Compiler.globals);
     CompileAST(ret);
-    CFunction *func=CompilerEmitCode;
+    CFunction *func=CompilerEmitCode(0);
     if(func)
         F64(*fptr)()=func->func_ptr;
     else
@@ -7675,12 +6266,10 @@ F64 EvalASTF64(AST *ast) {
     if(func) FreeFunction(func);
     return v;
 }
-I64 EvalAST(AST *ast) {
-    AST *ret=MAlloc(sizeof(AST));
+I64 EvalAST(AST *ast,Bool no_eval=FALSE) {
+    AST *ret;
     CHashTable *swap;
     I64 v=0,en=PoopSetGCEnable(0),idx;
-    ret->type=AST_RETURN;
-    ret->unopArg=ast;
     CCompilerState *state=NewCompilerState;
     //We swap out the "new" and empty Compiler labels with the old ones,Global labels are used in global asm-blocks and need to be flushed to avoid wierdness
     if(GlobalCompiler==state) {
@@ -7688,9 +6277,20 @@ I64 EvalAST(AST *ast) {
         Compiler.labels=state->labels;
         state->labels=swap;
     }
-    Compiler.ret_type=HashFind("I64i",Compiler.globals);
-    CompileAST(ret);
-    CFunction *func=CompilerEmitCode;
+    if(no_eval) {
+        CompileAST(ast);
+        if(Compiler.debug_mode) {
+            JIT_FUNC_CALL(Compiler.jit,0);
+            JIT_I64(Compiler.jit,&LeaveFunc);
+        }
+    } else {
+        ret=MAlloc(sizeof(AST));
+        ret->type=AST_RETURN;
+        ret->unopArg=ast;
+        Compiler.ret_type=HashFind("I64i",Compiler.globals);
+        CompileAST(ret);
+    }
+    CFunction *func=CompilerEmitCode(0);
     if(func)  {
         I64(*fptr)()=func->func_ptr;
         v=(*fptr)();
@@ -7699,7 +6299,7 @@ I64 EvalAST(AST *ast) {
     RestoreCompilerState(state);
     if(func) {
         if(func->has_exports) {
-            func->str=MStrPrint("asm.%x",GetUnique);
+            func->str=MStrPrint("asm.%x",GetUnique);    
             HashAdd(func,Compiler.globals);
         } else
             FreeFunction(func);
@@ -7723,7 +6323,7 @@ CFunction *CompileFunction(AST *at,CCmpCtrl *cc,CType *type,U8 *name,Bool inst_e
     Compiler.ret_type=type->ret_type;
     AST *body;
     Compiler.in_func=TRUE;
-    I64 idx,cnt,frame_off=0,align,freg,fp;
+    I64 idx,cnt,freg,fp;
     cnt=MSize(type->arg_types)/sizeof(CType*);
     for(idx=0;idx!=cnt;idx++) {
         if(type->arg_names[idx]) {
@@ -7731,7 +6331,7 @@ CFunction *CompileFunction(AST *at,CCmpCtrl *cc,CType *type,U8 *name,Bool inst_e
             arg->str=StrNew(type->arg_names[idx]);
             arg->type=HTT_VAR;
             arg->hc_type=type->arg_types[idx];
-            if(IsF64(arg->hc_type)||IsInteger(arg->hc_type)||IsPtrType(arg->hc_type))
+            if(IsInteger(arg->hc_type)||IsPtrType(arg->hc_type))
                 arg->isReg=TRUE; //Can be turned false later.
             HashAdd(arg,Compiler.locals);
         }
@@ -7762,112 +6362,85 @@ CFunction *CompileFunction(AST *at,CCmpCtrl *cc,CType *type,U8 *name,Bool inst_e
     }
     if(cc->token!='{') ParserFail(cc,"Expected function body.");
     body=ParseScope(cc,inst_eval);
-    Compiler.first_avail_ireg=3;
-    Compiler.first_avail_freg=2;
     cnt=Compiler.locals->mask+1;
     for(idx=0;idx!=cnt;idx++) {
         arg=Compiler.locals->body[idx];
         for(;arg;arg=arg->next) {
             if(arg->type==HTT_VAR&&!(arg->link.type&LINK_STATIC)) {
                 if(arg->isReg&&!Compiler.force_noregs) {
-                    if(IsF64(arg->hc_type))
-                        arg->reg=Compiler.first_avail_freg++;
-                    else
-                        arg->reg=Compiler.first_avail_ireg++;
+                    arg->reg=Compiler.first_avail_reg++;
                 } else {
                     arg->isReg=FALSE;
-                    align=arg->hc_type->align;
-                    frame_off+=(align-(frame_off%align))%align;
-                    arg->frame_off=frame_off;
-                    frame_off+=arg->hc_type->sz;
+                    arg->frame_off=JIT_ALLOCAI(Compiler.jit,arg->hc_type.sz);
                 }
             }
         }
-    }
-    Compiler.frame_off=jit_allocai(Compiler.jit,frame_off);
-    cnt=Compiler.locals->mask+1;
-    for(idx=0;idx!=cnt;idx++) {
-        arg=Compiler.locals->body[idx];
-        for(;arg;arg=arg->next) {
-            if(arg->type==HTT_VAR&&!(arg->link.type&LINK_STATIC)) {
-                if(!arg->isReg){
-                    arg->frame_off+=Compiler.frame_off;
-                }
-            }
-        }
-    }
-    cnt=MSize(type->arg_types)/sizeof(CType*);
-    for(idx=0;idx!=cnt;idx++) {
-        if(IsF64(type->arg_types[idx])) {
-            jit_declare_arg(Compiler.jit,JIT_FLOAT_NUM,8);
-        } else if(IsSigned(type->arg_types[idx]))
-            jit_declare_arg(Compiler.jit,JIT_SIGNED_NUM,8);
-        else
-            jit_declare_arg(Compiler.jit,JIT_UNSIGNED_NUM,8);
     }
     cnt=MSize(type->arg_types)/sizeof(CType*);
     for(idx=0;idx!=cnt;idx++) {
         if(type->arg_names[idx]) {
             arg=HashFind(type->arg_names[idx],Compiler.locals);
             if(arg->isReg) {
-                if(IsF64(type->arg_types[idx]))
-                    jit_getarg(Compiler.jit,jit_FR(arg->reg),idx);
-                else
-                    jit_getarg(Compiler.jit,jit_R(arg->reg),idx);
+                JIT_MOV(Compiler.jit);
+                JIT_R(Compiler.jit,arg->reg);
+                JIT_GETARGI(Compiler.jit,idx);
             } else {
                 if(IsF64(type->arg_types[idx])) {
-                    jit_getarg(Compiler.jit,jit_FR(freg=GetFreeFReg),idx);
-                    PushIRFReg(HashFind("F64",Compiler.globals),freg);
+                    JIT_FMOV(Compiler.jit);
+                    JIT_FDEREF(Compiler.jit,arg->frame_off);
+                    JIT_RBP(Compiler.jit);
+                    JIT_GETARGF(Compiler.jit,idx);
                 } else {
-                    jit_getarg(Compiler.jit,jit_R(freg=GetFreeIReg),idx);
-                    PushIRReg(HashFind("I64i",Compiler.globals),freg);
+                    JIT_MOV(Compiler.jit);
+                    JIT_DEREF(Compiler.jit,arg->frame_off);
+                    JIT_RBP(Compiler.jit);
+                    JIT_GETARGI(Compiler.jit,idx);
                 }
-                PushIRIndirX(arg->hc_type,fp=GetFreeIReg,arg->frame_off);
-                jit_movr(Compiler.jit,jit_R(fp),R_FP);
-                Assign(Compiler.stack,Compiler.stack->last);
-                PopIRValue,PopIRValue;
             }
         }
     }
     if(type->has_vargs) {
-         jit_declare_arg(Compiler.jit,JIT_SIGNED_NUM,8);
         arg=HashFind("argc",Compiler.locals);
         if(arg->isReg) {
-            jit_getarg(Compiler.jit,jit_R(arg->reg),idx++);
+            JIT_MOV(Compiler.jit);
+            JIT_R(Compiler.jit,arg->reg);
+            JIT_GETARGI(Compiler.jit,idx);
         } else {
-            jit_getarg(Compiler.jit,jit_R(freg=GetFreeIReg),idx++);
-            PushIRReg(HashFind("I64i",Compiler.globals),freg);
-            PushIRIndirX(arg->hc_type,fp=GetFreeIReg,arg->frame_off);
-            jit_movr(Compiler.jit,jit_R(fp),R_FP);
-            Assign(Compiler.stack,Compiler.stack->last);
-            PopIRValue,PopIRValue;
+            JIT_GETARGI(Compiler.jit,cnt);
         }
-         jit_declare_arg(Compiler.jit,JIT_PTR,8);
         arg=HashFind("argv",Compiler.locals);
         if(arg->isReg) {
-            jit_getarg(Compiler.jit,jit_R(arg->reg),idx++);
+            JIT_MOV(Compiler.jit);
+            JIT_R(Compiler.jit,arg->reg);
         } else {
-            jit_getarg(Compiler.jit,jit_R(freg=GetFreeIReg),idx++);
-            PushIRReg(HashFind("I64i",Compiler.globals),freg);
-            PushIRIndirX(arg->hc_type,fp=GetFreeIReg,arg->frame_off);
-            jit_movr(Compiler.jit,jit_R(fp),R_FP);
-            Assign(Compiler.stack,Compiler.stack->last);
-            PopIRValue,PopIRValue;
+            JIT_MOV(Compiler.jit);
+            JIT_DEREF(Compiler.jit,arg->frame_off);
+            JIT_RBP(Compiler.jit);
         }
+        JIT_ADDI(Compiler.jit);
+        JIT_RBP(Compiler.jit);
+        //start of argv
+        //argc
+        //args
+        //...
+        //RETURN ADDRESS
+        //OLD RBP
+        //RBP
+        JIT_I64(Compiler.jit,16+8*(cnt+1));
     }
-
+    Compiler.cur_tmp_reg=++Compiler.first_avail_reg;
     CompileAstWithBreakpoint(body);
-    PopIRValue;
     if(Compiler.debug_mode) {
-        jit_prepare(Compiler.jit);
-        jit_call(Compiler.jit,&LeaveFunc);
+        JIT_FUNC_CALL(Compiler.jit,0);
+        JIT_I64(Compiler.jit,&LeaveFunc);
     }
-    jit_reti(Compiler.jit,0);
+    JIT_RETI(Compiler.jit);
+    JIT_I64(Compiler.jit,0);
     idx=Compiler.asm_tainted_label_names.mask+1;
     while(--idx>=0) {
         for(tainted=Compiler.asm_tainted_label_names.body[idx];tainted;tainted=tainted->next) {
             if(label=HashFind(tainted->str,Compiler.labels))
-                jit_taint_label(Compiler.jit,label->op);
+                JIT_ASM_TAINT_LABEL(label->op);
 
         }
     }
@@ -7884,7 +6457,9 @@ CFunction *CompileFunction(AST *at,CCmpCtrl *cc,CType *type,U8 *name,Bool inst_e
         }
     }
     FreeAST(body);
-    ret=CompilerEmitCode;
+    cnt=MSize(type->arg_types)/sizeof(CType*);
+    if(type->has_vargs) cnt++; //argv is implicit
+    ret=CompilerEmitCode(cnt);
     if(!ret) {
         ret=HashFind(name,Compiler.globals);
         if(ret) {
@@ -7904,7 +6479,7 @@ CFunction *CompileFunction(AST *at,CCmpCtrl *cc,CType *type,U8 *name,Bool inst_e
             idx=Compiler.globals->mask+1;
             while(--idx>=0) {
                 func=Compiler.globals->body[idx];
-                for(;func;func=func->next) {
+            for(;func;func=func->next) {
                         if(func->type==HTT_FUNC)
                         FillInRelocations(func);
                 }
@@ -7920,22 +6495,6 @@ I64 SetCallStackSize(I64 sz) {
 }
 I64 CallStackSize() {
     return _Debugger.call_stack->size/2;
-}
-I64 FunctionParents(U0 **ptrs,I64 max) {
-    --max;
-    I64 top=_Debugger.call_stack->size-2,cnt=0;
-    *ptrs++=_Debugger.ctrl->last_rip;
-    for(;top>=0<max;top-=2)
-        ptrs[--max,cnt++]=_Debugger.call_stack->data[top];
-    return cnt;
-}
-I64 ParentFramePtrs(U0 **ptrs,I64 max,jit_debugger_regs *regs) {
-    --max;
-    I64 top=_Debugger.call_stack->size-2,cnt=0;
-    if(regs) *ptrs++=regs->_RBP;
-    for(;top>=0<max;top-=2)
-        ptrs[--max,cnt++]=_Debugger.call_stack->data[top+1];
-    return cnt;
 }
 U0 EnterFunc(U0 *frame) {
     VectorPush(_Debugger.call_stack,frame(U0**)[1]);
@@ -7956,7 +6515,7 @@ AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,
             case AST_ADD:
             binop_a=CompileX64Mode(a->binop.a,base,index,scale,offsets);
             binop_b=CompileX64Mode(a->binop.b,base,index,scale,offsets);
-            if(binop_a||binop_b) {
+            if(binop_a&&binop_b) {
                 FreeAST(binop_a),FreeAST(binop_b);
                 ret=MAlloc(sizeof(AST));
                 ret->type=AST_X64_MODE;
@@ -8011,6 +6570,10 @@ AST *CompileX64Mode(AST *a,CReg **base,CReg **index,I64 *scale,CVector *offsets,
     } catch {
         CatchIf('Parser','Lexer');
     }
+    for(cnt=offsets->size-1;cnt>=0;cnt--) {
+        AssignTypeToNode(offsets->data[cnt]);
+        offsets->data[cnt](AST*)->type2=GetType("I64i");
+    }
     return NULL;
 }
 U0 AsmInheritLocalsFromState(CCompilerState *state) {
@@ -8038,7 +6601,6 @@ AST *ParseX64Mode(CCmpCtrl *cc,COpcode *opc) {
     CReg *seg=NULL,*base=NULL,*index=NULL;
     AST *tmp,*tmp2,*offset,*ret,*sum;
     CVector *offsets;
-    CIRValue *ir_value;
     CType *addr_type=NULL;
     Bool is_indirect=FALSE;
     if(cc->token==TK_IDENT&&GetType(cc->cur_str))
@@ -8113,58 +6675,40 @@ AST *ParseX64Mode(CCmpCtrl *cc,COpcode *opc) {
             tmp->binop.b=offset;
             ret->x64_mode_offset=tmp;
         }
+        offset->type2=GetType("I64i");
     }
     if(!is_indirect) {
         if(base)
             ret->x64_mode=X64ModeReg(base);
         else {
             //See x64_mode_offsets;
-            if(AsmReferencesNonLocals(ret->x64_mode_offset)) {
-                max_width=0;
-                for(;opc;opc=opc->next_op) {
-                    if(opc->flags&OPC_F_IB)
-                        max_width=MaxI64(max_width,1);
-                    else if(opc->flags&OPC_F_IW)
-                        max_width=MaxI64(max_width,2);
-                    else if(opc->flags&OPC_F_ID)
-                        max_width=MaxI64(max_width,4);
-                    else if(opc->flags&OPC_F_IQ)
-                        max_width=MaxI64(max_width,8);
-                }
-                switch (max_width) {
-                    case 1:
-                    ret->x64_mode=X64ModeImm(0xff);
-                    break;
-                    case 2:
-                    ret->x64_mode=X64ModeImm(0xffff);
-                    break;
-                    case 4:
-                    ret->x64_mode=X64ModeImm(0xffffFFFF);
-                    break;
-                    case 8:
-                    ret->x64_mode=X64ModeImm(0xffffFFFFffff);
-                    break;
-                    default:
-                    //???
-                    ret->x64_mode=X64ModeImm(0);
-                }
-            } else {
-                cstate=NewCompilerState;
-                AsmInheritLocalsFromState(cstate);
-                Compiler.asm_mode=Compiler.in_func=TRUE;
-                tmp=MAlloc(sizeof(AST));
-                tmp->type=AST_RETURN;
-                tmp->unopArg=ret->x64_mode_offset;
-                Compiler.ret_type=GetType("I64i");
-                CompileAST(tmp);
-                patcher=CompilerEmitCode;
-                I64 (*fptr)()=patcher->func_ptr;
-                aconst=(*fptr)(); 
-                FreeFunction(patcher);
-                RestoreCompilerState(cstate);
-                ret->x64_mode=X64ModeImm(aconst);
-                FreeAST(tmp);
-                ret->x64_mode_offset=NULL;
+            max_width=0;
+            for(;opc;opc=opc->next_op) {
+                if(opc->flags&OPC_F_IB)
+                    max_width=MaxI64(max_width,1);
+                else if(opc->flags&OPC_F_IW)
+                    max_width=MaxI64(max_width,2);
+                else if(opc->flags&OPC_F_ID)
+                    max_width=MaxI64(max_width,4);
+                else if(opc->flags&OPC_F_IQ)
+                    max_width=MaxI64(max_width,8);
+            }
+            switch (max_width) {
+                case 1:
+                ret->x64_mode=X64ModeImm(0x7f);
+                break;
+                case 2:
+                ret->x64_mode=X64ModeImm(0x7fff);
+                break;
+                case 4:
+                ret->x64_mode=X64ModeImm(0x7fffFFFF);
+                break;
+                case 8:
+                ret->x64_mode=X64ModeImm(0x7fffFFFFffff);
+                break;
+                default:
+                //???
+                ret->x64_mode=X64ModeImm(0);
             }
         }
     } else {
@@ -8172,29 +6716,14 @@ AST *ParseX64Mode(CCmpCtrl *cc,COpcode *opc) {
             r=addr_type->sz;
         else
             r=0;
-        if((!base)&&!index)
+        if(!base&&!index)
             base=HashFind("RIP",regs);
-        if(ret->x64_mode_offset&&AsmReferencesNonLocals(ret->x64_mode_offset)) {
-            ret->x64_mode=X64ModeMem(seg,scale,index,base,0x11223344,r);
-        } else if(ret->x64_mode_offset&&!AsmReferencesNonLocals(ret->x64_mode_offset)) {
-            cstate=NewCompilerState;
-            AsmInheritLocalsFromState(cstate);
-            Compiler.asm_mode=Compiler.in_func=TRUE;
-            tmp=MAlloc(sizeof(AST));
-            tmp->type=AST_RETURN;
-            tmp->unopArg=ret->x64_mode_offset;
-            Compiler.ret_type=GetType("I64i");
-            CompileAST(tmp);
-            patcher=CompilerEmitCode;
-            fptr=patcher->func_ptr;
-            aconst=(*fptr)();
-            FreeFunction(patcher);
-            RestoreCompilerState(cstate);
-            ret->x64_mode=X64ModeMem(seg,scale,index,base,aconst,r);
-            FreeAST(tmp);
-            ret->x64_mode_offset=NULL;
-        } else 
-            ret->x64_mode=X64ModeMem(seg,scale,index,base,0x0,r);
+        //If we are using an offset,assume the maximum width
+        if(ret->x64_mode_offset)
+            max_width=0x11223344;
+        else
+            max_width=0;
+        ret->x64_mode=X64ModeMem(seg,scale,index,base,max_width,r);
     }
     VectorFree(offsets);
     Compiler.asm_mode=FALSE;
@@ -8225,7 +6754,10 @@ U0 ApplyAsmPatches(CFunction *f) {
                 patcher->ptr(U64*)[0]=value;
                 break;
             }
-        }
+        } else {
+            "UNPATCHED:%p\n",patcher; //TODO REMOVE
+            "%s\n",patcher->relocs->name;
+         }
         if(fully_patched&&patcher->is_const) {
             next=patcher->next_patch;
             FreeFunction(patcher);
@@ -8260,7 +6792,7 @@ Bool PatchAsmPatcher(CFunction *parent,CAsmPatcher *patcher ) {
                 nvar->type=HTT_VAR;
                 if(var->is_static) {
                     nvar->global_ptr=var->static_ptr;
-                } if(!var->isReg) {
+                } else if(!var->isReg) {
                     nvar->global_ptr=var->frame_off;
                 }
                 HashAdd(nvar,Compiler.globals);
@@ -8270,7 +6802,7 @@ Bool PatchAsmPatcher(CFunction *parent,CAsmPatcher *patcher ) {
     idx=parent->labels->mask+1;
     while(--idx>=0) {
         for(lab=parent->labels->body[idx];lab;lab=lab->next) {
-            if(lab->is_local) {
+			if(lab->is_local) {
                 StrScan(lab->str,LOCAL_LAB_FMT,&local_lab_name,&__local_scope);
                 if(patcher->label_scope!=__local_scope)
                     goto next;
@@ -8279,8 +6811,7 @@ Bool PatchAsmPatcher(CFunction *parent,CAsmPatcher *patcher ) {
             nvar=MAlloc(sizeof(CVariable));
             nvar->str=StrNew(local_lab_name);
             nvar->type=HTT_VAR;
-            nvar->extern_ptr=lab->ptr;
-            nvar->is_extern_ptr=TRUE;
+            nvar->global_ptr=lab->ptr;
             nvar->hc_type=GetType("U8i")+1;
             HashAdd(nvar,Compiler.globals);
             next:
@@ -8321,7 +6852,7 @@ U0 ImportLabelsFromStateAsVars(CCompilerState *state,I64 local_scope=-2) {
         }
     }
 }
-U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
+CAsmPatcher *CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2,Bool eval_only=FALSE) {
     AST *offset;
     Bool old_asm_mode=Compiler.asm_mode;
     CFunction *func;
@@ -8330,24 +6861,25 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
     CVariable *var,*nvar;
     CAsmPatcher *patcher;
     CLabel *lab;
-    CIRValue *ir_value;
     I64 (*fptr)();
     if(1) {
         patcher=MAlloc(sizeof(CAsmPatcher));
-        jit_dump_ptr(Compiler.jit,&patcher->ptr);
-        switch(width) {
-            case 1:
-            jit_data_byte(Compiler.jit,0);
-            break;
-            case 2:
-            jit_data_word(Compiler.jit,0);
-            break;
-            case 4:
-            jit_data_dword(Compiler.jit,0);
-            break;
-            case 8:
-            jit_data_qword(Compiler.jit,0);
-            break;
+        if(!eval_only) {
+            JIT_DUMP_PTR(Compiler.jit,&patcher->ptr);
+            switch(width) {
+                case 1:
+                JIT_DU8(Compiler.jit,0);
+                break;
+                case 2:
+                JIT_DU16(Compiler.jit,0);
+                break;
+                case 4:
+                JIT_DU32(Compiler.jit,0);
+                break;
+                case 8:
+                JIT_DU64(Compiler.jit,0);
+                break;
+            }
         }
         patcher->is_const=!AsmReferencesNonLocals(mode,TRUE);
         cstate=NewCompilerState;
@@ -8356,25 +6888,18 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
         Compiler.asm_mode=TRUE;
         Compiler.in_func=TRUE;
         Compiler.imports=cstate->imports;
-        PushIRReg(GetType("I64i"),r=GetFreeIReg);
         try {
             old_asm_mode=Compiler.asm_mode;
             Compiler.asm_mode=TRUE;
             AssignTypeToNode(mode);
+            JIT_RETI(Compiler.jit);
             CompileAST(mode);
         } catch {
             Compiler.asm_mode=old_asm_mode;
             CatchIf('Parser','Compile');
         }
         Compiler.asm_mode=old_asm_mode;
-        Assign(Compiler.stack->last,Compiler.stack);
-        if(Compiler.debug_mode) {
-            jit_prepare(Compiler.jit);
-            jit_call(Compiler.jit,&LeaveFunc);
-        }
-        jit_retr(Compiler.jit,jit_R(r));
-        PopIRValue,PopIRValue;
-        *patcher=*(func=CompilerEmitCode);
+        *patcher=*(func=CompilerEmitCode(0));
         patcher->width=width;
         patcher->is_rel=is_rel;
         patcher->label_scope=local_scope;
@@ -8383,8 +6908,11 @@ U0 CompileAsmConst(AST *mode,I64 width,Bool is_rel=FALSE,I64 local_scope=-2) {
         FillInRelocations(patcher);
         RestoreCompilerState(cstate);
     }
-    patcher->next_patch=Compiler.asm_patches;
-    Compiler.asm_patches=patcher;
+    if(!eval_only) {
+        patcher->next_patch=Compiler.asm_patches;
+        Compiler.asm_patches=patcher;
+    }
+    return patcher;
 }
 AST *ParseOpcode(CCmpCtrl *cc) {
     I64 acnt,idx;
@@ -8656,7 +7184,7 @@ U0 REPL(U8 *init=NULL,I64 flags=PF_DEBUGGER,U8 *body=NULL) {
     Lex(cc);
     try {
         while(ast=ParseStmt(cc)) {
-            EvalAST(ast);
+            EvalAST(ast,TRUE);
             FreeAST(ast);
         }
     } catch {
@@ -8673,7 +7201,7 @@ U0 REPL(U8 *init=NULL,I64 flags=PF_DEBUGGER,U8 *body=NULL) {
             Compiler.error_count=0;
             ast=ParseStmt(cc,TRUE);
             if(ast) {
-                EvalAST(ast);
+                EvalAST(ast,TRUE);
                 FreeAST(ast);
             }
         } catch {
@@ -8761,14 +7289,13 @@ U8 *LoadFunction(U8 *from,Bool verbose=FALSE,CFunction **dump_to=NULL) {
     CRelocation *reloc;
     CBinLabel blabel;
     CCompString *comp_string;
-    CLabel *label;
+    CLabel *label,*glabel;
     CBinAsmPatch basm_patch;
     CAsmPatcher *patcher;
-    if(*from!=1) return from;
     func=MAlloc(sizeof(CFunction));
     statics=HashTableNew(0x10);
     labels=HashTableNew(0x20);
-    for(ptr=++from;*ptr;ptr++);
+    for(ptr=from;*ptr;ptr++);
     U8 name[256];
     StrNCpy(name,from,ptr-from+1);
     from=ptr+1;
@@ -8825,6 +7352,7 @@ U8 *LoadFunction(U8 *from,Bool verbose=FALSE,CFunction **dump_to=NULL) {
         label=MAlloc(sizeof(CLabel));
         label->type=HTT_LABEL;
         label->str=StrNew(from);
+        label->ptr=blabel.offset;
         from+=StrLen(from)+1;
         switch(blabel.type) {
             case BIN_LABEL_LOCAL:
@@ -8860,6 +7388,20 @@ U8 *LoadFunction(U8 *from,Bool verbose=FALSE,CFunction **dump_to=NULL) {
             func->relocs=reloc;
         }
     }
+    //
+    cnt=labels->mask+1;
+    while(--cnt>=0) {
+        for(label=labels->body[cnt];label;label=label->next) {
+            label->ptr(U8*)+=func->func_ptr(U8*);
+            "PTR:%s->%p\n",label->str,label->ptr;
+            if(label->is_exported) {
+                glabel=MAlloc(sizeof(CLabel));
+                *glabel=*label;
+                glabel->str=StrNew(label->str);
+                HashAdd(glabel,Compiler.globals);
+            }
+        }
+    }
     Free(patches);
     func->locals=statics;
     func->type=HTT_FUNC;
@@ -8875,15 +7417,22 @@ U8 *LoadFunction(U8 *from,Bool verbose=FALSE,CFunction **dump_to=NULL) {
         *patcher=*tfunc;
         patcher->width=basm_patch.width;
         patcher->is_rel=basm_patch.is_rel;
-        patcher->ptr=basm_patch.offset+func->func_ptr;
+        patcher->ptr=basm_patch.offset+func->func_ptr(U8*);
         patcher->label_scope=basm_patch.labelContext;
+        if(verbose) {
+            "%p\n",patcher;
+            "is_rel:%d\n",patcher->is_rel;
+            "width:%d\n",patcher->width;
+            "offset:%p\n",basm_patch.offset;
+            "ptr:%p(func starts at %p)\n",patcher->ptr,func->func_ptr;
+            "context:%p\n",patcher->label_scope;
+        }
         Free(tfunc);
         if(func->asm_patches)
-            func->asm_patches->next_patch=patcher;
+            patcher->next_patch=func->asm_patches;
         func->asm_patches=patcher;
     }
-    ApplyAsmPatches(func);
-    //
+    //    
     cnt=MSize(strings)/sizeof(CBinString*);
     while(--cnt>=0) {
         CCompString *cs=MAlloc(sizeof(CCompString));
@@ -8893,10 +7442,11 @@ U8 *LoadFunction(U8 *from,Bool verbose=FALSE,CFunction **dump_to=NULL) {
         HashAdd(cs,AOTStrings);
         Free(strings[cnt]);
     }
-    Free(strings),Free(labels);
+    Free(strings);
     if(!dump_to)
         HashAdd(func,Compiler.globals);
     if(dump_to) *dump_to=func;
+    "END\n";
     return from;
 }
 I64 SerializeFunc(U8 *to,CFunction *func,Bool naked=FALSE) {
@@ -9005,7 +7555,7 @@ I64 SerializeFunc(U8 *to,CFunction *func,Bool naked=FALSE) {
     }
     //Function binary
     if(!func->func_ptr) throw('BinMod');
-    size=jit_bin_size(func->jit);
+    size=MSize(func->jit->buffer);
     tmp=size;
     to=WriteIfPresent(to,&tmp,8,&written);
     to=WriteIfPresent(to,func->func_ptr,size,&written);
@@ -9109,7 +7659,7 @@ U0 LoadBinModule(U8 *fn,Bool verbose=FALSE) {
     loop:
     switch(*ptr) {
         case 1:
-        ptr=LoadFunction(ptr,verbose);
+        ptr=LoadFunction(ptr+1,verbose);
         break;
         case 0:
         ptr=LoadVar(ptr,verbose);
@@ -9120,7 +7670,7 @@ U0 LoadBinModule(U8 *fn,Bool verbose=FALSE) {
         LexIncludeStr(cc,fn,MemCpy(MAlloc(cnt-(ptr-bin)+1),ptr,cnt-(ptr-bin)),TRUE);
         Lex(cc);
         while(ast=ParseStmt(cc)) {
-            EvalAST(ast);
+            EvalAST(ast,TRUE);
             FreeAST(ast);
         }
         goto en;
@@ -9169,11 +7719,11 @@ U0 CompileBinModule(U8 *source,U8 *fn="A.BIN",U8 *header=NULL) {
     while(cc->token) {
         stmt=ParseStmt(cc);
         CompileAST(stmt);
-        PopIRValue;
         FreeAST(stmt);
     }
-    jit_reti(Compiler.jit,0);
-    CFunction *main=CompilerEmitCode;
+    JIT_RETI(Compiler.jit);
+    JIT_I64(Compiler.jit,0);
+    CFunction *main=CompilerEmitCode(0);
     main->str=StrNew("@@Main");
     HashAdd(main,Compiler.globals);
     written=__CompileBinModule(NULL,header_text);
@@ -9263,32 +7813,12 @@ I64 JIT_Eval(U8 *text,U8 **unused) {
     //TODO free cc
     return ret;
 }
-#ifdef BOUNDS_CHECK
-U0 BtOnOOB(U8 *ptr,I64 sz) {
-    if(!WhineOnOutOfBounds(ptr,sz))
-        Backtrace(-1,0);
-}
-U0 CompileBoundsCheck(I64 r,I64 sz,I64 off=0) {
-    I64 tmp;
-    if(Compiler.bounds_check_mode) {
-        if(off) {
-            tmp=2; //Unused register typeically used for function calls.
-            jit_addi(Compiler.jit,jit_R(tmp),jit_R(r),off);
-        } else
-            tmp=r;
-        jit_prepare(Compiler.jit);
-        jit_putargr(Compiler.jit,jit_R(tmp));
-        jit_putargi(Compiler.jit,sz);
-        jit_call(Compiler.jit,&BtOnOOB);
-    }
-}
-#else
-U0 CompileBoundsCheck(I64 r,I64 sz,I64 off=0){}
-#endif
 #ifdef STAGE1
 GC_Collect;
-RegisterRuntimeClasses(&GetType,&LoaderCreateTypeFwd,&LoaderAddMember,&LoaderCreateArrayType);
-CompileBinModule("#define BOUNDS_CHECK\n#define SIGNAL\n#define RUNTIME_C\n#include \"CODEGEN.HC\";","CG.BIN","HCRT/HCRT.HH");
+//RegisterRuntimeClasses(&GetType,&LoaderCreateTypeFwd,&LoaderAddMember,&LoaderCreateArrayType);
+//CompileBinModule("#define BOUNDS_CHECK\n#define SIGNAL\n#define RUNTIME_C\n#include \"PARSER.HC\"#include \"HolyEd/EDITOR.HC\";","REPL.BIN","HCRT/HCRT.HH");
+//CompileBinModule("#define BOUNDS_CHECK\n#define SIGNAL\n#include \"PARSER2.HC\";","HCRT_TOS.BIN","HCRT/HCRT.HH");
+CompileBinModule("#include \"HCRT/HCRT.HH\"\n#include \"PARSER2.HC\";","HCRT_TOS.BIN","HCRT/HCRT.HH");
 #endif
 //See rl.c
 I64 __HCCompetions2(U8 *buf,U8 **dst) {
@@ -9473,7 +8003,7 @@ U0 WriteTagsAndErrsToFile(U8 *src,U8 *tags=NULL,U8 *errs=NULL) {
 Bool ParseAndRun(CCmpCtrl *cc) {
     AST *t=ParseStmt(cc);
     if(t) {
-        EvalAST(t);
+        EvalAST(t,TRUE);
         FreeAST(t);
         return TRUE;
     }

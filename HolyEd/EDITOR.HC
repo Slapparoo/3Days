@@ -507,7 +507,7 @@ U0 SDL_DrawWin(...) {
         I32 rx=SDL_GetSurfaceWidth(w->text),ry=SDL_GetSurfaceHeight(w->text);
         SDL_Rect sbox={w->begx*FONT_X2,w->begy*FONT_Y2,rx/FONT_X2*FONT_X2,ry/FONT_Y2*FONT_Y2};
         SDL_Rect wbox={0,0,rx/FONT_X2*FONT_X2,ry/FONT_Y2*FONT_Y2};
-        SDL_BlitScaled(w->text,&wbox,winsurf,&sbox);
+        SDL_BlitSurface(w->text,&wbox,winsurf,&sbox);
         if(w->cur_enabled) {
             SDL_Rect crect={w->begx*FONT_X2+w->curx*FONT_X2,w->begy*FONT_Y2+w->cury*FONT_Y2+FONT_Y2-2,FONT_X2,4};
             SDL_FillRect(winsurf,&crect,0xff000000);
@@ -768,7 +768,7 @@ U0 FocusCursor(CEditor *ed,I64 lmargin=0) {
         ed->x_scroll=ed->curx-w+1;
     }
     if(ed->cury<ed->vp_start_line) {
-        ed->vp_start_line=ed->cury;
+       ed->vp_start_line=ed->cury;
     } else if(ed->vp_start_line+SDL_WinY(ed->window)-ed->margin_top<=ed->cury) {
         ed->vp_start_line=ed->cury-SDL_WinY(ed->window)+1+ed->margin_top;
     }
@@ -1582,7 +1582,7 @@ I64 DrawEditor(CEditor *ed,I64 flags=ED_DRAW_DFT ,U8 *dialogtxt=NULL,I64 mb_acti
 }
 U0 EdUp(CEditor *ed) {
     if(ed->cury>0) {
-        --ed->cury;
+        ed->cury--;
         if(ed->cury<ed->vp_start_line)
             ed->vp_start_line=ed->cury;
         if(ed->_curx>RopeLength(GetLine(ed, ed->cury)->text))
@@ -1606,7 +1606,7 @@ U0 EdDown(CEditor *ed) {
     }
 }
 #define ED_MOVE_DONT_SKIP_TAB 1
-U0 EdRight(CEditor *ed,I64 flags=0) {
+U0 EdRight(CEditor *ed,I64 flags=0) {
     CLine *rline=GetLine(ed,ed->cury);
     U8 *text=Rope2Str(rline->text);
     I64 x=ed->curx,cnt=0;
@@ -2499,7 +2499,7 @@ I64 OpenFile(U8 *name,I64 ln=0)  {
   CBuffer *buf;
   if(buf=HashFind(name,buffers)) {
     Free(name);
-    buf->ed->cury=MinI64(ln,GetLineCount(buf->ed));
+    buf->ed->cury=MaxI64(0,MinI64(ln,GetLineCount(buf->ed)-1));
     return Edit(buf->ed);
   }
   I64 cnt;
@@ -2508,7 +2508,7 @@ I64 OpenFile(U8 *name,I64 ln=0)  {
   CEditor *new=EditorNew();
   EditorInsText(new,text,0);
   new->fn=StrNew(name);
-  new->cury=MinI64(ln,GetLineCount(new));
+  new->cury=MaxI64(0,MinI64(ln,GetLineCount(new)-1));
   Free(text);
   CreateTagsAndErrorsFiles("TAGS","ERRS",new->fn);
   new->tags=ReadTags("TAGS");
@@ -2895,6 +2895,10 @@ U0 Ed(U8 *fn) {
     OpenFile(fn,0);
     SDL_ExitScr;
 }
+
+
+
+
 
 
 

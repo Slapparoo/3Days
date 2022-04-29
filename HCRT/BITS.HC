@@ -256,7 +256,7 @@ I64 bitsperbyte[]={
 7, //254
 8, //255
 };
-I64 BCnt(I64 value) {
+I64 BCnt(U64 value) {
     I64 count=0;
     while(value!=0) {
         count+=bitsperbyte[value&0xff];
@@ -312,3 +312,4 @@ U32 BFieldExtU32(U8 *f,I64 bit,I64 size) {
     res&=(1<<size)-1;
     return res;
 }
+

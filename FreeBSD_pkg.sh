@@ -9,11 +9,11 @@ mkdir -p ${STAGEDIR}/usr
 mkdir -p ${STAGEDIR}/usr/local
 mkdir -p ${STAGEDIR}/usr/local/bin
 mkdir -p ${STAGEDIR}/usr/local/include/HolyC
-cp 3d_loader ${STAGEDIR}/usr/local/bin/3d
+cp 3d_loader2 ${STAGEDIR}/usr/local/bin/3d
 strip ${STAGEDIR}/usr/local/bin/3d
 chmod +x ${STAGEDIR}/usr/local/bin/3d
 set files = ( \
-    HCRT.BIN \
+    HCRT_TOS.BIN \
     )
 rm ${STAGEDIR}/plist
 echo "/usr/local/bin/3d" >> ${STAGEDIR}/plist

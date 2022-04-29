@@ -382,8 +382,21 @@ void LoadAOTBin(FILE *f,int flags,char **header) {
             FillInRelocations(map_get(&Loader.symbols,key),-100);
     }
     if(aaMain)
-        ((void(*)())aaMain->value_ptr)(0);
+        FFI_CALL_TOS_0(aaMain->value_ptr);
     if(header)
         *header=header_text;
     else TD_FREE(header);
+}
+char *GetAOTFunctionNameByPtr(void *ptr) {
+	map_iter_t iter=map_iter(&Loader.symbols);
+	const char *key;
+	CSymbol *sym;
+	while(key=map_next(&Loader.symbols,&iter)) {
+		sym=map_get(&Loader.symbols,key);
+		if(sym->type==SYM_FUNC) {
+			if(sym->value_ptr<=ptr&&sym->value_ptr+sym->size>=ptr)
+				return key;
+		}
+	}
+	return NULL;
 }

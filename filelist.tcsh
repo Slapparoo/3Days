@@ -3,7 +3,6 @@ set CFiles = ( \
  "./main.c"  \
  "./ext/vec/src/vec.c" \
  "./ext/map/src/map.c" \
- "./ext/myjit/myjit/jitlib-core.c" \
  "./TOSPrint.c" \
  "./ext/C_Unescaper/escaper.c" \
  "./ext/argtable3/argtable3.c" \
@@ -14,8 +13,10 @@ set CFiles = ( \
  "./ext/linenoise/linenoise.c" \
 )
 set AsmFiles = ( \
+  "./TOSJMP.yasm" \
   "./exceptLin.yasm" \
   "./debuggerAsm.yasm" \
+  "./FFI_SYSV.yasm" \
 )
 
 set HolyCFiles = ( \
@@ -44,21 +45,15 @@ set HolyCFiles = ( \
   "./HolyEd/KEYS2.HC" \
   "./HolyEd/FONT.HC" \
   "./FULL_RUNTIME.HC" \
+  "./PARSER2.HC" \
+  "./CODEGEN.HC" \
 )
 
-set MyjitFiles = (\
-  `find ext/myjit/myjit/` \
-)
 
 set HeaderFiles = ( \
   `find ext/ -name "*.h"` \
   "./3d.h" \
   "./poopalloc.h" \
-  # IMPORTANT,these files are used like headers so they are put in HeaderFiles \
-  "./ext/myjit/myjit/llrb.c" \
-  "./ext/myjit/myjit/jitlib-debug.c" \
-  "./ext/myjit/myjit/code-check.c" \
-  "./ext/myjit/myjit/x86-common-stuff.c" \
   "./alloc.h" \
   "./rl.h" \
 )
@@ -66,5 +61,5 @@ set HeaderFiles = ( \
 set MiscFiles = ( \
   "./make.tcsh" \
   "./filelist.tcsh" \
-  "./REPL.VBIN" \
+  "./HCRT/HCRT_TOS.BIN" \
 )

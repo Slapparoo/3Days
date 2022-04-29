@@ -1,0 +1,51 @@
+GLOBAL STK_HCSetJmp
+GLOBAL STK_HCLongJmp
+USE64
+SECTION .text
+;
+; Push dst ptr to stack then call
+STK_HCSetJmp:
+  MOV RAX, [RSP+8]
+  MOV [RAX],RAX
+  MOV [RAX+8],RBX
+  MOV [RAX+16],RCX
+  MOV [RAX+24],RDX
+  MOV [RAX+32],RSI
+  MOV [RAX+40],RDI
+  LEA RBX,[RSP+16] ;RSP BEFORE CALL
+  MOV [RAX+48],RBX 
+  MOV [RAX+56],RBP
+  MOV [RAX+64],R8
+  MOV [RAX+72],R9
+  MOV [RAX+80],R10
+  MOV [RAX+88],R11
+  MOV [RAX+96],R12
+  MOV [RAX+112],R13
+  MOV [RAX+120],R15
+  MOV RBX, [RSP]
+  MOV [RAX+192],RBX
+  MOV [RAX+200],R14
+  MOV RAX,0
+  RET
+
+;
+; Push pad pointer to stack before calling
+;
+STK_HCLongJmp:
+  MOV RAX,[RSP+8]
+  MOV RBX,[RAX+8]
+  MOV RCX,[RAX+16]
+  MOV RDX,[RAX+24]
+  MOV RSI,[RAX+32]
+  MOV RSP,[RAX+48]
+  MOV RBP,[RAX+56]
+  MOV R8,[RAX+64]
+  MOV R9,[RAX+72]
+  MOV R10,[RAX+80]
+  MOV R11,[RAX+88]
+  MOV R12,[RAX+96]
+  MOV R13,[RAX+112]
+  MOV R14,[RAX+200]
+  MOV R15,[RAX+120]
+  MOV RDI,[RAX+40]
+  JMP [RAX+192]

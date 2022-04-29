@@ -1,0 +1,237 @@
+;Poo Poo FFI for SystemV to TempleOS
+
+;
+; Push arguments as normal
+;
+%macro TOS_ffi 3
+GLOBAL FFI_%1
+EXTERN STK_%2
+FFI_%1:
+PUSH RBP
+MOV RBP,RSP
+AND RSP,-0x10
+PUSH R10
+PUSH R11
+LEA RCX,[RBP+8+8]
+PUSH R9
+PUSH R8
+PUSH RDX
+PUSH RCX
+CALL STK_%2
+ADD RSP,0x20
+POP R11
+POP R10
+LEAVE
+RET 8*%3
+
+%endmacro
+
+GLOBAL FFI_CALL_TOS_0
+FFI_CALL_TOS_0:
+PUSH RBP
+MOV RBP,RSP
+MOV RAX,RCX
+PUSH RBX
+CALL RAX
+POP RBX
+LEAVE
+RET
+
+GLOBAL FFI_CALL_TOS_1
+FFI_CALL_TOS_1:
+PUSH RBP
+MOV RBP,RSP
+MOV RAX,RCX
+PUSH RBX
+PUSH RDX
+CALL RAX
+POP RBX
+LEAVE
+RET
+
+GLOBAL FFI_CALL_TOS_2
+FFI_CALL_TOS_2:
+PUSH RBP
+MOV RBP,RSP
+MOV RAX,RCX
+PUSH RBX
+PUSH R8
+PUSH RDX
+CALL RAX
+POP RBX
+LEAVE
+RET
+
+GLOBAL FFI_CALL_TOS_3
+FFI_CALL_TOS_3:
+PUSH RBP
+MOV RBP,RSP
+MOV RAX,RCX
+PUSH RBX
+PUSH R9
+PUSH R8
+PUSH RDX
+CALL RAX
+POP RBX
+LEAVE
+RET
+
+;https://docs.microsoft.com/en-us/cpp/build/stack-usage?view=msvc-170
+; Fist stack arg:0x30
+; R9 HOME+0x28 
+; R8 HOME+0x20
+; RDX HOME+0x18
+; RCX HOME+0x10
+; RET ADDR+8
+; RBP
+GLOBAL FFI_CALL_TOS_4
+FFI_CALL_TOS_4:
+PUSH RBP
+MOV RBP,RSP
+PUSH RBX
+PUSH QWORD [RBP+0x30]
+PUSH R9
+PUSH R8
+PUSH RDX
+CALL RCX
+POP RBX
+LEAVE
+RET
+
+TOS_ffi EnterTry,EnterTry,0 ;
+TOS_ffi PopTryFrame,PopTryFrame,0 ;
+TOS_ffi GCollect,GCollect,0 ;
+TOS_ffi Del,Del,1 ;
+TOS_ffi throw,throw,1 ;
+TOS_ffi ExitCatch,ExitCatch,0 ;
+TOS_ffi BFFS,BFFS,1 ; 
+TOS_ffi BCLZ,BCLZ, 1;
+TOS_ffi __GetStr,__GetStr,1 ;
+TOS_ffi MemNCpy,MemNCpy,3 ; 
+TOS_ffi __Move,__Move,2 ;
+TOS_ffi Cd,Cd,1 ;
+TOS_ffi DirCur,DirCur,0 ;
+TOS_ffi DirMk,DirMk,1 ;
+TOS_ffi FileNameAbs,FileNameAbs,1 ;
+TOS_ffi IsDir,IsDir,1 ;
+TOS_ffi FileWrite,FileWrite,3 ;
+TOS_ffi FileRead,FileRead,2 ;
+TOS_ffi __Dir,__Dir,1 ;
+TOS_ffi IsWindows,IsWindows,0 ;
+TOS_ffi IsMac,IsMac,0 ;
+TOS_ffi CreateTagsAndErrorsFiles,CreateTagsAndErrorsFiles,3 ;
+TOS_ffi hc_SDL_GetWindowTitle,hc_SDL_GetWindowTitle,1 ;
+TOS_ffi SDL_GetClipboardText,SDL_GetClipboardText,0 ;
+TOS_ffi GetSurfaceW,GetSurfaceW,1 ;
+TOS_ffi GetSurfaceH,GetSurfaceH,1 ;
+TOS_ffi ForeachFunc,ForeachFunc,1 ;
+TOS_ffi log2,log2,1 ;
+TOS_ffi UnblockSignals,UnblockSignals,0 ;
+TOS_ffi SDL_Init,SDL_Init,1 ;
+TOS_ffi SDL_WasInit,SDL_WasInit,0 ;
+TOS_ffi SDL_CreateWindow,SDL_CreateWindow,6 ;
+TOS_ffi SDL_SetTextureBlendMode,SDL_SetTextureBlendMode,2 ;
+TOS_ffi SDL_CreateWindowAndRenderer,SDL_CreateWindowAndRenderer,5 ;
+TOS_ffi SDL_DestroyWindow,SDL_DestroyWindow,1 ;
+TOS_ffi SDL_DisableScreenSaver,SDL_DisableScreenSaver,0 ;
+TOS_ffi SDL_GetGrabbedWindow,SDL_GetGrabbedWindow,0 ;
+TOS_ffi SDL_GetWindowPosition,SDL_GetWindowPosition,3 ;
+TOS_ffi SDL_GetWindowMinimumSize,SDL_GetWindowMinimumSize,3 ;
+TOS_ffi SDL_GetWindowMaximumSize,SDL_GetWindowMaximumSize,3 ;
+TOS_ffi SDL_GetWindowSize,SDL_GetWindowSize,3 ;
+TOS_ffi SDL_HideWindow,SDL_HideWindow,1 ;
+TOS_ffi SDL_MaximizeWindow,SDL_MaximizeWindow,1 ;
+TOS_ffi SDL_MinimizeWindow,SDL_MinimizeWindow,1 ;
+TOS_ffi SDL_SetWindowBordered,SDL_SetWindowBordered,2 ;
+TOS_ffi SDL_SetWindowFullscreen,SDL_SetWindowFullscreen,2 ;
+TOS_ffi SDL_SetWindowMaximumSize,SDL_SetWindowMaximumSize,3 ;
+TOS_ffi SDL_SetWindowMinimumSize,SDL_SetWindowMinimumSize,3 ;
+TOS_ffi SDL_SetWindowResizable,SDL_SetWindowResizable,2 ;
+TOS_ffi SDL_SetWindowSize,SDL_SetWindowSize,3 ;
+TOS_ffi SDL_SetWindowTitle,SDL_SetWindowTitle,2 ;
+TOS_ffi SDL_ShowWindow,SDL_ShowWindow,1 ;
+TOS_ffi SDL_CreateRenderer,SDL_CreateRenderer,3 ;
+TOS_ffi SDL_CreateTexture,SDL_CreateTexture,5 ;
+TOS_ffi SDL_GetRenderer,SDL_GetRenderer,1 ;
+TOS_ffi SDL_GetRendererOutputSize,SDL_GetRendererOutputSize,3 ;
+TOS_ffi SDL_GetRenderTarget,SDL_GetRenderTarget,1 ;
+TOS_ffi SDL_GetTextureAlphaMod,SDL_GetTextureAlphaMod,2 ;
+TOS_ffi SDL_GetTextureColorMod,SDL_GetTextureColorMod,2 ;
+TOS_ffi SDL_RenderClear,SDL_RenderClear,1 ;
+TOS_ffi SDL_RenderCopy,SDL_RenderCopy,4 ;
+TOS_ffi SDL_RenderDrawLine,SDL_RenderDrawLine,5 ;
+TOS_ffi SDL_RenderDrawPoint,SDL_RenderDrawPoint,3 ; 
+TOS_ffi SDL_RenderDrawPoints,SDL_RenderDrawPoints,3 ;
+TOS_ffi SDL_RenderDrawRect,SDL_RenderDrawRect,2 ;
+TOS_ffi SDL_RenderDrawRects,SDL_RenderDrawRects,3 ;
+TOS_ffi SDL_RenderFillRects,SDL_RenderFillRects,3 ;
+TOS_ffi SDL_RenderGetClipRect,SDL_RenderGetClipRect,2 ;
+TOS_ffi SDL_RenderPresent,SDL_RenderPresent,1 ;
+TOS_ffi SDL_RenderSetClipRect,SDL_RenderSetClipRect,2 ;
+TOS_ffi SDL_SetTextureAlphaMod,SDL_SetTextureAlphaMod,2 ;
+TOS_ffi SDL_SetTextureColorMod,SDL_SetTextureColorMod,4 ;
+TOS_ffi SDL_UpdateTexture,SDL_UpdateTexture,4 ;
+TOS_ffi SDL_QueryTexture,SDL_QueryTexture,6 ;
+TOS_ffi SDL_SetClipboardText,SDL_SetClipboardText,1 ;
+TOS_ffi SDL_PollEvent,SDL_PollEvent,1 ;
+TOS_ffi SDL_WaitEvent,SDL_WaitEvent,1 ;
+TOS_ffi SDL_DestroyRenderer,SDL_DestroyRenderer,1 
+TOS_ffi SDL_DestroyTexture,SDL_DestroyTexture,1 ;
+TOS_ffi SDL_StartTextInput,SDL_StartTextInput,0 ;
+TOS_ffi SDL_StopTextInput,SDL_StopTextInput,0 ;
+TOS_ffi SDL_GetError,SDL_GetError,0 ;
+TOS_ffi SDL_ClearError,SDL_ClearError,0 ;
+TOS_ffi SDL_FlushEvent,SDL_FlushEvent,1 ;
+TOS_ffi SDL_CreateRGBSurface,SDL_CreateRGBSurface,8 ;
+TOS_ffi SDL_CreateRGBSurfaceFrom,SDL_CreateRGBSurfaceFrom,9 ;
+TOS_ffi SDL_UpperBlit,SDL_UpperBlit,4 ;
+TOS_ffi SDL_FillRect,SDL_FillRect,3 ;
+TOS_ffi SDL_FillRects,SDL_FillRects,4 ;
+TOS_ffi SDL_GetClipRect,SDL_GetClipRect,2 ;
+TOS_ffi SDL_GetColorKey,SDL_GetColorKey,2 ;
+TOS_ffi SDL_GetSurfaceAlphaMod,SDL_GetSurfaceAlphaMod,2 ;
+TOS_ffi SDL_GetSurfaceColorMod,SDL_GetSurfaceColorMod,4 ;
+TOS_ffi SDL_LockSurface,SDL_LockSurface,1 ;
+TOS_ffi SDL_UnlockSurface,SDL_UnlockSurface,1 ;
+TOS_ffi SDL_SetClipRect,SDL_SetClipRect,2 ;
+TOS_ffi SDL_SetColorKey,SDL_SetColorKey,3 ;
+TOS_ffi SDL_SetSurfaceColorMod,SDL_SetSurfaceColorMod,4 ; 
+TOS_ffi SDL_SetSurfaceAlphaMod,SDL_SetSurfaceAlphaMod,2 ;
+TOS_ffi SDL_SetSurfaceRLE,SDL_SetSurfaceRLE,2 ;
+TOS_ffi SDL_BlitSurface,SDL_BlitSurface,4 ;
+TOS_ffi SDL_BlitScaled,SDL_BlitScaled,4 ;
+TOS_ffi SDL_FreeSurface,SDL_FreeSurface,1 ;
+TOS_ffi SDL_UpdateWindowSurface,SDL_UpdateWindowSurface,1 ;
+TOS_ffi SDL_GetWindowSurface,SDL_GetWindowSurface,1 ;
+TOS_ffi __GetBuiltinMacrosText,__GetBuiltinMacrosText,0 ;
+TOS_ffi exit,exit,1 ;
+TOS_ffi trunc,trunc,1 ;
+TOS_ffi round,round,1 ;
+TOS_ffi log10,log10,1 ;
+TOS_ffi log,log,1 ;
+TOS_ffi floor,floor,1 ;
+TOS_ffi ceil,ceil,1 ;
+TOS_ffi tan,tan,1 ;
+TOS_ffi sqrt,sqrt,1 ;
+TOS_ffi sin,sin,1 ;
+TOS_ffi cos,cos,1 ; 
+TOS_ffi memset,memset,3 ;
+TOS_ffi abs,abs,1 ;
+TOS_ffi atan,atan,1 ;
+TOS_ffi GetFs,GetFs,0 ;
+TOS_ffi strstr,strstr,2 ;
+TOS_ffi strncpy,strncpy,3 ; 
+TOS_ffi strcpy,strcpy,2 ;
+TOS_ffi strncmp,strncmp,3 ;
+TOS_ffi strcmp,strcmp,2 ;
+TOS_ffi strlen,strlen,1 ;
+TOS_ffi PoopMAlloc,PoopMAlloc,1 ;
+TOS_ffi PoopFree,PoopFree,1 ;
+TOS_ffi PoopSetGCEnable,PoopSetGCEnable,1 ;
+TOS_ffi pow,pow,2 ;
+TOS_ffi BoundsCheck,BoundsCheck,2 ;
+TOS_ffi TOSPrint,TOSPrint,2 ;
+TOS_ffi Signal,Signal,2 ;
+TOS_ffi RegisterRuntimeClasses,RegisterRuntimeClasses,4 ;
+TOS_ffi MSize,MSize,1 ;
+TOS_ffi GetBuiltinMacrosText,GetBuiltinMacrosText,0 ;

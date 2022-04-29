@@ -80,8 +80,8 @@ CRope *RopeAppendText(CRope *a,U8 *text) {
   U8 buffer[ROPE_LEN+1];
   buffer[ROPE_LEN]=0;
   CRope *r=MAlloc(sizeof(CRope));
-  I64 len;
-  r->isLeaf=TRUE,StrNCpy(r->buffer,text,len=MinI64(ROPE_LEN,StrLen(text)));
+  I64 len=MinI64(ROPE_LEN,StrLen(text));
+  r->isLeaf=TRUE,StrNCpy(r->buffer,text,len);
   buffer[len]=0;
   r->text_length=len;
   if(text[len]!=0)

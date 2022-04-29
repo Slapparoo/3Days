@@ -57,8 +57,6 @@ epm
 *~
 !ext/wineditline-2.206/lib64/*
 !SDL2.dll
-*.BIN
-!HCRT/HCRT.BIN
 3d_loader
 chroot/*
 proot

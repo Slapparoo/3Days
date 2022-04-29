@@ -1,4 +1,5 @@
 #include "../LEXER.HH"
+U0 LoadBinModule(U8 *fn,Bool verbose=FALSE);
 class CLexFile
 {
     CLexFile *next;
@@ -895,14 +896,13 @@ lex_check_comment:
                 LexWarn(cc,"Unable to include file \"%q\".",cc->cur_str);
                 goto lex_cont;
               }
-              /*
               if(FileExtDot(buf2)) {
                   if(!StrCmp(FileExtDot(buf2),".BIN")) {
-                    LoadBinFile(buf2);
+                    LoadBinModule(buf2);
                     Free(buf2);
                     goto lex_cont;
                   }
-              }*/
+              }
               buf3=buf2;
               if(IsWindows) {
                 if(StrOcc(buf2,'\\')) {
@@ -1153,9 +1153,9 @@ U8 *LexMatchFile(CCmpCtrl *cc,U8 *name) {
         for(;tmph;tmph=tmph->next) {
             bptr2=tmph->str;
             while(bptr2=StrFirstOcc(bptr2,delim)) {
-                if(!StrCmp(++bptr2,name)) return tmph->str;
+                if(!StrCmp(++bptr2,name)) return StrNew(tmph->str);
             }
-            if(!StrCmp(tmph->str,name)) return tmph->str;
+            if(!StrCmp(tmph->str,name)) return StrNew(tmph->str);
         }
     }
     return NULL;
@@ -1181,3 +1181,6 @@ U0 StreamPrint(U8 *fmt,...) {
     }
     Free(buf);
 }
+
+
+

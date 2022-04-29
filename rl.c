@@ -93,7 +93,7 @@ static void completion(const char *buf,linenoiseCompletions *lc) {
     #endif
     CSymbol *hccomps;
     if(hccomps=map_get(&Loader.symbols,"__HCCompetions")) {
-        char **res=((char**(*)(char*))(hccomps->value_ptr))(buf);
+        char **res=FFI_CALL_TOS_1(hccomps->value_ptr,buf);
         if(!res) return;
         int64_t cnt=MSize(res)/sizeof(char*),idx;
         for(idx=0;idx!=cnt;idx++) {
@@ -127,7 +127,7 @@ static char **AttemptComps(const char *buf,int s,int e) {
 	CSymbol *hccomps;
 	count=0;
     if(hccomps=map_get(&Loader.symbols,"__HCCompetions")) {
-        char **res=((char**(*)(char*))(hccomps->value_ptr))(buf);
+        char **res=FFI_CALL_TOS_1(hccomps->value_ptr,buf);
         cmps=res;
         if(!res)  {
 			count=0;

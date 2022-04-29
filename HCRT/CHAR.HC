@@ -262,8 +262,8 @@ and take addr.
 	    ch=*fmt++;
 	  }
 	}
-	buf=MAlloc(len+1);
-	for (i=0;i<len;i++)
+ buf=MAlloc(len+1);
+ for (i=0;i<len;i++)
 	  buf[i]=*src++;
 	buf[i]=0;
 	switch (ch) {
@@ -271,7 +271,7 @@ and take addr.
 	    if (cur_arg>=argc)
 	      throw('Scan');
 	    pptr=argv[cur_arg++];
-	    StrCpy(*pptr,buf);
+    StrCpy(*pptr,buf);
 	    break;
 	  case 'c':
 	    if (cur_arg>=argc)
@@ -464,3 +464,6 @@ U8 *StrLastOcc(U8 *str,U8 *marker) {
   if(ch) return &str[cnt];
   return NULL;
 }
+
+
+

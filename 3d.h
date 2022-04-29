@@ -7,7 +7,6 @@
 typedef int8_t ExceptBuf[216];
 #include "ext/map/src/map.h"
 #include "ext/vec/src/vec.h"
-#include "ext/myjit/myjit/jitlib.h"
 #include "rl.h"
 #define AOT_NO_IMPORT_SYMS (1<<0)
 #define AOT_MALLOCED_SYM (1<<1)
@@ -74,3 +73,8 @@ void InitRL();
 void RegisterRuntimeClasses(void *gt,void *ctf,void *add_mem,void *c_arr_t);
 void RegisterMacrosAndREPL(char *includes,int flags,char *body_code) ;
 void RegisterMacrosAndCompile(char *includes,char *to_file,char *embed_header);
+int64_t FFI_CALL_TOS_0(void *fptr);
+int64_t FFI_CALL_TOS_1(void *fptr,int64_t);
+int64_t FFI_CALL_TOS_2(void *fptr,int64_t, int64_t);
+int64_t FFI_CALL_TOS_3(void *fptr,int64_t, int64_t,int64_t);
+int64_t FFI_CALL_TOS_4(void *fptr,int64_t, int64_t,int64_t,int64_t);

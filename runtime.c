@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
-#include <signal.h>
 extern int64_t HCSetJmp(void *ptr);
 extern void HCLongJmp(void *ptr);
 #ifndef MACOS
@@ -38,539 +37,6 @@ extern void HCLongJmp(void *ptr);
 #include <sys/mman.h>
 #endif
 typedef struct CType CType;
-static void *jit_INIT() {
-    return jit_init();
-}
-#ifdef TARGET_WIN32
-#include <winnt.h>
-#include <dbghelp.h>
-#endif
-static void *jit_BREAKPOINT(void *jit,void *bp,void *routine,void *ctrl) {
-  return jit_breakpoint(jit,bp,routine,ctrl);
-}
-static void jit_GENERATE_CODE(void *jit) {
-	jit_generate_code(jit,NULL);
-}
-static int64_t jit_BINSIZE(void *jit) {
-    return jit_bin_size(jit);
-}
-static void jit_DUMP_OPS(void *jit,int l) {
-	jit_dump_ops(jit,l);
-}
-static int64_t jit_R(int64_t r) {
-    return R(r);
-}
-static int64_t jit_FR(int64_t r) {
-    return FR(r);
-}
-static int64_t jit_R_FP() {
-    return R_FP;
-}
-static void *jit_ANDR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_andr(jit,a,b,c);
-}
-static void *jit_ANDI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_andi(jit,a,b,c);
-}
-static void *jit_GET_LABEL(void *j) {
-    return jit_get_label(j);
-}
-static void *jit_PROLOG(void *jit,void *fp) {
-    return jit_prolog(jit,fp);
-}
-static void *jit_MOVR(void *jit,int64_t a,int64_t b) {
-    return jit_movr(jit,a,b);
-}
-static void *jit_MOVI(void *jit,int64_t a,int64_t b) {
-    return jit_movi(jit,a,b);
-}
-static void *jit_JMPR(void *jit,int64_t a) {
-    return jit_jmpr(jit,a);
-}
-static void *jit_JMPI(void *jit,int64_t a) {
-    return jit_jmpi(jit,a);
-}
-static void *jit_PATCH(void *jit,void *a) {
-    return jit_patch(jit,a);
-}
-static void *jit_PREPARE(void *jit) {
-    return jit_prepare(jit);
-}
-static void *jit_PUTARGI(void *jit,int64_t a) {
-    return jit_putargi(jit,a);
-}
-static void *jit_PUTARGR(void *jit,int64_t a) {
-    return jit_putargr(jit,a);
-}
-static void *jit_CALL(void *jit,int64_t a) {
-    return jit_call(jit,a);
-}
-static void *jit_CALLR(void *jit,int64_t a) {
-    return jit_callr(jit,a);
-}
-static void *jit_DECLARE_ARG(void *jit,int64_t a,int64_t b) {
-    return jit_declare_arg(jit,a,b);
-}
-static void *jit_RETR(void *jit,int64_t a) {
-    return jit_retr(jit,a);
-}
-static void *jit_RETI(void *jit,int64_t a) {
-    return jit_reti(jit,a);
-}
-static void *jit_RETVAL(void *jit,int64_t a) {
-    return jit_retval(jit,a);
-}
-static void *jit_GETARG(void *jit,int64_t a,int64_t b) {
-    return jit_getarg(jit,a,b);
-}
-static void *jit_ADDR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_addr(jit,a,b,c);
-}
-static void *jit_ADDI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_addi(jit,a,b,c);
-}
-static void *jit_SUBR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_subr(jit,a,b,c);
-}
-static void *jit_SUBI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_subi(jit,a,b,c);
-}
-static void *jit_NEGR(void *jit,int64_t a,int64_t b) {
-    return jit_negr(jit,a,b);
-}
-static void *jit_MULR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_mulr(jit,a,b,c);
-}
-static void *jit_MULI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_muli(jit,a,b,c);
-}
-static void *jit_MULR_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_mulr_u(jit,a,b,c);
-}
-static void *jit_MULI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_muli_u(jit,a,b,c);
-}
-static void *jit_DIVR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_divr(jit,a,b,c);
-}
-static void *jit_DIVI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_divi(jit,a,b,c);
-}
-static void *jit_DIVR_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_divr_u(jit,a,b,c);
-}
-static void *jit_DIVI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_divi_u(jit,a,b,c);
-}
-static void *jit_MODR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_modr(jit,a,b,c);
-}
-static void *jit_MODI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_modi(jit,a,b,c);
-}
-static void *jit_MODR_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_modr_u(jit,a,b,c);
-}
-static void *jit_MODI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_modi_u(jit,a,b,c);
-}
-static void *jit_ORR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_orr(jit,a,b,c);
-}
-static void *jit_ORI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ori(jit,a,b,c);
-}
-static void *jit_XORR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_xorr(jit,a,b,c);
-}
-static void *jit_XORI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_xori(jit,a,b,c);
-}
-static void *jit_LSHR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_lshr(jit,a,b,c);
-}
-static void *jit_LSHI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_lshi(jit,a,b,c);
-}
-static void *jit_RSHR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_rshr(jit,a,b,c);
-}
-static void *jit_RSHI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_rshi(jit,a,b,c);
-}
-static void *jit_RSHR_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_rshr_u(jit,a,b,c);
-}
-static void *jit_RSHI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_rshi_u(jit,a,b,c);
-}
-static void *jit_NOTR(void*jit,int64_t a,int64_t b) {
-    return jit_notr(jit,a,b);
-}
-static void *jit_BLTR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bltr(jit,a,b,c);
-}
-static void *jit_BLTI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_blti(jit,a,b,c);
-}
-static void *jit_BLTR_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bltr_u(jit,a,b,c);
-}
-static void *jit_BLTI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_blti_u(jit,a,b,c);
-}
-
-static void *jit_BLER(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bler(jit,a,b,c);
-}
-static void *jit_BLEI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_blei(jit,a,b,c);
-}
-static void *jit_BLER_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bler_u(jit,a,b,c);
-}
-static void *jit_BLEI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_blei_u(jit,a,b,c);
-}
-
-static void *jit_BGTR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bgtr(jit,a,b,c);
-}
-static void *jit_BGTI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bgti(jit,a,b,c);
-}
-static void *jit_BGTR_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bgtr_u(jit,a,b,c);
-}
-static void *jit_BGTI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bgti_u(jit,a,b,c);
-}
-
-static void *jit_BGER(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bger(jit,a,b,c);
-}
-static void *jit_BGEI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bgei(jit,a,b,c);
-}
-static void *jit_BGER_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bger_u(jit,a,b,c);
-}
-static void *jit_BGEI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bgei_u(jit,a,b,c);
-}
-
-static void*jit_BEQR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_beqr(jit,a,b,c);
-}
-static void*jit_BEQI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_beqi(jit,a,b,c);
-}
-
-static void*jit_BNER(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bner(jit,a,b,c);
-}
-static void*jit_BNEI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_bnei(jit,a,b,c);
-}
-
-static void *jit_LTR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ltr(jit,a,b,c);
-}
-static void *jit_LTI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_lti(jit,a,b,c);
-}
-static void *jit_LTR_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ltr_u(jit,a,b,c);
-}
-static void *jit_LTI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_lti_u(jit,a,b,c);
-}
-
-static void *jit_GTR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_gtr(jit,a,b,c);
-}
-static void *jit_GTI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_gti(jit,a,b,c);
-}
-static void *jit_GTR_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_gtr_u(jit,a,b,c);
-}
-static void *jit_GTI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_gti_u(jit,a,b,c);
-}
-
-static void *jit_GER(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ger(jit,a,b,c);
-}
-static void *jit_GEI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_gei(jit,a,b,c);
-}
-static void *jit_GER_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ger_u(jit,a,b,c);
-}
-static void *jit_GEI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_gei_u(jit,a,b,c);
-}
-
-static void *jit_LER(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ler(jit,a,b,c);
-}
-static void *jit_LEI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_lei(jit,a,b,c);
-}
-static void *jit_LER_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ler_u(jit,a,b,c);
-}
-static void *jit_LEI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_lei_u(jit,a,b,c);
-}
-
-static void *jit_EQR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_eqr(jit,a,b,c);
-}
-static void *jit_EQI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_eqi(jit,a,b,c);
-}
-
-static void *jit_NER(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ner(jit,a,b,c);
-}
-static void *jit_NEI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_nei(jit,a,b,c);
-}
-
-static void* jit_LDR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ldr(jit,a,b,c);
-}
-static void* jit_LDI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ldi(jit,a,b,c);
-}
-static void* jit_LDXR(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
-    return jit_ldxr(jit,a,b,c,d);
-}
-static void* jit_LDXI(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
-    return jit_ldxi(jit,a,b,c,d);
-}
-
-static void* jit_LDR_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ldr_u(jit,a,b,c);
-}
-static void* jit_LDI_U(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_ldi_u(jit,a,b,c);
-}
-static void* jit_LDXR_U(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
-    return jit_ldxr_u(jit,a,b,c,d);
-}
-static void* jit_LDXI_U(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
-    return jit_ldxi_u(jit,a,b,c,d);
-}
-
-static void* jit_STR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_str(jit,a,b,c);
-}
-static void* jit_STI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_sti(jit,a,b,c);
-}
-
-static void* jit_STXR(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
-    return jit_stxr(jit,a,b,c,d);
-}
-static void* jit_STXI(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
-    return jit_stxi(jit,a,b,c,d);
-}
-
-static void* jit_FMOVR(void *jit,int64_t a,int64_t b) {
-    return jit_fmovr(jit,a,b);
-}
-static void* jit_FMOVI(void *jit,int64_t a,double b) {
-    return jit_fmovi(jit,a,b);
-}
-
-static void* jit_FADDR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_faddr(jit,a,b,c);
-}
-static void* jit_FADDI(void *jit,int64_t a,int64_t b,double c) {
-    return jit_faddi(jit,a,b,c);
-}
-
-static void* jit_FSUBR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fsubr(jit,a,b,c);
-}
-static void* jit_FSUBI(void *jit,int64_t a,int64_t b,double c) {
-    return jit_fsubi(jit,a,b,c);
-}
-
-static void* jit_FMULR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fmulr(jit,a,b,c);
-}
-static void* jit_FMULI(void *jit,int64_t a,int64_t b,double c) {
-    return jit_fmuli(jit,a,b,c);
-}
-
-static void* jit_FDIVR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fdivr(jit,a,b,c);
-}
-static void* jit_FDIVI(void *jit,int64_t a,int64_t b,double c) {
-    return jit_fdivi(jit,a,b,c);
-}
-
-static void* jit_FNEGR(void *jit,int64_t a,int64_t b) {
-    return jit_fnegr(jit,a,b);
-}
-
-static void* jit_EXTR(void *jit,int64_t a,int64_t b) {
-    return jit_extr(jit,a,b);
-}
-static void* jit_TRUNCR(void *jit,int64_t a,int64_t b) {
-    return jit_truncr(jit,a,b);
-}
-static void* jit_FLOORR(void *jit,int64_t a,int64_t b) {
-    return jit_floorr(jit,a,b);
-}
-static void* jit_CEILR(void *jit,int64_t a,int64_t b) {
-    return jit_ceilr(jit,a,b);
-}
-static void* jit_ROUNDR(void *jit,int64_t a,int64_t b) {
-    return jit_roundr(jit,a,b);
-}
-
-static void* jit_FBLTR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fbltr(jit,a,b,c);
-}
-static void* jit_FBLTI(void *jit,int64_t a,int64_t b,double c) {
-    return jit_fblti(jit,a,b,c);
-}
-static void* jit_FBGTR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fbgtr(jit,a,b,c);
-}
-static void* jit_FBGTI(void *jit,int64_t a,int64_t b,double c) {
-    return jit_fbgti(jit,a,b,c);
-}
-
-static void* jit_FBLER(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fbler(jit,a,b,c);
-}
-static void* jit_FBLEI(void *jit,int64_t a,int64_t b,double c) {
-    return jit_fblei(jit,a,b,c);
-}
-static void* jit_FBGER(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fbger(jit,a,b,c);
-}
-static void* jit_FBGEI(void *jit,int64_t a,int64_t b,double c) {
-    return jit_fbgei(jit,a,b,c);
-}
-
-static void* jit_FBEQR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fbeqr(jit,a,b,c);
-}
-static void* jit_FBEQI(void *jit,int64_t a,int64_t b,double c) {
-    return jit_fbeqi(jit,a,b,c);
-}
-
-static void* jit_FBNER(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fbner(jit,a,b,c);
-}
-static void* jit_FBNEI(void *jit,int64_t a,int64_t b,double c) {
-    return jit_fbnei(jit,a,b,c);
-}
-
-static void* jit_FSTR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fstr(jit,a,b,c);
-}
-static void* jit_FSTI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fsti(jit,a,b,c);
-}
-static void* jit_FSTXR(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
-    return jit_fstxr(jit,a,b,c,d);
-}
-static void* jit_FSTXI(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
-    return jit_fstxi(jit,a,b,c,d);
-}
-
-static void* jit_FLDR(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fldr(jit,a,b,c);
-}
-static void* jit_FLDI(void *jit,int64_t a,int64_t b,int64_t c) {
-    return jit_fldi(jit,a,b,c);
-}
-
-static void* jit_FLDXR(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
-    return jit_fldxr(jit,a,b,c,d);
-}
-static void* jit_FLDXI(void *jit,int64_t a,int64_t b,int64_t c,int64_t d) {
-    return jit_fldxi(jit,a,b,c,d);
-}
-
-static void* jit_FPUTARGR(void *jit,int64_t a,int64_t b) {
-    return jit_fputargr(jit,a,b);
-}
-static void* jit_FPUTARGI(void *jit,double a,int64_t b) {
-    return jit_fputargi(jit,a,b);
-}
-
-static void* jit_FRETR(void *jit,int64_t a,int64_t b) {
-    return jit_fretr(jit,a,b);
-}
-static void* jit_FRETI(void *jit,double a,int64_t b) {
-    return jit_freti(jit,a,b);
-}
-static void* jit_FRETVAL(void *jit,int64_t a,int64_t b) {
-    return jit_fretval(jit,a,b);
-}
-
-static void *jit_REF_CODE(void *jit,int64_t a,int64_t b) {
-    return jit_ref_code(jit,a,b);
-}
-static void *jit_REF_DATA(void *jit,int64_t a,int64_t b) {
-    return jit_ref_data(jit,a,b);
-}
-static void *jit_TAINT_LABEL(void *jit,int64_t a) {
-    return jit_taint_label(jit,a);
-}
-static void *jit_END_ASM_BLK(void *jit) {
-    return jit_end_asm_blk(jit);
-}
-static void *jit_CODE_ALIGN(void *jit,int64_t a) {
-    return jit_code_align(jit,a);
-}
-static void *jit_CODE_ALIGN_FILL(void *jit,int64_t a,int64_t b) {
-    return jit_align_fill(jit,a,b);
-}
-static void *jit_DATA_STR(void *jit,void *a) {
-    jit_data_str(jit,a);
-    return NULL;
-}
-static void *jit_DATA_BYTE(void *jit,int64_t a) {
-    return jit_data_byte(jit,a);
-}
-static void *jit_DATA_WORD(void *jit,int64_t a) {
-    jit_data_word(jit,a);
-    return NULL;
-}
-static void *jit_DATA_DWORD(void *jit,int64_t a) {
-    jit_data_dword(jit,a);
-    return NULL;
-}
-static void *jit_DATA_QWORD(void *jit,int64_t a) {
-    jit_data_qword(jit,a);
-    return NULL;
-}
-
-static void *jit_DATA_REF_CODE(void *jit,int64_t a) {
-    return jit_data_ref_code(jit,a);
-}
-static void *jit_DATA_REF_DATA(void *jit,int64_t a) {
-    return jit_data_ref_data(jit,a);
-}
-static void *jit_DUMP_PTR(void *jit,void *a) {
-    return jit_dump_ptr(jit,a);
-}
-static void *jit_RELOCATION(void *jit,int64_t a,void *b) {
-    return jit_relocation(jit,a,b);
-}
-static int64_t jit_ALLOCAI(void *jit,int64_t a) {
-    return jit_allocai(jit,a);
-}
 TOS_Fs Fs;
 void *GetFs() {
     return &Fs;
@@ -587,11 +53,6 @@ void PopTryFrame() {
     ExceptFrame *par=curframe->parent;
     TD_FREE(curframe);
     curframe=par;
-}
-static void GCollect() {
-    int old=PoopSetGCEnable(1);
-    PoopCollect();
-    PoopSetGCEnable(old);
 }
 void throw(uint64_t val) {
     if(!curframe)
@@ -654,22 +115,6 @@ static uint64_t PowU64(uint64_t x,uint64_t n) {
     }
     return x*y;
 }
-static int64_t PowI64(int64_t x,int64_t n) {
-    if(n<0) return 0;
-    if(n==0) return 1;
-    int64_t y=1;
-    while(n>1) {
-        if(!(n%2)) {
-            x=x*x;
-            n=n/2;
-        } else {
-            y=x*y;
-            x=x*x;
-            n=(n-1)/2;
-        }
-    }
-    return x*y;
-}
 static char *__GetStr(char*txt) {
     return rl(txt);
 }
@@ -682,11 +127,13 @@ static int64_t __Move(char *old,char *new) {
 static int64_t Cd(char *dir) {
     return 0==chdir(dir);
 }
+
 static char *DirCur(char *dir) {
     char buffer[1024];
     getcwd(buffer,1024);
     return strdup(buffer);
 }
+
 static int64_t DirMk(char *dir) {
 #ifndef TARGET_WIN32
     return 0==mkdir(dir, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -813,13 +260,6 @@ void CreateTagsAndErrorsFiles(char *tags,char *errs,char *root) {
   system(buffer);
   #endif
 }
-static void Test(int64_t a,int64_t b,int64_t c,int64_t d,int64_t e,int64_t f,int64_t  g) {
-  printf("%lld,%lld,%lld,%lld,%lld,%lld,%lld\n",a,b,c,d,e,f,g);
-}
-//https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-160
-static void TestMixed(int a, double b, int c, double d, int e, double f) {
-  printf("%d,%lf,%d,%lf,%d,%lf\n",a,b,c,d,e,f);
-}
 static char *hc_SDL_GetWindowTitle(SDL_Window *win) {
     return strdup(SDL_GetWindowTitle(win));
 }
@@ -832,31 +272,6 @@ static int64_t GetSurfaceW(SDL_Surface *s) {
 static int64_t GetSurfaceH(SDL_Surface *s) {
     return s->h;
 }
-static double Bit4BitU64ToF64(uint64_t b) {
-    union {double f;int64_t i;} val;
-    val.i=b;
-    return val.f;
-}
-static uint64_t Bit4BitF64ToU64(double b) {
-    union {double f;int64_t i;} val;
-    val.f=b;
-    return val.i;
-}
-static double F64And(double a,double b) {
-    return (*(uint64_t*)&a)&(*(uint64_t*)&b);
-}
-static double F64Or(double a,double b) {
-    return (*(uint64_t*)&a)&(*(uint64_t*)&b);
-}
-static double F64Xor(double a,double b) {
-    return (*(uint64_t*)&a)&(*(uint64_t*)&b);
-}
-static double F64Shl(double a,int64_t b) {
-    return (*(uint64_t*)&a)<<b;
-}
-static double F64Shr(double a,int64_t b) {
-    return (*(uint64_t*)&a)>>b;
-}
 static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
   map_iter_t iter=map_iter(&Loader.symbols);
   const char *key;
@@ -864,13 +279,10 @@ static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
     CSymbol *var=map_get(&Loader.symbols, key);
     if(!var->is_importable)
         continue;
-    func(key,var->value_ptr,var->size);
+    FFI_CALL_TOS_3(func,key,var->value_ptr,var->size);
   }
 }
-static void jit_DATA_BYTES(struct jit *j,int64_t count,void *d) {
-  jit_data_bytes(j,count,d);
-}
-static void RegisterFunctionPtr(char *name,void *fptr) {
+static void STK_RegisterFunctionPtr(char *name,void *fptr) {
     CSymbol sym;
     sym.type=SYM_FUNC;
     sym.value_ptr=fptr;
@@ -880,374 +292,775 @@ static void RegisterFunctionPtr(char *name,void *fptr) {
 static double Log2(double c) {
     return log(c)/log(2);
 }
-#ifndef TARGET_WIN32
 void UnblockSignals() {
+	#ifndef TARGET_WIN32
     sigset_t set;
     sigfillset(&set);
     sigprocmask(SIG_UNBLOCK,&set,NULL);
+    #endif
 }
-#else
-void UnblockSignals() {
-}
-#endif
 char *GetBuiltinMacrosText();
-void RegisterFuncPtrs() {
-    RegisterFunctionPtr("RegisterRuntimeClasses",RegisterRuntimeClasses);
-    RegisterFunctionPtr("UnblockSignals",UnblockSignals);
-    RegisterFunctionPtr("signal",signal);
-    RegisterFunctionPtr("IsDir",IsDir);
-    RegisterFunctionPtr("FileRead",FileRead);
-    RegisterFunctionPtr("FileWrite",FileWrite);
-    RegisterFunctionPtr("jit_breakpoint",jit_BREAKPOINT);
-    RegisterFunctionPtr("jit_putargi",jit_PUTARGI);
-    RegisterFunctionPtr("jit_dump_ptr",jit_DUMP_PTR);
-    RegisterFunctionPtr("jit_putargr",jit_PUTARGR);
-    RegisterFunctionPtr("jit_get_breakpoint_by_ptr",jit_get_breakpoint_btr_ptr);
-    RegisterFunctionPtr("jit_free",jit_free);
-    RegisterFunctionPtr("jit_BREAKPOINT",jit_BREAKPOINT);
-    RegisterFunctionPtr("jit_debugger_get_reg_ptr",jit_debugger_get_reg_ptr);
-    RegisterFunctionPtr("jit_debugger_get_vreg_ptr_from_parent",jit_debugger_get_vreg_ptr_from_parent);
-    RegisterFunctionPtr("jit_get_breakpoint_btr_ptr",jit_get_breakpoint_btr_ptr);
-    RegisterFunctionPtr("jit_disable_optimization",jit_disable_optimization);
-    RegisterFunctionPtr("jit_enable_optimization",jit_enable_optimization);
-    RegisterFunctionPtr("ForeachFuncInTable",ForeachFunc);//
-    RegisterFunctionPtr("jit_init",jit_INIT);
-    RegisterFunctionPtr("jit_dump_ops",jit_DUMP_OPS);
-    RegisterFunctionPtr("jit_generate_code",jit_GENERATE_CODE);
-    RegisterFunctionPtr("jit_andr",jit_ANDR);
-    RegisterFunctionPtr("jit_andi",jit_ANDI);
-    RegisterFunctionPtr("R_FP",jit_R_FP);
-    RegisterFunctionPtr("jit_bin_size",jit_BINSIZE);
-    RegisterFunctionPtr("jit_FR",jit_FR);
-    RegisterFunctionPtr("jit_R",jit_R);
-    RegisterFunctionPtr("jit_allocai",jit_ALLOCAI);
-    RegisterFunctionPtr("jit_get_label",jit_GET_LABEL);
-    RegisterFunctionPtr("jit_prolog",jit_PROLOG);
-    RegisterFunctionPtr("jit_movr",jit_MOVR);
-    RegisterFunctionPtr("jit_movi",jit_MOVI);
-    RegisterFunctionPtr("jit_jmpr",jit_JMPR);
-    RegisterFunctionPtr("jit_jmpi",jit_JMPI);
-    RegisterFunctionPtr("jit_patch",jit_PATCH);
-    RegisterFunctionPtr("jit_prepare",jit_PREPARE);
-    RegisterFunctionPtr("jit_call",jit_CALL);
-    RegisterFunctionPtr("jit_callr",jit_CALLR);
-    RegisterFunctionPtr("jit_reti",jit_RETI);
-    RegisterFunctionPtr("jit_retr",jit_RETR);
-    RegisterFunctionPtr("jit_retval",jit_RETVAL);
-    RegisterFunctionPtr("jit_getarg",jit_GETARG);
-    RegisterFunctionPtr("jit_declare_arg",jit_DECLARE_ARG);
-    RegisterFunctionPtr("jit_addr",jit_ADDR);
-    RegisterFunctionPtr("jit_addi",jit_ADDI);
-    RegisterFunctionPtr("jit_subr",jit_SUBR);
-    RegisterFunctionPtr("jit_subi",jit_SUBI);
-    RegisterFunctionPtr("jit_mulr",jit_MULR);
-    RegisterFunctionPtr("jit_muli",jit_MULI);
-    RegisterFunctionPtr("jit_mulr_u",jit_MULR_U);
-    RegisterFunctionPtr("jit_muli_u",jit_MULI_U);
-    RegisterFunctionPtr("jit_divr",jit_DIVR);
-    RegisterFunctionPtr("jit_divi",jit_DIVI);
-    RegisterFunctionPtr("jit_divr_u",jit_DIVR_U);
-    RegisterFunctionPtr("jit_divi_u",jit_DIVI_U);
-    RegisterFunctionPtr("jit_modr",jit_MODR);
-    RegisterFunctionPtr("jit_modi",jit_MODI);
-    RegisterFunctionPtr("jit_modr_u",jit_MODR_U);
-    RegisterFunctionPtr("jit_modi_u",jit_MODI_U);
-    RegisterFunctionPtr("jit_orr",jit_ORR);
-    RegisterFunctionPtr("jit_ori",jit_ORI);
-    RegisterFunctionPtr("jit_xorr",jit_XORR);
-    RegisterFunctionPtr("jit_xori",jit_XORI);
-    RegisterFunctionPtr("jit_lshr",jit_LSHR);
-    RegisterFunctionPtr("jit_lshi",jit_LSHI);
-    RegisterFunctionPtr("jit_rshr",jit_RSHR);
-    RegisterFunctionPtr("jit_rshi",jit_RSHI);
-    RegisterFunctionPtr("jit_rshr_u",jit_RSHR_U);
-    RegisterFunctionPtr("jit_rshi_u",jit_RSHI_U);
-    RegisterFunctionPtr("jit_notr",jit_NOTR);
-    RegisterFunctionPtr("jit_bltr",jit_BLTR);
-    RegisterFunctionPtr("jit_blti",jit_BLTI);
-    RegisterFunctionPtr("jit_bltr_u",jit_BLTR_U);
-    RegisterFunctionPtr("jit_blti_u",jit_BLTI_U);
-    RegisterFunctionPtr("jit_bler",jit_BLER);
-    RegisterFunctionPtr("jit_blei",jit_BLEI);
-    RegisterFunctionPtr("jit_bler_u",jit_BLER_U);
-    RegisterFunctionPtr("jit_blei_u",jit_BLEI_U);
-    RegisterFunctionPtr("jit_bger",jit_BGER);
-    RegisterFunctionPtr("jit_bgei",jit_BGEI);
-    RegisterFunctionPtr("jit_bger_u",jit_BGER_U);
-    RegisterFunctionPtr("jit_bgei_u",jit_BGEI_U);
-    RegisterFunctionPtr("jit_bgtr",jit_BGTR);
-    RegisterFunctionPtr("jit_bgti",jit_BGTI);
-    RegisterFunctionPtr("jit_bgtr_u",jit_BGTR_U);
-    RegisterFunctionPtr("jit_bgti_u",jit_BGTI_U);
-    RegisterFunctionPtr("jit_beqr",jit_BEQR);
-    RegisterFunctionPtr("jit_beqi",jit_BEQI);
-    RegisterFunctionPtr("jit_bner",jit_BNER);
-    RegisterFunctionPtr("jit_bnei",jit_BNEI);
-
-    RegisterFunctionPtr("jit_ltr",jit_LTR);
-    RegisterFunctionPtr("jit_lti",jit_LTI);
-    RegisterFunctionPtr("jit_ltr_u",jit_LTR_U);
-    RegisterFunctionPtr("jit_lti_u",jit_LTI_U);
-    RegisterFunctionPtr("jit_ler",jit_LER);
-    RegisterFunctionPtr("jit_lei",jit_LEI);
-    RegisterFunctionPtr("jit_ger_u",jit_GER_U);
-    RegisterFunctionPtr("jit_gei_u",jit_GEI_U);
-    RegisterFunctionPtr("jit_ger",jit_GER);
-    RegisterFunctionPtr("jit_gei",jit_GEI);
-    RegisterFunctionPtr("jit_ger_u",jit_GER_U);
-    RegisterFunctionPtr("jit_gei_u",jit_GEI_U);
-    RegisterFunctionPtr("jit_gtr",jit_GTR);
-    RegisterFunctionPtr("jit_gti",jit_GTI);
-    RegisterFunctionPtr("jit_gtr_u",jit_GTR_U);
-    RegisterFunctionPtr("jit_gti_u",jit_GTI_U);
-    RegisterFunctionPtr("jit_eqr",jit_EQR);
-    RegisterFunctionPtr("jit_eqi",jit_EQI);
-    RegisterFunctionPtr("jit_ner",jit_NER);
-    RegisterFunctionPtr("jit_nei",jit_NEI);
-    RegisterFunctionPtr("jit_ldr",jit_LDR);
-    RegisterFunctionPtr("jit_ldi",jit_LDI);
-    RegisterFunctionPtr("jit_ldxr",jit_LDXR);
-    RegisterFunctionPtr("jit_ldxi",jit_LDXI);
-    RegisterFunctionPtr("jit_ldr_u",jit_LDR_U);
-    RegisterFunctionPtr("jit_ldi_u",jit_LDI_U);
-    RegisterFunctionPtr("jit_ldxr_u",jit_LDXR_U);
-    RegisterFunctionPtr("jit_ldxi_u",jit_LDXI_U);
-    RegisterFunctionPtr("jit_str",jit_STR);
-    RegisterFunctionPtr("jit_sti",jit_STI);
-    RegisterFunctionPtr("jit_stxr",jit_STXR);
-    RegisterFunctionPtr("jit_stxi",jit_STXI);
-    RegisterFunctionPtr("jit_fmovi",jit_FMOVI);
-    RegisterFunctionPtr("jit_fmovr",jit_FMOVR);
-    RegisterFunctionPtr("jit_faddr",jit_FADDR);
-    RegisterFunctionPtr("jit_faddi",jit_FADDI);
-    RegisterFunctionPtr("jit_fsubi",jit_FSUBI);
-    RegisterFunctionPtr("jit_fsubr",jit_FSUBR);
-    RegisterFunctionPtr("jit_fmulr",jit_FMULR);
-    RegisterFunctionPtr("jit_fmuli",jit_FMULI);
-    RegisterFunctionPtr("jit_fdivi",jit_FDIVI);
-    RegisterFunctionPtr("jit_fdivr",jit_FDIVR);
-    RegisterFunctionPtr("jit_fnegr",jit_FNEGR);
-    RegisterFunctionPtr("jit_negr",jit_NEGR);
-    RegisterFunctionPtr("jit_extr",jit_EXTR);
-    RegisterFunctionPtr("jit_truncr",jit_TRUNCR);
-    RegisterFunctionPtr("jit_floorr",jit_FLOORR);
-    RegisterFunctionPtr("jit_ceilr",jit_CEILR);
-    RegisterFunctionPtr("jit_roundr",jit_ROUNDR);
-    RegisterFunctionPtr("jit_fbltr",jit_FBLTR);
-    RegisterFunctionPtr("jit_fbgtr",jit_FBGTR);
-    RegisterFunctionPtr("jit_fbler",jit_FBLER);
-    RegisterFunctionPtr("jit_fbger",jit_FBGER);
-    RegisterFunctionPtr("jit_fbeqr",jit_FBEQR);
-    RegisterFunctionPtr("jit_fbner",jit_FBNER);
-    RegisterFunctionPtr("jit_fblti",jit_FBLTI);
-    RegisterFunctionPtr("jit_fbgti",jit_FBGTI);
-    RegisterFunctionPtr("jit_fblei",jit_FBLEI);
-    RegisterFunctionPtr("jit_fbgei",jit_FBGEI);
-    RegisterFunctionPtr("jit_fbeqi",jit_FBEQI);
-    RegisterFunctionPtr("jit_fbnei",jit_FBNEI);
-    RegisterFunctionPtr("jit_fstr",jit_FSTR);
-    RegisterFunctionPtr("jit_fsti",jit_FSTI);
-    RegisterFunctionPtr("jit_fstxr",jit_FSTXR);
-    RegisterFunctionPtr("jit_fstxi",jit_FSTXI);
-    RegisterFunctionPtr("jit_fldr",jit_FLDR);
-    RegisterFunctionPtr("jit_fldi",jit_FLDI);
-    RegisterFunctionPtr("jit_fldxr",jit_FLDXR);
-    RegisterFunctionPtr("jit_fldxi",jit_FLDXI);
-    RegisterFunctionPtr("jit_fputargi",jit_FPUTARGI);
-    RegisterFunctionPtr("jit_fputargr",jit_FPUTARGR);
-    RegisterFunctionPtr("jit_freti",jit_FRETI);
-    RegisterFunctionPtr("jit_fretr",jit_FRETR);
-    RegisterFunctionPtr("jit_fretval",jit_FRETVAL);
-    RegisterFunctionPtr("jit_ref_code",jit_REF_CODE);
-    RegisterFunctionPtr("jit_ref_data",jit_REF_DATA);
-    RegisterFunctionPtr("jit_taint_label",jit_TAINT_LABEL);
-    RegisterFunctionPtr("jit_end_asm_blk",jit_END_ASM_BLK);
-    RegisterFunctionPtr("jit_code_align",jit_CODE_ALIGN);
-    RegisterFunctionPtr("jit_code_align_fill",jit_CODE_ALIGN_FILL);
-    RegisterFunctionPtr("jit_data_str",jit_DATA_STR);
-    RegisterFunctionPtr("jit_data_byte",jit_DATA_BYTE);
-    RegisterFunctionPtr("jit_data_word",jit_DATA_WORD);
-    RegisterFunctionPtr("jit_data_dword",jit_DATA_DWORD);
-    RegisterFunctionPtr("jit_data_qword",jit_DATA_QWORD);
-    RegisterFunctionPtr("jit_data_ref_code",jit_DATA_REF_CODE);
-    RegisterFunctionPtr("jit_data_ref_data",jit_DATA_REF_DATA);
-    RegisterFunctionPtr("jit_relocation",jit_RELOCATION);
-    RegisterFunctionPtr("jit_data_bytes",jit_DATA_BYTES);
-    RegisterFunctionPtr("HCSetJmp",HCSetJmp);
-    RegisterFunctionPtr("PopTryFrame",PopTryFrame);
-    RegisterFunctionPtr("EnterTry",EnterTry);
-    RegisterFunctionPtr("ExitCatch",ExitCatch);
-    RegisterFunctionPtr("TOSPrint",TOSPrint);
-    RegisterFunctionPtr("PowI64",PowI64);
-    RegisterFunctionPtr("PowU64",PowU64);
-    RegisterFunctionPtr("FMod",fmod);
-    RegisterFunctionPtr("WhineOnOutOfBounds",InBounds);
-    RegisterFunctionPtr("Bit4BitU64ToF64",Bit4BitU64ToF64);
-    RegisterFunctionPtr("Bit4BitF64ToU64",Bit4BitF64ToU64);
-    RegisterFunctionPtr("F64And",F64And);
-    RegisterFunctionPtr("F64Xor",F64Xor);
-    RegisterFunctionPtr("F64Shr",F64Shr);
-    RegisterFunctionPtr("F64Shl",F64Shl);
-    RegisterFunctionPtr("Pow",pow);
-    RegisterFunctionPtr("PoopSetGCEnable",PoopSetGCEnable);
-    RegisterFunctionPtr("GC_Collect",GCollect);
-    RegisterFunctionPtr("CreateTagsAndErrorsFiles",CreateTagsAndErrorsFiles);
-    RegisterFunctionPtr("MSize",MSize);
-    RegisterFunctionPtr("Bsf",BFFS);
-    RegisterFunctionPtr("Bsr",BCLZ);
-    RegisterFunctionPtr("throw",throw);
-    RegisterFunctionPtr("MAlloc",PoopMAlloc);
-    RegisterFunctionPtr("Free",PoopFree);
-    RegisterFunctionPtr("MemCpy",MemNCpy);
-    RegisterFunctionPtr("MemNCpy",MemNCpy);
-    RegisterFunctionPtr("StrLen",strlen);
-    RegisterFunctionPtr("StrCmp",strcmp);
-    RegisterFunctionPtr("StrNCmp",strncmp);
-    RegisterFunctionPtr("StrCpy",strcpy);
-    RegisterFunctionPtr("StrNCpy",strncpy);
-    RegisterFunctionPtr("StrMatch",strstr);
-    RegisterFunctionPtr("Fs",GetFs);
-    RegisterFunctionPtr("__GetStr",__GetStr);
-    RegisterFunctionPtr("ATan",atan);
-    RegisterFunctionPtr("Abs",fabs);
-    RegisterFunctionPtr("Cos",cos);
-    RegisterFunctionPtr("Sin",sin);
-    RegisterFunctionPtr("Sqrt",sqrt);
-    RegisterFunctionPtr("Tan",tan);
-    RegisterFunctionPtr("Ceil",ceil);
-    RegisterFunctionPtr("Floor",floor);
-    RegisterFunctionPtr("Ln",log);
-    RegisterFunctionPtr("Log10",log10);
-    RegisterFunctionPtr("Log2",Log2);
-    RegisterFunctionPtr("Round",round);
-    RegisterFunctionPtr("Trunc",trunc);
-    RegisterFunctionPtr("Exit",exit);
-    RegisterFunctionPtr("Cd",Cd);
-    RegisterFunctionPtr("DirCur",DirCur);
-    RegisterFunctionPtr("DirMk",DirMk);
-    RegisterFunctionPtr("__Move",__Move);
-    RegisterFunctionPtr("FileNameAbs",FileNameAbs);
-    RegisterFunctionPtr("DirNameAbs",FileNameAbs);
-    RegisterFunctionPtr("__Dir",__Dir);
-    RegisterFunctionPtr("IsWindows",IsWindows);
-    RegisterFunctionPtr("IsMac",IsMac);
-    RegisterFunctionPtr("MemSet",memset);
-    RegisterFunctionPtr("SDL_Init",SDL_Init);
-    RegisterFunctionPtr("SDL_WasInit",SDL_WasInit);
-    RegisterFunctionPtr("SDL_CreateWindow",SDL_CreateWindow);
-    RegisterFunctionPtr("SDL_SetTextureBlendMode",SDL_SetTextureBlendMode);
-    RegisterFunctionPtr("SDL_CreateWindowAndRenderer",SDL_CreateWindowAndRenderer);
-    RegisterFunctionPtr("SDL_DestroyWindow",SDL_DestroyWindow);
-    RegisterFunctionPtr("SDL_DestroyRenderer",SDL_DestroyRenderer);
-    RegisterFunctionPtr("SDL_DisableScreenSaver",SDL_DisableScreenSaver);
-    RegisterFunctionPtr("SDL_GetGrabbedWindow",SDL_GetGrabbedWindow);
-    RegisterFunctionPtr("SDL_GetWindowPosition",SDL_GetWindowPosition);
-    RegisterFunctionPtr("SDL_GetWindowMinimumSize",SDL_GetWindowMinimumSize);
-    RegisterFunctionPtr("SDL_GetWindowMaximumSize",SDL_GetWindowMaximumSize);
-    RegisterFunctionPtr("SDL_GetWindowSize",SDL_GetWindowSize);
-    RegisterFunctionPtr("SDL_GetWindowTitle",hc_SDL_GetWindowTitle);
-    RegisterFunctionPtr("SDL_HideWindow",SDL_HideWindow);
-    RegisterFunctionPtr("SDL_MaximizeWindow",SDL_MaximizeWindow);
-    RegisterFunctionPtr("SDL_MinimizeWindow",SDL_MinimizeWindow);
-    RegisterFunctionPtr("SDL_SetWindowBordered",SDL_SetWindowBordered);
-    RegisterFunctionPtr("SDL_SetWindowFullscreen",SDL_SetWindowFullscreen);
-    RegisterFunctionPtr("SDL_SetWindowMaximumSize",SDL_SetWindowMaximumSize);
-    RegisterFunctionPtr("SDL_SetWindowMinimumSize",SDL_SetWindowMinimumSize);
-    RegisterFunctionPtr("SDL_SetWindowResizable",SDL_SetWindowResizable);
-    RegisterFunctionPtr("SDL_SetWindowSize",SDL_SetWindowSize);
-    RegisterFunctionPtr("SDL_SetWindowTitle",SDL_SetWindowTitle);
-    RegisterFunctionPtr("SDL_ShowWindow",SDL_ShowWindow);
-    RegisterFunctionPtr("SDL_CreateRenderer",SDL_CreateRenderer);
-    RegisterFunctionPtr("SDL_CreateTexture",SDL_CreateTexture);
-    RegisterFunctionPtr("SDL_DestroyRenderer",SDL_DestroyRenderer);
-    RegisterFunctionPtr("SDL_GetRenderDrawColor",SDL_GetRenderDrawColor);
-    RegisterFunctionPtr("SDL_GetRenderer",SDL_GetRenderer);
-    RegisterFunctionPtr("SDL_GetRendererOutputSize",SDL_GetRendererOutputSize);
-    RegisterFunctionPtr("SDL_GetRenderTarget",SDL_GetRenderTarget);
-    RegisterFunctionPtr("SDL_GetTextureAlphaMod",SDL_GetTextureAlphaMod);
-    RegisterFunctionPtr("SDL_GetTextureColorMod",SDL_GetTextureColorMod);
-    RegisterFunctionPtr("SDL_RenderClear",SDL_RenderClear);
-    RegisterFunctionPtr("SDL_RenderCopy",SDL_RenderCopy);
-    RegisterFunctionPtr("SDL_RenderDrawLine",SDL_RenderDrawLine);
-    RegisterFunctionPtr("SDL_RenderDrawLines",SDL_RenderDrawLines);
-    RegisterFunctionPtr("SDL_RenderDrawPoint",SDL_RenderDrawPoint);
-    RegisterFunctionPtr("SDL_RenderDrawPoints",SDL_RenderDrawPoints);
-    RegisterFunctionPtr("SDL_RenderDrawRect",SDL_RenderDrawRect);
-    RegisterFunctionPtr("SDL_RenderDrawRects",SDL_RenderDrawRects);
-    RegisterFunctionPtr("SDL_RenderFillRects",SDL_RenderFillRects);
-    RegisterFunctionPtr("SDL_RenderFillRects",SDL_RenderFillRects);
-    RegisterFunctionPtr("SDL_RenderGetClipRect",SDL_RenderGetClipRect);
-    RegisterFunctionPtr("SDL_RenderPresent",SDL_RenderPresent);
-    RegisterFunctionPtr("SDL_RenderSetClipRect",SDL_RenderSetClipRect);
-    RegisterFunctionPtr("SDL_SetRenderDrawColor",SDL_SetRenderDrawColor);
-    RegisterFunctionPtr("SDL_SetRenderTarget",SDL_SetRenderTarget);
-    RegisterFunctionPtr("SDL_SetTextureAlphaMod",SDL_SetTextureAlphaMod);
-    RegisterFunctionPtr("SDL_SetTextureColorMod",SDL_SetTextureColorMod);
-    RegisterFunctionPtr("SDL_UpdateTexture",SDL_UpdateTexture);
-    RegisterFunctionPtr("SDL_QueryTexture",SDL_QueryTexture);
-    RegisterFunctionPtr("SDL_GetClipboardText",hc_SDL_GetClipboardText);
-    RegisterFunctionPtr("SDL_SetClipboardText",SDL_SetClipboardText);
-    RegisterFunctionPtr("SDL_PollEvent",SDL_PollEvent);
-    RegisterFunctionPtr("SDL_WaitEvent",SDL_WaitEvent);
-    RegisterFunctionPtr("SDL_DestroyRenderer",SDL_DestroyRenderer);
-    RegisterFunctionPtr("SDL_DestroyTexture",SDL_DestroyTexture);
-    RegisterFunctionPtr("SDL_StartTextInput",SDL_StartTextInput);
-    RegisterFunctionPtr("SDL_StopTextInput",SDL_StopTextInput);
-    RegisterFunctionPtr("SDL_GetError",SDL_GetError);
-    RegisterFunctionPtr("SDL_ClearError",SDL_ClearError);
-    RegisterFunctionPtr("SDL_FlushEvent",SDL_FlushEvent);
-    RegisterFunctionPtr("SDL_GetSurfaceWidth",GetSurfaceW);
-    RegisterFunctionPtr("SDL_GetSurfaceHeight",GetSurfaceH);
-    RegisterFunctionPtr("SDL_CreateRGBSurface",SDL_CreateRGBSurface);
-    RegisterFunctionPtr("SDL_CreateRGBSurfaceFrom",SDL_CreateRGBSurfaceFrom);
-    RegisterFunctionPtr("SDL_UpperBlit",SDL_UpperBlit);
-    RegisterFunctionPtr("SDL_FillRect",SDL_FillRect);
-    RegisterFunctionPtr("SDL_FillRects",SDL_FillRects);
-    RegisterFunctionPtr("SDL_GetClipRect",SDL_GetClipRect);
-    RegisterFunctionPtr("SDL_GetColorKey",SDL_GetColorKey);
-    RegisterFunctionPtr("SDL_GetSurfaceAlphaMod",SDL_GetSurfaceAlphaMod);
-    RegisterFunctionPtr("SDL_GetSurfaceColorMod",SDL_GetSurfaceColorMod);
-    RegisterFunctionPtr("SDL_LockSurface",SDL_LockSurface);
-    RegisterFunctionPtr("SDL_UnlockSurface",SDL_UnlockSurface);
-    RegisterFunctionPtr("SDL_SetClipRect",SDL_SetClipRect);
-    RegisterFunctionPtr("SDL_SetColorKey",SDL_SetColorKey);
-    RegisterFunctionPtr("SDL_SetSurfaceAlphaMod",SDL_SetSurfaceAlphaMod);
-    RegisterFunctionPtr("SDL_SetSurfaceColorMod",SDL_SetSurfaceColorMod);
-    RegisterFunctionPtr("SDL_SetSurfaceRLE",SDL_SetSurfaceRLE);
-    RegisterFunctionPtr("SDL_BlitSurface",SDL_BlitSurface);
-    RegisterFunctionPtr("SDL_BlitScaled",SDL_BlitScaled);
-    RegisterFunctionPtr("SDL_FreeSurface",SDL_FreeSurface);
-    RegisterFunctionPtr("SDL_UpdateWindowSurface",SDL_UpdateWindowSurface);
-    RegisterFunctionPtr("SDL_GetWindowSurface",SDL_GetWindowSurface);
-    RegisterFunctionPtr("__GetBuiltinMacrosText",GetBuiltinMacrosText);
+int64_t STK_RegisterRuntimeClasses(int64_t *stk) {
+    RegisterRuntimeClasses(stk[0],stk[1],stk[2],stk[3]);
+}
+int64_t STK_FileRead(int64_t *stk) {
+    return FileRead(stk[0],stk[1]);
+}
+int64_t STK_FileWrite(int64_t *stk) {
+    return FileWrite(stk[0],stk[1],stk[2]);
+}
+int64_t STK_UnblockSignals(int64_t *stk) {
+    UnblockSignals();
+}
+int64_t STK_Signal(int64_t *stk) {
+    signal(stk[0],stk[1]);
+}
+int64_t STK_ForeachFunc(int64_t *stk) {
+    ForeachFunc(stk[0]);
+}
+int64_t STK_PopTryFrame(int64_t *stk) {
+    PopTryFrame();
+}
+int64_t STK_EnterTry(int64_t *stk) {
+    return EnterTry();
+}
+int64_t STK_ExitCatch(int64_t *stk) {
+    ExitCatch();
+}
+int64_t STK_TOSPrint(int64_t *stk) {
+    TOSPrint(stk[0],stk[1],stk+2);
+}
+int64_t STK_BoundsCheck(int64_t *stk) {
+    BoundsCheck(stk[0],stk[1]);
+}
+ int64_t STK_Del(int64_t *stk) {
+#ifdef TARGET_WIN32
+    return DeleteFileA(stk[0]);
+#else
+    return remove(stk[0]);
+#endif
+	
+}
+int64_t STK_pow(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=pow(stk[0],stk[1]);
+    return val.i;
+}
+int64_t STK_PoopSetGCEnable(int64_t *stk) {
+    return PoopSetGCEnable(stk[0]);
+}
+int64_t STK_CreateTagsAndErrorsFiles(int64_t *stk) {
+    CreateTagsAndErrorsFiles(stk[0],stk[1],stk[2]);
+}
+int64_t STK_MSize(int64_t *stk) {
+    return MSize(stk[0]);
+}
+int64_t STK_BFFS(int64_t *stk) {
+    return BFFS(stk[0]);
+}
+int64_t STK_BCLZ(int64_t *stk) {
+    return BCLZ(stk[0]);
+}
+int64_t STK_throw(int64_t *stk) {
+    throw(stk[0]);
+}
+int64_t STK_PoopMAlloc(int64_t *stk) {
+    return PoopMAlloc(stk[0]);
+}
+int64_t STK_PoopFree(int64_t *stk) {
+    PoopFree(stk[0]);
+}
+int64_t STK_MemNCpy(int64_t *stk) {
+    return memcpy(stk[0],stk[1],stk[2]);
+}
+int64_t STK_strlen(int64_t *stk) {
+    return strlen(stk[0]);
+}
+int64_t STK_strcmp(int64_t *stk) {
+    return strcmp(stk[0],stk[1]);
+}
+int64_t STK_strncmp(int64_t *stk) {
+    return strncmp(stk[0],stk[1],stk[2]);
+}
+int64_t STK_strcpy(int64_t *stk) {
+    return strcpy(stk[0],stk[1]);
+}
+int64_t STK_strncpy(int64_t *stk) {
+    return strncpy(stk[0],stk[1],stk[2]);
+}
+int64_t STK_strstr(int64_t *stk) {
+    return strstr(stk[0],stk[1]);
+}
+int64_t STK_GetFs(int64_t *stk) {
+    return GetFs();
+}
+int64_t STK___GetStr(int64_t *stk) {
+    return __GetStr(stk[0]);
+}
+int64_t STK_atan(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=atan(stk[0]);
+    return val.i;
+}
+int64_t STK_abs(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=abs(stk[0]);
+    return val.i;
+}
+int64_t STK_cos(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=cos(stk[0]);
+    return val.i;
+}
+int64_t STK_sin(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=sin(stk[0]);
+    return val.i;
+}
+int64_t STK_sqrt(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=sin(stk[0]);
+    return val.i;
+}
+int64_t STK_tan(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=tan(stk[0]);
+    return val.i;
+}
+int64_t STK_ceil(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=ceil(stk[0]);
+    return val.i;
+}
+int64_t STK_floor(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=floor(stk[0]);
+    return val.i;
+}
+int64_t STK_log(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=log(stk[0]);
+    return val.i;
+}
+int64_t STK_log10(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=log10(stk[0]);
+    return val.i;
+}
+int64_t STK_log2(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=log2(stk[0]);
+    return val.i;
+}
+int64_t STK_round(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=round(stk[0]);
+    return val.i;
+}
+int64_t STK_trunc(double *stk) {
+    union {int64_t i;double_t d;} val;
+    val.d=trunc(stk[0]);
+    return val.i;
+}
+int64_t STK_exit(int64_t *stk) {
+    exit(stk[0]);
+}
+int64_t STK_Cd(int64_t *stk) {
+    return Cd(stk[0]);
+}
+int64_t STK_DirCur(int64_t *stk) {
+    return DirCur(stk[0]);
+}
+int64_t STK_DirMk(int64_t *stk) {
+    return DirMk(stk[0]);
+}
+int64_t STK___Move(int64_t *stk) {
+    return __Move(stk[0],stk[1]);
+}
+int64_t STK_FileNameAbs(int64_t *stk) {
+    return FileNameAbs(stk[0]);
+}
+int64_t STK_IsMac(int64_t *stk) {
+    return IsMac();
+}
+int64_t STK_IsWindows(int64_t *stk) {
+    return IsWindows();
+}
+int64_t STK___Dir(int64_t *stk) {
+    return __Dir(stk[0]);
+}
+int64_t STK_memset(int64_t *stk) {
+    return memset(stk[0],stk[1],stk[2]);
+}
+int64_t STK_SDL_Init(int64_t *stk) {
+    return SDL_Init(stk[0]);
+}
+int64_t STK_SDL_WasInit(int64_t *stk) {
+    return SDL_WasInit(stk[0]);
+}
+int64_t STK_SDL_CreateWindow(int64_t *stk) {
+    return (int64_t)SDL_CreateWindow((char*)stk[0],stk[1],stk[2],stk[3],stk[4],stk[5]);
+}
+int64_t STK_SDL_SetTextureBlendMode(int64_t *stk) {
+    SDL_SetTextureBlendMode((SDL_Texture*)stk[0],stk[1]);
+}
+int64_t STK_SDL_CreateWindowAndRenderer(int64_t *stk) {
+    SDL_CreateWindowAndRenderer(stk[0],stk[1],stk[2],(SDL_Window**)stk[3],(SDL_Renderer**)stk[4]);
+}
+int64_t STK_SDL_DestroyWindow(int64_t *stk) {
+    SDL_DestroyWindow(stk[0]);
+}
+int64_t STK_SDL_GetGrabbedWindow(int64_t *stk) {
+    return (int64_t)SDL_GetGrabbedWindow();
+}
+int64_t STK_SDL_GetWindowPosition(int64_t *stk) {
+    SDL_GetWindowPosition((SDL_Window*)stk[0],(int*)stk[1],(int*)stk[2]);
+}
+int64_t STK_SDL_GetWindowMaximumSize(int64_t *stk) {
+    SDL_GetWindowMaximumSize((SDL_Window*)stk[0],(int*)stk[1],(int*)stk[2]);
+}
+int64_t STK_SDL_GetWindowMinimumSize(int64_t *stk) {
+    SDL_GetWindowMinimumSize((SDL_Window*)stk[0],(int*)stk[1],(int*)stk[2]);
+}
+int64_t STK_SDL_GetWindowSize(int64_t *stk) {
+    SDL_GetWindowSize(stk[0],stk[1],stk[2]);
+}
+int64_t STK_hc_SDL_GetWindowTitle(int64_t *stk) {
+    return (int64_t)hc_SDL_GetWindowTitle((SDL_Window*)stk[0]);
+}
+int64_t STK_SDL_MaximizeWindow(int64_t *stk) {
+    SDL_MaximizeWindow((SDL_Window*)stk[0]);
+}
+int64_t STK_SDL_MinimizeWindow(int64_t *stk) {
+    SDL_MinimizeWindow((SDL_Window*)stk[0]);
+}
+int64_t STK_SDL_SetWindowBordered(int64_t *stk) {
+    SDL_SetWindowBordered((SDL_Window*)stk[0],stk[1]);
+}
+int64_t STK_SDL_SetWindowFullscreen(int64_t *stk) {
+    SDL_SetWindowFullscreen((SDL_Window*)stk[0],stk[1]);
+}
+int64_t STK_SDL_SetWindowMaximumSize(int64_t *stk) {
+    SDL_SetWindowMaximumSize((SDL_Window*)stk[0],stk[1],stk[2]);
+}
+int64_t STK_SDL_SetWindowMinimumSize(int64_t *stk) {
+    SDL_SetWindowMinimumSize((SDL_Window*)stk[0],stk[1],stk[2]);
+}
+int64_t STK_SDL_SetWindowResizable(int64_t *stk) {
+    SDL_SetWindowResizable((SDL_Window*)stk[0],stk[1]);
+}
+int64_t STK_SDL_SetWindowSize(int64_t *stk) {
+    SDL_SetWindowSize((SDL_Window*)stk[0],stk[1],stk[2]);
+}
+int64_t STK_SDL_SetWindowTitle(int64_t *stk) {
+    SDL_SetWindowTitle((SDL_Window*)stk[0],stk[1]);
+}
+int64_t STK_SDL_ShowWindow(int64_t *stk) {
+    SDL_ShowWindow((SDL_Window*)stk[0]);
+}
+int64_t STK_SDL_HideWindow(int64_t *stk) {
+    SDL_HideWindow((SDL_Window*)stk[0]);
+}
+int64_t STK_SDL_CreateRenderer(int64_t *stk) {
+    return (int64_t)SDL_CreateRenderer((SDL_Renderer*)stk[0],stk[1],stk[2]);
+}
+int64_t STK_SDL_CreateTexture(int64_t *stk) {
+    return (int64_t)SDL_CreateTexture((SDL_Renderer*)stk[0],stk[1],stk[2],stk[3],stk[4]);
+}
+int64_t STK_SDL_DestroyRenderer(int64_t *stk) {
+    SDL_DestroyRenderer((SDL_Renderer*)stk[0]);
+}
+int64_t STK_SDL_GetRenderer(int64_t *stk) {
+    return (int64_t)SDL_GetRenderer((SDL_Window*)stk[0]);
+}
+int64_t STK_SDL_GetRendererOutputSize(int64_t *stk) {
+    return SDL_GetRendererOutputSize((SDL_Renderer*)stk[0],(int*)stk[1],(int*)stk[2]);
+}
+int64_t STK_SDL_GetRenderTarget(int64_t *stk) {
+    return (int64_t)SDL_GetRenderTarget((SDL_Renderer*)stk[0]);
+}
+int64_t STK_SDL_GetTextureAlphaMod(int64_t *stk) {
+    return SDL_GetTextureAlphaMod((SDL_Texture*)stk[0],(Uint8*)stk[1]);
+}
+int64_t STK_SDL_GetTextureColorMod(int64_t *stk) {
+    return SDL_GetTextureColorMod((SDL_Texture*)stk[0],(Uint8*)stk[1],(Uint8*)stk[2],(Uint8*)stk[3]);
+}
+int64_t STK_SDL_RenderClear(int64_t *stk) {
+    return SDL_RenderClear((SDL_Renderer*)stk[0]);
+}
+int64_t STK_SDL_RenderCopy(int64_t *stk) {
+    return SDL_RenderCopy((SDL_Renderer*)stk[0],(SDL_Texture*)stk[1],(SDL_Rect*)stk[2],(SDL_Rect*)stk[3]);
+}
+int64_t STK_SDL_RenderDrawLine(int64_t *stk) {
+    return SDL_RenderDrawLine((SDL_Renderer*)stk[0],stk[1],stk[2],stk[3],stk[4]);
+}
+int64_t STK_SDL_RenderDrawPoint(int64_t *stk) {
+    return SDL_RenderDrawPoint((SDL_Renderer*)stk[0],stk[1],stk[2]);
+}
+int64_t STK_SDL_RenderDrawPoints(int64_t *stk) {
+    return SDL_RenderDrawPoints((SDL_Renderer*)stk[0],(SDL_Point*)stk[1],stk[2]);
+}
+int64_t STK_SDL_RenderDrawRect(int64_t *stk) {
+    return SDL_RenderDrawRect((SDL_Renderer*)stk[0],(SDL_Rect*)stk[1]);
+}
+int64_t STK_SDL_RenderDrawRects(int64_t *stk) {
+    return SDL_RenderDrawRects((SDL_Renderer*)stk[0],(SDL_Rect*)stk[1],stk[2]);
+}
+int64_t STK_SDL_RenderFillRects(int64_t *stk) {
+    return SDL_RenderDrawRects((SDL_Renderer*)stk[0],(SDL_Rect*)stk[1],stk[2]);
+}
+int64_t STK_SDL_RenderGetClipRect(int64_t *stk) {
+    SDL_RenderGetClipRect((SDL_Renderer*)stk[0],(SDL_Rect*)stk[1]);
+}
+int64_t STK_SDL_RenderPresent(int64_t *stk) {
+    SDL_RenderPresent((SDL_Renderer*)stk[0]);
+}
+int64_t STK_SDL_RenderSetClipRect(int64_t *stk) {
+    return SDL_RenderSetClipRect((SDL_Renderer*)stk[0],(SDL_Rect*)stk[1]);
+}
+int64_t STK_SDL_SetRenderTarget(int64_t *stk) {
+    return SDL_SetRenderTarget((SDL_Renderer*)stk[0],(SDL_Texture*)stk[1]);
+}
+int64_t STK_SDL_SetTextureAlphaMod(int64_t *stk) {
+    return SDL_SetTextureAlphaMod((SDL_Texture*)stk[0],stk[1]);
+}
+int64_t STK_SDL_SetTextureColorMod(int64_t *stk) {
+    return SDL_SetTextureColorMod((SDL_Texture*)stk[0],stk[1],stk[2],stk[3]);
+}
+int64_t STK_SDL_UpdateTexture(int64_t *stk) {
+    return SDL_UpdateTexture((SDL_Texture*)stk[0],(SDL_Rect*)stk[1],(void*)stk[2],stk[3]);
+}
+int64_t STK_SDL_QueryTexture(int64_t *stk) {
+    return SDL_QueryTexture((SDL_Texture*)stk[0],(Uint32*)stk[1],(int*)stk[2],(int*)stk[3],(int*)stk[4]);
+}
+int64_t STK_SDL_GetClipboardText(int64_t *stk) {
+    return (int64_t)hc_SDL_GetClipboardText();
+}
+int64_t STK_SDL_SetClipboardText(int64_t *stk) {
+    return SDL_SetClipboardText((char*)stk[0]);
+}
+int64_t STK_SDL_PollEvent(int64_t *stk) {
+    return SDL_PollEvent((SDL_Event*)stk[0]);
+}
+int64_t STK_SDL_WaitEvent(int64_t *stk) {
+    return SDL_WaitEvent((SDL_Event*)stk[0]);
+}
+int64_t STK_SDL_DestroyTexture(int64_t *stk) {
+    SDL_DestroyTexture((SDL_Texture*)stk[0]);
+}
+int64_t STK_SDL_StartTextInput(int64_t *stk) {
+    SDL_StartTextInput();
+}
+int64_t STK_SDL_StopTextInput(int64_t *stk) {
+    SDL_StopTextInput();
+}
+int64_t STK_SDL_GetError(int64_t *stk) {
+    SDL_GetError();
+}
+int64_t STK_SDL_ClearError(int64_t *stk) {
+    SDL_ClearError();
+}
+int64_t STK_SDL_FlushEvent(int64_t *stk) {
+    SDL_FlushEvent(stk[0]);
+}
+int64_t STK_GetSurfaceW(int64_t *stk) {
+    return GetSurfaceW((SDL_Surface*)stk[0]);
+}
+int64_t STK_GetSurfaceH(int64_t *stk) {
+    return GetSurfaceH((SDL_Surface*)stk[0]);
+}
+int64_t STK_SDL_CreateRGBSurface(int64_t *stk) {
+    return (int64_t)SDL_CreateRGBSurface(stk[0],stk[1],stk[2],stk[3],stk[4],stk[5],stk[6],stk[7]);
+}
+int64_t STK_SDL_CreateRGBSurfaceFrom(int64_t *stk) {
+    return (int64_t)SDL_CreateRGBSurfaceFrom((void*)stk[0],stk[1],stk[2],stk[3],stk[4],stk[5],stk[6],stk[7],stk[8]);
+}
+int64_t STK_SDL_UpperBlit(int64_t *stk) {
+    return SDL_UpperBlit((SDL_Surface*)stk[0],(SDL_Rect*)stk[1],(SDL_Surface*)stk[2],(SDL_Rect*)stk[3]);
+}
+int64_t STK_SDL_FillRect(int64_t *stk) {
+    return SDL_FillRect((SDL_Surface*)stk[0],(SDL_Rect*)stk[1],stk[2]);
+}
+int64_t STK_SDL_FillRects(int64_t *stk) {
+    return SDL_FillRects((SDL_Surface*)stk[0],(SDL_Rect*)stk[1],stk[2],stk[3]);
+}
+int64_t STK_SDL_GetClipRect(int64_t *stk) {
+     SDL_GetClipRect((SDL_Surface*)stk[0],(SDL_Rect*)stk[1]);
+}
+int64_t STK_SDL_GetColorKey(int64_t *stk) {
+    return SDL_GetColorKey((SDL_Surface*)stk[0],(Uint32*)stk[1]);
+}
+int64_t STK_SDL_GetSurfaceAlphaMod(int64_t *stk) {
+    return SDL_GetSurfaceAlphaMod((SDL_Surface*)stk[0],(Uint8*)stk[1]);
+}
+int64_t STK_SDL_GetSurfaceColorMod(int64_t *stk) {
+    return SDL_GetSurfaceColorMod((SDL_Surface*)stk[0],(Uint8*)stk[1],(Uint8*)stk[2],(Uint8*)stk[3]);
+}
+int64_t STK_SDL_LockSurface(int64_t *stk) {
+    return SDL_LockSurface((SDL_Surface*)stk[0]);
+}
+int64_t STK_SDL_UnlockSurface(int64_t *stk) {
+    SDL_UnlockSurface((SDL_Surface*)stk[0]);
+}
+int64_t STK_SDL_SetClipRect(int64_t *stk) {
+    SDL_SetClipRect((SDL_Surface*)stk[0],(SDL_Rect*)stk[1]);
+}
+int64_t STK_SDL_SetColorKey(int64_t *stk) {
+    SDL_SetColorKey((SDL_Surface*)stk[0],stk[1],stk[2]);
+}
+int64_t STK_SDL_SetSurfaceAlphaMod(int64_t *stk) {
+    return SDL_SetSurfaceAlphaMod((SDL_Surface*)stk[0],stk[1]);
+}
+int64_t STK_SDL_SetSurfaceColorMod(int64_t *stk) {
+    return SDL_SetSurfaceColorMod((SDL_Surface*)stk[0],stk[1],stk[2],stk[3]);
+}
+int64_t STK_SDL_SetSurfaceRLE(int64_t *stk) {
+    return SDL_SetSurfaceRLE((SDL_Surface*)stk[0],stk[1]);
+}
+int64_t STK_SDL_BlitSurface(int64_t *stk) {
+    return SDL_BlitSurface((SDL_Surface*)stk[0],(SDL_Rect*)stk[1],(SDL_Surface*)stk[2],(SDL_Rect*)stk[3]);
+}
+int64_t STK_SDL_BlitScaled(int64_t *stk) {
+    return SDL_LowerBlitScaled((SDL_Surface*)stk[0],(SDL_Rect*)stk[1],(SDL_Surface*)stk[2],(SDL_Rect*)stk[3]);
+}
+int64_t STK_SDL_FreeSurface(int64_t *stk) {
+    SDL_FreeSurface((SDL_Surface*)stk[0]);
+}
+int64_t STK_SDL_UpdateWindowSurface(int64_t *stk) {
+    return (int64_t)SDL_UpdateWindowSurface((SDL_Window*)stk[0]);
+}
+int64_t STK_SDL_GetWindowSurface(int64_t *stk) {
+    return (int64_t)SDL_GetWindowSurface((SDL_Window*)stk[0]);
+}
+int64_t STK_GetBuiltinMacrosText(int64_t *stk) {
+    return (int64_t)GetBuiltinMacrosText();
+}
+int64_t STK_SDL_DisableScreenSaver(int64_t *stk) {
+    SDL_DisableScreenSaver();
+}
+int64_t STK_GCollect(int64_t *stk) {
+    PoopCollect();
+} 
+int64_t STK_IsDir(int64_t *stk) {
+    return IsDir(stk[0]);
+}
+int64_t STK___GetBuiltinMacrosText(int64_t *stk) {
+    return GetBuiltinMacrosText();
+}
+//
+//This was built for TOS abi
+//
+void JIT_DebuggerHit();
+void STK_HCSetJmp();
+int64_t FFI_RegisterRuntimeClasses();
+int64_t FFI_UnblockSignals();
+int64_t FFI_Signal();
+int64_t FFI_ForeachFunc();
+int64_t TOS_HCSetJmp();
+int64_t FFI_PopTryFrame();
+int64_t FFI_EnterTry();
+int64_t FFI_ExitCatch();
+int64_t FFI_TOSPrint();
+int64_t FFI_BoundsCheck();
+int64_t FFI_pow();
+int64_t FFI_PoopSetGCEnable();
+int64_t FFI_GCollect();
+int64_t FFI_CreateTagsAndErrorsFiles();
+int64_t FFI_MSize();
+int64_t FFI_BFFS();
+int64_t FFI_BCLZ();
+int64_t FFI_throw();
+int64_t FFI_PoopMAlloc();
+int64_t FFI_PoopFree();
+int64_t FFI_MemNCpy();
+int64_t FFI_MemNCpy();
+int64_t FFI_strlen();
+int64_t FFI_strcmp();
+int64_t FFI_strncmp();
+int64_t FFI_strcpy();
+int64_t FFI_strncpy();
+int64_t FFI_strstr();
+int64_t FFI_GetFs();
+int64_t FFI___GetStr();
+int64_t FFI_atan();
+int64_t FFI_abs();
+int64_t FFI_cos();
+int64_t FFI_sin();
+int64_t FFI_sqrt();
+int64_t FFI_tan();
+int64_t FFI_ceil();
+int64_t FFI_floor();
+int64_t FFI_log();
+int64_t FFI_log10();
+int64_t FFI_log2();
+int64_t FFI_round();
+int64_t FFI_trunc();
+int64_t FFI_exit();
+int64_t FFI_Cd();
+int64_t FFI_DirCur();
+int64_t FFI_DirMk();
+int64_t FFI___Move();
+int64_t FFI_FileNameAbs();
+int64_t FFI_FileNameAbs();
+int64_t FFI___Dir();
+int64_t FFI_IsWindows();
+int64_t FFI_IsMac();
+int64_t FFI_memset();
+int64_t FFI_SDL_Init();
+int64_t FFI_SDL_WasInit();
+int64_t FFI_SDL_CreateWindow();
+int64_t FFI_SDL_SetTextureBlendMode();
+int64_t FFI_SDL_CreateWindowAndRenderer();
+int64_t FFI_SDL_DestroyWindow();
+int64_t FFI_SDL_DestroyRenderer();
+int64_t FFI_SDL_DisableScreenSaver();
+int64_t FFI_SDL_GetGrabbedWindow();
+int64_t FFI_SDL_GetWindowPosition();
+int64_t FFI_SDL_GetWindowMinimumSize();
+int64_t FFI_SDL_GetWindowMaximumSize();
+int64_t FFI_SDL_GetWindowSize();
+int64_t FFI_hc_SDL_GetWindowTitle();
+int64_t FFI_SDL_HideWindow();
+int64_t FFI_SDL_MaximizeWindow();
+int64_t FFI_SDL_MinimizeWindow();
+int64_t FFI_SDL_SetWindowBordered();
+int64_t FFI_SDL_SetWindowFullscreen();
+int64_t FFI_SDL_SetWindowMaximumSize();
+int64_t FFI_SDL_SetWindowMinimumSize();
+int64_t FFI_SDL_SetWindowResizable();
+int64_t FFI_SDL_SetWindowSize();
+int64_t FFI_SDL_SetWindowTitle();
+int64_t FFI_SDL_ShowWindow();
+int64_t FFI_SDL_CreateRenderer();
+int64_t FFI_SDL_CreateTexture();
+int64_t FFI_SDL_DestroyRenderer();
+int64_t FFI_SDL_GetRenderDrawColor();
+int64_t FFI_SDL_GetRenderer();
+int64_t FFI_SDL_GetRendererOutputSize();
+int64_t FFI_SDL_GetRenderTarget();
+int64_t FFI_SDL_GetTextureAlphaMod();
+int64_t FFI_SDL_GetTextureColorMod();
+int64_t FFI_SDL_RenderClear();
+int64_t FFI_SDL_RenderCopy();
+int64_t FFI_SDL_RenderDrawLine();
+int64_t FFI_SDL_RenderDrawLines();
+int64_t FFI_SDL_RenderDrawPoint();
+int64_t FFI_SDL_RenderDrawPoints();
+int64_t FFI_SDL_RenderDrawRect();
+int64_t FFI_SDL_RenderDrawRects();
+int64_t FFI_SDL_RenderFillRects();
+int64_t FFI_SDL_RenderGetClipRect();
+int64_t FFI_SDL_RenderPresent();
+int64_t FFI_SDL_RenderSetClipRect();
+int64_t FFI_SDL_SetRenderDrawColor();
+int64_t FFI_SDL_SetRenderTarget();
+int64_t FFI_SDL_SetTextureAlphaMod();
+int64_t FFI_SDL_SetTextureColorMod();
+int64_t FFI_SDL_UpdateTexture();
+int64_t FFI_SDL_QueryTexture();
+int64_t FFI_SDL_GetClipboardText();
+int64_t FFI_SDL_SetClipboardText();
+int64_t FFI_SDL_PollEvent();
+int64_t FFI_SDL_WaitEvent();
+int64_t FFI_SDL_DestroyRenderer();
+int64_t FFI_SDL_DestroyTexture();
+int64_t FFI_SDL_StartTextInput();
+int64_t FFI_SDL_StopTextInput();
+int64_t FFI_SDL_GetError();
+int64_t FFI_SDL_ClearError();
+int64_t FFI_SDL_FlushEvent();
+int64_t FFI_GetSurfaceW();
+int64_t FFI_GetSurfaceH();
+int64_t FFI_SDL_CreateRGBSurface();
+int64_t FFI_SDL_CreateRGBSurfaceFrom();
+int64_t FFI_SDL_UpperBlit();
+int64_t FFI_SDL_FillRect();
+int64_t FFI_SDL_FillRects();
+int64_t FFI_SDL_GetClipRect();
+int64_t FFI_SDL_GetColorKey();
+int64_t FFI_SDL_GetSurfaceAlphaMod();
+int64_t FFI_SDL_GetSurfaceColorMod();
+int64_t FFI_SDL_LockSurface();
+int64_t FFI_SDL_UnlockSurface();
+int64_t FFI_SDL_SetClipRect();
+int64_t FFI_SDL_SetColorKey();
+int64_t FFI_SDL_SetSurfaceAlphaMod();
+int64_t FFI_SDL_SetSurfaceColorMod();
+int64_t FFI_SDL_SetSurfaceRLE();
+int64_t FFI_SDL_BlitSurface();
+int64_t FFI_SDL_BlitScaled();
+int64_t FFI_SDL_FreeSurface();
+int64_t FFI_SDL_UpdateWindowSurface();
+int64_t FFI_SDL_GetWindowSurface();
+int64_t FFI_GetBuiltinMacrosText();
+int64_t FFI_IsDir();
+int64_t FFI_FileRead();
+int64_t FFI_FileWrite();
+int64_t FFI_Del();
+void TOS_RegisterFuncPtrs() {
+    STK_RegisterFunctionPtr("RegisterRuntimeClasses",FFI_RegisterRuntimeClasses);
+    STK_RegisterFunctionPtr("UnblockSignals",FFI_UnblockSignals);
+    STK_RegisterFunctionPtr("signal",FFI_Signal);
+    STK_RegisterFunctionPtr("ForeachFuncInTable",FFI_ForeachFunc);
+    STK_RegisterFunctionPtr("FileRead",FFI_FileRead);
+    STK_RegisterFunctionPtr("FileWrite",FFI_FileWrite);
+    STK_RegisterFunctionPtr("IsDir",FFI_IsDir);
+    //SPECIAL
+    STK_RegisterFunctionPtr("HCSetJmp",TOS_HCSetJmp);
+    //SPECIAL
+    STK_RegisterFunctionPtr("JIT_DebuggerHit",JIT_DebuggerHit);
+    STK_RegisterFunctionPtr("PopTryFrame",FFI_PopTryFrame);
+    STK_RegisterFunctionPtr("EnterTry",FFI_EnterTry);
+    STK_RegisterFunctionPtr("ExitCatch",FFI_ExitCatch);
+    STK_RegisterFunctionPtr("TOSPrint",FFI_TOSPrint);
+    STK_RegisterFunctionPtr("WhineOnOutOfBounds",FFI_BoundsCheck);
+    STK_RegisterFunctionPtr("Pow",FFI_pow);
+    STK_RegisterFunctionPtr("PoopSetGCEnable",FFI_PoopSetGCEnable);
+    STK_RegisterFunctionPtr("GC_Collect",FFI_GCollect);
+    STK_RegisterFunctionPtr("CreateTagsAndErrorsFiles",FFI_CreateTagsAndErrorsFiles);
+    STK_RegisterFunctionPtr("MSize",FFI_MSize);
+    STK_RegisterFunctionPtr("Bsf",FFI_BFFS);
+    STK_RegisterFunctionPtr("Bsr",FFI_BCLZ);
+    STK_RegisterFunctionPtr("throw",FFI_throw);
+    STK_RegisterFunctionPtr("MAlloc",FFI_PoopMAlloc);
+    STK_RegisterFunctionPtr("Free",FFI_PoopFree);
+    STK_RegisterFunctionPtr("MemCpy",FFI_MemNCpy);
+    STK_RegisterFunctionPtr("MemNCpy",FFI_MemNCpy);
+    STK_RegisterFunctionPtr("StrLen",FFI_strlen);
+    STK_RegisterFunctionPtr("StrCmp",FFI_strcmp);
+    STK_RegisterFunctionPtr("StrNCmp",FFI_strncmp);
+    STK_RegisterFunctionPtr("StrCpy",FFI_strcpy);
+    STK_RegisterFunctionPtr("StrNCpy",FFI_strncpy);
+    STK_RegisterFunctionPtr("StrMatch",FFI_strstr);
+    STK_RegisterFunctionPtr("Fs",FFI_GetFs);
+    STK_RegisterFunctionPtr("__GetStr",FFI___GetStr);
+    STK_RegisterFunctionPtr("ATan",FFI_atan);
+    STK_RegisterFunctionPtr("Abs",FFI_abs);
+    STK_RegisterFunctionPtr("Cos",FFI_cos);
+    STK_RegisterFunctionPtr("Sin",FFI_sin);
+    STK_RegisterFunctionPtr("Sqrt",FFI_sqrt);
+    STK_RegisterFunctionPtr("Tan",FFI_tan);
+    STK_RegisterFunctionPtr("Ceil",FFI_ceil);
+    STK_RegisterFunctionPtr("Floor",FFI_floor);
+    STK_RegisterFunctionPtr("Ln",FFI_log);
+    STK_RegisterFunctionPtr("Log10",FFI_log10);
+    STK_RegisterFunctionPtr("Log2",FFI_log2);
+    STK_RegisterFunctionPtr("Round",FFI_round);
+    STK_RegisterFunctionPtr("Trunc",FFI_trunc);
+    STK_RegisterFunctionPtr("Exit",FFI_exit);
+    STK_RegisterFunctionPtr("Cd",FFI_Cd);
+    STK_RegisterFunctionPtr("DirCur",FFI_DirCur);
+    STK_RegisterFunctionPtr("DirMk",FFI_DirMk);
+    STK_RegisterFunctionPtr("__Move",FFI___Move);
+    STK_RegisterFunctionPtr("Del",FFI_Del);
+    STK_RegisterFunctionPtr("FileNameAbs",FFI_FileNameAbs);
+    STK_RegisterFunctionPtr("DirNameAbs",FFI_FileNameAbs);
+    STK_RegisterFunctionPtr("__Dir",FFI___Dir);
+    STK_RegisterFunctionPtr("IsWindows",FFI_IsWindows);
+    STK_RegisterFunctionPtr("IsMac",FFI_IsMac);
+    STK_RegisterFunctionPtr("MemSet",FFI_memset);
+    STK_RegisterFunctionPtr("SDL_Init",FFI_SDL_Init);
+    STK_RegisterFunctionPtr("SDL_WasInit",FFI_SDL_WasInit);
+    STK_RegisterFunctionPtr("SDL_CreateWindow",FFI_SDL_CreateWindow);
+    STK_RegisterFunctionPtr("SDL_SetTextureBlendMode",FFI_SDL_SetTextureBlendMode);
+    STK_RegisterFunctionPtr("SDL_CreateWindowAndRenderer",FFI_SDL_CreateWindowAndRenderer);
+    STK_RegisterFunctionPtr("SDL_DestroyWindow",FFI_SDL_DestroyWindow);
+    STK_RegisterFunctionPtr("SDL_DestroyRenderer",FFI_SDL_DestroyRenderer);
+    STK_RegisterFunctionPtr("SDL_DisableScreenSaver",FFI_SDL_DisableScreenSaver);
+    STK_RegisterFunctionPtr("SDL_GetGrabbedWindow",FFI_SDL_GetGrabbedWindow);
+    STK_RegisterFunctionPtr("SDL_GetWindowPosition",FFI_SDL_GetWindowPosition);
+    STK_RegisterFunctionPtr("SDL_GetWindowMinimumSize",FFI_SDL_GetWindowMinimumSize);
+    STK_RegisterFunctionPtr("SDL_GetWindowMaximumSize",FFI_SDL_GetWindowMaximumSize);
+    STK_RegisterFunctionPtr("SDL_GetWindowSize",FFI_SDL_GetWindowSize);
+    STK_RegisterFunctionPtr("SDL_GetWindowTitle",FFI_hc_SDL_GetWindowTitle);
+    STK_RegisterFunctionPtr("SDL_HideWindow",FFI_SDL_HideWindow);
+    STK_RegisterFunctionPtr("SDL_MaximizeWindow",FFI_SDL_MaximizeWindow);
+    STK_RegisterFunctionPtr("SDL_MinimizeWindow",FFI_SDL_MinimizeWindow);
+    STK_RegisterFunctionPtr("SDL_SetWindowBordered",FFI_SDL_SetWindowBordered);
+    STK_RegisterFunctionPtr("SDL_SetWindowFullscreen",FFI_SDL_SetWindowFullscreen);
+    STK_RegisterFunctionPtr("SDL_SetWindowMaximumSize",FFI_SDL_SetWindowMaximumSize);
+    STK_RegisterFunctionPtr("SDL_SetWindowMinimumSize",FFI_SDL_SetWindowMinimumSize);
+    STK_RegisterFunctionPtr("SDL_SetWindowResizable",FFI_SDL_SetWindowResizable);
+    STK_RegisterFunctionPtr("SDL_SetWindowSize",FFI_SDL_SetWindowSize);
+    STK_RegisterFunctionPtr("SDL_SetWindowTitle",FFI_SDL_SetWindowTitle);
+    STK_RegisterFunctionPtr("SDL_ShowWindow",FFI_SDL_ShowWindow);
+    STK_RegisterFunctionPtr("SDL_CreateRenderer",FFI_SDL_CreateRenderer);
+    STK_RegisterFunctionPtr("SDL_CreateTexture",FFI_SDL_CreateTexture);
+    STK_RegisterFunctionPtr("SDL_DestroyRenderer",FFI_SDL_DestroyRenderer);
+    STK_RegisterFunctionPtr("SDL_GetRenderer",FFI_SDL_GetRenderer);
+    STK_RegisterFunctionPtr("SDL_GetRendererOutputSize",FFI_SDL_GetRendererOutputSize);
+    STK_RegisterFunctionPtr("SDL_GetTextureAlphaMod",FFI_SDL_GetTextureAlphaMod);
+    STK_RegisterFunctionPtr("SDL_GetTextureColorMod",FFI_SDL_GetTextureColorMod);
+    STK_RegisterFunctionPtr("SDL_RenderClear",FFI_SDL_RenderClear);
+    STK_RegisterFunctionPtr("SDL_RenderCopy",FFI_SDL_RenderCopy);
+    STK_RegisterFunctionPtr("SDL_RenderDrawLine",FFI_SDL_RenderDrawLine);
+    STK_RegisterFunctionPtr("SDL_RenderDrawPoint",FFI_SDL_RenderDrawPoint);
+    STK_RegisterFunctionPtr("SDL_RenderDrawPoints",FFI_SDL_RenderDrawPoints);
+    STK_RegisterFunctionPtr("SDL_RenderDrawRect",FFI_SDL_RenderDrawRect);
+    STK_RegisterFunctionPtr("SDL_RenderDrawRects",FFI_SDL_RenderDrawRects);
+    STK_RegisterFunctionPtr("SDL_RenderFillRects",FFI_SDL_RenderFillRects);
+    STK_RegisterFunctionPtr("SDL_RenderGetClipRect",FFI_SDL_RenderGetClipRect);
+    STK_RegisterFunctionPtr("SDL_RenderPresent",FFI_SDL_RenderPresent);
+    STK_RegisterFunctionPtr("SDL_RenderSetClipRect",FFI_SDL_RenderSetClipRect);
+    STK_RegisterFunctionPtr("SDL_SetTextureAlphaMod",FFI_SDL_SetTextureAlphaMod);
+    STK_RegisterFunctionPtr("SDL_SetTextureColorMod",FFI_SDL_SetTextureColorMod);
+    STK_RegisterFunctionPtr("SDL_UpdateTexture",FFI_SDL_UpdateTexture);
+    STK_RegisterFunctionPtr("SDL_QueryTexture",FFI_SDL_QueryTexture);
+    STK_RegisterFunctionPtr("SDL_GetClipboardText",FFI_SDL_GetClipboardText);
+    STK_RegisterFunctionPtr("SDL_SetClipboardText",FFI_SDL_SetClipboardText);
+    STK_RegisterFunctionPtr("SDL_PollEvent",FFI_SDL_PollEvent);
+    STK_RegisterFunctionPtr("SDL_WaitEvent",FFI_SDL_WaitEvent);
+    STK_RegisterFunctionPtr("SDL_DestroyRenderer",FFI_SDL_DestroyRenderer);
+    STK_RegisterFunctionPtr("SDL_DestroyTexture",FFI_SDL_DestroyTexture);
+    STK_RegisterFunctionPtr("SDL_StartTextInput",FFI_SDL_StartTextInput);
+    STK_RegisterFunctionPtr("SDL_StopTextInput",FFI_SDL_StopTextInput);
+    STK_RegisterFunctionPtr("SDL_GetError",FFI_SDL_GetError);
+    STK_RegisterFunctionPtr("SDL_ClearError",FFI_SDL_ClearError);
+    STK_RegisterFunctionPtr("SDL_FlushEvent",FFI_SDL_FlushEvent);
+    STK_RegisterFunctionPtr("SDL_GetSurfaceWidth",FFI_GetSurfaceW);
+    STK_RegisterFunctionPtr("SDL_GetSurfaceHeight",FFI_GetSurfaceH);
+    STK_RegisterFunctionPtr("SDL_CreateRGBSurface",FFI_SDL_CreateRGBSurface);
+    STK_RegisterFunctionPtr("SDL_CreateRGBSurfaceFrom",FFI_SDL_CreateRGBSurfaceFrom);
+    STK_RegisterFunctionPtr("SDL_UpperBlit",FFI_SDL_UpperBlit);
+    STK_RegisterFunctionPtr("SDL_FillRect",FFI_SDL_FillRect);
+    STK_RegisterFunctionPtr("SDL_FillRects",FFI_SDL_FillRects);
+    STK_RegisterFunctionPtr("SDL_GetClipRect",FFI_SDL_GetClipRect);
+    STK_RegisterFunctionPtr("SDL_GetColorKey",FFI_SDL_GetColorKey);
+    STK_RegisterFunctionPtr("SDL_GetSurfaceAlphaMod",FFI_SDL_GetSurfaceAlphaMod);
+    STK_RegisterFunctionPtr("SDL_GetSurfaceColorMod",FFI_SDL_GetSurfaceColorMod);
+    STK_RegisterFunctionPtr("SDL_LockSurface",FFI_SDL_LockSurface);
+    STK_RegisterFunctionPtr("SDL_UnlockSurface",FFI_SDL_UnlockSurface);
+    STK_RegisterFunctionPtr("SDL_SetClipRect",FFI_SDL_SetClipRect);
+    STK_RegisterFunctionPtr("SDL_SetColorKey",FFI_SDL_SetColorKey);
+    STK_RegisterFunctionPtr("SDL_SetSurfaceAlphaMod",FFI_SDL_SetSurfaceAlphaMod);
+    STK_RegisterFunctionPtr("SDL_SetSurfaceColorMod",FFI_SDL_SetSurfaceColorMod);
+    STK_RegisterFunctionPtr("SDL_SetSurfaceRLE",FFI_SDL_SetSurfaceRLE);
+    STK_RegisterFunctionPtr("SDL_BlitSurface",FFI_SDL_BlitSurface);
+    STK_RegisterFunctionPtr("SDL_BlitScaled",FFI_SDL_BlitScaled);
+    STK_RegisterFunctionPtr("SDL_FreeSurface",FFI_SDL_FreeSurface);
+    STK_RegisterFunctionPtr("SDL_UpdateWindowSurface",FFI_SDL_UpdateWindowSurface);
+    STK_RegisterFunctionPtr("SDL_GetWindowSurface",FFI_SDL_GetWindowSurface);
+    STK_RegisterFunctionPtr("__GetBuiltinMacrosText",FFI_GetBuiltinMacrosText);
 }
 static void *GetType(void *fp,char *name,long ptr_level) {
     CSymbol *gt;
-    if(!fp) {
-        gt=map_get(&Loader.symbols,"GetType");
-        if(!gt) return NULL;
-        fp=gt->value_ptr;
-    }
-    return ((void*(*)(char *,long))fp)(name,ptr_level);
+	gt=map_get(&Loader.symbols,"GetType");
+	if(!gt) return NULL;
+	fp=gt->value_ptr;
+	return FFI_CALL_TOS_2(gt->value_ptr,name,ptr_level);
 }
 static void *__LoaderCreateTypeFwd(void *fp,char *name,long sz,long align) {
     CSymbol *gt;
-    if(!fp) {
-        gt=map_get(&Loader.symbols,"LoaderCreateTypeFwd");
-        if(!gt) return NULL;
-        fp=gt->value_ptr;
-    }
-    return ((void*(*)(char *,long,long))fp)(name,sz,align);
+	gt=map_get(&Loader.symbols,"LoaderCreateTypeFwd");
+	if(!gt) return NULL;
+	return FFI_CALL_TOS_3(gt->value_ptr,name,sz,align);
 }
 #define LoaderCreateTypeFwd(fp,t) __LoaderCreateTypeFwd(fp,#t,sizeof(t),8);
 static void __LoaderAddMember(void *fp,void *dst,void *t,char *name,long off) {
     CSymbol *gt;
-    if(!fp) {
-        gt=map_get(&Loader.symbols,"LoaderAddMember");
-        if(!gt) return NULL;
-        fp=gt->value_ptr;
-    }
-    return ((void(*)(void*,void*,char *,long))fp)(dst,t,name,off);
+	gt=map_get(&Loader.symbols,"LoaderAddMember");
+	if(!gt) return NULL;
+    return FFI_CALL_TOS_4(gt->value_ptr,dst,t,name,off);
 }
 static CType *PrimType(void *fp,int64_t sz) {
     switch(sz) {
@@ -1264,12 +1077,10 @@ static CType *PrimType(void *fp,int64_t sz) {
 }
 static CType *LoaderCreateArrayType(void *fp,char *name,int64_t dim) {
     CSymbol *gt;
-    if(!fp) {
-        gt=map_get(&Loader.symbols,"LoaderCreateArrayType");
-        if(!gt) return NULL;
-        fp=gt->value_ptr;
-    }
-    return ((void*(*)(char *,long))fp)(name,dim);
+	gt=map_get(&Loader.symbols,"LoaderCreateArrayType");
+	if(!gt) return NULL;
+	fp=gt->value_ptr;
+    return FFI_CALL_TOS_2(fp,name,dim);
 }
 #define LoaderAddMember(fp,d,t,ct,mem) __LoaderAddMember(fp,d,t,#mem,offsetof(ct,mem));
 #define LoaderAddPrimMember(fp,gt,d,ct,mem) __LoaderAddMember(fp,d,PrimType(gt,sizeof(((ct*)NULL)->mem)),#mem,offsetof(ct,mem));
@@ -1281,25 +1092,17 @@ static void CreateMacroInt(vec_char_t *to,char *name,int64_t value) {
 vec_char_t CreateMacros() {
     vec_char_t macros;
     vec_init(&macros);
-    CreateMacroInt(&macros,"JIT_SIGNED_NUM", JIT_SIGNED_NUM);
-    CreateMacroInt(&macros,"JIT_UNSIGNED_NUM", JIT_UNSIGNED_NUM);
-    CreateMacroInt(&macros,"JIT_FLOAT_NUM", JIT_FLOAT_NUM);
-    CreateMacroInt(&macros,"JIT_PTR", JIT_PTR);
-    CreateMacroInt(&macros,"JIT_OPT_ALL",JIT_OPT_ALL);
-    CreateMacroInt(&macros,"JIT_OPT_JOIN_ADDMUL",JIT_OPT_JOIN_ADDMUL);
-    CreateMacroInt(&macros,"JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS",JIT_OPT_OMIT_UNUSED_ASSIGNEMENTS);
-    CreateMacroInt(&macros,"JIT_OPT_OMIT_FRAME_PTR",JIT_OPT_OMIT_FRAME_PTR);
     //SIGNALS
-    #ifndef TARGET_WIN32
     CreateMacroInt(&macros,"SIGILL",SIGILL);
     CreateMacroInt(&macros,"SIGABRT",SIGABRT);
-    CreateMacroInt(&macros,"SIGBUS",SIGBUS);
     CreateMacroInt(&macros,"SIGFPE",SIGFPE);
+    #ifndef TARGET_WIN32
     CreateMacroInt(&macros,"SIGKILL",SIGKILL);
-    CreateMacroInt(&macros,"SIGSEGV",SIGSEGV);
-    CreateMacroInt(&macros,"SIGTERM",SIGTERM);
+    CreateMacroInt(&macros,"SIGBUS",SIGBUS);
     CreateMacroInt(&macros,"SIGSTOP",SIGSTOP);
     #endif
+    CreateMacroInt(&macros,"SIGSEGV",SIGSEGV);
+    CreateMacroInt(&macros,"SIGTERM",SIGTERM);
     CreateMacroInt(&macros,"SDL_INIT_TIMER",SDL_INIT_TIMER);
     CreateMacroInt(&macros,"SDL_INIT_AUDIO",SDL_INIT_AUDIO);
     CreateMacroInt(&macros,"SDL_INIT_VIDEO",SDL_INIT_VIDEO);
@@ -1459,7 +1262,7 @@ void RegisterMacrosAndREPL(char *includes,int flags,char *body_code) {
     assert(repl);
     for(;;) {
         if(!HCSetJmp(EnterTry())) {
-            ((void(*)(char*,long,char *))repl->value_ptr)(macros.data,flags,body_code);
+            FFI_CALL_TOS_3(repl->value_ptr,macros.data,flags,body_code);
             break;
         } else {
             fprintf(stderr,"Caught exception,re-entering.\n");
@@ -1477,5 +1280,5 @@ void RegisterMacrosAndCompile(char *includes,char *to_file,char *embed_header) {
       vec_pusharr(&macros,includes,strlen(includes));
     vec_push(&macros,0);
     CSymbol *comp=map_get(&Loader.symbols,"CompileBinModule");
-    ((void(*)(char*,char*,char *))comp->value_ptr)(macros.data,to_file,embed_header);
+    FFI_CALL_TOS_3(comp->value_ptr,macros.data,to_file,embed_header);
 }

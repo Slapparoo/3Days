@@ -811,7 +811,7 @@ sp_out_e:
         {
           flags|=PRTF_NEG;
           d=-d;
-        }
+        } 
 sp_out_eng: //Engineering notation
         if (d==inf) goto sp_out_inf;
         if (d)
@@ -1047,3 +1047,7 @@ U8 *MStrPrint(U8 *fmt,...)
   Free(buf);
   return res;
 }
+
+
+
+

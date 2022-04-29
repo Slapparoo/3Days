@@ -5,7 +5,7 @@
 #ifndef TARGET_WIN32
 #include <sys/syscall.h>
 #include <unistd.h>
-#define HCRT_INSTALLTED_DIR "/HolyC/HCRT.BIN"
+#define HCRT_INSTALLTED_DIR "/HolyC/HCRT_TOS.BIN"
 #include <libgen.h>
 #include "ext/C_Unescaper/escaper.h"
 #else
@@ -14,7 +14,7 @@
 #include <fileapi.h>
 #include <userenv.h>
 #include <winnt.h>
-#define HCRT_INSTALLTED_DIR "\\HCRT\\HCRT.BIN"
+#define HCRT_INSTALLTED_DIR "\\HCRT\\HCRT_TOS.BIN"
 #endif
 static struct arg_lit *helpArg;
 static struct arg_lit *dbgArg;
@@ -112,12 +112,12 @@ int main(int argc,char **argv) {
         exit(0);
     }
     PoopInit(__builtin_frame_address(0));
-    RegisterFuncPtrs();
+    TOS_RegisterFuncPtrs();
     if(1) {
         int flags=noRuntime->count?AOT_NO_IMPORT_SYMS:0;
     #ifndef TARGET_WIN32
-        if(0==access("HCRT/HCRT.BIN",F_OK)) {
-            FILE *rt=fopen("HCRT/HCRT.BIN","rb");
+        if(0==access("HCRT/HCRT_TOS.BIN",F_OK)) {
+            FILE *rt=fopen("HCRT/HCRT_TOS.BIN","rb");
             LoadAOTBin(rt,flags,&header);
             fclose(rt);
         } else if(0==access("/usr/local/include" HCRT_INSTALLTED_DIR,F_OK)) {
