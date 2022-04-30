@@ -1,5 +1,5 @@
 name: 3days
-version:  0.0.99
+version:  0.1.00
 comment: A HolyC Compiler
 desc: <<EOD
 This is a 64bit HolyC JIT Compiler,it also includes an assembler.

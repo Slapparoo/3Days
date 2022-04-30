@@ -704,6 +704,8 @@ U8 *EncodeOpcode(U8 *ip,U8 *name,Bool *is_jmp,I64 *sibooff ,I64 *immoff,I64 *imm
     I64 *operand_sizes=MAlloc(sizeof(I64)*opc_cnt);
     I64 item=0;
     loop:
+    if(opc->flags&OPC_F_32bit)
+        goto fail;
     X64Mode *mem=NULL;
     I64 passed=1;
     I64 arg=0;
@@ -1248,6 +1250,7 @@ EncodeOpcode(buffer,"ADD",rm8,r8);
 "MOVSX R64,RM8\n";
 EncodeOpcode(buffer,"MOVSX",r64,rm8);
 */
+
 
 
 
