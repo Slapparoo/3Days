@@ -159,3 +159,17 @@ I64 ClampI64(I64 a,I64 min=0,I64 max) {
   if(a>max) return max;
   return a;
 }
+//https://stackoverflow.com/questions/101439/the-most-efficient-way-to-implement-an-integer-based-power-function-powint-int
+I64 PowI64(I64 base,I64 exp) {
+	I64 res=1;
+	if(exp<0) return 0;
+	for(;;) {
+		if(exp&1)
+			res*=base;
+		exp>>=1;
+		if(!exp)
+			break;
+		base*=base;
+	}
+	return res;
+} 

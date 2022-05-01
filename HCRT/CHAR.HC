@@ -466,4 +466,36 @@ U8 *StrLastOcc(U8 *str,U8 *marker) {
 }
 
 
+U8 *StrFirstRem(U8 *src,U8 *marker,U8 *dst=NULL)
+{//Remove first str segment and place in dst buf or NULL.
+  I64 ch;
+  U8 *ptr=src,*res=dst;
+  if (dst) {
+    while ((ch=*ptr++) && !StrOcc(marker,ch))
+      *dst++=ch;
+    *dst=0;
+  } else
+    while ((ch=*ptr++) && !StrOcc(marker,ch));
+  if (ch)
+    StrCpy(src,ptr);
+  else
+    *src=0;
+  return res;
+}
+U8 *StrLastRem(U8 *src,U8 *marker,U8 *dst=NULL)
+{//Remove last str segment and place in dst buf or NULL.
+  U8 *ptr;
+  if (ptr=StrLastOcc(src,marker)) {
+    if (dst)
+      StrCpy(dst,ptr+1);
+    *ptr=0;
+  } else {
+    if (dst)
+      StrCpy(dst,src);
+    *src=0;
+  }
+  return dst;
+}
+
+
 

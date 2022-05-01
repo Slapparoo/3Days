@@ -150,6 +150,8 @@ extern U8 *StrIMatch(U8 *src,U8 *find);
 extern I64 StrOcc(U8 *src, I64 ch);
 extern U8 *StrFirstOcc(U8 *src,U8 *marker);
 extern U8 *StrLastOcc(U8 *str,U8 *marker);
+extern U8 *StrFirstRem(U8 *src,U8 *marker,U8 *dst=NULL);
+extern U8 *StrLastRem(U8 *src,U8 *marker,U8 *dst=NULL);
 //FIFO.HC
 class CFifoU8 {
   U8 *buf;
@@ -184,8 +186,9 @@ class CDirEntry
  I64 size;	//In bytes
  I64 datetime; //In Unix time(not used yet)
 };
+extern U8 *DirFile(U8 *dirname,U8 *name=NULL,U8 *_extension=NULL);
 extern U8 *FileExtDot(U8 *src);
-
+extern Bool FileFind(U8 *str,CDirEntry *_en=NULL,I64 flags=0);
 #define FUF_RECURSE (1<<0)
 #define FUF_SINGLE (1<<1)
 #define FUF_JUST_DIRS (1<<3)
@@ -229,14 +232,6 @@ extern U0 QSort2b(U8 *base,I64 num, I64 width,
 	I64 (*fp_compare)(U8 *e1,U8 *e2),U8 *tmp);
 extern U0 QSort(U8 *base,I64 num, I64 width, I64 (*fp_compare)(U8 *e1,U8 *e2));
 //ASM.HC
-#define SREG 0
-#define GP_8 1
-#define GP_16 2
-#define GP_32 3
-#define GP_64 4
-#define X87 5
-#define MM 6
-#define XMM 7
 class CReg:CHash {
     I64 code,type;
 };
@@ -393,7 +388,7 @@ U8 *SDL_GetWindowTitle(SDL_Window *);
 U0 SDL_HideWindow(SDL_Window *);
 U0 SDL_MaximizeWindow(SDL_Window *);
 U0 SDL_MinimizeWindow(SDL_Window *);
-U0 SDL_SetWindowBordered(SDL_Window *);
+U0 SDL_SetWindowBordered(SDL_Window *,Bool);
 I64 SDL_SetWindowFullscreen(SDL_Window *,I64 flags=0);
 U0 SDL_SetWindowMaximumSize(SDL_Window *,I64,I64);
 U0 SDL_SetWindowMinimumSize(SDL_Window *,I64,I64);
@@ -467,16 +462,8 @@ extern U0 HCSetJmp();
 extern U0 PopTryFrame();
 extern U0 EnterTry();
 extern U0 ExitCatch();
-extern U64 PowU64(U64 a,U64 b);
 extern I64 PowI64(I64 a,I64 b);
-extern F64 FMod(F64 a,F64 b);
 extern Bool WhineOnOutOfBounds(U0 *a,I64 b);
-extern F64 Bit4BitU64ToF64(U64 arr);
-extern F64 Bit4BitF64ToU64(F64 arr);
-extern F64 F64And(F64 a,F64 b);
-extern F64 F64Xor(F64 a,F64 b);
-extern F64 F64Or(F64 a,F64 b);
-extern F64 F64Shr(F64 a,I64 b);
 extern F64 Pow(F64 a,F64 b);
 extern U0 GC_Collect();
 extern I64 MSize(U0 *a);
@@ -543,6 +530,7 @@ U0 Debugger();
 //For internal use 
 U0 RegisterRuntimeClasses(U0*gt,U0*fwd,U0*am,U0 *cat);
 #endif
+
 
 
 

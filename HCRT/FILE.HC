@@ -209,28 +209,32 @@ CDirEntry *FilesFind(U8 *mask,I64 flags=0) {
   path[StrLen(root)]=delim_chr;
   path[StrLen(root)+1]=0;
   I64 fnstart=StrLen(path);
-  CDirEntry *prev=NULL;
+  CDirEntry *prev=NULL,*first=NULL;
   while(--fcnt>=0) {
     if(files[fcnt]) {
       CDirEntry *ent=MAlloc(sizeof(CDirEntry));
       StrCpy(path+fnstart,files[fcnt]);
       StrCpy(ent.name,files[fcnt]);      
       if(prev) {
-        ent->prev=prev;
         prev->next=ent;
       }
+      if(!first) first=ent;
       prev=ent;
     }
   }
-  if(prev&&!(flags&FUF_SINGLE))
-    while(prev->prev) prev=prev->prev;
   Free(mask);
-  return prev;
+  return first;
 }
 U0 DirEntryFree(CDirEntry *ents) {
   if(ents->next)
     DirEntryFree(ents->next);
   Free(ents);
+}
+Bool FileFind(U8 *str,CDirEntry *_en=NULL,I64 flags=0) {
+    CDirEntry *ents=FilesFind(str,flags);
+    if(_en&&ents) *_en=*ents; 
+    DirEntryFree(ents);
+    return NULL!=ents;
 }
 U0 Dir(U8 *path=".") {
   U8 delim='/';
@@ -300,4 +304,53 @@ U0 Move(U8 *mask,U8 *to) {
   }
 }
 
+U8 *DirFile(U8 *dirname,U8 *name=NULL,U8 *_extension=NULL)
+{/*Strips file from dirname, scans for file upward until found or
+returns default.
 
+("/Kernel/KHashA.HC.Z",NULL,NULL)	returns "D:/Kernel"
+("/Kernel",NULL,"PRJ.Z")		returns "D:/Kernel/Kernel.PRJ.Z"
+("/Kernel/BlkDev",NULL,"PRJ.Z")		returns "D:/Kernel/Kernel.PRJ.Z"
+("/Apps/Psalmody","Load","HC.Z")	returns "D:/Apps/Psalmody/Load.HC.Z"
+*/
+  U8 *st=FileNameAbs(dirname),*st2,*st3,*res,*dft=NULL,*ext;
+  if (_extension && *_extension) {
+    if (*_extension=='.')
+      ext=StrNew(_extension);
+    else
+      ext=MStrPrint(".%s",_extension);
+  } else
+    ext=StrNew("");
+  while (StrOcc(st,'/')&&!IsDir(st))
+    StrLastRem(st,"/");
+  while (StrOcc(st,'/')) {
+    st2=StrNew(st);
+    st3=StrNew(st);
+    StrLastRem(st2,"/",st3);
+
+    if (name)
+      res=MStrPrint("%s/%s%s",st,name,ext);
+    else {
+      if (*ext)
+	res=MStrPrint("%s/%s%s",st,st3,ext);
+      else
+	res=StrNew(st);
+    }
+    if (!dft)
+      dft=StrNew(res);
+    if (!*ext && (!name||!*name) || FileFind(res)) {
+      Free(st3);
+      Free(st2);
+      Free(st);
+      Free(dft);
+      Free(ext);
+      return res;
+    }
+    Free(st);
+    st=st2;
+    Free(st3);
+  }
+  Free(st);
+  Free(ext);
+  return dft;
+}

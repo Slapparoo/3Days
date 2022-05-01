@@ -18,8 +18,8 @@ static U8 *SkipComment(U8 *text) {
 #define GP_32 3
 #define GP_64 4
 #define X87 5
-#define MM 6
-#define XMM 7
+#define _MM 6
+#define _XMM 7
 CHashTable *regs=HashTableNew(64);
 CHashTable *opcodes=HashTableNew(1<<9);
 #define OPC_F_SR 1 // /R
@@ -78,10 +78,10 @@ U0 ParseOpcodes(U8 *text) {
         rtype=GP_64;
         goto addreg;
     } else if(!StrNCmp(text,"MM",len=StrLen("MM"))) {
-        rtype=MM;
+        rtype=_MM;
         goto addreg;
     } else if(!StrNCmp(text,"XMM",len=StrLen("XMM"))) {
-        rtype=XMM;
+        rtype=_XMM;
         goto addreg;
     } else if(!StrNCmp(text,"OPCODE",len=StrLen("OPCODE"))) {
         text=SkipComment(text+len);

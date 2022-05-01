@@ -95,10 +95,12 @@ static void ExitCatch() {
     }
 }
 static int64_t BFFS(int64_t v) {
-    return __builtin_ffsl(v);
+	if(!v) return -1;
+    return __builtin_ffsl(v)-1;
 }
 static int64_t BCLZ(int64_t v) {
-    return __builtin_clzl(v);
+	if(!v) return -1;
+    return 63-__builtin_clzl(v);
 }
 static uint64_t PowU64(uint64_t x,uint64_t n) {
     if(n==0) return 1;

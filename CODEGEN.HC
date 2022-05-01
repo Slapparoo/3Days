@@ -4557,7 +4557,7 @@ U0 CacheRPNSuccessors(JIT *jit) {
 }
 I64 ShiftifyAmt(I64 v) {
     if(BCnt(v)==1)
-        return Bsf(v)-1;
+        return Bsf(v);
     return -1;
 }
 CRPN *FoldConstants(JIT *jit) {
