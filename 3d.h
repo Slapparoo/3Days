@@ -4,34 +4,24 @@
 #include <assert.h>
 #include <stdio.h>
 #include <signal.h>
-typedef int8_t ExceptBuf[216];
+#ifdef TARGET_WIN32
+//https://stackoverflow.com/questions/17048072/sdl-2-undefined-reference-to-winmain16-and-several-sdl-functions
+#define SDL_MAIN_HANDLED
+#endif
+#include <SDL.h>
+#include <SDL_video.h>
+#include <SDL_render.h>
+#include <SDL_rect.h>
+#include <SDL_clipboard.h>
+#include <SDL_events.h>
+#include <SDL_thread.h>
+#include <SDL_mutex.h>
+#include <SDL_audio.h>
 #include "ext/map/src/map.h"
 #include "ext/vec/src/vec.h"
-#include "rl.h"
 #define AOT_NO_IMPORT_SYMS (1<<0)
 #define AOT_MALLOCED_SYM (1<<1)
 extern char CompilerPath[1024];
-typedef vec_t(struct jit_op*) vec_jit_op_t;
-typedef map_t(vec_jit_op_t) map_vec_jit_op_t;
-extern ExceptBuf SigPad;
-typedef struct CRelocation {
-    void **ptr;
-} CRelocation;
-typedef vec_t(CRelocation*) vec_CRelocationp_t;
-typedef struct  {
-    int64_t is_rel;
-    int64_t rel_offset;
-    int64_t width;
-    int64_t offset;
-    int64_t labelContext;
- } CBinAsmPatch;
-struct CSymbol;
-typedef struct {
-    CBinAsmPatch patch;
-    struct CSymbol *func;
-} CAsmRelocation;
-typedef vec_t(CAsmRelocation) vec_CAsmRelocation_t;
-typedef map_t(vec_CRelocationp_t) map_vec_CRelocationp_t;
 typedef struct CSymbol {
     enum {
         SYM_VAR,
@@ -39,12 +29,9 @@ typedef struct CSymbol {
         SYM_LABEL,
     } type;
     int8_t is_importable;
+    int8_t add_to_rt_blob;
     int64_t size;
     void *value_ptr;
-    map_vec_CRelocationp_t relocs;
-    map_void_t label_ptrs;
-    map_void_t statics;
-    vec_CAsmRelocation_t asm_relocs;
     char *strings;
 } CSymbol;
 typedef map_t(struct CSymbol) map_CSymbol_t;
@@ -53,28 +40,122 @@ typedef struct {
 } CLoader;
 extern CLoader Loader;
 char *MStrPrint(const char *fmt,int64_t argc,int64_t *argv);
-typedef struct TOS_Fs {
-    int64_t except_ch;
-    int64_t catch_except;
-    int64_t rand_seed;
-    void *last_cc;
-} TOS_Fs;
-typedef struct ExceptFrame {
-    ExceptBuf pad;
-    struct ExceptFrame *parent;
-} ExceptFrame;
 void TOSPrint(const char *fmt,int64_t argc,int64_t *argv);
-extern TOS_Fs Fs;
 void RegisterFuncPtrs();
-extern ExceptFrame *curframe;
-void LoadAOTBin(FILE *f,int flags,char **header);
 void InitRL();
-//Leave args NULL to use Loader's symbols
-void RegisterRuntimeClasses(void *gt,void *ctf,void *add_mem,void *c_arr_t);
-void RegisterMacrosAndREPL(char *includes,int flags,char *body_code) ;
-void RegisterMacrosAndCompile(char *includes,char *to_file,char *embed_header);
+void __AddTimer(int64_t interval,void (*tos_fptr)());
+int64_t ScanKey(int64_t *ch,int64_t *sc);
 int64_t FFI_CALL_TOS_0(void *fptr);
 int64_t FFI_CALL_TOS_1(void *fptr,int64_t);
 int64_t FFI_CALL_TOS_2(void *fptr,int64_t, int64_t);
 int64_t FFI_CALL_TOS_3(void *fptr,int64_t, int64_t,int64_t);
 int64_t FFI_CALL_TOS_4(void *fptr,int64_t, int64_t,int64_t,int64_t);
+void *Load(char *fn,int64_t ld_flags);
+#define HTT_INVALID		0
+#define HTT_EXPORT_SYS_SYM	0x00001 //CHashExport
+#define HTT_IMPORT_SYS_SYM	0x00002 //CHashImport
+#define HTT_DEFINE_STR		0x00004 //CHashDefineStr
+#define HTT_GLBL_VAR		0x00008 //CHashGlblVar
+#define HTT_CLASS		0x00010 //CHashClass
+#define HTT_INTERNAL_TYPE	0x00020 //CHashClass
+#define HTT_FUN			0x00040 //CHashFun
+#define HTT_WORD		0x00080 //CHashAC only in AutoComplete table
+#define HTT_DICT_WORD		0x00100 //CHashGeneric only in AutoComplete tbl
+#define HTT_KEYWORD		0x00200 //CHashGeneric \dLK,"KEYWORD",A="FF:::/Compiler/OpCodes.DD,KEYWORD"\d
+#define HTT_ASM_KEYWORD		0x00400 //CHashGeneric \dLK,"ASM_KEYWORD",A="FF:::/Compiler/OpCodes.DD,ASM_KEYWORD"\d
+#define HTT_OPCODE		0x00800 //CHashOpcode
+#define HTT_REG			0x01000 //CHashReg
+#define HTT_FILE		0x02000 //CHashGeneric
+#define HTT_MODULE		0x04000 //CHashGeneric
+#define HTT_HELP_FILE		0x08000 //CHashSrcSym
+#define HTT_FRAME_PTR		0x10000 //CHashGeneric
+#define HTG_TYPE_MASK		0x1FFFF
+typedef struct {
+    int64_t type;
+    union {
+        void *val;
+        struct {
+            int64_t mod_header_entry;
+            int64_t mod_base;
+        };
+    };
+} CHash;
+typedef vec_t(CHash) vec_CHash_t;
+typedef map_t(vec_CHash_t) map_vec_CHash_t;
+extern map_vec_CHash_t TOSLoader;
+struct CDrawWindow;
+void DrawWindowDel(struct CDrawWindow *win);
+void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h);
+struct CDrawWindow *NewDrawWindow();
+void *GetFs();
+void __WaitForSpawn(void *sp);
+struct CThread;
+struct CThread *__Spawn(void *fs,void *fp,void *data,char *name);
+void ScanSDLEvent();
+void __FreeThread(struct CThread *t);
+void __AwakeThread(struct CThread *t);
+void __Suspend(struct CThread *t);
+void __Yield();
+void __Exit();
+void __AwaitThread(struct CThread *t);
+void __KillThread(struct CThread *t);
+void SetMSCallback(void* fptr);
+void InitSound();
+void SndFreq(int64_t f);
+void FualtCB();
+int64_t VFsFileRead(char *name,int64_t *len);
+int64_t VFsFileWrite(char *name,char *data,int64_t len);
+char VFsChDrv(char to);
+char *VFsFileNameAbs(char *name);   
+#define VFS_CDF_MAKE (1)
+//Will not fail if not exists
+#define VFS_CDF_FILENAME_ABS (1<<1)
+int VFsCd(char *to,int flags);
+extern char* cur_dir;
+extern char cur_drv;
+char *VFsDirCur();
+char *__VFsFileNameAbs(char *name);
+void VFsThrdInit();
+void __Sleep(int64_t t);
+int64_t VFsDel(char *p);
+char *HostHomeDir();
+void CreateTemplateBootDrv(char *to,char *template,int overwrite);
+void VFsGlobalInit();
+//Not VFs
+void* FileRead(char *fn,int64_t *sz);
+int64_t FileWrite(char *fn,void *data,int64_t sz);
+#ifdef TARGET_WIN32
+//See swapctxWIN.yasm
+typedef struct {
+    int64_t rax;
+    int64_t rbx;
+    int64_t rcx;
+    int64_t rdx;
+    int64_t rsp;
+    int64_t rbp;
+    int64_t rsi;
+    int64_t rdi;
+    int64_t r8;
+    int64_t r9;
+    int64_t r10;
+    int64_t r11;
+    int64_t r12;
+    int64_t r13;
+    int64_t r14;
+    int64_t r15;
+    int64_t rip;
+    double xmm6;
+    double xmm7;
+    double xmm8;
+    double xmm9;
+    double xmm10;
+    double xmm11;
+    double xmm12;
+    double xmm13;
+    double xmm14;
+    double xmm15;
+    void *un1,*un2,*un3;
+} win_ctx_t;
+void getcontext(win_ctx_t *);
+void setcontext(win_ctx_t *);
+#endif

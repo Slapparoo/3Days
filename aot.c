@@ -186,7 +186,7 @@ CSymbol *LoadAOTFunction(FILE *f,int verbose,int flags) {
     int64_t code_size;
     fread(&code_size,1,sizeof(code_size),f);
     CSymbol v;
-    void * mem=TD_MALLOC(code_size);
+    void * mem=PoopMAlloc32(code_size);
     fread(mem,1,code_size,f);
     v.value_ptr=mem;
     v.type=SYM_FUNC;
@@ -352,7 +352,7 @@ void LoadAOTBin(FILE *f,int flags,char **header) {
                     v.type=SYM_VAR;
                     v.size=size;
                     v.is_importable=!(flags&AOT_NO_IMPORT_SYMS);
-                    v.value_ptr=TD_MALLOC(size);
+                    v.value_ptr=PoopMAlloc32(size);
                     map_set(&Loader.symbols,buffer,v);
                     break;
                 }
@@ -383,6 +383,7 @@ void LoadAOTBin(FILE *f,int flags,char **header) {
     }
     if(aaMain)
         FFI_CALL_TOS_0(aaMain->value_ptr);
+    Load("HCRT.BIN",0);
     if(header)
         *header=header_text;
     else TD_FREE(header);

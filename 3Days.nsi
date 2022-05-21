@@ -6,7 +6,7 @@
 
 !define APP_NAME "3Days"
 !define COMP_NAME "nrootconauto@gmail.com"
-!define VERSION "00.01.00.00"
+!define VERSION "00.02.00.00"
 !define COPYRIGHT "None"
 !define DESCRIPTION "A HolyC Compiler"
 !define INSTALLER_NAME "3d_setup.exe"
@@ -84,8 +84,9 @@ SetOverwrite ifnewer
 SetOutPath "$INSTDIR"
 File "3d_loader.exe"
 File "SDL2.dll"
-SetOutPath "$INSTDIR\HCRT"
-File "HCRT\HCRT_TOS.BIN"
+File "HCRT.BIN"
+SetOutPath "$INSTDIR\T"
+File /r "T\*"
 SectionEnd
 
 ######################################################################
@@ -138,8 +139,8 @@ Section Uninstall
 ${INSTALL_TYPE}
 Delete "$INSTDIR\SDL2.dll"
 Delete "$INSTDIR\${MAIN_APP_EXE}"
-Delete "$INSTDIR\HCRT\HCRT_TOS.BIN"
-RmDir "$INSTDIR\HCRT"
+Delete "$INSTDIR\HCRT.BIN"
+RmDir /r "$INSTDIR\T"
 
 Delete "$INSTDIR\uninstall.exe"
 !ifdef WEB_SITE

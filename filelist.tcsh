@@ -1,65 +1,19 @@
 #!/bin/tcsh
 set CFiles = ( \
+ "./sound.c" \
  "./main.c"  \
  "./ext/vec/src/vec.c" \
  "./ext/map/src/map.c" \
  "./TOSPrint.c" \
  "./ext/C_Unescaper/escaper.c" \
  "./ext/argtable3/argtable3.c" \
- "./rl.c" \
  "./runtime.c" \
  "./poopalloc.c" \
- "./aot.c" \
- "./ext/linenoise/linenoise.c" \
+ "./tos_aot.c" \
+ "./window.c" \
+ "./multic.c" \
+ "./vfs.c" \
 )
 set AsmFiles = ( \
-  "./TOSJMP.yasm" \
-  "./exceptLin.yasm" \
-  "./debuggerAsm.yasm" \
   "./FFI_SYSV.yasm" \
-)
-
-set HolyCFiles = ( \
-  "./SIGNAL.HC" \
-  "./PARSER.HC" \
-  "./PARSER.HH" \
-  "./LEXER.HH" \
-  "./HCRT/ASM.HC" \
-  "./HCRT/CHAR.HC" \
-  "./HCRT/FILE.HC" \
-  "./HCRT/HASH.HC" \
-  "./HCRT/HCRT.HH" \
-  "./HCRT/MATH.HC" \
-  "./HCRT/Opcodes.STR.HC" \
-  "./HCRT/QSORT.HC" \
-  "./HCRT/BITS.HC" \
-  "./HCRT/COMPRESS.HC" \
-  "./HCRT/FIFO.HC" \
-  "./HCRT/FS.HC" \
-  "./HCRT/HCRT.HC" \
-  "./HCRT/LEXER.HC" \
-  "./HCRT/PRINT.HC" \
-  "./VECTOR.HC" \
-  "./HolyEd/EDITOR.HC" \
-  "./HolyEd/ROPE.HC" \
-  "./HolyEd/KEYS2.HC" \
-  "./HolyEd/FONT.HC" \
-  "./FULL_RUNTIME.HC" \
-  "./PARSER2.HC" \
-  "./CODEGEN.HC" \
-)
-
-
-set HeaderFiles = ( \
-  `find ext/ -name "*.h"` \
-  "./3d.h" \
-  "./poopalloc.h" \
-  "./alloc.h" \
-  "./rl.h" \
-)
-
-set MiscFiles = ( \
-  "./make.tcsh" \
-  "./filelist.tcsh" \
-  "./HCRT/HCRT_TOS.BIN" \
 )

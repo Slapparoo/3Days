@@ -1,0 +1,254 @@
+U0 LexPutToken(CCmpCtrl *cc)
+{   //Print cur token to StdOut. (Crude)
+    '"';
+    if (cc->token==TK_IDENT || cc->token==TK_STR)
+        "%s",cc->cur_str;
+    else if (cc->token==TK_I64)
+        "INT:%X",cc->cur_i64;
+    else if (cc->token==TK_CHAR_CONST)
+        "U8:%X",cc->cur_i64;
+    else if (cc->token==TK_F64)
+        "FLOAT:%e",cc->cur_f64;
+    else if (cc->token=='\n')
+        "<NEW_LINE>";
+    else if (Bt(char_bmp_displayable,cc->token))
+        ;
+    else {
+        "T:%X",cc->token;
+    }
+    "\" ";
+}
+
+U8 *LexPutLine(CCmpCtrl *cc,U8 *st)
+{   //Print cur pos to end of line to StdOut.
+    I64 ch;
+    U8 *ptr;
+    if (!st) return NULL;
+    if (cc->lex_include_stk->flags&LFSF_DOC)
+        return StrNew("UNIMP");
+    else {
+        ptr=st;
+        while (ch=*ptr++) {
+            if (ch=='\n') {
+                if (*ptr=='\r')
+                    ptr++;
+                break;
+            } else if (ch=='\r') {
+                if (*ptr=='\n')
+                    ptr++;
+                break;
+            }
+            "%c",ch;
+        }
+        if (!ch) ptr--;
+        '\n';
+        return ptr;
+    }
+    return NULL;
+}
+extern U0 LexFilePop(CCmpCtrl *cc);
+U0 LexPutPos(CCmpCtrl *cc)
+{   //Print token, line link and, then, \dLK,"LexPutLine",A="MN:LexPutLine"\d().
+    LexPutToken(cc);
+    while(cc->lex_include_stk->next) {
+		if(!StrCmp("@@TMP",cc->lex_include_stk->full_name)) {
+			LexFilePop(cc);
+		} else 
+			break;
+    }
+    "%s,%d ",cc->lex_include_stk->full_name,cc->lex_include_stk->line_num;
+    LexPutLine(cc,cc->lex_include_stk->line_start);
+}
+
+U0 LexWarn(CCmpCtrl *cc,U8 *str=NULL)
+{   //Print warn msg, then, \dLK,"LexPutPos",A="MN:LexPutPos"\d().
+    if (str) "%s",str;
+    if (cc->htc.fun) {
+        "in fun '%s'.\n",cc->htc.fun->str;
+        "%s\n"
+        ,cc->htc.fun->src_link;
+    } else
+        LexPutPos(cc);
+    cc->warning_cnt++;
+}
+
+U0 LexExcept(CCmpCtrl *cc,U8 *str=NULL)
+{   //Print err msg, \dLK,"LexPutPos",A="MN:LexPutPos"\d() and throw exception.
+	if (str) "%s\n",str;
+    LexPutPos(cc);
+    cc->error_cnt++;
+    throw('Compiler');
+}
+
+U0 UndefinedExtern()
+{
+    U8 *link=SrcEdLink(Caller);
+    "Undefined Extern\nat %s\n",link;
+    Free(link);
+    throw('UndefExt');
+}
+
+U0 UnusedExternWarning(CCmpCtrl *cc,CHashClass *tmpc)
+{
+    "Unused extern '%s'\n",tmpc->str;
+    cc->warning_cnt++;
+}
+
+U0 ParenWarning(CCmpCtrl *cc)
+{
+    if (Bt(&cc->opts,OPTf_WARN_PAREN) &&
+            !(cc->lex_include_stk->flags&LFSF_DEFINE))
+        LexWarn(cc,"Unnecessary parenthesis ");
+}
+
+U0 ICClassPut(CHashClass *c)
+{
+    I64 i;
+    if (!c) return;
+    if (c->ptr_stars_cnt>4) {
+        "put_class ptrcnt=%d\n",c->ptr_stars_cnt;
+        while (TRUE)
+//TODO:
+            throw('Y');
+    }
+    for (i=0; i<c->ptr_stars_cnt; i++)
+        '*';
+    c-=c->ptr_stars_cnt;
+    if (c->str)
+        "%s",c->str;
+    else {
+        "put_class str=NULL\n";
+        while (TRUE)
+//TODO:
+            throw('Y');
+    }
+    "%c",CH_SPACE;
+}
+
+U0 ICArgPut(CICArg *a,I64 type_pointed_to)
+{
+    if (type_pointed_to)
+        "[%s](%s) %s ",DefineSub(a->type.raw_type,"ST_RAW_TYPES"),
+        DefineSub(type_pointed_to,"ST_RAW_TYPES"),DefineSub(Bsr(a->type>>8)+1,"ST_TY_TYPES");
+    else
+        "%s %s ",DefineSub(a->type.raw_type,"ST_RAW_TYPES"),
+        DefineSub(Bsr(a->type>>8)+1,"ST_TY_TYPES");
+    switch (Bsr(a->type)) {
+    case MDf_STK:
+        "STK"
+        ;
+        break;
+    case MDf_IMM:
+        "#%X"
+        ,a->disp;
+        break;
+    case MDf_REG:
+        "%Z"
+        ,a->reg,"ST_U64_REGS";
+        break;
+    case MDf_DISP:
+        "%X[%s]"
+        ,a->disp,DefineSub(a->reg,"ST_U64_REGS");
+        break;
+    case MDf_RIP_DISP32:
+        "[%X]"
+        ,a->disp;
+        break;
+    case MDf_SIB:
+        if (a->disp)
+            "%X",a->disp;
+        if (a->reg==REG_RIP)
+            '[';
+        else
+            "[%s+",DefineSub(a->reg&15,"ST_U64_REGS");
+        "%s"
+        ,DefineSub(a->reg>>8&15,"ST_U64_REGS");
+        switch (a->reg>>14) {
+        case 0: "]"
+            ;
+            break;
+        case 1: "*2]"
+            ;
+            break;
+        case 2: "*4]"
+            ;
+            break;
+        case 3: "*8]"
+            ;
+            break;
+        }
+        break;
+    }
+    '%c',CH_SPACE;
+}
+
+U0 ICPut(CCmpCtrl *cc,CIntermediateCode *tmpi)
+{
+    I64 opcode=tmpi->ic_code,i;
+    if (opcode>=IC_END_EXP && opcode!=IC_NOP2) {
+        "%15ts %016X ",intermediate_code_table[opcode].name,tmpi->ic_data;
+        if (cc->pass) {
+            if (tmpi->res.type.mode) {
+                "\dPURPLE\dRES:\dFG\d";
+                ICArgPut(&tmpi->res,0);
+            }
+            if (tmpi->arg1.type.mode) {
+                "\dPURPLE\dARG1:\dFG\d";
+                if (intermediate_code_table[tmpi->ic_code].type==IST_DEREF ||
+                        intermediate_code_table[tmpi->ic_code].type==IST_ASSIGN)
+                    ICArgPut(&tmpi->arg1,tmpi->arg1_type_pointed_to);
+                else
+                    ICArgPut(&tmpi->arg1,0);
+            }
+            if (tmpi->arg2.type.mode) {
+                "\dPURPLE\dARG2:\dFG\d";
+                ICArgPut(&tmpi->arg2,0);
+            }
+            "\dPURPLE\d:\dFG\d";
+        }
+        ICClassPut(tmpi->ic_class);
+        if (tmpi->ic_flags & ICF_LOCK)
+            "\dBROWN\dlock\dFG\d ";
+        if (tmpi->ic_flags & ICF_ARG2_TO_F64)
+            "\dLTBLUE\da2d\dFG\d ";
+        if (tmpi->ic_flags & ICF_ARG2_TO_INT)
+            "\dGREEN\da2i\dFG\d ";
+        if (tmpi->ic_flags & ICF_ARG1_TO_F64)
+            "\dLTBLUE\da1d\dFG\d ";
+        if (tmpi->ic_flags & ICF_ARG1_TO_INT)
+            "\dGREEN\da1i\dFG\d ";
+        if (tmpi->ic_flags & ICF_RES_TO_F64)
+            "\dLTBLUE\drd\dFG\d ";
+        if (tmpi->ic_flags & ICF_RES_TO_INT)
+            "\dGREEN\dri\dFG\d ";
+        if (tmpi->ic_flags & ICF_USE_F64)
+            "[F64] ";
+        if (tmpi->ic_flags & ICF_USE_UNSIGNED)
+            "[unsigned] ";
+        if (tmpi->ic_flags & ICF_USE_INT)
+            "[int] ";
+        if (tmpi->ic_flags & ICF_RES_NOT_USED)
+            "NO_RES ";
+        if (tmpi->ic_flags & ICF_BY_VAL)
+            "BY_VAL ";
+        if (tmpi->ic_flags & ICF_PUSH_RES)
+            "PUSH ";
+        if (tmpi->ic_flags & ICF_PUSH_CMP)
+            "PUSH_CMP ";
+        if (tmpi->ic_flags & ICF_POP_CMP)
+            "POP_CMP ";
+        if (tmpi->ic_flags & ICF_DEL_PREV_INS)
+            "DEL_PREV ";
+        if (tmpi->ic_flags & ICF_PREV_DELETED)
+            "PREV_DEL ";
+        for (i=0; i<3; i++) {
+            if (Bt(&tmpi->ic_flags,ICf_DONT_PUSH_FLOAT0+i))
+                "DONT_PUSH#%d ",i;
+            if (Bt(&tmpi->ic_flags,ICf_DONT_POP_FLOAT0+i))
+                "DONT_POP#%d ",i;
+        }
+        if (tmpi->ic_flags & ICF_ALT_TEMPLATE)
+            "ALT_TMP ";
+        '\n';
+    }
+}
