@@ -47,15 +47,19 @@ static CThread *cur_thrd;
 static vec_CThread_t threads;
 static vec_CThread_t dead_threads;
 void __FreeThread(CThread *t) {
+    PoopAllocFreeTaskMem(t->Fs);
 }
 void __Exit() {
-    __FreeThread(cur_thrd);
     vec_remove(&threads,cur_thrd);
-    PoopFree(cur_thrd);
+    vec_push(&dead_threads,cur_thrd);
+    cur_thrd->dead=1;
     __Yield();
 }
 void __KillThread(CThread *t) {
+    vec_remove(&threads,cur_thrd);
+    vec_push(&dead_threads,cur_thrd);
     t->dead=1;
+    //TODO Halt thread if we are killing the active thread
     __Yield();
 }
 static int64_t __SpawnFFI(CPair *p) {
@@ -111,11 +115,14 @@ void __Yield() {
     #endif
     getcontext(&old);
     int64_t i;
+    rem:
     for(i=0;i!=dead_threads.length;i++) {
 		if(cur_thrd!=dead_threads.data[i]) {
+            __FreeThread(dead_threads.data[i]);
 			PoopFree(dead_threads.data[i]->stack);
 			PoopFree(dead_threads.data[i]);
 			vec_remove(&dead_threads,dead_threads.data[i]);
+            goto rem;
 		}
 	}
     loop:;

@@ -3,21 +3,22 @@
 // These are modified for 3Days; they dont take CTask * as an argument
 //
 extern class C3DaysDrawWin;
+extern class CTask;
 #ifdef IMPORT_BUILTINS
 public import U0i Free(U8i *addr);
-public import U8i *MAlloc(I64i size);
-public import U8i *MAlloc32(I64i size);
-public import U8i *MAllocIdent(U8i *src);
+public import U8i *MAlloc(I64i size,CTask *task=0);
+public import U8i *MAlloc32(I64i size,CTask *task=0);
+public import U8i *MAllocIdent(U8i *src,CTask *task=0);
 public import I64i MSize(U8i *src);   //size of heap object
 public import I64i MSize2(U8i *src); //Internal size
-public import U8i *CAlloc(I64i size);
+public import U8i *CAlloc(I64i size,CTask *t=0);
 public import U0i TOSPrint(U8i *,...);
-public import U8i *StrNew(U8i *);
+public import U8i *StrNew(U8i *,CTask *t=0);
 public import U8i *__FileRead(U8i *filename,I64i *_size=0);
 public import I64i __FileWrite(U8i *filename,
 	U8i *fbuf,I64i size);
 public import U8 *DirNameAbs(U8i *dirname);
-public import U8 *FileNameAbs(U8i *dirname);
+public import U8 *FileNameAbs$IV,1$$IV,1$$IV,1$(U8i *dirname);
 public import Bool Cd(U8i *dirname=0);
 public import Bool IsDir(U8i *dir_name); //TODO
 public import Bool DirMk(U8i *filename); //TODO
@@ -49,16 +50,16 @@ public import U0i Sleep(I64i mS);
 import U0 __Del(U8 *);
 #else
 extern U0 __Del(U8 *);
-public extern U8i *MAlloc32(I64i size);
+public extern U8i *MAlloc32(I64i size,CTask *t=0);
 public extern U8 *DirCur();
 public extern U0i Free(U8i *addr);
-public extern U8i *MAlloc(I64i size);
-public extern U8i *MAllocIdent(U8i *src);
+public extern U8i *MAlloc(I64i size,CTask *t=0);
+public extern U8i *MAllocIdent(U8i *src,CTask *y=0);
 public extern I64i MSize(U8i *src);   //size of heap object
 public extern I64i MSize2(U8i *src); //Internal size
-public extern U8i *CAlloc(I64i size);
+public extern U8i *CAlloc(I64i size,CTask *t=0);
 public extern U0i TOSPrint(U8i *,...);
-public extern U8i StrNew(U8 *);
+public extern U8i StrNew(U8 *,CTask *t=0);
 public extern U8i *__FileRead(U8i *filename,I64i *_size=0);
 public extern I64i __FileWrite(U8i *filename,
 	U8i *fbuf,I64i size);
@@ -594,7 +595,7 @@ class CKernel
 #define LAPIC_LVT_ERR		(LAPIC_BASE+0x370)
 
 #define MPN_VECT		0x97
-#define MP_VECT_ADDR		(MPN_VECT*0x1000)
+#define MP_VECT_ADDR		(MPN_VECT*0x1000)
 
 //I/O APIC Memory mapped window
 #define IOAPIC_REG		0xFEC00000 //U8

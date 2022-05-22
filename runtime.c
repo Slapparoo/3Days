@@ -59,10 +59,10 @@ static int64_t __Move(char *old,char *new) {
     return ret;
 }
 static int64_t STK_StrNew(int64_t *stk) {
-    return strdup(stk[0]);
+    return PoopAllocSetTask(strdup(stk[0]),stk[1]);
 }
 static int64_t STK_MAllocIdent(int64_t *stk) {
-    return memcpy(PoopMAlloc(MSize(*stk)),*stk,MSize(*stk));
+    return PoopAllocSetTask(memcpy(PoopMAlloc(MSize(*stk)),*stk,MSize(*stk)),stk[1]);
 }
 static int64_t IsDir(char *fn) {
     fn=__VFsFileNameAbs(fn);
@@ -296,7 +296,9 @@ void UnblockSignals() {
 }
 char *GetBuiltinMacrosText();
 int64_t STK_FileRead(int64_t *stk) {
-    return VFsFileRead(stk[0],stk[1]);
+    void *r=VFsFileRead(stk[0],stk[1]);
+    if(r) PoopAllocSetTask(r,stk[2]);
+    return r;
 }
 int64_t STK_FileWrite(int64_t *stk) {
     return VFsFileWrite(stk[0],stk[1],stk[2]);
@@ -334,10 +336,10 @@ int64_t STK_BCLZ(int64_t *stk) {
     return BCLZ(stk[0]);
 }
 int64_t STK_PoopMAlloc(int64_t *stk) {
-    return PoopMAlloc(stk[0]);
+    return PoopAllocSetTask(PoopMAlloc(stk[0]),stk[1]);
 }
 int64_t STK_PoopMAlloc32(int64_t *stk) {
-    return PoopMAlloc32(stk[0]);
+    return PoopAllocSetTask(PoopMAlloc32(stk[0]),stk[1]);
 }
 int64_t STK_PoopFree(int64_t *stk) {
     PoopFree(stk[0]);
@@ -531,7 +533,7 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"Sleep",&STK_Sleep,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__ScanUIEvent",&STK_ScanSDLEvent,0);
     STK_RegisterFunctionPtr(&ffi_blob,"Fs",STK_GetFs,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"StrNew",STK_StrNew,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"StrNew",STK_StrNew,2);
     STK_RegisterFunctionPtr(&ffi_blob,"SetKBCallback",STK_SetKBCallback,2);
     STK_RegisterFunctionPtr(&ffi_blob,"SetMSCallback",STK_SetMSCallback,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__AddTimer",STK___AddTimer,2);
@@ -544,11 +546,11 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"__Spawn",STK___Spawn,4);
     STK_RegisterFunctionPtr(&ffi_blob,"__Suspend",STK___Suspend,1);
     STK_RegisterFunctionPtr(&ffi_blob,"Yield",STK_Yield,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"MAllocIdent",STK_MAllocIdent,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"MAllocIdent",STK_MAllocIdent,2);
     STK_RegisterFunctionPtr(&ffi_blob,"UnblockSignals",STK_UnblockSignals,0);
     STK_RegisterFunctionPtr(&ffi_blob,"signal",STK_Signal,2);
     STK_RegisterFunctionPtr(&ffi_blob,"__BootstrapForeachSymbol",STK_ForeachFunc,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__FileRead",STK_FileRead,2);
+    STK_RegisterFunctionPtr(&ffi_blob,"__FileRead",STK_FileRead,3);
     STK_RegisterFunctionPtr(&ffi_blob,"__FileWrite",STK_FileWrite,3);
     STK_RegisterFunctionPtr(&ffi_blob,"IsDir",STK_IsDir,1);
     STK_RegisterFunctionPtr(&ffi_blob,"DrawWindowDel",STK_DrawWindowDel,1);
@@ -561,9 +563,9 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"MSize2",STK_MSize,1);
     STK_RegisterFunctionPtr(&ffi_blob,"Bsf",STK_BFFS,1);
     STK_RegisterFunctionPtr(&ffi_blob,"Bsr",STK_BCLZ,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"MAlloc",STK_PoopMAlloc,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"MAlloc32",STK_PoopMAlloc32,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"CAlloc",STK_PoopMAlloc,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"MAlloc",STK_PoopMAlloc,2);
+    STK_RegisterFunctionPtr(&ffi_blob,"MAlloc32",STK_PoopMAlloc32,2);
+    STK_RegisterFunctionPtr(&ffi_blob,"CAlloc",STK_PoopMAlloc,2);
     STK_RegisterFunctionPtr(&ffi_blob,"Free",STK_PoopFree,1);
     STK_RegisterFunctionPtr(&ffi_blob,"MemCpy",STK_MemNCpy,3);
     STK_RegisterFunctionPtr(&ffi_blob,"MemNCpy",STK_MemNCpy,3);

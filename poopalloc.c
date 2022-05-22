@@ -123,16 +123,19 @@ static int64_t Log2I(int64_t n) {
 typedef struct CMemBlk {
     int8_t is_self_contained,is_32bit;
     int64_t item_sz,blk_sz,use_cnt;
+    struct CMemBlk *last,*next;
 } CMemBlk;
 typedef struct CMemUnused {
     struct CMemUnused *last,*next;
     CMemBlk *parent;
     int64_t sz:63;
     int64_t occupied:1;
+    void *task;
 } CMemUnused;
 typedef struct CHeap {
    CMemUnused *cache64[16+1];
    CMemUnused *cache32[16+1];
+   CMemBlk *blks;
 } CHeap;
 static CHeap heap;
 static CMemBlk *AllocateBlock(int64_t sz,int64_t low32) {
@@ -152,12 +155,18 @@ static CMemBlk *AllocateBlock(int64_t sz,int64_t low32) {
         un=(void*)un+sizeof(CMemUnused)+sz;
     }
     LockHeap();
+    ret->next=heap.blks;
+    heap.blks=ret;
+    if(ret->next)
+        ret->next->last=ret;
+    ret->last=NULL;
     if(last) {
         last->next=cache[Log2I(sz)];
         if(last->next) last->next->last=last;
     }
     cache[Log2I(sz)]=first;
     UnlockHeap();
+    return ret;
 }
 static void *__PoopMAlloc(int64_t sz,int64_t low32) {
     int64_t l=Log2I(SizeUp(sz));
@@ -204,10 +213,19 @@ int64_t MSize2(void *ptr) {
 void PoopFree(void *ptr) {
     if(!ptr) return;
     CMemUnused *un=ptr,**cache;
+    CMemBlk *next,*last;
     --un;
     un->occupied=0;
     int64_t l=Log2I(un->parent->item_sz);
     if(un->parent->is_self_contained) {
+        LockHeap();
+        next=un->parent->next;
+        last=un->parent->last;
+        if(last) last->next=next;
+        if(next) next->last=last;
+        if(heap.blks==un->parent)
+            heap.blks=next;
+        UnlockHeap();
         FreeVirtualChunk(un->parent,un->parent->blk_sz);
         return;
     }
@@ -233,3 +251,36 @@ void *PoopReAlloc(void *ptr,int64_t sz) {
     PoopFree(ptr);
     return ret;
 } 
+void *PoopAllocSetTask(void *ptr,void *task) {
+    if(!ptr) return;
+    if(!task) task=GetFs();
+    ((CMemUnused*)ptr)[-1].task=task;
+    return ptr;
+}
+void PoopAllocFreeTaskMem(void *task) {
+    CMemBlk *blk;
+    CMemUnused *un;
+    int64_t sz;
+    LockHeap();
+    for(blk=heap.blks;blk;blk=blk->next) {
+        if(blk->is_self_contained) {
+            UnlockHeap();
+            PoopFree((void*)(blk+1)+sizeof(CMemUnused));
+            LockHeap();
+        } else {
+            un=blk+1;
+            sz=SizeUp(blk->item_sz);
+            while((void*)un+sizeof(CMemUnused)+sz<(void*)blk+0x400000) {
+                if(!un->occupied) goto next;
+                if(un->task==task) {
+                    UnlockHeap();
+                    PoopFree(un+1);
+                    LockHeap();
+                }
+                next:
+                un=(void*)un+sizeof(CMemUnused)+sz;
+            }
+        }
+    }
+    UnlockHeap();
+}

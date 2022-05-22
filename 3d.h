@@ -159,3 +159,6 @@ typedef struct {
 void getcontext(win_ctx_t *);
 void setcontext(win_ctx_t *);
 #endif
+void PoopAllocFreeTaskMem(void *task);
+//Returns ptr
+void *PoopAllocSetTask(void *p,void *task);

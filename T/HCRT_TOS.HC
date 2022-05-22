@@ -1,20 +1,11 @@
 #define FPTRS 1
 #include "KERNELA.HH"
-U8 *MAlloc2(I64 sz,CTask *t=NULL) {
-    return CAlloc(sz);
-}
-U8 *MAllocIdent2(I64 sz,CTask *t=NULL) {
-    return MAllocIdent(sz);
-}
-U8 *StrNew2(U8 *s,CTask *t=NULL) {
-    return StrNew(s);
-}
-U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
+$IV,1$U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
 	I64 len2;
 	U8 *fn2=FileNameAbs(fn),*data=NULL,*exp;
 	if(!fn2) return NULL;
 	if(!t) t=Fs;
-	data=__FileRead(fn,&len2);
+	data=__FileRead(fn,&len2,t);
 	if(IsDotZ(fn2)) {
 		exp=ExpandBuf(data,t);
 		if(len)
@@ -42,10 +33,6 @@ I64 FileWrite(U8 *fn,U8 *buf,I64 len) {
 	Free(fn2);
 	return r;
 }
-#define MAlloc MAlloc2
-#define CAlloc MAlloc2
-#define MAllocIdent MAllocIdent2
-#define StrNew StrNew2
 #include "DOLDOC/DocExt.HC"
 #include "GR/Gr.HH"
 public extern I64 ExeCmdLine(CCmpCtrl *cc);
