@@ -1,6 +1,6 @@
 #!/bin/tcsh
 set gFindLoc = `which find`
-set binary = 3d_loader2
+set binary = 3d_loader
 set cc = gcc
 if ! $#gFindLoc then
 	echo "Install findutils for your BSD,im or if your up to it,port this file to use the BSD find."
