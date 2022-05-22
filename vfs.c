@@ -265,12 +265,17 @@ char *__VFsFileNameAbs(char *name) {
 }
 char *VFsFileNameAbs(char *name) {
     char *tmp=__VFsFileNameAbs(name),*r;
-    char buf[strlen(tmp)+1+2];
+    if(!tmp) return NULL;
+    char buf[strlen(tmp)+1+3];
+    int64_t offset=3;
     if(tmp) {
-        strcpy(buf+3,tmp+RootPathLen());
+        if(tmp[0]==TOS_delim)
+            offset=2;
+        strcpy(buf+offset,tmp+RootPathLen());
         buf[0]=cur_drv;
         buf[1]=':';
-        buf[2]=TOS_delim;
+        if(offset==3)
+            buf[2]=TOS_delim;
         return strdup(VFsInplaceConvertDelims(buf));
     }
     return NULL;
