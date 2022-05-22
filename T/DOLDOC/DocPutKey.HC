@@ -223,14 +223,12 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 		    KeyDescSet("Edit/Autocomplete Sym");
 		} else {
 		  DocUnlock(doc);
-          /*TODO RESTORE
-		  if (AutoComplete(ON)) {
+		  if (AutoComplete(ON)) {
 		    if (sc&SCF_SHIFT)
 		      ACMan(sc.u8[0]-SC_F1+1,Fs);
 		    else
 		      ACFillIn(sc.u8[0]-SC_F1+1);
 		  }
-          */
 		  DocLock(doc);
 		}
 	      } else {
@@ -494,7 +492,7 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 	      KeyDescSet("Cmd /Code Tools");
 	    else {
 	      DocUnlock(doc);
-	      //EdCodeTools(doc); TODO RESTORE
+	      EdCodeTools(doc);
 	      DocLock(doc);
 	    }
 	  } else {
@@ -675,14 +673,14 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 	      else
 		KeyDescSet("Edit/Autocomplete Word");
 	    } else {
-	    /*  if (AutoComplete(ON)) { TODO RESTORE
+        if (AutoComplete(ON)) {
 		DocUnlock(doc);
 		if (sc&SCF_SHIFT)
 		  ACDDef(ch-'0',Fs);
 		else
 		  ACDFillin(ch-'0');
 		DocLock(doc);
-	      }*/
+	      }
 	    }
 	  }
 	  break;

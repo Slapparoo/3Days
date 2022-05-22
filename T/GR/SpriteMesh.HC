@@ -1048,7 +1048,7 @@ See \dLK,"::/Demo/Graphics/SpritePlot3D.HC"\d.
 	"}");
 
   SettingsPush; //See \dLK,"SettingsPush",A="MN:SettingsPush"\d
-  //AutoComplete; TODO URGENT RESTORE
+  AutoComplete;
   OneTimePopUp(sys_msg_flags,ARf_MESH_ED,
 	"\dGREEN\dRight Mouse\dFG\d: Hold and move to shift cursor z\n"
 	"\dGREEN\d'j'\dFG\d: Jump cursor Z to nearest vertex's Z\n"

@@ -32,7 +32,11 @@ U0 LoadImps() {
     ExePrint2("#define BOOT_3DAYS\n#include \"KERNELB.HH\";\n");
 }
 U0 REPL() {
+    CTask *win_mgr;
     LoadImps;
-    __AwaitThread(Spawn(&WinMgrTask)->_3days_spawn_ptr);
+    win_mgr=Spawn(&WinMgrTask)->_3days_spawn_ptr;
+    //Needs win_mgr
+    ACInit("/*");
+    __AwaitThread(win_mgr);
 }
 __AwaitThread(Spawn(&REPL,NULL,"Main",,Fs)->_3days_spawn_ptr);

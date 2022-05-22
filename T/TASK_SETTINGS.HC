@@ -47,12 +47,10 @@ tmpse->task_end_cb=task->task_end_cb;
   tmpse->border_attr=task->border_attr;
   tmpse->border_src =task->border_src;
   tmpse->border=!Bt(&task->display_flags,DISPLAYf_NO_BORDER);
-  /* TODO RESTORE
   if (TaskValidate(ac.task))
     tmpse->autocomplete=TRUE;
   else
     tmpse->autocomplete=FALSE;
-  */
   tmpse->next=task->next_settings;
   task->next_settings=tmpse;
   return tmpse;
@@ -80,7 +78,7 @@ U0 SettingsPop2(CTask *task,CTaskSettings *tmpse)
   task->border_src =tmpse->border_src;
   task->title_src  =tmpse->title_src;
   StrCpy(task->task_title,tmpse->task_title);
-  //AutoComplete(tmpse->autocomplete); TOOD RESTORE
+  AutoComplete(tmpse->autocomplete);
   //GrPaletteSet(tmpse->palette); TODO RESTORE
   Snd;
 }
@@ -111,7 +109,7 @@ public U0 SettingsPop(CTask *task=NULL,I64 flags=0)
     }
 
     SettingsPop2(task,tmpse); //Do it to get ress fast
-    //Refresh(,TRUE); TODO RESTORE ???
+    Refresh(,TRUE);
     //SettingsPop2(task,tmpse); //Redo in case was lost by old update
     
     Free(tmpse);

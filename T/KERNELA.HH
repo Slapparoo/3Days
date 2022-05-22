@@ -4,7 +4,13 @@
 //
 extern class C3DaysDrawWin;
 extern class CTask;
+extern class CFile;
+#define FFB_NEXT_BLK		0x7FFFFFFFFFFFFFFF
 #ifdef IMPORT_BUILTINS
+public import Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
+public import Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
+public import U0 FClose(CFile *f);
+public import CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
 public import U0i Free(U8i *addr);
 public import U8i *MAlloc(I64i size,CTask *task=0);
 public import U8i *MAlloc32(I64i size,CTask *task=0);
@@ -14,11 +20,11 @@ public import I64i MSize2(U8i *src); //Internal size
 public import U8i *CAlloc(I64i size,CTask *t=0);
 public import U0i TOSPrint(U8i *,...);
 public import U8i *StrNew(U8i *,CTask *t=0);
-public import U8i *__FileRead(U8i *filename,I64i *_size=0);
+public import U8i *__FileRead(U8i *filename,I64i *_size=0,CTask *t=0);
 public import I64i __FileWrite(U8i *filename,
 	U8i *fbuf,I64i size);
 public import U8 *DirNameAbs(U8i *dirname);
-public import U8 *FileNameAbs$IV,1$$IV,1$$IV,1$(U8i *dirname);
+public import U8 *FileNameAbs(U8i *dirname);
 public import Bool Cd(U8i *dirname=0);
 public import Bool IsDir(U8i *dir_name); //TODO
 public import Bool DirMk(U8i *filename); //TODO
@@ -60,7 +66,7 @@ public extern I64i MSize2(U8i *src); //Internal size
 public extern U8i *CAlloc(I64i size,CTask *t=0);
 public extern U0i TOSPrint(U8i *,...);
 public extern U8i StrNew(U8 *,CTask *t=0);
-public extern U8i *__FileRead(U8i *filename,I64i *_size=0);
+public extern U8i *__FileRead(U8i *filename,I64i *_size=0,CTask *t=0);
 public extern I64i __FileWrite(U8i *filename,
 	U8i *fbuf,I64i size);
 public extern U8 *DirNameAbs(U8i *dirname);
@@ -92,6 +98,10 @@ extern U0i __KillThread(U8i *thr);
 extern U0i SetMSCallback(U8i *fp);
 public extern U0i Sleep(I64i mS);
 extern U0i SndFreq(I64i freq);
+public extern Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
+public extern Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
+public extern U0 FClose(CFile *f);
+public extern CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
 #endif
 extern U0i Exit();
 extern class CAOT;
@@ -1581,9 +1591,9 @@ public class CAutoCompleteGlbls
   CHashAC *fillin_matches[AC_FILLINS_NUM+1];
 };
 
-#define ACD_WORD_FILENAME	"/Adam/AutoComplete/ACWords.DATA.Z"
-#define ACD_DEF_FILENAME	"/Adam/AutoComplete/ACDefs.DATA"
-#define ACD_DEF_FILENAME_Z	"/Adam/AutoComplete/ACDefs.DATA.Z"
+#define ACD_WORD_FILENAME	"/AutoComplete/ACWords.DATA"
+#define ACD_DEF_FILENAME	"/AutoComplete/ACDefs.DATA"
+#define ACD_DEF_FILENAME_Z	"/AutoComplete/ACDefs.DATA.Z"
 
 #define ACD_H1			0
 #define ACD_H1_END		1
@@ -1632,7 +1642,7 @@ public class CAutoCompleteDictGlbls
 #define OPTf_USE_IMM64		0x25 //Not completely implemented
 
 #define OPTF_ECHO		(1<<OPTf_ECHO)
-
+extern CAutoCompleteGlbls ac;
 //See \dLK,"ST_RAW_TYPES",A="MN:ST_RAW_TYPES"\d
 #define RT_I0		2
 #define RT_U0		3
@@ -4502,3 +4512,16 @@ public extern U0 WinMax(CTask *task=NULL);
 public extern Bool WinBorder(Bool val=OFF,CTask *task=NULL);
 public extern U0 Refresh(I64 cnt=1,Bool force=FALSE);
 #endif
+public extern U0 ACInit(U8 *mask=NULL);
+public extern U0 ACDWordsLoad();
+public extern Bool AutoComplete(Bool val=OFF);
+public extern U8 *ACDDefGet(U8 *st,I64 def_num=1);
+public extern U8 *ACDDefsGet(U8 *st);
+public extern U8 *ACDWordPtAt(U8 *st);
+public extern U0 ACDDefsPut(CDoc *doc=NULL,U8 *st,I64 num=-1);
+extern U0 ACDFillin(I64 n);
+extern U0 ACFillIn(I64 n);
+extern U0 ACDDef(I64 n,CTask *parent=NULL);
+extern U0 ACMan(I64 n,CTask *parent_task=NULL);
+extern U0 Kill(CTask *t);
+

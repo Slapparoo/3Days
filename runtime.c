@@ -341,6 +341,25 @@ int64_t STK_PoopMAlloc(int64_t *stk) {
 int64_t STK_PoopMAlloc32(int64_t *stk) {
     return PoopAllocSetTask(PoopMAlloc32(stk[0]),stk[1]);
 }
+int64_t STK_FOpen(int64_t *stk) {
+    return fopen(stk[1],stk[2]);
+}
+int64_t STK_FClose(int64_t *stk) {
+    return fclose(stk[1]);
+}
+#define NEXT_BLK 0x7FFFFFFFFFFFFFFFll
+int64_t STK_FBlkRead(int64_t *stk) {
+    if(NEXT_BLK!=stk[2]) {
+        fseek(stk[0],stk[2]*(1<<9),SEEK_SET);
+    }
+    return fread(stk[1],1<<9,stk[3],stk[0]);
+}
+int64_t STK_FBlkWrite(int64_t *stk) {
+    if(NEXT_BLK!=stk[2]) {
+        fseek(stk[0],stk[2]*(1<<9),SEEK_SET);
+    }
+    return fwrite(stk[1],1<<9,stk[3],stk[0]);
+}
 int64_t STK_PoopFree(int64_t *stk) {
     PoopFree(stk[0]);
 }
@@ -432,6 +451,9 @@ int64_t STK_trunc(double *stk) {
     union {int64_t i;double_t d;} val;
     val.d=trunc(stk[0]);
     return val.i;
+}
+int64_t STK_Kill(int64_t *stk) {
+    __KillThread(stk[0]);
 }
 int64_t STK_exit(int64_t *stk) {
     exit(stk[0]);
@@ -529,6 +551,10 @@ void TOS_RegisterFuncPtrs() {
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+    STK_RegisterFunctionPtr(&ffi_blob,"FOpen",STK_FOpen,3);
+    STK_RegisterFunctionPtr(&ffi_blob,"FClose",STK_FClose,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"FBlkRead",STK_FBlkRead,4);
+    STK_RegisterFunctionPtr(&ffi_blob,"FBlkWrite",STK_FBlkWrite,4);
     STK_RegisterFunctionPtr(&ffi_blob,"SndFreq",STK_SndFreq,1);
     STK_RegisterFunctionPtr(&ffi_blob,"Sleep",&STK_Sleep,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__ScanUIEvent",&STK_ScanSDLEvent,0);

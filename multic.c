@@ -56,26 +56,39 @@ void __Exit() {
     __Yield();
 }
 void __KillThread(CThread *t) {
-    vec_remove(&threads,cur_thrd);
-    vec_push(&dead_threads,cur_thrd);
-    t->dead=1;
-    //TODO Halt thread if we are killing the active thread
-    __Yield();
+    CHash **ex=map_get(&TOSLoader,"Exit");
+    if(cur_thrd==t) {
+        if(ex)
+            FFI_CALL_TOS_0(ex[0]->val);
+        __Exit();
+    } else {
+        #ifdef TARGET_WIN32
+        if(ex)
+            t->ctx.rip=ex[0]->val;
+        else
+            t->ctx.rip=__Exit;
+        #else
+        t->ctx.uc_mcontext.mc_rip=ex[0]->val; //Exit will never return so abi differences are irrelevant
+        #endif
+    }
 }
 static int64_t __SpawnFFI(CPair *p) {
+    CHash **ex;
     FFI_CALL_TOS_1(p->fp,p->data);
+    if(ex=map_get(&TOSLoader,"Exit")) {
+        FFI_CALL_TOS_0(ex[0]->val);
+    }
     __Exit();
 }
 CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
-    CThread *ret=PoopMAlloc(sizeof(CThread));
+    CThread *thd=PoopMAlloc(sizeof(CThread));
     CPair *p=PoopMAlloc(sizeof(CPair));
-    p->fp=fp,p->data=data,p->fs=fs,p->thd=ret;
+    p->fp=fp,p->data=data,p->fs=fs,p->thd=thd;
     signal(SIGSEGV,FualtCB);
     #ifndef TARGET_WIN32
     signal(SIGBUS,FualtCB);
     #endif
     VFsThrdInit();
-    CThread *thd=PoopMAlloc(sizeof(CThread));
     thd->self=thd;
     thd->Fs=p->fs;
     thd->cur_dir=cur_dir;
@@ -93,7 +106,7 @@ CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
         makecontextWIN(&thd->ctx,thd->stack,&__SpawnFFI,p);
         #endif
     }
-    return ret;
+    return thd;
 }
 void __AwakeThread(CThread *t) {
     t->locked=0;
@@ -127,47 +140,51 @@ void __Yield() {
 	}
     loop:;
     int64_t ms=SDL_GetTicks(),min_sleep=-1.,t;
+    int64_t dont_sleep=0;
     int64_t idx,idx2=threads.length-1;
     vec_find(&threads,cur_thrd,idx);
-    if(idx!=-1) {
-        getcontext(&threads.data[idx]->ctx);
-        if(!(flop^=1))
+    if(idx==-1) {
+        idx2=idx=0;
+        if(threads.length)
+            goto ent;
+        else //???
             return;
-        for(idx2=(idx+1)%threads.length;idx!=idx2;idx2=(1+idx2)%threads.length) {
-            if(threads.data[idx2]->locked||threads.data[idx2]->dead) {
-                continue;
-            } else if(threads.data[idx2]->sleep_until) {
-                t=threads.data[idx2]->sleep_until-ms;
-                if(min_sleep>=0)
-                    min_sleep=(min_sleep<t)?min_sleep:t;
-                else
-                    min_sleep=t;
-                if(threads.data[idx2]->sleep_until<ms) {
-                    threads.data[idx2]->sleep_until=0;
-                    goto pass;
-                }
-            } else {
-                pass:
-                threads.data[idx]->cur_drv=cur_drv;
-                threads.data[idx]->cur_dir=cur_dir;
-                threads.data[idx]->Fs=Fs;
-                threads.data[idx]->self=cur_thrd;
-                //
-                ent:
-                cur_thrd=threads.data[idx2]->self;
-                Fs=threads.data[idx2]->Fs;
-                cur_dir=threads.data[idx2]->cur_dir;
-                cur_drv=threads.data[idx2]->cur_drv;
-                setcontext(&threads.data[idx2]->ctx);
-            }
-        }
-    } else  {
-        if(!(flop^=1))
-            return;
-        goto ent;
     }
-    if(min_sleep>0)
-    SDL_Delay(1+(int64_t)min_sleep);
+    getcontext(&threads.data[idx]->ctx);
+    if(!(flop^=1))
+        return;
+    for(idx2=(idx+1)%threads.length;idx!=idx2;idx2=(1+idx2)%threads.length) {
+        if(threads.data[idx2]->locked||threads.data[idx2]->dead) {
+            continue;
+        } else if(threads.data[idx2]->sleep_until) {
+            t=threads.data[idx2]->sleep_until-ms;
+            if(min_sleep>0)
+                min_sleep=(min_sleep<t)?min_sleep:t;
+            else if(min_sleep<0)
+                min_sleep=t;
+            if(threads.data[idx2]->sleep_until<ms) {
+                threads.data[idx2]->sleep_until=0;
+                goto pass;
+            }
+        } else {
+            //We got here if threads.data[idx2]->sleep_until==0
+            dont_sleep=1;
+            pass:
+            threads.data[idx]->cur_drv=cur_drv;
+            threads.data[idx]->cur_dir=cur_dir;
+            threads.data[idx]->Fs=Fs;
+            threads.data[idx]->self=cur_thrd;
+            //
+            ent:
+            cur_thrd=threads.data[idx2]->self;
+            Fs=threads.data[idx2]->Fs;
+            cur_dir=threads.data[idx2]->cur_dir;
+            cur_drv=threads.data[idx2]->cur_drv;
+            setcontext(&threads.data[idx2]->ctx);
+        }
+    }
+    if(min_sleep>0&&!(dont_sleep||cur_thrd->sleep_until==0)) //We skipped over the current thread when looking for canidates to swap too
+        SDL_Delay(1+(int64_t)min_sleep);
     goto loop;
 }
 void __AwaitThread(CThread *t) {

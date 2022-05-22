@@ -28,6 +28,8 @@ CMsStateGlbls	ms,ms_last;
 CScrnCastGlbls	scrncast;
 CMsHardStateGlbls ms_hard;
 CMsHardStateGlbls ms_hard_last;
+CAutoCompleteDictGlbls acd;
+CAutoCompleteGlbls ac;
 public CWinMgrGlbls winmgr={0,0,0,WINMGR_FPS,cnts.jiffies,cnts.jiffies,NULL,FALSE,FALSE,FALSE};
 winmgr.t=CAlloc(sizeof(CWinMgrTimingGlbls));
 winmgr.t->last_calc_idle_time=cnts.jiffies;

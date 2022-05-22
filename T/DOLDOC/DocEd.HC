@@ -214,7 +214,7 @@ public Bool Ed(U8 *link_st,I64 edf_dof_flags=0)
     case LK_DEF:
       doc=DocNew;
       doc->desc='DictDef';
-      //ACDDefsPut(doc,filename,num); TODO URGENT RESTORE
+      ACDDefsPut(doc,filename,num);
       goto ej_doc;
     case LK_HELP_INDEX:
       doc=DocNew;

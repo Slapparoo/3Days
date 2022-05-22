@@ -36,6 +36,7 @@ I64 FileWrite(U8 *fn,U8 *buf,I64 len) {
 #include "DOLDOC/DocExt.HC"
 #include "GR/Gr.HH"
 public extern I64 ExeCmdLine(CCmpCtrl *cc);
+CTask *adam_task=Fs;
 #ifdef INIT_EVERYTHING
 TaskInit(Fs,0);
 #endif
@@ -92,4 +93,5 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "WINMGR.HC"
 #include "WALLPAPER.HC"
 #include "AREGISTRY.HC"
+#include "AutoComplete/MakeAC.HC"
 #endif

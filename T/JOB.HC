@@ -391,8 +391,7 @@ I64 PopUp(U8 *buf,CTask *parent=NULL,CTask **_pu_task=NULL)
     if (_pu_task) *_pu_task=task;
     JobResScan(tmpc,&res);
     Fs->popup_task=NULL;
-    XTalk(task,"Exit;;");
-    //Kill(task);
+    Kill(task);
     if (_pu_task) *_pu_task=NULL;
     return res;
   }
@@ -463,4 +462,7 @@ U0 XTalkStrWait(CTask *task,U8 *fmt,...)
   TaskText(task,NULL,buf,0);
   Free(buf);
   TaskWait(task);
+}
+U0 Kill(CTask *t) {
+    __KillThread(t->_3days_spawn_ptr);
 }

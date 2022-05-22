@@ -32,3 +32,4 @@ extern U0 ClipDel();
 extern CDoc *DocRead(U8 *name=NULL,I64 flags=0);
 extern U0 DocCenter(CDoc *doc=NULL,I64 recalc_flags=RECALCt_NORMAL);
 extern Bool Ed(U8 *link_st,I64 edf_dof_flags=0);
+extern U0 EdCodeTools(CDoc *doc);

@@ -47,8 +47,11 @@ U0 TaskQueInsChild(CTask *task)
 
 U0 Exit() {
     LBts(&(Fs->task_flags),TASKf_KILL_TASK);
+    Fs->task_signature=-1; //Invalidate signature
     TaskQueRem(Fs);
     WinZBufUpdate;
+    while(sys_focus_task==Fs)
+        Yield;
     __Exit;
 }
 U0 SrvTaskCont()
@@ -131,8 +134,9 @@ I64 ExeCmdLine(CCmpCtrl *cc)
 }
 Bool TaskValidate(CTask *task)
 {//return TRUE if task looks valid.
-  if (task&&!(task->addr!=task ||
-	task->task_signature!=TASK_SIGNATURE_VAL))
+  if (!task)
+    return FALSE;
+  else if(task->task_signature!=TASK_SIGNATURE_VAL)
     return FALSE;
   else
     return ToBool(task);
@@ -172,6 +176,7 @@ I64 TaskInit(CTask *task,I64 stk_size)
   task->win_right	=text.cols-2;
   task->win_top		=13;
   task->win_bottom	=text.rows-2;
+  task->task_signature=TASK_SIGNATURE_VAL;
 
     /*
   if (blkdev.home_dir) {//Beware Adam \dLK,"TaskInit",A="FF:::/Kernel/KStart64.HC,TaskInit"\d. I guess ok until \dLK,"DskChg",A="FF:::/Kernel/KMain.HC,DskChg"\d().
@@ -274,4 +279,13 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
     LBts(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0);
   LBtr(&task->task_flags,TASKf_TASK_LOCK);
   POPFD
+}
+U0 DeathWait(CTask **_task,Bool send_exit=FALSE)
+{//Wait for task death.
+  if (send_exit && TaskValidate(*_task)) {
+    TaskWait(*_task,TRUE);
+    XTalk(*_task,"Exit;\n");
+  }
+  while (TaskValidate(*_task))
+    Yield;
 }
