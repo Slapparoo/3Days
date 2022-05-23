@@ -178,15 +178,6 @@ void CreateTagsAndErrorsFiles(char *tags,char *errs,char *root) {
 static char *hc_SDL_GetWindowTitle(SDL_Window *win) {
     return strdup(SDL_GetWindowTitle(win));
 }
-static char *hc_SDL_GetClipboardText() {
-    return strdup(SDL_GetClipboardText());
-}
-static int64_t GetSurfaceW(SDL_Surface *s) {
-    return s->w;
-}
-static int64_t GetSurfaceH(SDL_Surface *s) {
-    return s->h;
-}
 static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
   map_iter_t iter;
   const char *key;
@@ -545,12 +536,26 @@ int64_t STK_SndFreq(int64_t *stk) {
 int64_t STK_ScanSDLEvent(int64_t *stk) {
     ScanSDLEvent();
 }
+int64_t STK_SetClipboardText(int64_t *stk) {
+    SDL_SetClipboardText(stk[0]);
+}
+int64_t STK_GetClipboardText(int64_t *stk) {
+    char *find,*ret;
+    if(!SDL_HasClipboardText())
+        return NULL;
+    find=SDL_GetClipboardText();
+    ret=strdup(find);
+    SDL_free(find);
+    return ret;
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+    STK_RegisterFunctionPtr(&ffi_blob,"SetClipboardText",STK_SetClipboardText,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"GetClipboardText",STK_GetClipboardText,0);
     STK_RegisterFunctionPtr(&ffi_blob,"FOpen",STK_FOpen,3);
     STK_RegisterFunctionPtr(&ffi_blob,"FClose",STK_FClose,1);
     STK_RegisterFunctionPtr(&ffi_blob,"FBlkRead",STK_FBlkRead,4);

@@ -9,6 +9,7 @@ public U0 ClipDel()
 
 public U0 ClipCopy(CDoc *doc)
 {//Copy $LK,"DOCET_SEL",A="MN:DOCET_SEL"$ flagged entries to clip.
+  U8 *plain;
   CDoc *doc2=sys_clip_doc;
   Bool unlock_doc=DocLock(doc),
 	unlock_doc2=DocLock(doc2);
@@ -24,6 +25,9 @@ public U0 ClipCopy(CDoc *doc)
     }
     doc_e=doc_e->next;
   }
+  if(plain) plain=DocSave(doc2);
+    SetClipboardText(plain);
+  Free(plain);
   if (unlock_doc2)
     DocUnlock(doc2);
   if (unlock_doc)
@@ -33,6 +37,7 @@ public U0 ClipCopy(CDoc *doc)
 public U0 ClipCut(CDoc *doc)
 {//Remove sel entries and place on clip.
   CDoc *doc2=sys_clip_doc;
+  U8 *plain;
   Bool unlock_doc=DocLock(doc),
 	unlock_doc2=DocLock(doc2);
   CDocEntry *doc_e=doc->head.next,*doc_e1,*doc_ne,*doc_e2=NULL;
@@ -56,6 +61,9 @@ public U0 ClipCut(CDoc *doc)
     doc->cur_col=doc_e2->min_col;
   }
   DocRemSoftNewLines(doc,NULL);
+  plain=DocSave(doc2);
+  if(plain) SetClipboardText(plain);
+  Free(plain);
   if (unlock_doc2)
     DocUnlock(doc2);
   if (unlock_doc)
@@ -64,21 +72,19 @@ public U0 ClipCut(CDoc *doc)
 
 public U0 ClipPaste(CDoc *doc)
 {//Insert copy of clip at insert pt, cur_entry.
-  CDoc *doc2=sys_clip_doc;
-  Bool unlock_doc=DocLock(doc),
-	unlock_doc2=DocLock(doc2);
+  U8 *plain;
+  I64 c;
+  Bool unlock_doc=DocLock(doc);
   CDocEntry *doc_ce=doc->cur_entry,*doc_e;
-  if (doc_ce->type_u8==DOCT_DATA) {
-    doc_e=doc2->head.next;
-    while (doc_e!=doc2) {
-      if (doc_e->de_flags&DOCEF_TAG)
-	DocPrintPartial(doc,"%s",doc_e->tag);
-      doc_e=doc_e->next;
-    }
-  } else
-    DocInsDoc(doc,doc2);
-  if (unlock_doc2)
-    DocUnlock(doc2);
+  TOSPrint("plain\n");
+  if(plain=GetClipboardText) {
+    for(c=0;plain[c];++c)
+        if(plain[c]=='\d')
+          DocPrintPartial(doc,"$$");
+        else
+          DocPrintPartial(doc,"%c",plain[c]);
+    Free(plain);
+  }
   if (unlock_doc)
     DocUnlock(doc);
 }

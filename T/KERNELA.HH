@@ -141,6 +141,8 @@ extern class CFile;
 #define ARGT_XMM0	55 // Not implemented
 #define OCF_ALIAS	1
 #ifdef IMPORT_BUILTINS
+import U8i *GetClipboardText();
+import U8i *SetClipboardText(U8i *);
 public import Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public import Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public import U0 FClose(CFile *f);
@@ -189,6 +191,8 @@ import U0i SetMSCallback(U8i *fp);
 public import U0i Sleep(I64i mS);
 import U0 __Del(U8 *);
 #else
+extern U8i *GetClipboardText();
+extern U8i *SetClipboardText(U8i *);
 extern U0 __Del(U8 *);
 public extern U8i *MAlloc32(I64i size,CTask *t=0);
 public extern U8 *DirCur();
