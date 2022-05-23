@@ -68,7 +68,7 @@ void __KillThread(CThread *t) {
         else
             t->ctx.rip=__Exit;
         #else
-        t->ctx.uc_mcontext.mc_rip=ex[0]->val; //Exit will never return so abi differences are irrelevant
+        makecontext(&t->ctx,ex[0]->val,0); //Exit will never return so abi differences are irrelevant
         #endif
     }
 }
