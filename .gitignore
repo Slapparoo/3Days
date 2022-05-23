@@ -60,3 +60,5 @@ epm
 3d_loader
 chroot/*
 proot
+stagedir/**
+debian/usr/**

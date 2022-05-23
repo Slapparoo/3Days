@@ -331,7 +331,7 @@ U0 FixSet(U8 *filename,I64 line)
     Yield;
   Free(dbg.fix_file_line);
   dbg.fix_file_line=StrNew(st);
-  //LBtr(&sys_semas[SEMA_FIX],0);
+  LBtr(&sys_semas[SEMA_FIX],0);
 }
 
 Bool Fix(I64 edf_dof_flags=0)

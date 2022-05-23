@@ -497,7 +497,7 @@ I64 Cmp(U8 *filename,U8 *map_name=NULL,U8 *out_name=NULL,U8 mapfile_drv_let=0)
     if (tmpaot=CmpBuf(fbuf2,fbuf3,&error_cnt,&warning_cnt,mapfile_drv_let)) {
         aot_U8s=tmpaot->aot_U8s;
         ptr=patch_table;
-//See \dLK,"Load",A="MN:Load"\d()
+//See $LK,"Load",A="MN:Load"$()
         cnt=0;
         tmpa=tmpaot->abss;
         while (tmpa) {
@@ -693,7 +693,7 @@ I64 ExeFile(U8 *name,I64 ccf_flags=0)
 }
 
 I64 RunFile(U8 *name,I64 ccf_flags=0,...)
-{   //\dLK,"ExeFile",A="MN:ExeFile"\d() with args using \dLK,"LastFun",A="MN:LastFun"\d().
+{   //$LK,"ExeFile",A="MN:ExeFile"$() with args using $LK,"LastFun",A="MN:LastFun"$().
     ExeFile(name,ccf_flags);
     return LastFun(argc,argv);
 }
@@ -737,7 +737,7 @@ I64 ExeFile2(U8 *name,I64 ccf_flags=0)
 }
 
 I64 RunFile2(U8 *name,I64 ccf_flags=0,...)
-{   //\dLK,"ExeFile2",A="MN:ExeFile2"\d() with args using \dLK,"LastFun",A="MN:LastFun"\d(). throws exceptions.
+{   //$LK,"ExeFile2",A="MN:ExeFile2"$() with args using $LK,"LastFun",A="MN:LastFun"$(). throws exceptions.
     ExeFile2(name,ccf_flags);
     return LastFun(argc,argv);
 }

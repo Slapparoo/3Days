@@ -38,3 +38,6 @@ _extern CMP_TEMPLATES_DONT_PUSH		U32 cmp_templates_dont_push[1];
 _extern CMP_TEMPLATES_DONT_PUSH_POP	U32 cmp_templates_dont_push_pop[1];
 public extern U8 *LexStmt2Bin(
 	CCmpCtrl *cc,I64 *_type,I64 cmp_flags=CMPF_PRS_SEMICOLON);
+extern U0 LexPutToken(CCmpCtrl *cc);
+extern 	U0 FixSet(U8 *filename,I64 line);
+extern U0 SysSymImportsResolve(U8 *st_ptr,I64 ld_flags=0);

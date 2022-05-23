@@ -1,6 +1,5 @@
-U0 HashFuns() {
-    asm {
-//************************************
+asm {
+// ************************************
         SYS_HASH_STR::
 // IN:	RSI=Addr of string
 // OUT:	RAX
@@ -26,7 +25,7 @@ U0 HashFuns() {
         POP	RSI
 
         @@15:	RET
-//************************************
+// ************************************
         SYS_HASH_SINGLE_TABLE_FIND1::
 // IN:	RAX=HASHED STRING VAL
 //	RSI=STR
@@ -248,7 +247,6 @@ U0 HashFuns() {
         POP	RBP
         RET1	24
     }
-}
 _extern _HASH_STR I64 HashStr(U8 *st); //Hash a string.
 _extern _HASH_FIND CHash *HashFind(U8 *needle_str,CHashTable *haystack_table,
                                    I64 mask,I64 instance=1);//Find string in hash table.

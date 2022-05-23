@@ -6,6 +6,140 @@ extern class C3DaysDrawWin;
 extern class CTask;
 extern class CFile;
 #define FFB_NEXT_BLK		0x7FFFFFFFFFFFFFFF
+#define REGT_NONE	0
+#define REGT_R8		1
+#define REGT_R16	2
+#define REGT_R32	3
+#define REGT_R64	4
+#define REGT_SEG	5
+#define REGT_FSTK	6
+#define REGT_MM		7
+#define REGT_XMM	8
+
+
+#define OC_OP_SIZE_PREFIX	0x66
+#define OC_ADDR_SIZE_PREFIX	0x67
+#define OC_LOCK_PREFIX		0xF0
+#define OC_NOP			0x90
+#define OC_BPT			0xCC
+#define OC_CALL			0xE8
+#define OC_JMP_REL8		0xEB
+#define OC_NOP2			(OC_NOP<<8+OC_OP_SIZE_PREFIX)
+
+#define REG_RAX		0
+#define REG_RCX		1
+#define REG_RDX		2
+#define REG_RBX		3
+#define REG_RSP		4
+#define REG_RBP		5
+#define REG_RSI		6
+#define REG_RDI		7
+#define REG_R8		8
+#define REG_REGS_NUM	16
+
+#define REG_RIP		16	//Used by compiler, not really it's num
+//Be careful: RBPu8, RSPu8, RSIu8, RDIu8 are 20-24
+#define REG_NONE	32	//noreg flag sets it to this
+#define REG_ALLOC	33	//reg flag sets it to this
+#define REG_UNDEF	I8_MIN
+
+#define IEF_OP_SIZE16		0x001
+#define IEF_OP_SIZE32		0x002
+#define IEF_PLUS_OPCODE		0x004
+#define IEF_DONT_SWITCH_MODES	0x008
+#define IEF_DFT			0x010
+#define IEF_NOT_IN_64_BIT	0x020
+#define IEF_48_REX		0x040
+#define IEF_REX_ONLY_R8_R15	0x080
+#define IEF_REX_XOR_LIKE	0x100
+#define IEF_STI_LIKE		0x200
+#define IEF_ENDING_ZERO		0x400
+
+//Slash value
+#define SV_R_REG	8
+#define SV_I_REG	9
+#define SV_STI_LIKE	10 //\dLK,"uasm_slash_val",A="FF:::/Compiler/AsmInit.HC,uasm_slash_val"\d only.
+#define SV_NONE		11
+
+//Opcode Modifier
+#define OM_NO 0
+#define OM_CB 1
+#define OM_CW 2
+#define OM_CD 3
+#define OM_CP 4
+#define OM_IB 5
+#define OM_IW 6
+#define OM_ID 7
+
+#define ARGT_NONE	0
+#define ARGT_REL8	1
+#define ARGT_REL16	2
+#define ARGT_REL32	3
+
+#define ARGT_IMM8	4
+#define ARGT_IMM16	5
+#define ARGT_IMM32	6
+#define ARGT_IMM64	7
+
+#define ARGT_UIMM8	8
+#define ARGT_UIMM16	9
+#define ARGT_UIMM32	10
+#define ARGT_UIMM64	11
+
+#define ARGT_R8		12
+#define ARGT_R16	13
+#define ARGT_R32	14
+#define ARGT_R64	15
+
+#define ARGT_RM8	16
+#define ARGT_RM16	17
+#define ARGT_RM32	18
+#define ARGT_RM64	19
+
+#define ARGT_M8		20
+#define ARGT_M16	21
+#define ARGT_M32	22
+#define ARGT_M64	23
+
+#define ARGT_M1632	24 // Not implemented
+#define ARGT_M16N32	25 // Not implemented
+#define ARGT_M16N16	26 // Not implemented
+#define ARGT_M32N32	27 // Not implemented
+
+#define ARGT_MOFFS8	28
+#define ARGT_MOFFS16	29
+#define ARGT_MOFFS32	30
+#define ARGT_MOFFS64	31
+
+#define ARGT_AL		32
+#define ARGT_AX		33
+#define ARGT_EAX	34
+#define ARGT_RAX	35
+
+#define ARGT_CL		36
+#define ARGT_DX		37
+#define ARGT_SREG	39
+
+#define ARGT_SS		40
+#define ARGT_DS		41
+#define ARGT_ES		42
+#define ARGT_FS		43
+
+#define ARGT_GS		44
+#define ARGT_CS		45
+#define ARGT_ST0	46
+#define ARGT_STI	47
+
+#define ARGT_MM		48 // Not implemented
+#define ARGT_MM32	49 // Not implemented
+#define ARGT_MM64	50 // Not implemented
+#define ARGT_XMM	51 // Not implemented
+
+#define ARGT_XMM32	52 // Not implemented
+#define ARGT_XMM64	53 // Not implemented
+#define ARGT_XMM128	54 // Not implemented
+#define ARGT_XMM0	55 // Not implemented
+#define OCF_ALIAS	1
 #ifdef IMPORT_BUILTINS
 public import Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public import Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
@@ -3482,8 +3616,8 @@ public class CSysFixedArea
 #define CH_SHIFT_SPACE	0x1F
 #define CH_SPACE	0x20
 
-#define ST_ERR_ST   "\dLTRED\d\dBK,1\dERROR:\dFG\dBK,0\d "
-#define ST_WARN_ST  "\dRED\d\dBK,1\dWARNING:\dFG\dBK,0\d "
+#define ST_ERR_ST   "\dLTRED\d\dBK,1\dERROR:\dFG\d\dBK,0\d "
+#define ST_WARN_ST  "\dRED\d\dBK,1\dWARNING:\dFG\d\dBK,0\d "
 
 //Scan code flags
 #define SCf_E0_PREFIX	7
@@ -4524,4 +4658,11 @@ extern U0 ACFillIn(I64 n);
 extern U0 ACDDef(I64 n,CTask *parent=NULL);
 extern U0 ACMan(I64 n,CTask *parent_task=NULL);
 extern U0 Kill(CTask *t);
-
+extern CHashDefineStr *DefineLstLoad(U8 *dname,U8 *lst);
+extern CHashDefineStr *DefineLoad(U8 *dname,U8 *st);
+extern U0 UndefinedDefine(U8 *dname);
+extern U8 *Define(U8 *dname);
+extern U8 *DefineSub(I64 sub,U8 *dname);
+extern I64 DefineCnt(U8 *dname);
+extern U0 DefinePrint(U8 *dname,U8 *src,...);
+extern CHashDefineStr *DefineLstLoad(U8 *dname,U8 *lst);

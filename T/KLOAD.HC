@@ -209,7 +209,7 @@ CBinFile *Load(U8 *filename,I64 ld_flags=0,CBinFile *bfh_addr=INVALID_PTR)
     return NULL;
   }
 
-  //See \dLK,"Patch Table Generation",A="FF:::/Compiler/CMain.HC,IET_ABS_ADDR"\d
+  //See $LK,"Patch Table Generation",A="FF:::/Compiler/CMain.HC,IET_ABS_ADDR"$
   module_align=1<<bfh->module_align_bits;
   if (!module_align || bfh->bin_signature!=BIN_SIGNATURE_VAL) {
     Free(bfh);

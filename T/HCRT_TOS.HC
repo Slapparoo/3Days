@@ -43,6 +43,7 @@ TaskInit(Fs,0);
 #include "KGLBLS.HC"
 #include "KMATH.HC"
 #include "STR.HC"
+#include "HASH.HC"
 #include "CHASH.HC"
 #include "KUTILS.HC"
 #include "KERNELB.HH"
@@ -72,6 +73,7 @@ CInit;
 #include "KDefine.HC"
 #include "BlkDev/DskCopy.HC"
 #include "BlkDev/DskA.HC"
+#include "KLOAD.HC"
 #include "KEND.HC"
 #include "EDLITE.HC"
 #ifdef COMPONET_GRAPHICS
