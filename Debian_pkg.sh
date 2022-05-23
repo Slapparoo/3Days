@@ -19,7 +19,7 @@ foreach f ($files)
     if -d $f then
         mkdir -p ${STAGEDIR}/usr/local/include/3Days/$f
     else
-        cp  $f  ${STAGEDIR}/usr/local/include/3Days/
+        cp  $f  "${STAGEDIR}/usr/local/include/3Days/$f:h"
 	echo "/usr/local/include/3Days/$f" >> ${STAGEDIR}/plist
     endif
 end
