@@ -36,7 +36,8 @@ U0 REPL() {
     LoadImps;
     win_mgr=Spawn(&WinMgrTask)->_3days_spawn_ptr;
     //Needs win_mgr
-    ACInit("/*");
+    ACInit("/KERNEL*.HH");
+    //ACInit("/*;!*.BIN*;!*.DATA;!*.TXT"); Slow and curently only Things in Kernel files are exposed 
     __AwaitThread(win_mgr);
 }
 __AwaitThread(Spawn(&REPL,NULL,"Main",,Fs)->_3days_spawn_ptr);

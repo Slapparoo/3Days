@@ -184,7 +184,7 @@ void __Yield() {
         }
     }
     if(min_sleep>0&&!(dont_sleep||cur_thrd->sleep_until==0)) //We skipped over the current thread when looking for canidates to swap too
-        SDL_Delay(1+(int64_t)min_sleep);
+        SDL_Delay((int64_t)min_sleep);
     goto loop;
 }
 void __AwaitThread(CThread *t) {

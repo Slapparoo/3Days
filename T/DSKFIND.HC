@@ -181,7 +181,12 @@ When done, you free with \dLK,"DirEntryDel",A="MN:DirEntryDel"\d(),\dLK,"DirEntr
     return NULL;
   return res;
 }
-
+static Bool IsAtRoot() {
+    U8 *r=DirCur;
+    Bool ret=r[2]=='/'&&!r[3];
+    Free(r);
+    return ret; 
+}
 Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0)
 {//\dLK,"FUF_JUST_DIRS",A="MN:FUF_JUST_DIRS"\d, \dLK,"FUF_JUST_FILES",A="MN:FUF_JUST_FILES"\d, \dLK,"FUF_Z_OR_NOT_Z",A="MN:FUF_Z_OR_NOT_Z"\d, \dLK,"FUF_SCAN_PARENTS",A="MN:FUF_SCAN_PARENTS"\d
 //If you pass _de, you must Free(_de->full_name);
@@ -235,11 +240,11 @@ Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0)
       ;//Silent(old_silent);
       //cur_dir_clus=FileNameAbs(dirc->dv,Fs->cur_dir);
       //TODO CHECK IF AT ROOT ON WINDOWS
-      while (!res && StrCmp(Fs->cur_dir,"/")) {
+      while (!res && !IsAtRoot) {
 	Cd("..");
 	//cur_dir_clus=FileNameAbs(dirc->dv,Fs->cur_dir);
         _de2=FilesFind__(dirc->mask);
-        res=NULL!=_de2;
+        res=NULL!=_de2; 
         if(res) {
             MemCpy(&de,_de2,sizeof(de));
             de.full_name=StrNew(_de2->full_name);
@@ -303,7 +308,7 @@ U0 PutDirLink(U8 *dirname,U8 *full_name=NULL)
       full_name=st=DirNameAbs(dirname);
     else
       st=NULL;
-    "\dMA,T=\"%s\",LM=\"Cd(\\\"%s\\\");Dir;\n\"\d",dirname,full_name;
+    "\dMA,T=\"%s\",LM=\"Cd(\\\"%s\\\");Dir;\"\d",dirname,full_name;
     Free(st);
   }
 }

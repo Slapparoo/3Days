@@ -10,6 +10,7 @@ U0 SysGlblsInit() {
     text.border_chars[2] (I64)=0x0908070605040302;
     text.border_chars[10](U32)=0x0D0C0B0A;
     dbg.fun_seg_cache=CAlloc(FUN_SEG_CACHE_SIZE*sizeof(CFunSegCache));
+    blkdev.tmp_filename=StrNew("~/Tmp.DD.Z",adam_task);
 }
 SysGlblsInit;
 SysDefinesLoad;

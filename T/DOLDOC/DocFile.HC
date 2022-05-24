@@ -38,7 +38,7 @@ public CDoc *DocRead(U8 *name=NULL,I64 flags=0)
   U8 *src,*name2;
   I64 size=0;
   CDirContext *dirc;
-  if (!name) name="@TMP";
+  if (!name) name=blkdev.tmp_filename;
   doc->flags|=flags;
   name2=FileNameAbs(name);
   StrCpy(doc->filename.name,name2);

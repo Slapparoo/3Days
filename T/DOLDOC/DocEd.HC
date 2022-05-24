@@ -207,7 +207,6 @@ public Bool Ed(U8 *link_st,I64 edf_dof_flags=0)
   I64 i,num;
   Bool cont,res=FALSE;
   CDoc *doc;
-
   switch (i=EdLinkCvt(link_st,&filename,&needle_str,&num,edf_dof_flags)) {
     case -1:
       break;
@@ -235,8 +234,12 @@ ej_doc:
 	      !FilesFindMatch(filename,FILEMASK_TXT) &&
 	      !PopUpCancelOk(ST_WARN_ST "Not Text File\n\n"))
 	  cont=FALSE;
-	if (cont)
+	if (cont) {
+        //CHANGE,create the file in an obvious way
+        if(!FileFind(filename))
+            FileWrite(filename,NULL,0);
 	  res=DocFileEd(i,filename,needle_str,&num,edf_dof_flags);
+      }
       }
   }
   Free(filename);

@@ -59,8 +59,8 @@ U0 GrUpdateTasks()
   CTask *task,*task1;
   try {
     winmgr.ode_time=0;
-    if (Bt(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0))
-      WinZBufUpdate;
+    //if (Bt(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0)) TODO RESTORE
+    //WinZBufUpdate;
     task1=task=sys_winmgr_task;
     do { //Loop through Core0 tasks.
       if (!TaskValidate(task)) break;

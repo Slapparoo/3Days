@@ -1,10 +1,23 @@
 #define FPTRS 1
 #include "KERNELA.HH"
-$IV,1$U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
+#include "KGLBLS.HC"
+U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
 	I64 len2;
+    //CHANGE,TempleOS grabs loaded files from RAM,some functions use
+    //blkdev.tmp_filename as a "defualt" file,so im going to assume its loaded
+    if(fn==blkdev.tmp_filename) {
+        return StrNew("");
+    }
 	U8 *fn2=FileNameAbs(fn),*data=NULL,*exp;
-	if(!fn2) return NULL;
+	if(!fn2) {
+        PrintErr("File \"%s\" not found!",fn);
+        return NULL;
+    }
 	if(!t) t=Fs;
+        if(!FileFind(fn2)) {
+		"File %s not found!!!\n",fn2;
+		throw('FILE');
+	}
 	data=__FileRead(fn,&len2,t);
 	if(IsDotZ(fn2)) {
 		exp=ExpandBuf(data,t);
@@ -40,7 +53,6 @@ CTask *adam_task=Fs;
 #ifdef INIT_EVERYTHING
 TaskInit(Fs,0);
 #endif
-#include "KGLBLS.HC"
 #include "KMATH.HC"
 #include "STR.HC"
 #include "HASH.HC"
@@ -95,5 +107,5 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "WINMGR.HC"
 #include "WALLPAPER.HC"
 #include "AREGISTRY.HC"
-#include "AutoComplete/MakeAC.HC"
+#include "AutoComplete/MakeAC.HC"
 #endif

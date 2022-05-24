@@ -1,27 +1,24 @@
 #include "3d.h"
 static SDL_AudioSpec audio_spec;
 static int64_t freq=0;
+static int64_t sample;
 static void AudioCB(void *ud,float *data,int len) {
-    double start,time=0.0;
     if(!freq) {
         memset(data,0,len);
         return;
     }
     len/=sizeof(float);
     int olen=len;
-    for(start=0;start<olen/2;start++) {
-        time=start*((double)audio_spec.freq/olen);
-        if(1&(int64_t)((2*freq*time)/audio_spec.freq)) {
-            data[--len]=1.0;
-        } else {
-            data[--len]=0.;
-        }
+    for(;len>=0;) {
+        double t=(double)++sample/(double)audio_spec.freq;
+        data[--len]=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
     }
+    sample%=audio_spec.freq;
 } 
 void InitSound() {
     SDL_AudioSpec want;
     SDL_memset(&want, 0, sizeof(want));
-    want.freq=48000;
+    want.freq=24000;
     want.format=AUDIO_F32;
     want.channels=1;
     want.samples=4096;

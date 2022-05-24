@@ -373,7 +373,7 @@ public CDoc *DocNew(U8 *filename=NULL,CTask *task=NULL)
   if (filename)
     StrCpy(doc->filename.name,filename);
   else
-    StrCpy(doc->filename.name,"@TMP");
+    StrCpy(doc->filename.name,blkdev.tmp_filename);
   doc->find_replace=CAlloc(sizeof(CEdFindText),task);
   doc->find_replace->scan_fwd=TRUE;
   doc->find_replace->match_case=TRUE;

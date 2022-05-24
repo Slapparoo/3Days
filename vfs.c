@@ -166,10 +166,13 @@ int VFsCd(char *to,int flags) {
             top=strrchr(path.data,delim);
             *top2=delim;
         }
-        if(RootPathLen()<=1+top-path.data) {
-            path.length=top-path.data+1; //+1 for delim
+        if(RootPathLen()>=top-path.data) {
+            path.length=RootPathLen(); //+1 for delim
             vec_push(&path,0);
             goto next;
+        } else if(top) {
+            path.length=top-path.data+1;
+            vec_push(&path,0);
         }
     } else 
         folder_depth++; 

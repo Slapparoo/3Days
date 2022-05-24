@@ -68,7 +68,7 @@ Bool EdLite(U8 *filename,I64 num=1,I64 edf_dof_flags=0)
 	old_debug=TRUE,
 	old_single=TRUE;
 
-  if (!filename) filename="@TMP";
+  if (!filename) filename=blkdev.tmp_filename;
   buf=FileRead(filename,&size);
 
   PUSHFD;
