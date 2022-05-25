@@ -176,6 +176,7 @@ static int32_t __ScanKey(int64_t *ch,int64_t *sc,SDL_Event *_e) {
     cond=1;
     if(cond) {
         if(e.type==SDL_KEYDOWN) {
+            ent:
             *ch=*sc=0;
             if(e.key.keysym.mod&(KMOD_LSHIFT|KMOD_RSHIFT))
                 mod|=SCF_SHIFT;
@@ -371,6 +372,9 @@ static int32_t __ScanKey(int64_t *ch,int64_t *sc,SDL_Event *_e) {
             *sc=mod|(SC_F1+e.key.keysym.scancode-SDL_SCANCODE_F1);
             return 1;
             }
+        } else if(e.type==SDL_KEYUP) {
+            mod|=SCF_KEY_UP;
+            goto ent;
         }
     }
     return -1;

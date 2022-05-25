@@ -300,7 +300,7 @@ I64 WinMgrSleep(Bool flush_msgs=FALSE)
     }
     winmgr.updates++;
     Sleep(33);
-    //Sleep(MaxI64(0,timeout_val-cnts.jiffies));
+    //Sleep(MaxI64(0,timeout_val-cnts.jiffies));
   }
   return msg_code;
 }
@@ -337,6 +337,7 @@ CDoc *WinCursorPosSet(CTask *task,I64 msx,I64 msy,Bool set_cursor=TRUE)
   return res;
 }
 
+
 Bool WinKeyNavMenu()
 {
   I64 i,old_key_cnt;
@@ -344,12 +345,12 @@ Bool WinKeyNavMenu()
   CMenu *m;
   CMenuEntry *tmpme;
   CTask *focus=MenuTask;
-  if (Bt(kbd.down_bitmap,SC_GUI) && focus && (m=focus->cur_menu)) {
+  if (Bt(kbd.down_bitmap,SC_ALT) && focus && (m=focus->cur_menu)) {
     winmgr.show_menu=TRUE;
     sys_cur_submenu_entry=NULL;
     old_pos.x=ms.pos.x; old_pos.y=ms.pos.y;
     ms.pos.x=new_pos.x=ms.pos.y=new_pos.y=0;
-    while (Bt(kbd.down_bitmap,SC_GUI)) {
+    while (Bt(kbd.down_bitmap,SC_ALT)) {
       old_key_cnt=kbd.cnt;
       if (Bt(kbd.down_bitmap,SC_CURSOR_LEFT)) {
 	while (Bt(kbd.down_bitmap,SC_CURSOR_LEFT) && kbd.cnt==old_key_cnt)
