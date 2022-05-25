@@ -98,7 +98,6 @@ U0 ACMainFileLstTraverse(U8 *files_find_mask)
     tmpde=tmpde1=FilesFind(files_find_mask,
 	  FUF_RECURSE|FUF_JUST_TXT|FUF_JUST_FILES|FUF_CLUS_ORDER);
     while (tmpde) {
-      "%s\n",tmpde->full_name;
       buf=FileRead(tmpde->full_name);
       ACSingleFileAdd(buf);
       Free(buf);

@@ -16,7 +16,7 @@ Bool Copy(U8 *src_files_find_mask,U8 *dst_files_find_mask=".")
       tmpde=tmpde1;
       while (tmpde)
       {
-        if (!(tmpde->attr & RS_ATTR_DIR))
+        if (!IsDir(tmpde->full_name))
         {
           st=FileNameAbs(tmpde->name);
           if (!CopySingle(tmpde->full_name,st))
@@ -116,7 +116,7 @@ I64 DelTreeDirs(CDirEntry *tmpde1)
   while (tmpde1)
   {
     tmpde2=tmpde1->next;
-    if (tmpde1->attr & RS_ATTR_DIR)
+    if (IsDir(tmpde1->full_name))
     {
       if (tmpde1->sub)
         res+=DelTreeDirs(tmpde1->sub);
@@ -134,7 +134,7 @@ I64 DelTreeFiles(CDirEntry *tmpde1)
   while (tmpde1)
   {
     tmpde2=tmpde1->next;
-    if (tmpde1->attr & RS_ATTR_DIR)
+    if (IsDir(tmpde1->full_name))
     {
       if (tmpde1->sub)
         res+=DelTreeFiles(tmpde1->sub);

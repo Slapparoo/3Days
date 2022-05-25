@@ -14,7 +14,7 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
         return NULL;
     }
 	if(!t) t=Fs;
-        if(!FileFind(fn2)) {
+    if(!FileFind(fn2)) {
 		"File %s not found!!!\n",fn2;
 		throw('FILE');
 	}
@@ -38,6 +38,7 @@ I64 FileWrite(U8 *fn,U8 *buf,I64 len) {
 	CArcCompress *cmp;
 	if(!fn2) return 0;
 	if(IsDotZ(fn2)) {
+        if(!buf) buf="";
 		cmp=CompressBuf(buf,len,Fs);
 		r=__FileWrite(fn2,cmp,cmp->compressed_size);
 		Free(cmp);

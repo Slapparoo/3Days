@@ -4684,3 +4684,7 @@ extern U0 XTalk(CTask *task,U8 *fmt,...);
 extern U0 StreamPrint(U8 *fmt,...);
 extern I64 ExePrint(U8 *fmt,...);   
 public extern CBlkDevGlbls blkdev;
+extern U0 UserTaskCont();
+extern I64 Char2ScanCode(I64 ch,I64 sc_flags=0);
+extern CDirEntry *FilesFind(U8 *files_find_mask,I64 fuf_flags=0);
+extern I64 ExeFile2(U8 *name,I64 ccf_flags=0);

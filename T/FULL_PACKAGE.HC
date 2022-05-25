@@ -34,10 +34,11 @@ U0 LoadImps() {
 U0 REPL() {
     CTask *win_mgr;
     LoadImps;
+    ACInit("/KERNEL*.HH"); //Slow   
     win_mgr=Spawn(&WinMgrTask)->_3days_spawn_ptr;
-    //Needs win_mgr
-    ACInit("/KERNEL*.HH");
-    //ACInit("/*;!*.BIN*;!*.DATA;!*.TXT"); Slow and curently only Things in Kernel files are exposed 
+    //Needs win_mgr 
     __AwaitThread(win_mgr);
 }
-__AwaitThread(Spawn(&REPL,NULL,"Main",,Fs)->_3days_spawn_ptr);
+Spawn(&REPL,NULL,"Main",,Fs);
+//We are adam task
+SrvTaskCont;

@@ -44,8 +44,7 @@ I64 TermRightClickLink(CDoc *doc,CDocEntry *doc_e)
 	    }
 	    "Adam(\"#include \\\"%s\\\"\" );\n\dPT\d\dFG\d\dBG\d",st;
 	    WinZBufUpdate;
-	    //;AdamFile(st,FALSE); TODO RESTORE
-	    "UNIMPLEMENTED\n";
+        AdamFile(st,FALSE);
 	    res=TRUE;
 	    break;
 	  case RIGHT_COPY:

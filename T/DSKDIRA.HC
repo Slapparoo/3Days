@@ -48,9 +48,9 @@ I64 DirEntryCompareName(CDirEntry *e1,CDirEntry *e2)
     U8 buf1[CDIR_FILENAME_LEN],buf2[CDIR_FILENAME_LEN],
     buf3[CDIR_FILENAME_LEN],buf4[CDIR_FILENAME_LEN];
     I64 d1=0,d2=0;
-    if (e1->attr & RS_ATTR_DIR)
+    if (IsDir(e1->full_name))
         d1=1;
-    if (e2->attr & RS_ATTR_DIR)
+    if (IsDir(e2->full_name))
         d2=1;
     if (d1!=d2)
         return d2-d1;
@@ -123,7 +123,7 @@ CDirEntry *DirFilesFlatten(CDirEntry *tmpde,CDirEntry **_res,I64 fuf_flags)
     if (tmpde)
         while (TRUE) {
             tmpde1=tmpde->next;
-            if (!(tmpde->attr&RS_ATTR_DIR)||!(fuf_flags&FUF_JUST_FILES)) {
+            if (!IsDir(tmpde->full_name)||!(fuf_flags&FUF_JUST_FILES)) {
                 _res=*_res=tmpde;
                 del=FALSE;
             } else

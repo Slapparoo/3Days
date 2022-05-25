@@ -261,24 +261,25 @@ public F64 PopUpRangeF64Log(F64 lo,F64 hi,I64 steps,
 }
 
 #help_index "Job/Exe;Task/Job/Exe;Compiler"
-/*TODO URGENT RESTORE
 public I64 AdamFile(U8 *filename,Bool warn_ext=TRUE)
 {//Make adam_task execute file.
   Bool okay=TRUE;
   U8 *name=FileNameAbs(filename),
-	*name2=ExtDft(name,"HC.Z");
+	*name2=ExtDft(name,"HC.Z"),*tmp;
   I64 res=0;
   if (warn_ext &&
 	!FilesFindMatch(name2,FILEMASK_JIT) &&
 	!PopUpCancelOk(ST_WARN_ST "Not .HC File\n\n"))
     okay=FALSE;
-  if (okay)
-    res=Adam("#include \"%s\";",name2);
+  if (okay) {
+    tmp=MStrPrint("#include \"%s\";",name2);
+    res=TaskText(adam_task,NULL,tmp,0);
+    Free(tmp);
+  }
   Free(name2);
   Free(name);
   return res;
 }
-*/
 public I64 PopUpFile(U8 *filename,Bool warn_ext=TRUE,
 	CTask *parent=NULL,CTask **_pu_task=NULL)
 {//\dLK,"ExeFile2",A="MN:ExeFile2"\d() in \dLK,"PopUp",A="MN:PopUp"\d task. Cont as User.

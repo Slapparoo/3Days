@@ -50,8 +50,11 @@ U0 Exit() {
     Fs->task_signature=-1; //Invalidate signature
     TaskQueRem(Fs);
     WinZBufUpdate;
-    while(sys_focus_task==Fs)
+    while(sys_focus_task==Fs) {
+        if(Fs->parent_task)
+            WinFocus(Fs->parent_task);
         Yield;
+    }
     __Exit;
 }
 U0 SrvTaskCont()

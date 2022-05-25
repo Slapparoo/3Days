@@ -304,12 +304,15 @@ int64_t VFsFileWrite(char *name,char *data,int64_t len) {
     return !!name;
 }
 int64_t VFsFileRead(char *name,int64_t *len) {
+    if(len) *len=0;
     FILE *f;
     int64_t s,e;
     void *data=NULL;
     name=__VFsFileNameAbs(name);
-    if(name) {
+    if(!name) return NULL;
+    if(!__FIsDir(name)) {
         f=fopen(name,"rb");
+        if(!f) goto end;
         s=ftell(f);
         fseek(f,0,SEEK_END);
         e=ftell(f);
@@ -318,6 +321,7 @@ int64_t VFsFileRead(char *name,int64_t *len) {
         fclose(f);
         if(len) *len=e-s;
     }
+    end:
     PoopFree(name);
     return data;
 }

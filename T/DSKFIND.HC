@@ -308,7 +308,7 @@ U0 PutDirLink(U8 *dirname,U8 *full_name=NULL)
       full_name=st=DirNameAbs(dirname);
     else
       st=NULL;
-    "\dMA,T=\"%s\",LM=\"Cd(\\\"%s\\\");Dir;\"\d",dirname,full_name;
+    "\dMA,T=\"%s\",LM=\"Cd(\\\"%s\\\");Dir;\n\"\d",dirname,full_name;
     Free(st);
   }
 }

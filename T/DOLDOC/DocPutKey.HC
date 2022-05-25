@@ -317,9 +317,9 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 			  Free(st2);
 		      }
 		      if (st) {
-			/*if (sc&SCF_SHIFT) TODO RESTORE
+			if (sc&SCF_SHIFT)
 			  AdamFile(st);
-			else */
+			else
 			  PopUpFile(st);
 			Free(st);
 		      }

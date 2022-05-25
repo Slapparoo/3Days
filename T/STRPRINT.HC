@@ -896,7 +896,13 @@ U0 Print(U8 *fmt,...)
 {//\dLK,"Print(\"\") Fmt Strings",A="FI:::/Doc/Print.DD"\d.  See \dLK,"StrPrintJoin",A="MN:StrPrintJoin"\d().
 //Don't use this.  \dLK,"See Print() shortcut.",A="FF:::/Doc/HolyC.DD,DemoHolyC"\d
   U8 *buf=StrPrintJoin(NULL,fmt,argc,argv);
-  if(fp_puts2) (*fp_puts2)(buf);//Don't use PutS().  \dLK,"See Print() shortcut.",A="FF:::/Doc/HolyC.DD,DemoHolyC"\d
+  I64 len=StrLen(buf),i;
+  for(i=0;i!=len;i++) {
+    if (Bt(&(Fs->task_flags),TASKf_INPUT_FILTER_TASK))
+      Msg(MSG_KEY_DOWN,buf[i],0,1<<JOBf_DONT_FILTER);
+  }
+  if(!Bt(&(Fs->display_flags),DISPLAYf_SILENT)&&!Bt(&(Fs->task_flags),TASKf_INPUT_FILTER_TASK))
+    (*fp_puts2)(buf);
   Free(buf);
 }
 
