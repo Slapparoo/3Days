@@ -233,6 +233,7 @@ void PoopFree(void *ptr) {
     cache=(un->parent->is_32bit)?heap.cache32:heap.cache64;
     if(l<=16) {
         un->last=NULL;
+        un->task=NULL;
         un->next=cache[l];
         cache[l]=un;
     }
