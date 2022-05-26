@@ -124,7 +124,6 @@ void VFsGlobalInit();
 //Not VFs
 void* FileRead(char *fn,int64_t *sz);
 int64_t FileWrite(char *fn,void *data,int64_t sz);
-#ifdef TARGET_WIN32
 //See swapctxWIN.yasm
 typedef struct {
     int64_t rax;
@@ -155,10 +154,9 @@ typedef struct {
     double xmm14;
     double xmm15;
     void *un1,*un2,*un3;
-} win_ctx_t;
-void getcontext(win_ctx_t *);
-void setcontext(win_ctx_t *);
-#endif
+} ctx_t;
+void GetContext(ctx_t *);
+void SetContext(ctx_t *);
 void PoopAllocFreeTaskMem(void *task);
 //Returns ptr
 void *PoopAllocSetTask(void *p,void *task);

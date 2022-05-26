@@ -216,6 +216,9 @@ struct CBinFile {
 } ;
 typedef struct CBinFile CBinFile ;
 void FualtCB() {
+    sigset_t set;
+    sigfillset(&set);
+    sigprocmask(SIG_UNBLOCK,&set,NULL);
     void *arr[1];
     arr[0]=*(void**)(__builtin_frame_address(0)+8);
     int64_t i;
@@ -228,7 +231,7 @@ void FualtCB() {
             }
         }
     }
-    exit(-1);
+    __Yield();
 }
 void *Load(char *fn,int64_t ld_flags) {
     FILE *f;

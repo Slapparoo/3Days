@@ -1,8 +1,8 @@
-GLOBAL setcontext
-GLOBAL getcontext
+GLOBAL SetContext
+GLOBAL GetContext
 USE64
 SECTION .text
-getcontext:
+GetContext:
 MOV [RCX+0],RAX
 MOV [RCX+1*8],RBX
 MOV [RCX+2*8],RCX
@@ -33,7 +33,7 @@ MOVSD [RCX+25*8],XMM14
 MOVSD [RCX+26*8],XMM15
 POP RCX ;SIMULATE RET
 JMP RAX
-setcontext:
+SetContext:
 MOV RAX,[RCX+0]
 MOV RBX,[RCX+1*8]
 ;MOV [RCX+2*8],RCX ;save for last as we are using RCX 

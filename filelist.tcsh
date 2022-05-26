@@ -16,4 +16,5 @@ set CFiles = ( \
 )
 set AsmFiles = ( \
   "./FFI_SYSV.yasm" \
+  "./swapctxSYSV.yasm" \
 )

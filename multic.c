@@ -1,15 +1,15 @@
 #include "3d.h"
 #include <sched.h>
 #include <signal.h>
-#ifdef TARGET_WIN32
-static void makecontextWIN(win_ctx_t *ctx,void *stack,void(*fptr)(void*),void *data) {
+static void MakeContext(ctx_t *ctx,void *stack,void(*fptr)(void*),void *data) {
     ctx->rip=fptr;
+    #ifdef TARGET_WIN32
     ctx->rcx=data;
+    #else
+    ctx->rdi=data;
+    #endif
     ctx->rsp=stack+MSize(stack)-8*8;//Include area for home registers and minimum of 4 stack items
 }
-#else
-#include <ucontext.h>
-#endif
 #include <sys/time.h>
 static void *Fs;
 void *GetFs() {
@@ -36,11 +36,7 @@ typedef struct CThread {
     void *stack;
     char *cur_dir;
     char cur_drv;
-    #ifdef TARGET_WIN32
-    win_ctx_t ctx;
-    #else
-    ucontext_t ctx;
-    #endif
+    ctx_t ctx;
 } CThread;
 typedef vec_t(CThread*) vec_CThread_t;
 static CThread *cur_thrd;
@@ -56,11 +52,7 @@ void __Exit() {
     __Yield();
 }
 void __SetThreadPtr(CThread *t,void *ptr) {
-    #ifdef TARGET_WIN32
     t->ctx.rip=ptr;
-    #else
-    makecontext(&t->ctx,ptr,0); //Exit will never return so abi differences are irrelevant
-    #endif
 }
 void __KillThread(CThread *t) {
     CHash **ex=map_get(&TOSLoader,"Exit");
@@ -93,18 +85,11 @@ CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
     thd->Fs=p->fs;
     thd->cur_dir=cur_dir;
     thd->cur_drv=cur_drv;
-    getcontext(&thd->ctx);
+    GetContext(&thd->ctx);
     if(!thd->dead) {
         vec_push(&threads,thd);
-        #ifndef TARGET_WIN32
-        thd->ctx.uc_stack.ss_sp=PoopMAlloc(1<<16);
-        thd->ctx.uc_stack.ss_size=1<<16;
-        thd->ctx.uc_stack.ss_flags=0;
-        makecontext(&thd->ctx,&__SpawnFFI,1,p);
-        #else
         thd->stack=PoopMAlloc(1<<16);
-        makecontextWIN(&thd->ctx,thd->stack,&__SpawnFFI,p);
-        #endif
+        MakeContext(&thd->ctx,thd->stack,&__SpawnFFI,p);
     }
     return thd;
 }
@@ -121,12 +106,8 @@ void __Sleep(int64_t t) {
 }
 void __Yield() {
     static int flop;
-    #ifndef TARGET_WIN32
-    ucontext_t old;
-    #else
-    win_ctx_t old;
-    #endif
-    getcontext(&old);
+    ctx_t old;
+    GetContext(&old);
     int64_t i;
     rem:
     for(i=0;i!=dead_threads.length;i++) {
@@ -150,7 +131,7 @@ void __Yield() {
         else //???
             return;
     }
-    getcontext(&threads.data[idx]->ctx);
+    GetContext(&threads.data[idx]->ctx);
     if(!(flop^=1))
         return;
     for(idx2=(idx+1)%threads.length;idx!=idx2;idx2=(1+idx2)%threads.length) {
@@ -180,7 +161,7 @@ void __Yield() {
             Fs=threads.data[idx2]->Fs;
             cur_dir=threads.data[idx2]->cur_dir;
             cur_drv=threads.data[idx2]->cur_drv;
-            setcontext(&threads.data[idx2]->ctx);
+            SetContext(&threads.data[idx2]->ctx);
         }
     }
     if(min_sleep>0&&!(dont_sleep||cur_thrd->sleep_until==0)) //We skipped over the current thread when looking for canidates to swap too
