@@ -10,6 +10,7 @@ static int32_t gr_palette_std[]={
 0xAA0000,0xAA00AA,0xAA5500,0xAAAAAA,
 0x555555,0x5555FF,0x55FF55,0x55ffff,
 0xFF5555,0xFF55FF,0xFFFF55,0xFFFFFF};
+static void StartInputScanner();
 
 CDrawWindow *NewDrawWindow() {
     CDrawWindow *ret=PoopMAlloc(sizeof(CDrawWindow));
@@ -398,6 +399,7 @@ void SetKBCallback(void *fptr,void *data) {
     kb_cb=fptr;
     kb_cb_data=data;
     static init;
+    StartInputScanner();
     if(!init)
         init=1,SDL_AddEventWatch(KBCallback,data);
 }
@@ -407,6 +409,7 @@ static int SDLCALL MSCallback(void *d,SDL_Event *e) {
     int64_t x,y;
     static int state;
     static int z;
+    StartInputScanner();
     if(ms_cb)
         switch(e->type) {
             case SDL_MOUSEBUTTONDOWN:
@@ -440,12 +443,19 @@ void SetMSCallback(void *fptr) {
     if(!init)
         init=1,SDL_AddEventWatch(MSCallback,NULL);
 }
-void ScanSDLEvent() {
+static void ScanSDLEvent(void *ul) {
     SDL_Event e;
-    if(SDL_PollEvent(&e)) {
+    for(;;)
+    if(SDL_WaitEvent(&e)) {
         if(e.type==SDL_QUIT) {
-            SDL_Quit();
             exit(0);
         }
+    }
+}
+void StartInputScanner() {
+    static int started=0;
+    if(!started) {
+        started++;
+        SDL_CreateThread(ScanSDLEvent,"Input Scanner",NULL);
     }
 }

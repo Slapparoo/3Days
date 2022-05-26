@@ -335,10 +335,10 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 //\dLK,"::/Adam/God/HSNotes.DD"\d
 		      if (sc&SCF_SHIFT) {
 			DocUnlock(doc);
-			//GodDoodle; TODO RESTORE
+			GodDoodle;
 			DocLock(doc);
 		      } else
-;			//GodSong; TODO RESTORE
+              GodSong;
 		    }
 		    break;
 		  case SC_F7:

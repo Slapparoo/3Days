@@ -6,10 +6,6 @@ CDbgGlbls dbg;
 CDoc *sys_clip_doc;
 static U0 JiffieInc(I64 inc) {
     cnts.jiffies+=inc;
-    //                              //
-    // Scan events while were at it // TODO README
-    //                              //
-    __ScanUIEvent;
 }
 U8  *(*fp_getstr2)(I64 flags=0);
 CDoc *(*fp_doc_put)(CTask *task=NULL);

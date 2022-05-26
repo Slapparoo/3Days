@@ -91,7 +91,6 @@ void *GetFs();
 void __WaitForSpawn(void *sp);
 struct CThread;
 struct CThread *__Spawn(void *fs,void *fp,void *data,char *name);
-void ScanSDLEvent();
 void __FreeThread(struct CThread *t);
 void __AwakeThread(struct CThread *t);
 void __Suspend(struct CThread *t);

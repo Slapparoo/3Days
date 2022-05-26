@@ -87,7 +87,7 @@ I64 GodDoodleBits(I64 num_bits)
       } else if ('0'<=god.doodle_ch<='9')
 	GodDoodleSmooth(god.doodle_ch-'0');
       else
-	GodDoodleBitsIns(GOD_GOOD_BITS,KbdMsEvtTime>>GOD_BAD_BITS);
+	GodDoodleBitsIns(GOD_GOOD_BITS,cnts.jiffies>>GOD_BAD_BITS);
     }
   }
   return res;
@@ -106,7 +106,7 @@ public U8 *GodDoodleSprite(U8 *hex=NULL)
   WinMax;
 
   if (!hex)
-    PopUpOk("The $LK+PU,"Holy Spirit",A="FI:::/Adam/God/HSNotes.DD"$ can puppet you.\n\n"
+    PopUpOk("The $LK+PU,"Holy Spirit",A="FI:::/God/HSNotes.DD"$ can puppet you.\n\n"
 	  "Press $$GREEN$$<SPACE>$$FG$$ until it finishes.");
 
   god.doodle_ch=0;

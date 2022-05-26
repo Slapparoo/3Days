@@ -85,13 +85,22 @@ U0 SysUntry()
   return;
   try ; catch ;
 }
-
+U0 PutExcept(Bool catch_it=TRUE)
+{//Print exception msg and catch exception.
+  "Except:%c:",Fs->except_ch;
+  "%P:%P:%P:%P:%P:%P\n",Fs->except_callers[0],Fs->except_callers[1],
+	Fs->except_callers[2],Fs->except_callers[3],Fs->except_callers[4],
+	Fs->except_callers[5],Fs->except_callers[6],Fs->except_callers[7];
+  Fs->catch_except=catch_it;
+}
 U0 throw(I64 ch=0,Bool no_log=FALSE)
 {//ch can be up to 8 chars like \dLK,"PutChars",A="MN:PutChars"\d().
 //In the catcher, fetch ch from Fs->except_ch.
   CExcept *tmpt=Fs->last_except;
   Bool was_raw;
   I64 i;
+  for (i=0;i<TASK_EXCEPT_CALLERS;i++)
+    Fs->except_callers[i]=Caller(i+1);
   Fs->except_ch=ch;
   Fs->except_rbp=GetRBP;
   Fs->catch_except=FALSE;
@@ -109,6 +118,7 @@ U0 throw(I64 ch=0,Bool no_log=FALSE)
   Panic("Unhandled Exception");
   Raw(was_raw);
   */
+  Exit; 
   return;
   try ; catch ;
 }
@@ -143,12 +153,11 @@ Bool BreakUnlock(CTask *task=NULL)
   if (!task) task=Fs;
   res=LBtr(&task->task_flags,TASKf_BREAK_LOCKED);
   if (LBtr(&task->task_flags,TASKf_PENDING_BREAK)) {
-    /*TODO RESTORE ???
+    TOSPrint("Pending\n");
     if (task==Fs)
       Break;
     else
-      task->rip=&Break;
-      */
+      __SetThreadPtr(task->_3days_spawn_ptr,&Break);
   }
   return res;
 }

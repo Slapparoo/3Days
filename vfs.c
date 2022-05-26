@@ -109,7 +109,7 @@ int VFsCd(char *to,int flags) {
     //int only_dirs=flags&VFS_ONLY_DIRS;
     int failed=0;
     int folder_depth=0;
-    char *d,*top,*top2,*root,drv=cur_drv;
+    char *d,*top,*top2,*root,drv=cur_drv,*start;
     char drv_buf[2]={cur_drv,0};
     root=*map_get(&mount_points,drv_buf);
     vec_char_t path;
@@ -151,12 +151,15 @@ int VFsCd(char *to,int flags) {
         d=to+strlen(to);
     vec_pusharr(&path,to,d-to);
     vec_push(&path,0);
-    if(!strcmp(strrchr(path.data,delim)+1,".")) {
+    start=strrchr(path.data,delim);
+    if(start) start++;
+    else start=path.data;
+    if(!strcmp(start,".")) {
         vec_pop(&path);
         vec_pop(&path);
         vec_push(&path,0);
         goto next;
-    } else if(!strcmp(strrchr(path.data,delim)+1,"..")) {
+    } else if(!strcmp(start,"..")) {
         //Pop a directory item
         top=strrchr(path.data,delim);
         assert(top);

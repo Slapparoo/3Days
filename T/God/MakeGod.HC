@@ -5,5 +5,5 @@
 #include "GodBible.HC"
 #include "HolySpirit.HC"
 #include "GodSong.HC"
-//#include "GodDoodle.HC"
+#include "GodDoodle.HC"
 #exe {Cd("..");;};;

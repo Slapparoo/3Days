@@ -469,5 +469,19 @@ static U0 KBCb(I64 c,I64 s) {
     BEqu(&kbd.down_bitmap,s&0x7f,!(s&SCF_KEY_UP));
     FifoI64Ins(kbd.scan_code_fifo,s);
     kbd.timestamp=cnts.jiffies;
+    //If we get a CTRL_ALT_b we break,CTRL_ALT_t terminates(?)
+    if(sys_focus_task&&!(s&SCF_KEY_UP)) {
+        if(s&SCF_CTRL&&s&SCF_ALT) {
+            if(ScanCode2Char(s)==CH_CTRLB) {
+                if(!Bt(&sys_focus_task->task_flags,TASKf_BREAK_LOCKED)) {
+                    __SetThreadPtr(sys_focus_task->_3days_spawn_ptr,&Break);
+                } else {
+                    Bts(&sys_focus_task->task_flags,TASKf_PENDING_BREAK);
+                }
+            }
+            if(ScanCode2Char(s)==CH_CTRLT)
+                Kill(sys_focus_task);
+        }
+    }
 }
 SetKBCallback(&KBCb,sys_focus_task);

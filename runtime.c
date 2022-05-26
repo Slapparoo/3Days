@@ -533,10 +533,7 @@ int64_t STK_Yield(int64_t *stk) {
 int64_t STK_SndFreq(int64_t *stk) {
     SndFreq(stk[0]);
 }
-int64_t STK_ScanSDLEvent(int64_t *stk) {
-    ScanSDLEvent();
-}
-int64_t STK_SetClipboardText(int64_t *stk) {
+    int64_t STK_SetClipboardText(int64_t *stk) {
     SDL_SetClipboardText(stk[0]);
 }
 int64_t STK_GetClipboardText(int64_t *stk) {
@@ -566,7 +563,6 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"FBlkWrite",STK_FBlkWrite,4);
     STK_RegisterFunctionPtr(&ffi_blob,"SndFreq",STK_SndFreq,1);
     STK_RegisterFunctionPtr(&ffi_blob,"Sleep",&STK_Sleep,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__ScanUIEvent",&STK_ScanSDLEvent,0);
     STK_RegisterFunctionPtr(&ffi_blob,"Fs",STK_GetFs,0);
     STK_RegisterFunctionPtr(&ffi_blob,"StrNew",STK_StrNew,2);
     STK_RegisterFunctionPtr(&ffi_blob,"SetKBCallback",STK_SetKBCallback,2);
