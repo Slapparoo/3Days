@@ -4729,3 +4729,4 @@ class CGodGlbls
   Bool	doodle_done;
 };
 extern CGodGlbls god;
+extern F64 tS();
