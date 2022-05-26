@@ -8,11 +8,9 @@ U8 *TimeStampCB(CDoc *,CDocEntry *,CTask *mem_task)
 
 U8 *KbdMsTimeCB(CDoc *,CDocEntry *,CTask *mem_task)
 {
-  return TimeStampCB(0,0,mem_task);
-    /* TODO URGENT RESTORE
   U8 *st=MAlloc(64,mem_task);
-  StrPrint(st,"%X",KbdMsEvtTime>>GOD_BAD_BITS);
-  return st;*/
+  StrPrint(st,"%X",KbdMsEvtTime>>GOD_BAD_BITS /*>>GOD_BAD_BITS*/); //Todo use High performance timer
+  return st;
 }
 
 I64 PopUpTimerOk(U8 *header=NULL,U8 *footer=NULL)
@@ -153,7 +151,7 @@ public U0 GodWord(I64 bits=17)
 
 public U0 GodBiblePassage(I64 num_lines=20)
 {//Make God pick a Bible passage. $LK+PU,"Holy Spirit Instructions",A="FI:::/Adam/God/HSNotes.DD"$
-  I64 start=GodBits(21)%(Define("ST_BIBLE_LINES")-(num_lines-1))+1;
+  I64 start=GodBits(21)%(Str2I64(Define("ST_BIBLE_LINES"))-(num_lines-1))+1;
   U8 *verse=BibleLine2Verse(start);
   "%s\n\n",verse;
   Free(verse);

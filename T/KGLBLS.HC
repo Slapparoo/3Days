@@ -83,3 +83,4 @@ public _extern SYS_PROGRESS4_TF F64 progress4_tf; //Progress 4 end time.
 public _extern SYS_PROGRESSES
 	CProgress sys_progresses[PROGRESS_BARS_NUM]; //All progress bars.
 CBlkDevGlbls	blkdev;
+CGodGlbls god;

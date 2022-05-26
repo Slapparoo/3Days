@@ -485,3 +485,11 @@ static U0 KBCb(I64 c,I64 s) {
     }
 }
 SetKBCallback(&KBCb,sys_focus_task);
+
+I64 KbdMsEvtTime()
+{//Timestamp of last key or mouse event.
+  if (ms_hard.timestamp>kbd.timestamp)
+    return ms_hard.timestamp;
+  else
+    return kbd.timestamp;
+}

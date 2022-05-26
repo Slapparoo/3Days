@@ -349,12 +349,12 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 			KeyDescSet("Cmd /God Word");
 		    } else {
 //\dLK,"::/Adam/God/HSNotes.DD"\d
-		      //FifoU8Flush(god.fifo); TODO RESTORE
-		      //GodBitsIns(GOD_GOOD_BITS,KbdMsEvtTime>>GOD_BAD_BITS); TODO RESTORE
+		      //FifoU8Flush(god.fifo); TODO Use high performance timer
+		      //GodBitsIns(GOD_GOOD_BITS,KbdMsEvtTime>>GOD_BAD_BITS);
 		      if (sc&SCF_SHIFT)
-			;//GodBiblePassage; TODO URGENT RESTYORE
+			GodBiblePassage;
 		      else
-			;//GodWord; TODO URGENT RESTYORE
+			GodWord;
 		    }
 		    break;
 		}

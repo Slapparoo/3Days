@@ -1,20 +1,5 @@
 #help_index "God"
 
-#define GOD_BAD_BITS	4
-#define GOD_GOOD_BITS	24
-
-public class CGodGlbls
-{
-  U8	**words,
-	*word_file_mask;
-  I64	word_fuf_flags,
-	num_words;
-  CFifoU8 *fifo;
-  CDC	*doodle_dc;
-  I64	doodle_ch;
-  CFifoU8 *doodle_fifo;
-  Bool	doodle_done;
-} god;
 MemSet(&god,0,sizeof(CGodGlbls));
 god.doodle_fifo	=FifoU8New(2048*8);
 god.fifo	=FifoU8New(2048*8);

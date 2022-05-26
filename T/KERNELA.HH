@@ -4709,3 +4709,23 @@ class CMakeSongSettings
 extern U0 Break();
 extern U0 PutChars(U64 ch);
 extern U0 PutExcept(Bool catch_it=TRUE);
+public extern U0 BibleView();
+public extern U0 BookLines(CDoc *doc_out=NULL,I64 start,I64 lines,
+	U8 *book_filename=BIBLE_FILENAME);
+
+#define GOD_BAD_BITS	4
+#define GOD_GOOD_BITS	24
+
+class CGodGlbls
+{
+  U8	**words,
+	*word_file_mask;
+  I64	word_fuf_flags,
+	num_words;
+  CFifoU8 *fifo;
+  CDC	*doodle_dc;
+  I64	doodle_ch;
+  CFifoU8 *doodle_fifo;
+  Bool	doodle_done;
+};
+extern CGodGlbls god;
