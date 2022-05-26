@@ -190,6 +190,7 @@ import U0i __KillThread(U8i *thr);
 import U0i SetMSCallback(U8i *fp);
 public import U0i Sleep(I64i mS);
 import U0 __Del(U8 *);
+import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 #else
 extern U8i *GetClipboardText();
 extern U8i *SetClipboardText(U8i *);
@@ -215,6 +216,7 @@ public extern Bool DirMk(U8i *filename); //TODO
 public extern U8 **__Dir(U8i *); //TODO
 public extern U0 Exit();
 public extern U8 *__GetStr(U8 *pmt="");
+extern U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 extern U0 __BootstrapForeachSymbol(U0 *fptr);
 extern C3DaysDrawWin *DrawWindowNew();
 extern U0i DrawWindowUpdate(C3DaysDrawWin *win,U8i *,I64i,I64i);
@@ -4688,3 +4690,22 @@ extern U0 UserTaskCont();
 extern I64 Char2ScanCode(I64 ch,I64 sc_flags=0);
 extern CDirEntry *FilesFind(U8 *files_find_mask,I64 fuf_flags=0);
 extern I64 ExeFile2(U8 *name,I64 ccf_flags=0);
+#define BIBLE_FILENAME	"::/Misc/Bible.TXT"
+extern U0 GodBiblePassage(I64 num_lines=20);
+extern U0 GodBitsIns(I64 num_bits,I64 n);
+extern U0 GodDoodle(U8 *hex=NULL);
+extern U0 GodSong();
+extern U0 GodWord(I64 bits=17);
+extern I64 Str2I64(U8 *st,I64 radix=10,U8 **_end_ptr=NULL);
+extern F64 Str2F64(U8 *src,U8 **_end_ptr=NULL);
+extern U8 *GodSongStr();
+//Need this for the Meta-data
+class CMakeSongSettings
+{
+  I64  complexity		format "$$LS,D=\"ST_RHYTHM_COMPLEXITY\"$$\n";
+  Bool rests			format "$$CB,\"Rests\"$$\n";
+  Bool six_eight		format "$$CB,\"Six Eight\"$$\n";
+  I64  octave			format "$$DA-TRM,A=\"Octave:%d\"$$\n";
+  I64  octave_state;
+};
+extern U0 Break();

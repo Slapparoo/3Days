@@ -55,6 +55,13 @@ void __Exit() {
     cur_thrd->dead=1;
     __Yield();
 }
+void __SetThreadPtr(CThread *t,void *ptr) {
+    #ifdef TARGET_WIN32
+    t->ctx.rip=ptr;
+    #else
+    makecontext(&t->ctx,ptr,0); //Exit will never return so abi differences are irrelevant
+    #endif
+}
 void __KillThread(CThread *t) {
     CHash **ex=map_get(&TOSLoader,"Exit");
     if(cur_thrd==t) {
@@ -62,14 +69,7 @@ void __KillThread(CThread *t) {
             FFI_CALL_TOS_0(ex[0]->val);
         __Exit();
     } else {
-        #ifdef TARGET_WIN32
-        if(ex)
-            t->ctx.rip=ex[0]->val;
-        else
-            t->ctx.rip=__Exit;
-        #else
-        makecontext(&t->ctx,ex[0]->val,0); //Exit will never return so abi differences are irrelevant
-        #endif
+        __SetThreadPtr(t,ex[0]->val);
     }
 }
 static int64_t __SpawnFFI(CPair *p) {

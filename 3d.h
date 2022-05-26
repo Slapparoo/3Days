@@ -162,3 +162,4 @@ void setcontext(win_ctx_t *);
 void PoopAllocFreeTaskMem(void *task);
 //Returns ptr
 void *PoopAllocSetTask(void *p,void *task);
+void __SetThreadPtr(struct CThread *t,void *ptr);

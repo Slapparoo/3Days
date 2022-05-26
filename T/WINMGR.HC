@@ -295,7 +295,7 @@ I64 WinMgrSleep(Bool flush_msgs=FALSE)
       if (!music.cur_song_task)
 	music.cur_song_task=Spawn(&CurSongTask,NULL,"Song");
     } else if (music.cur_song_task) {
-      ;//Kill(music.cur_song_task); TODO RESTORE
+      Kill(music.cur_song_task);
       music.cur_song_task=NULL;
     }
     winmgr.updates++;

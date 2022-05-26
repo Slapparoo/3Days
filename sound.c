@@ -3,15 +3,14 @@ static SDL_AudioSpec audio_spec;
 static int64_t freq=0;
 static int64_t sample;
 static void AudioCB(void *ud,float *data,int len) {
-    if(!freq) {
-        memset(data,0,len);
-        return;
-    }
     len/=sizeof(float);
     int olen=len;
     for(;len>=0;) {
         double t=(double)++sample/(double)audio_spec.freq;
-        data[--len]=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
+        if(!freq)
+            data[--len]=0;
+        else
+            data[--len]=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
     }
     sample%=audio_spec.freq;
 } 

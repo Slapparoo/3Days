@@ -548,12 +548,16 @@ int64_t STK_GetClipboardText(int64_t *stk) {
     SDL_free(find);
     return ret;
 }
+int64_t STK___SetThreadPtr(int64_t *stk) {
+    __SetThreadPtr(stk[0],stk[1]);
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+    STK_RegisterFunctionPtr(&ffi_blob,"__SetThreadPtr",STK___SetThreadPtr,2);
     STK_RegisterFunctionPtr(&ffi_blob,"SetClipboardText",STK_SetClipboardText,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetClipboardText",STK_GetClipboardText,0);
     STK_RegisterFunctionPtr(&ffi_blob,"FOpen",STK_FOpen,3);

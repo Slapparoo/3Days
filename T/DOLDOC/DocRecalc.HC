@@ -1032,7 +1032,7 @@ rc_adjust_xy:
 		(!music.cur_song || StrCmp(music.cur_song,doc_e->aux_str))) {
 	    Free(music.cur_song);
 	    MusicSettingsRst;
-	    music.cur_song=StrNew(doc_e->aux_str);
+	    music.cur_song=StrNew(doc_e->aux_str,adam_task); //CHANGE we dont wnat the song to disappear when our thing exits
 	  }
 	}
 	doc->flags|=DOCF_HAS_SONG;
