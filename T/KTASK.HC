@@ -44,17 +44,95 @@ U0 TaskQueInsChild(CTask *task)
   task->next_sibling_task=pred;
   LBtr(&tq_lock,0);
 }
+/* TODO ???
+I64 TaskEnd()
+{//Called with irq's off.
+  CTask *task=Fs,*tmpt,*tmpt1;
+  if (task==sys_task_being_scrn_updated) {
+    LBts(&task->task_flags,TASKf_KILL_TASK);
+    return task->next_task;
+  }
+  if (task->task_end_cb) {
+    task->wake_jiffy=0;
+    LBtr(&task->task_flags,TASKf_KILL_TASK);
+    TaskRstAwaitingMsg(task);
+    Suspend(task,FALSE);
+    task->rip=task->task_end_cb;
+    task->task_end_cb=NULL;
+    return task;
+  }
+  if (task->parent_task && task->parent_task->popup_task==task) {
+    task->parent_task->popup_task=NULL;
+    Kill(task->parent_task);
+    return task->parent_task;
+  }
 
+  tmpt1=(&task->next_child_task)(U8 *)-offset(CTask.next_sibling_task);
+  tmpt=tmpt1->next_sibling_task;
+  if (tmpt!=tmpt1) {
+    do {
+      LBts(&tmpt->task_flags,TASKf_KILL_TASK);
+      tmpt=tmpt->next_sibling_task;
+    } while (tmpt!=tmpt1);
+    return task->next_task;
+  }
+  if (LBtr(&task->display_flags,DISPLAYf_SHOW))
+    LBts(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0);
+
+  while (LBts(&task->task_flags,TASKf_TASK_LOCK))
+    Yield();
+  while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED))
+    Yield();
+
+  JobQueDel(&task->srv_ctrl.next_waiting);
+  JobQueDel(&task->srv_ctrl.next_done);
+
+  /*if (sys_focus_task==task) {
+    if (!Gs->num)
+      SingleUser(OFF);
+    sys_focus_task=NULL;
+    if (fp_set_std_palette)
+      (*fp_set_std_palette)();
+  }*/
+
+  //QueRem
+  task->task_signature(I64)=0;
+
+  tmpt =task->next_input_filter_task;
+  tmpt1=task->last_input_filter_task;
+  tmpt1->next_input_filter_task=tmpt;
+  tmpt ->last_input_filter_task=tmpt1;
+
+  tmpt =task->next_sibling_task;
+  tmpt1=task->last_sibling_task;
+  tmpt1->next_sibling_task=tmpt;
+  tmpt ->last_sibling_task=tmpt1;
+
+  tmpt =task->next_task; //save to return
+  TaskQueRem(task);
+
+  LBtr(&task->srv_ctrl.flags,JOBCf_LOCKED);
+  LBtr(&task->task_flags,TASKf_TASK_LOCK);
+
+  task->wake_jiffy=cnts.jiffies+DYING_JIFFIES;
+  return tmpt;
+}*/
 U0 Exit() {
+    U8 *cb;
+    if(Fs->task_end_cb) {
+        cb=Fs->task_end_cb;
+        Fs->task_end_cb=NULL;
+        Call(cb);
+    }
     LBts(&(Fs->task_flags),TASKf_KILL_TASK);
-    Fs->task_signature=-1; //Invalidate signature
+    Fs->task_signature=0;
     TaskQueRem(Fs);
     WinZBufUpdate;
     while(sys_focus_task==Fs) {
         if(Fs->parent_task)
             WinFocus(Fs->parent_task);
         Yield;
-    }
+    }       
     __Exit;
 }
 U0 SrvTaskCont()
