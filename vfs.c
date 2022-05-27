@@ -49,7 +49,7 @@ char * VFsDirCur() {
 }
 #ifdef TARGET_WIN32
 static int __FExists(char *path) {
-	char buf[strlen(path)+1];
+	char buf[strlen(path)+128];
 	strcpy(buf,path);
 	if(buf[strlen(path)-1]==delim)
 		buf[strlen(path)-1]=0;
@@ -58,17 +58,11 @@ static int __FExists(char *path) {
 		//Not in the mood to match wildcards,we do that in HolyC
 		return 0;
 	}
-    WIN32_FIND_DATA data;
-    HANDLE h=FindFirstFile(path,&data);
-    if(h!=INVALID_HANDLE_VALUE) {
-        FindClose(h);
-        return 1;
-    }
-    return 0;
+    return PathFileExistsA(buf);
 }
 static int __FIsDir(char *path) {
 	int r=0;
-	char buf[strlen(path)+1];
+	char buf[strlen(path)+128];
 	strcpy(buf,path);
 	if(buf[strlen(path)-1]==delim)
 		buf[strlen(path)-1]=0;
@@ -77,13 +71,7 @@ static int __FIsDir(char *path) {
 		//Not in the mood to match wildcards,we do that in HolyC
 		return 0;
 	}
-	WIN32_FIND_DATA data;
-    HANDLE h=FindFirstFile(path,&data);
-    if(h!=INVALID_HANDLE_VALUE) {
-        r=!!(data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY);
-        FindClose(h);
-    }
-    return r;
+	return PathIsDirectoryA(buf);
 }
 #else
 static int __FExists(char *path) {

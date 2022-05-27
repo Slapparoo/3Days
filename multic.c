@@ -31,17 +31,18 @@ typedef struct CThread {
     struct CThread *self;
     void *Fs;
     uint64_t sleep_until;
-    uint64_t locked:1;
-    uint64_t dead:1;
+    int8_t locked;
+    int8_t dead;
+    int8_t to_kill;
     void *stack;
     char *cur_dir;
     char cur_drv;
     ctx_t ctx;
 } CThread;
 typedef vec_t(CThread*) vec_CThread_t;
-static CThread *cur_thrd;
-static vec_CThread_t threads;
-static vec_CThread_t dead_threads;
+static __thread CThread *cur_thrd;
+static __thread vec_CThread_t threads;
+static __thread vec_CThread_t dead_threads;
 void __FreeThread(CThread *t) {
     PoopAllocFreeTaskMem(t->Fs);
 }
@@ -56,6 +57,7 @@ void __SetThreadPtr(CThread *t,void *ptr) {
 }
 void __KillThread(CThread *t) {
     CHash **ex=map_get(&TOSLoader,"Exit");
+    t->to_kill=1;
     if(cur_thrd==t) {
         if(ex)
             FFI_CALL_TOS_0(ex[0]->val);
@@ -112,6 +114,13 @@ void __Yield() {
     ctx_t old;
     GetContext(&old);
     int64_t i;
+    for(i=0;i!=threads.length;i++)
+        if(threads.data[i]->to_kill) {
+            if(cur_thrd!=threads.data[i]) {
+                __KillThread(threads.data[i]);
+                threads.data[i]->to_kill=0;
+            }
+        }
     rem:
     for(i=0;i!=dead_threads.length;i++) {
 		if(cur_thrd!=dead_threads.data[i]) {

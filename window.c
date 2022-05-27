@@ -13,13 +13,18 @@ static int32_t gr_palette_std[]={
 static void StartInputScanner();
 
 CDrawWindow *NewDrawWindow() {
-    CDrawWindow *ret=PoopMAlloc(sizeof(CDrawWindow));
-    ret->window=SDL_CreateWindow("HolyC Drawer",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,640,480,SDL_WINDOW_RESIZABLE);
-    ret->surf=SDL_CreateRGBSurfaceWithFormat(0,640,480,32,SDL_PIXELFORMAT_BGR24);
-    SDL_SetWindowMaximumSize(ret->window,640,480);
-    //Let 3Days draw the mouse from HolyC
-    SDL_ShowCursor(SDL_DISABLE);
-    return ret;
+	//1 Screen on main thread
+	static CDrawWindow *win;
+	if(!win) { 
+		CDrawWindow *ret=PoopMAlloc(sizeof(CDrawWindow));
+		ret->window=SDL_CreateWindow("HolyC Drawer",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,640,480,SDL_WINDOW_RESIZABLE);
+		ret->surf=SDL_CreateRGBSurfaceWithFormat(0,640,480,32,SDL_PIXELFORMAT_BGR24);
+		SDL_SetWindowMaximumSize(ret->window,640,480);
+		//Let 3Days draw the mouse from HolyC
+		SDL_ShowCursor(SDL_DISABLE);
+		win=ret;
+	}
+    return win;
 }
 void DrawWindowUpdate(CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h) {
     SDL_Surface *s=win->surf;
@@ -399,9 +404,10 @@ void SetKBCallback(void *fptr,void *data) {
     kb_cb=fptr;
     kb_cb_data=data;
     static init;
-    StartInputScanner();
-    if(!init)
-        init=1,SDL_AddEventWatch(KBCallback,data);
+    if(!init) { 
+        init=1;
+        SDL_AddEventWatch(KBCallback,data);
+    }
 }
 //x,y,z,(l<<1)|r
 static void(*ms_cb)();
@@ -409,7 +415,6 @@ static int SDLCALL MSCallback(void *d,SDL_Event *e) {
     int64_t x,y;
     static int state;
     static int z;
-    StartInputScanner();
     if(ms_cb)
         switch(e->type) {
             case SDL_MOUSEBUTTONDOWN:
@@ -440,22 +445,18 @@ static int SDLCALL MSCallback(void *d,SDL_Event *e) {
 void SetMSCallback(void *fptr) {
     ms_cb=fptr;
     static init;
-    if(!init)
-        init=1,SDL_AddEventWatch(MSCallback,NULL);
+    if(!init){
+        init=1;
+        SDL_AddEventWatch(MSCallback,NULL);
+    }
 }
-static void ScanSDLEvent(void *ul) {
+void InputLoop(void *ul) {
     SDL_Event e;
-    for(;;)
-    if(SDL_WaitEvent(&e)) {
-        if(e.type==SDL_QUIT) {
-            exit(0);
-        }
-    }
-}
-void StartInputScanner() {
-    static int started=0;
-    if(!started) {
-        started++;
-        SDL_CreateThread(ScanSDLEvent,"Input Scanner",NULL);
-    }
+    for(;;) {
+		if(SDL_WaitEvent(&e)) {
+			if(e.type==SDL_QUIT) {
+				exit(0);
+			}
+		}
+	}
 }
