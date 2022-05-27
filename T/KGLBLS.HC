@@ -4,9 +4,6 @@ CTextGlbls	text;
 CCntsGlbls	cnts={1,0,2676302000,2676302,2676302000,0,0,0,FALSE};
 CDbgGlbls dbg;
 CDoc *sys_clip_doc;
-static U0 JiffieInc(I64 inc) {
-    cnts.jiffies+=inc;
-}
 U8  *(*fp_getstr2)(I64 flags=0);
 CDoc *(*fp_doc_put)(CTask *task=NULL);
 U0 (*fp_update_ctrls)(CTask *task)=NULL;
@@ -26,9 +23,9 @@ CMsHardStateGlbls ms_hard;
 CMsHardStateGlbls ms_hard_last;
 CAutoCompleteDictGlbls acd;
 CAutoCompleteGlbls ac;
-public CWinMgrGlbls winmgr={0,0,0,WINMGR_FPS,cnts.jiffies,cnts.jiffies,NULL,FALSE,FALSE,FALSE};
+public CWinMgrGlbls winmgr={0,0,0,WINMGR_FPS,__GetTicks,__GetTicks,NULL,FALSE,FALSE,FALSE};
 winmgr.t=CAlloc(sizeof(CWinMgrTimingGlbls));
-winmgr.t->last_calc_idle_time=cnts.jiffies;
+winmgr.t->last_calc_idle_time=__GetTicks;
 CTask *sys_macro_task;
 CKbdStateGlbls	kbd;
 I64 sys_msg_flags[1]={0};

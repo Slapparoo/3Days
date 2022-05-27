@@ -58,7 +58,7 @@ CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
 
   PUSHFD
   while (LBts(&srv->srv_ctrl.flags,JOBCf_LOCKED))
-    Yield;
+    {PAUSE;Yield;}
   if (!TaskValidate(srv)) {
     LBtr(&srv->srv_ctrl.flags,JOBCf_LOCKED);
     POPFD
@@ -106,7 +106,7 @@ CJob *TaskText(CTask *srv,CTask *master,U8 *data,I64 flags)
   }
   res->ctrl=&task->srv_ctrl;
   while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED))
-    Yield;
+    {PAUSE;Yield;}
   if (!TaskValidate(task)) {
     JobDel(res);
     res=NULL;
@@ -149,7 +149,7 @@ CJob *TaskMsg(CTask *_srv,CTask *master,
     srv=srv->next_input_filter_task;
   tmpc->ctrl=&srv->srv_ctrl;
   while (LBts(&srv->srv_ctrl.flags,JOBCf_LOCKED))
-    Yield;
+    {PAUSE;Yield;}
   if (!TaskValidate(srv)) {
     JobDel(tmpc);
     tmpc=NULL;
@@ -176,7 +176,7 @@ Bool JobResScan(CJob *rqst=NULL,I64 *_res=NULL)
       ctrl=rqst->ctrl;
     PUSHFD
     while (LBts(&ctrl->flags,JOBCf_LOCKED))
-      Yield;
+      {PAUSE;Yield;}
     tmpc1=&ctrl->next_done;
     tmpc=tmpc1->next;
     while (tmpc!=tmpc1) {
@@ -212,7 +212,7 @@ I64 JobResGet(CJob *rqst=NULL)
   } else {
     while (!Bt(&rqst->flags,JOBf_DONE)) {
       LBts(&(Fs->task_flags),TASKf_IDLE);
-      Yield;
+      {PAUSE;Yield;}
     }
   }
   LBtr(&(Fs->task_flags),TASKf_IDLE);
@@ -328,7 +328,7 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
     if (master=tmpc->master_task) {
       if (!Bt(&flags,JOBf_FREE_ON_COMPLETE)) {
 	while (LBts(&master->srv_ctrl.flags,JOBCf_LOCKED))
-	  Yield;
+	  {PAUSE;Yield;}
 	QueIns(tmpc,master->srv_ctrl.last_done);
 	LBts(&tmpc->flags,JOBf_DONE);
 	LBtr(&master->srv_ctrl.flags,JOBCf_LOCKED);
@@ -344,7 +344,7 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
       JobDel(tmpc);
     else if (!master) {
       while (LBts(&ctrl->flags,JOBCf_LOCKED))
-	Yield;
+	{PAUSE;Yield;}
       QueIns(tmpc,ctrl->last_done);
       LBts(&tmpc->flags,JOBf_DONE);
       LBtr(&ctrl->flags,JOBCf_LOCKED);
@@ -360,7 +360,7 @@ I64 JobsHndlr(I64 run_flags,CTask *task=NULL)
   if (!task) task=Fs;
   while (TRUE) {
     while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED))
-      Yield;
+      PAUSE;
     if (task->srv_ctrl.next_waiting!=&task->srv_ctrl) {
       switch (JobRunOne(run_flags,&task->srv_ctrl)) {
 	case JOB_CONT:

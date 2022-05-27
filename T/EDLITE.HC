@@ -328,7 +328,7 @@ U0 FixSet(U8 *filename,I64 line)
 {//Compiler calls this to set file line for Fix
   U8 *st=MStrPrint("FL:%s,%d",filename,line);
   while (LBts(&sys_semas[SEMA_FIX],0)) 
-    Yield;
+    PAUSE;
   Free(dbg.fix_file_line);
   dbg.fix_file_line=StrNew(st);
   LBtr(&sys_semas[SEMA_FIX],0);
@@ -340,7 +340,7 @@ Bool Fix(I64 edf_dof_flags=0)
   Bool res=FALSE;
 
   while (LBts(&sys_semas[SEMA_FIX],0))
-    Yield;
+    PAUSE;
   st=StrNew(dbg.fix_file_line);
   //LBtr(&sys_semas[SEMA_FIX],0);
 

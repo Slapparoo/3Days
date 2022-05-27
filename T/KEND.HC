@@ -21,21 +21,4 @@ U0 SysGlblsInit() {
     blkdev.tmp_filename=StrNew("/Tmp.DD.Z",adam_task);
 }
 SysGlblsInit;
-SysDefinesLoad;
-class CTimerPair {
-    U0 (*fptr)(U8 *);
-    I64 ms;
-    U8 *data;
-};
-static U0 TimerSpawn(CTimerPair *p) {
-    while(TRUE) {
-        (*p->fptr)(p->data);
-        Sleep(p->ms);
-    }
-}
-U0 __AddTimer(I64 ms,U0 (*fptr)(),U8 *data) {
-    CTimerPair *p=MAlloc(sizeof(CTimerPair));
-    p->ms=ms,p->fptr=fptr,p->data=data;
-    Spawn(&TimerSpawn,p);
-}
-__AddTimer(2,&JiffieInc,2);
+SysDefinesLoad; 

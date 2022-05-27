@@ -105,6 +105,9 @@ void __Sleep(int64_t t) {
     __Yield();
 }
 void __Yield() {
+    #ifndef TARGET_WIN32
+    sched_yield();
+    #endif
     static int flop;
     ctx_t old;
     GetContext(&old);

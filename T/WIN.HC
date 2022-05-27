@@ -1,5 +1,5 @@
 CMsStateGlbls old_ms={{-1000,-1000,0},{-1000,-1000,0},{-1000,-1000,0},
-  {0,0,0},{1.0,1.0,1.0},0.0,cnts.jiffies,0.350,0,0,
+  {0,0,0},{1.0,1.0,1.0},0.0,__GetTicks,0.350,0,0,
   FALSE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,FALSE
 };
 
@@ -8,7 +8,7 @@ U0 ProgressBarsRegTf(U8 *path=NULL)
 {
   F64 t,p1,p2,p3,p4;
   if (path) {
-    t=cnts.jiffies;
+    t=__GetTicks;
     if (progress1_t0) p1=t-progress1_t0; else p1=0;
     if (progress2_t0) p2=t-progress2_t0; else p2=0;
     if (progress3_t0) p3=t-progress3_t0; else p3=0;

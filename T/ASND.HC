@@ -4,7 +4,9 @@ public U0 SndTaskEndCB()
   Exit;
 }
 public U0 SleepUntil(I64 wake) {
-	Sleep(wake-cnts.jiffies);
+    I64 s=wake-__GetTicks;
+    if(s>0)
+        Sleep(s);
 }
 #help_index "Snd/Math;Math"
 public U0 Beep(I8 ona=62,Bool busy=FALSE)
@@ -114,7 +116,7 @@ public class CMusicGlbls
 #help_index "Snd/Music;Time/Seconds"
 public F64 tM()
 {//Time in seconds synced to music subsystem.
-  return (cnts.jiffies+music.tM_correction)/JIFFY_FREQ;
+  return (__GetTicks+music.tM_correction)/JIFFY_FREQ;
 }
 
 public F64 Beat()
@@ -243,7 +245,7 @@ per second.  It defaults to
   F64 d,on_jiffies,off_jiffies;
   music.play_note_num=0;
   while (*st) {
-    timeout_val=cnts.jiffies;
+    timeout_val=__GetTicks;
     tie=FALSE;
 
     do {

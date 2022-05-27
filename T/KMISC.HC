@@ -1,6 +1,6 @@
 F64 tS()
 {//Time since boot in seconds as a float.
-  return cnts.jiffies/1000.;
+  return __GetTicks/1000.;
 }
 Bool Blink(F64 Hz=2.5)
 {//Return TRUE, then FALSE, then TRUE at given frequency.

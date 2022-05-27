@@ -5,7 +5,7 @@ U0 TaskQueIns(CTask *task,CTask *pred=NULL)
   CTask *last;
   if (!pred) pred=Fs;
   while(LBts(&tq_lock,0))
-    Yield;
+    {PAUSE;Yield;}
   last=pred->last_task;
   last->next_task=pred->last_task=task;
   task->last_task=last;
@@ -18,7 +18,7 @@ U0 TaskQueRem(CTask *task)
 //Use \dLK,"Suspend",A="MN:Suspend"\d().
   CTask *next,*last;
   while(LBts(&tq_lock,0))
-    Yield;
+    {PAUSE;Yield;}
   next=task->next_task;
   last=task->last_task;
   last->next_task=next;
@@ -30,7 +30,7 @@ U0 TaskQueInsChild(CTask *task)
 {
   CTask *last,*pred;
   while(LBts(&tq_lock,0))
-    Yield;
+    {PAUSE;Yield;}
   pred=task->parent_task->last_child_task;
   //I reworked this 
   if(!pred) {
@@ -80,9 +80,10 @@ I64 TaskEnd()
     LBts(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0);
 
   while (LBts(&task->task_flags,TASKf_TASK_LOCK))
-    Yield();
-  while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED))
-    Yield();
+    {PAUSE;Yield;}
+  while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
+    PAUSE;Yield;
+  }
 
   JobQueDel(&task->srv_ctrl.next_waiting);
   JobQueDel(&task->srv_ctrl.next_done);
@@ -114,7 +115,7 @@ I64 TaskEnd()
   LBtr(&task->srv_ctrl.flags,JOBCf_LOCKED);
   LBtr(&task->task_flags,TASKf_TASK_LOCK);
 
-  task->wake_jiffy=cnts.jiffies+DYING_JIFFIES;
+  task->wake_jiffy=__GetTicks+DYING_JIFFIES;
   return tmpt;
 }*/
 U0 Exit() {
@@ -132,6 +133,7 @@ U0 Exit() {
         if(Fs->parent_task)
             WinFocus(Fs->parent_task);
         Yield;
+        PAUSE;
     }       
     __Exit;
 }
@@ -142,7 +144,7 @@ U0 SrvTaskCont()
   while (TRUE) {
     if (JobsHndlr(old_flags) && Fs->title_src==TTS_TASK_NAME)
       MemCpy(Fs->task_title,Fs->task_name,TASK_NAME_LEN);
-    //FlushMsgs;
+    FlushMsgs;
     LBts(&(Fs->task_flags),TASKf_IDLE);
     LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
     Yield;
@@ -350,8 +352,10 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
 {//Those things calculated from other variables.
   if (!task) task=Fs;
   PUSHFD
-  while (LBts(&task->task_flags,TASKf_TASK_LOCK))
+  while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
     Yield;
+    PAUSE;
+  }
   WinDerivedValsUpdate(task);
   if (fp_update_ctrls) {
     (*fp_update_ctrls)(task);

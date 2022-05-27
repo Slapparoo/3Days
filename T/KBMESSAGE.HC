@@ -468,7 +468,7 @@ static U0 KBCb(I64 c,I64 s) {
     kbd.last_down_scan_code=s;
     BEqu(&kbd.down_bitmap,s&0x7f,!(s&SCF_KEY_UP));
     FifoI64Ins(kbd.scan_code_fifo,s);
-    kbd.timestamp=cnts.jiffies;
+    kbd.timestamp=__GetTicks;
     //If we get a CTRL_ALT_b we break,CTRL_ALT_t terminates(?)
     if(sys_focus_task&&!(s&SCF_KEY_UP)) {
         if(s&SCF_CTRL&&s&SCF_ALT) {

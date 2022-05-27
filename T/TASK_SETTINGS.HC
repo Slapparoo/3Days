@@ -103,7 +103,7 @@ public U0 SettingsPop(CTask *task=NULL,I64 flags=0)
 
     if (!(flags&TSF_SAME_SONG)) {
       if (task->song_task)
-	;// TODO RESTORE Kill(task->song_task);
+        Kill(task->song_task);
       if (task->song_task=tmpse->song_task)
 	Suspend(task->song_task,FALSE);
     }
