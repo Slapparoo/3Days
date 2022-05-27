@@ -216,9 +216,11 @@ struct CBinFile {
 } ;
 typedef struct CBinFile CBinFile ;
 void FualtCB() {
+	#ifndef TARGET_WIN32
     sigset_t set;
     sigfillset(&set);
     sigprocmask(SIG_UNBLOCK,&set,NULL);
+    #endif
     void *arr[1];
     arr[0]=*(void**)(__builtin_frame_address(0)+8);
     int64_t i;

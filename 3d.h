@@ -160,3 +160,4 @@ void PoopAllocFreeTaskMem(void *task);
 //Returns ptr
 void *PoopAllocSetTask(void *p,void *task);
 void __SetThreadPtr(struct CThread *t,void *ptr);
+void InputLoop(void *ul);

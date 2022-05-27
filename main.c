@@ -69,6 +69,9 @@ void SignalHandler(int sig) {
     }
     exit(0);
 }
+static void Core0(char *name) {
+	Load(name,0);
+} 
 int main(int argc,char **argv) {
     char *header=NULL,*t_drive=NULL,*tmp;
     SDL_Init(SDL_INIT_EVERYTHING);
@@ -129,13 +132,15 @@ int main(int argc,char **argv) {
     //IMPORTANT,init thread VFs after we make drive T
     VFsThrdInit();
     if(1) {
+		//Create the Window,there is 1 screen God willing.
+		NewDrawWindow();
         int flags=0;
     #ifndef TARGET_WIN32
         if(0==access("HCRT.BIN",F_OK)) {
 			puts("Using ./HCRT.BIN as the default binary.");
-            Load("HCRT.BIN",flags);
+            SDL_CreateThread(Core0,"Core0","HCRT.BIN");
         } else if(0==access( HCRT_INSTALLTED_DIR,F_OK)) {
-            Load(HCRT_INSTALLTED_DIR,flags);
+			SDL_CreateThread(Core0,"Core0",HCRT_INSTALLTED_DIR);
         }
     #else
       char buffer[MAX_PATH];
@@ -144,10 +149,11 @@ int main(int argc,char **argv) {
       strcat(buffer,"\\HCRT.BIN");
       puts(buffer);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
-        Load(buffer,flags);
+        SDL_CreateThread(Core0,"Core0",buffer);
       }
     #endif
     }
+    InputLoop(NULL);
     return 0;
 }
 CLoader Loader;
