@@ -4650,7 +4650,6 @@ public extern U0 WinMax(CTask *task=NULL);
 public extern Bool WinBorder(Bool val=OFF,CTask *task=NULL);
 public extern U0 Refresh(I64 cnt=1,Bool force=FALSE);
 #endif
-#ifdef ALL
 public extern U0 ACInit(U8 *mask=NULL);
 public extern U0 ACDWordsLoad();
 public extern Bool AutoComplete(Bool val=OFF);
