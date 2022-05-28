@@ -1,11 +1,14 @@
-static Bool tq_lock=FALSE; 
+static I64 tq_lock=FALSE; 
 U0 TaskQueIns(CTask *task,CTask *pred=NULL)
 {//Insert a task in the scheduler running task queue.
 //You have no business with this, probably.
   CTask *last;
   if (!pred) pred=Fs;
-  while(LBts(&tq_lock,0))
-    {PAUSE;Yield;}
+  while(LBts(&tq_lock,0)) {
+    __SleepUntilChange(&tq_lock);
+    PAUSE;
+    Yield;
+  }
   last=pred->last_task;
   last->next_task=pred->last_task=task;
   task->last_task=last;
@@ -17,8 +20,11 @@ U0 TaskQueRem(CTask *task)
 {//Remove a task from the scheduler running task queue.
 //Use \dLK,"Suspend",A="MN:Suspend"\d().
   CTask *next,*last;
-  while(LBts(&tq_lock,0))
-    {PAUSE;Yield;}
+  while(LBts(&tq_lock,0)) {
+    __SleepUntilChange(&tq_lock);
+    PAUSE;
+    Yield;
+  }
   next=task->next_task;
   last=task->last_task;
   last->next_task=next;
@@ -29,8 +35,11 @@ U0 TaskQueRem(CTask *task)
 U0 TaskQueInsChild(CTask *task)
 {
   CTask *last,*pred;
-  while(LBts(&tq_lock,0))
-    {PAUSE;Yield;}
+  while(LBts(&tq_lock,0)) {
+    __SleepUntilChange(&tq_lock);
+    PAUSE;
+    Yield;
+  }
   pred=task->parent_task->last_child_task;
   //I reworked this 
   if(!pred) {
@@ -79,10 +88,15 @@ I64 TaskEnd()
   if (LBtr(&task->display_flags,DISPLAYf_SHOW))
     LBts(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0);
 
-  while (LBts(&task->task_flags,TASKf_TASK_LOCK))
-    {PAUSE;Yield;}
+  while (LBts(&task->task_flags,TASKf_TASK_LOCK)){
+    __SleepUntilChange(&task->task_flags,1<<TASKf_TASK_LOCK);
+    PAUSE;
+    Yield;
+  }
   while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
-    PAUSE;Yield;
+    __SleepUntilChange(&task->srv_ctrl.flags,1<<JOBCf_LOCKED);
+    PAUSE;
+    Yield;
   }
 
   JobQueDel(&task->srv_ctrl.next_waiting);
@@ -132,6 +146,7 @@ U0 Exit() {
     while(sys_focus_task==Fs) {
         if(Fs->parent_task)
             WinFocus(Fs->parent_task);
+        __SleepUntilChange(&sys_focus_task);
         Yield;
         PAUSE;
     }       
@@ -147,6 +162,7 @@ U0 SrvTaskCont()
     FlushMsgs;
     LBts(&(Fs->task_flags),TASKf_IDLE);
     LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
+    Sleep(10);
     Yield;
   }
 }
@@ -353,6 +369,7 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (!task) task=Fs;
   PUSHFD
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
+    __SleepUntilChange(&task->task_flags,1<<TASKf_TASK_LOCK);
     Yield;
     PAUSE;
   }
@@ -371,6 +388,8 @@ U0 DeathWait(CTask **_task,Bool send_exit=FALSE)
     TaskWait(*_task,TRUE);
     XTalk(*_task,"Exit;\n");
   }
-  while (TaskValidate(*_task))
+  while (TaskValidate(*_task)) {
+    Sleep(10);
     Yield;
+  }
 }

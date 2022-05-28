@@ -1,6 +1,7 @@
 #include "3d.h"
 #include <sched.h>
 #include <signal.h>
+#include <stdatomic.h>
 static void MakeContext(ctx_t *ctx,void *stack,void(*fptr)(void*),void *data) {
     ctx->rip=fptr;
     #ifdef TARGET_WIN32
@@ -34,6 +35,9 @@ typedef struct CThread {
     int8_t locked;
     int8_t dead;
     int8_t to_kill;
+    int64_t *wait_for_ptr;
+    int64_t wait_for_ptr_old_value;
+    int64_t wait_for_ptr_mask;
     void *stack;
     char *cur_dir;
     char cur_drv;
@@ -103,7 +107,16 @@ void __Suspend(CThread *t) {
     if(t==cur_thrd) __Yield();
 }
 void __Sleep(int64_t t) {
-    cur_thrd->sleep_until=t+SDL_GetTicks();
+    if(cur_thrd)
+        cur_thrd->sleep_until=t+SDL_GetTicks();
+    __Yield();
+}
+void __SleepUntilChange(int64_t *ptr,int64_t mask) {
+    if(cur_thrd) {
+        cur_thrd->wait_for_ptr=ptr;
+        cur_thrd->wait_for_ptr_old_value=*ptr;
+        cur_thrd->wait_for_ptr_mask=mask;
+    }
     __Yield();
 }
 void __Yield() {
@@ -119,6 +132,14 @@ void __Yield() {
             if(cur_thrd!=threads.data[i]) {
                 __KillThread(threads.data[i]);
                 threads.data[i]->to_kill=0;
+            }
+        } else if(threads.data[i]->wait_for_ptr) {
+            int64_t mask=threads.data[i]->wait_for_ptr_mask;
+            if((threads.data[i]->wait_for_ptr_old_value&mask)==(mask&atomic_load(threads.data[i]->wait_for_ptr))) {
+                threads.data[i]->locked=1;
+            } else {
+                threads.data[i]->wait_for_ptr=NULL;
+                threads.data[i]->locked=0;
             }
         }
     rem:

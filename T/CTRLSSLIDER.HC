@@ -53,8 +53,11 @@ U0 TemplateCtrlSlider(CDoc *doc)
   DocCaptureUndo(doc,TRUE);
 
   task=User("CTemplateCS **_m=0x%X;*_m=CtrlSliderGet;\n",&m);
-  while (!m)
-    {PAUSE;Yield;}
+  while (!m) {
+        __SleepUntilChange(&m);
+        PAUSE;
+        Yield;
+    }
 
   DocPrint(doc,
 "#define SLIDER_RANGE\t%d

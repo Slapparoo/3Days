@@ -141,6 +141,7 @@ extern class CFile;
 #define ARGT_XMM0	55 // Not implemented
 #define OCF_ALIAS	1
 #ifdef IMPORT_BUILTINS
+import U0 __SleepUntilChange(I64i *ptr,U64i mask=~0);
 import U8i *GetClipboardText();
 import U8i *SetClipboardText(U8i *);
 public import Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
@@ -240,6 +241,7 @@ public extern Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public extern Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public extern U0 FClose(CFile *f);
 public extern CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
+extern U0 __SleepUntilChange(I64i *ptr,U64i mask=~0);
 #endif
 extern U0i Exit();
 extern class CAOT;
@@ -4972,7 +4974,7 @@ extern CDirEntry *FilesFind(U8 *files_find_mask,I64 fuf_flags=0);
 extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0);
 extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0);
 extern U0 PutFileLink(U8 *filename,U8 *full_name=NULL,I64 line=0,Bool plain_text=FALSE);
-extern I64 Dir(U8 *files_find_mask,Bool full);
+extern I64 Dir(U8 *files_find_mask=".",Bool full=FALSE);
 extern U8 *FileExtDot(U8 *src);
 extern U8 *FileExtRem(U8 *src,U8 *dst=NULL);
 extern Bool IsDotZ(U8 *filename);

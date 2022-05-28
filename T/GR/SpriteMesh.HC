@@ -818,7 +818,11 @@ U0 DrawIt(CTask *task,CDC *dc)
   }
 //Wait for all cores to complete.
   while (e->mp_not_done_flags)
-    {PAUSE;Yield;}
+    {
+        __SleepUntilChange(&e->mp_not_done_flags);
+        PAUSE;
+        Yield;
+    }
 }
 
 U0 MeshInit(CMeshFrame *e,Bool flip_y)

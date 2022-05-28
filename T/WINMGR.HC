@@ -14,7 +14,9 @@ public U0 Refresh(I64 cnt=1,Bool force=FALSE)
   while (Bt(&sys_semas[SEMA_REFRESH_IN_PROGRESS],0)) {
     if (force && sys_winmgr_task)
       sys_winmgr_task->wake_jiffy=__GetTicks;
+    __SleepUntilChange(&sys_semas[SEMA_REFRESH_IN_PROGRESS]);
     PAUSE;
+    Sleep(10);
     Yield;
   }
   if (cnt>1 && old_doc)

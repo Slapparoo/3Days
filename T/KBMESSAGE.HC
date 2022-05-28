@@ -317,6 +317,7 @@ I64 GetMsg(I64 *_arg1=NULL,I64 *_arg2=NULL,I64 mask=~1,CTask *task=NULL)
   LBtr(&task->task_flags,TASKf_IDLE);
   while (!(res=ScanMsg(_arg1,_arg2,mask,task))) {
     LBts(&task->task_flags,TASKf_IDLE);
+    Sleep(10);
     Yield;
   }
   LBtr(&task->task_flags,TASKf_IDLE);
@@ -364,6 +365,7 @@ I64 GetKey(I64 *_scan_code=NULL,Bool echo=FALSE,Bool raw_cursor=FALSE)
   while (!ScanKey(&ch,&sc,FALSE)) {
     LBts(&(Fs->task_flags),TASKf_IDLE);
     LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
+    Sleep(10);
     Yield;
     LBtr(&(Fs->task_flags),TASKf_IDLE);
   }

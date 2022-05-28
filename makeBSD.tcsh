@@ -7,7 +7,7 @@ if ! $#gFindLoc then
 	exit
 endif
 source filelist.tcsh
-set CFlags = "-O0 -g3 `sdl2-config --cflags --libs` -lm -fno-omit-frame-pointer -lpthread"
+set CFlags = "-Os -g3 `sdl2-config --cflags --libs` -lm -fno-omit-frame-pointer -lpthread"
 
 if ! -e $binary then
   foreach f ( $CFiles )
