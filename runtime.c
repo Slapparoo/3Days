@@ -238,14 +238,15 @@ static void STK_RegisterFunctionPtr(vec_char_t *blob,char *name,void *fptr,int64
     AND RSP,-0x10
     PUSH R10
     PUSH R11
+    SUB RSP,0x20 //Manditory 4 stack arguments must be "pushed"
     LEA RCX,[RBP+8+8]
     PUSH R9
     PUSH R8
     PUSH RDX
     PUSH RCX
      */
-    char *atxt="\x55\x48\x89\xE5\x48\x83\xE4\xF0\x41\x52\x41\x53\x48\x8D\x4D\x10\x41\x51\x41\x50\x52\x51";
-    vec_pusharr(blob,atxt,0x16);
+    char *atxt="\x55\x48\x89\xE5\x48\x83\xE4\xF0\x41\x52\x41\x53\x48\x83\xEC\x20\x48\x8D\x4D\x10\x41\x51\x41\x50\x52\x51";
+    vec_pusharr(blob,atxt,0x1a);
     //MOV RAX,fptr
 	atxt="\x48\xb8";
 	vec_pusharr(blob,atxt,0x2);
@@ -253,12 +254,12 @@ static void STK_RegisterFunctionPtr(vec_char_t *blob,char *name,void *fptr,int64
 		vec_push(blob,(((int64_t)fptr)>>(i*8))&0xff);
     /*
     CALL RAX
-    ADD RSP,0x20
+    ADD RSP,0x40
     POP R11
     POP R10
     LEAVE
     */
-    atxt="\xFF\xD0\x48\x83\xC4\x20\x41\x5B\x41\x5A\xC9";
+    atxt="\xFF\xD0\x48\x83\xC4\x40\x41\x5B\x41\x5A\xC9";
     vec_pusharr(blob,atxt,0xb);
     #endif
 	//RET1 ARITY*8

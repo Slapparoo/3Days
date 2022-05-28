@@ -301,6 +301,7 @@ int64_t VFsFileRead(char *name,int64_t *len) {
     void *data=NULL;
     name=__VFsFileNameAbs(name);
     if(!name) return NULL;
+    if(__FExists(name))
     if(!__FIsDir(name)) {
         f=fopen(name,"rb");
         if(!f) goto end;
