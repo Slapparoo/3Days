@@ -6,8 +6,6 @@ U0 TaskQueIns(CTask *task,CTask *pred=NULL)
   if (!pred) pred=Fs;
   while(LBts(&tq_lock,0)) {
     __SleepUntilChange(&tq_lock);
-    PAUSE;
-    Yield;
   }
   last=pred->last_task;
   last->next_task=pred->last_task=task;
@@ -22,8 +20,6 @@ U0 TaskQueRem(CTask *task)
   CTask *next,*last;
   while(LBts(&tq_lock,0)) {
     __SleepUntilChange(&tq_lock);
-    PAUSE;
-    Yield;
   }
   next=task->next_task;
   last=task->last_task;
@@ -37,8 +33,6 @@ U0 TaskQueInsChild(CTask *task)
   CTask *last,*pred;
   while(LBts(&tq_lock,0)) {
     __SleepUntilChange(&tq_lock);
-    PAUSE;
-    Yield;
   }
   pred=task->parent_task->last_child_task;
   //I reworked this 
@@ -90,13 +84,9 @@ I64 TaskEnd()
 
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)){
     __SleepUntilChange(&task->task_flags,1<<TASKf_TASK_LOCK);
-    PAUSE;
-    Yield;
   }
   while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
     __SleepUntilChange(&task->srv_ctrl.flags,1<<JOBCf_LOCKED);
-    PAUSE;
-    Yield;
   }
 
   JobQueDel(&task->srv_ctrl.next_waiting);
@@ -147,8 +137,6 @@ U0 Exit() {
         if(Fs->parent_task)
             WinFocus(Fs->parent_task);
         __SleepUntilChange(&sys_focus_task);
-        Yield;
-        PAUSE;
     }       
     __Exit;
 }
@@ -370,8 +358,6 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
   PUSHFD
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
     __SleepUntilChange(&task->task_flags,1<<TASKf_TASK_LOCK);
-    Yield;
-    PAUSE;
   }
   WinDerivedValsUpdate(task);
   if (fp_update_ctrls) {

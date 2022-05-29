@@ -55,8 +55,6 @@ U0 TemplateCtrlSlider(CDoc *doc)
   task=User("CTemplateCS **_m=0x%X;*_m=CtrlSliderGet;\n",&m);
   while (!m) {
         __SleepUntilChange(&m);
-        PAUSE;
-        Yield;
     }
 
   DocPrint(doc,

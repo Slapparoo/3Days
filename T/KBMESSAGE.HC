@@ -135,7 +135,7 @@ U0 InputFilterTask()
     if (tmpc==tmpc1)
       break;
     else {
-      if (tmpc->job_code==JOBT_TEXT_INPUT) {
+      if (tmpc->job_code==JOBT_TEXT_INPUT) {
 	QueRem(tmpc);
 	//SetRFlags(old_flags);
 	try
@@ -365,8 +365,8 @@ I64 GetKey(I64 *_scan_code=NULL,Bool echo=FALSE,Bool raw_cursor=FALSE)
   while (!ScanKey(&ch,&sc,FALSE)) {
     LBts(&(Fs->task_flags),TASKf_IDLE);
     LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
+    //Yields for us
     Sleep(10);
-    Yield;
     LBtr(&(Fs->task_flags),TASKf_IDLE);
   }
   if (raw_cursor && cursor_on)

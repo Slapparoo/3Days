@@ -552,12 +552,20 @@ int64_t STK___SetThreadPtr(int64_t *stk) {
 int64_t STK___SleepUntilChange(int64_t *stk) {
     __SleepUntilChange(stk[0],stk[1]);
 }
+int64_t STK_FSize(int64_t *stk) {
+	return VFsFSize(stk[0]);
+}
+int64_t STK_FUnixTime(int64_t *stk) {
+	return VFsUnixTime(stk[0]);
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+	STK_RegisterFunctionPtr(&ffi_blob,"FUnixTime",STK_FUnixTime,1);
+	STK_RegisterFunctionPtr(&ffi_blob,"FSize",STK_FSize,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__SleepUntilChange",STK___SleepUntilChange,2);
     STK_RegisterFunctionPtr(&ffi_blob,"__SetThreadPtr",STK___SetThreadPtr,2);
     STK_RegisterFunctionPtr(&ffi_blob,"SetClipboardText",STK_SetClipboardText,1);

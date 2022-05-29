@@ -494,8 +494,6 @@ U0 EdCodeTools2(CDoc *doc,I64 tool_action,Bool beep=TRUE)
 	PopUpOk("Has Errors");
 	while (LBts(&sys_semas[SEMA_FIX],0)) {
         __SleepUntilChange(&sys_semas[SEMA_FIX]);
-        PAUSE;
-        Yield;
     }
 	ToFileLine(dbg.fix_file_line,&st,&i);
 	LBtr(&sys_semas[SEMA_FIX],0);

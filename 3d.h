@@ -162,3 +162,5 @@ void *PoopAllocSetTask(void *p,void *task);
 void __SetThreadPtr(struct CThread *t,void *ptr);
 void InputLoop(void *ul);
 void __SleepUntilChange(int64_t *ptr,int64_t mask);
+int64_t VFsUnixTime(char *name);
+int64_t VFsFSize(char *name) ;

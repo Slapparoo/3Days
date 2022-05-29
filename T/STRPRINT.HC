@@ -42,16 +42,14 @@ U0 OutStr(U8 *ptr,U8 **_buf,U8 **_dst,I64 len,I64 flags)
 U8 *MPrintTime(CDate cdt)
 {
   CDateStruct ds;
-  //TODO RE-IMP
-  //Date2Struct(&ds,cdt+local_time_offset);
+  Date2Struct(&ds,cdt);
   return MStrPrint("%02d:%02d:%02d",ds.hour,ds.min,ds.sec);
 }
 
 U8 *MPrintDate(CDate cdt)
 {
   CDateStruct ds;
-  //TODO RE-IMP
-  //Date2Struct(&ds,cdt+local_time_offset);
+  Date2Struct(&ds,cdt);
   return MStrPrint("%02d/%02d/%02d",ds.mon,ds.day_of_mon,ds.year%100);
 }
 

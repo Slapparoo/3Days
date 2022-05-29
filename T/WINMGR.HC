@@ -17,7 +17,6 @@ public U0 Refresh(I64 cnt=1,Bool force=FALSE)
     __SleepUntilChange(&sys_semas[SEMA_REFRESH_IN_PROGRESS]);
     PAUSE;
     Sleep(10);
-    Yield;
   }
   if (cnt>1 && old_doc)
     old_full_refresh=LBts(&old_doc->flags,DOCf_DO_FULL_REFRESH);
@@ -850,7 +849,7 @@ wmt_start:
       }
     } catch {
         "CUAHT A %c\n",Fs->except_ch;
-      //Fs->catch_except=TRUE;
+      Fs->catch_except=TRUE;
       task=Fs;
     }
   }

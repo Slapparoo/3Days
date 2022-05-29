@@ -282,7 +282,7 @@ public Bool DocRecalc(CDoc *doc,I64 recalc_flags=RECALCt_NORMAL)
     while (Bt(&doc->locked_flags,DOClf_LOCKED)) {
       if (__GetTicks>=i_jif)
 	return FALSE; //Bail-out if doc locked.
-      {PAUSE;Yield;}
+	  __SleepUntilChange(&doc->locked_flags,1<<DOClf_LOCKED);
     }
   }
 

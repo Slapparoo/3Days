@@ -141,6 +141,8 @@ extern class CFile;
 #define ARGT_XMM0	55 // Not implemented
 #define OCF_ALIAS	1
 #ifdef IMPORT_BUILTINS
+import I64i FSize(U8i *);
+import I64i FUnixTime(U8i *);
 import U0 __SleepUntilChange(I64i *ptr,U64i mask=~0);
 import U8i *GetClipboardText();
 import U8i *SetClipboardText(U8i *);
@@ -192,6 +194,8 @@ public import U0i Sleep(I64i mS);
 import U0 __Del(U8 *);
 import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 #else
+extern I64i FSize(U8i *);
+extern I64i FUnixTime(U8i *);
 extern U8i *GetClipboardText();
 extern U8i *SetClipboardText(U8i *);
 extern U0 __Del(U8 *);
@@ -5282,3 +5286,14 @@ extern U0 UAsmHashLoad();
 extern U0 Ui(U8 *buf,U8 **_rip,I64 seg_size=64,I64 *_jmp_dst=NULL,Bool just_ins=FALSE);
 extern U8 *U(U8 *rip,I64 cnt=20,I64 seg_size=64);
 extern I64 Un(U8 *rip,I64 cnt=0x80,I64 seg_size=64);
+extern CDate Str2Date(U8 *_src);
+extern I64 Bcd2Bin(U64 b);
+extern I64 LastDayOfYear(I64 i);
+extern I64 FirstDayOfYear(I64 i);
+extern I64 LastDayOfMon(I64 i);
+extern I64 FirstDayOfMon(I64 i);
+extern U0 Date2Struct(CDateStruct *_ds,CDate cdt);
+extern CDate Struct2Date(CDateStruct *_ds);
+extern I64 YearStartDate(I64 year);
+extern CDate Unix2CDate(I64 timestamp);
+extern I64 CDate2Unix(CDate dt);

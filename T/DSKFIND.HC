@@ -109,6 +109,8 @@ CDirEntry *FilesFind__(U8 *files_find_mask,I64 fuf_flags=0,
         for (idx=0; dir&&dir[idx]; idx++) {
             tmpde=CAlloc(sizeof(CDirEntry));
             StrCpy(&tmpde->name,dir[idx]);
+            tmpde->datetime=Unix2CDate(FUnixTime(dir[idx]));
+            tmpde->size=FSize(dir[idx]);
             tmpde->parent=parent;
             if (Bt(&fuf_flags,FUf_RECURSE) && IsDir(dir[idx]) &&
                     *tmpde->name!='.'&&*tmpde->name!='..') {
@@ -350,7 +352,7 @@ I64 Dir(U8 *files_find_mask,Bool full)
       while (tmpde1) {
 	tmpde2=tmpde1->next;
 	res++;
-	  " %T %0*tX %0*tX ",tmpde1->datetime,
+	  "%D %T %0*tX %0*tX ",tmpde1->datetime,tmpde1->datetime,
 		csize,tmpde1->size,c,tmpde1->clus;
 	if (IsDir(tmpde1->full_name))
 	  PutDirLink(tmpde1->name,tmpde1->full_name);

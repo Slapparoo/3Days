@@ -60,6 +60,7 @@ TaskInit(Fs,0);
 #include "CHASH.HC"
 #include "KUTILS.HC"
 #include "KERNELB.HH"
+#include "KDate.HC"
 #include "STRB.HC"
 #include "FUNSEG.HC"
 #include "STRPRINT.HC"

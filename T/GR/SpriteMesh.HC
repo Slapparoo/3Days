@@ -820,8 +820,6 @@ U0 DrawIt(CTask *task,CDC *dc)
   while (e->mp_not_done_flags)
     {
         __SleepUntilChange(&e->mp_not_done_flags);
-        PAUSE;
-        Yield;
     }
 }
 

@@ -44,9 +44,9 @@ typedef struct CThread {
     ctx_t ctx;
 } CThread;
 typedef vec_t(CThread*) vec_CThread_t;
-static __thread CThread *cur_thrd;
-static __thread vec_CThread_t threads;
-static __thread vec_CThread_t dead_threads;
+static  CThread *cur_thrd;
+static  vec_CThread_t threads;
+static  vec_CThread_t dead_threads;
 void __FreeThread(CThread *t) {
     PoopAllocFreeTaskMem(t->Fs);
 }
@@ -197,7 +197,7 @@ void __Yield() {
             SetContext(&threads.data[idx2]->ctx);
         }
     }
-    if(min_sleep>0&&!(dont_sleep||cur_thrd->sleep_until==0)) //We skipped over the current thread when looking for canidates to swap too
+    if(min_sleep>0&&!dont_sleep) //We skipped over the current thread when looking for canidates to swap too
         SDL_Delay((int64_t)min_sleep);
     goto loop;
 }

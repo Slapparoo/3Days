@@ -719,8 +719,7 @@ and take addr.
 	    if (cur_arg>=argc)
 	      throw('Scan');
 	    i_ptr=argv[cur_arg++];
-	    //TODO RESTORE
-	    //*i_ptr=Str2Date(buf);
+		*i_ptr=Str2Date(buf);
 	    break;
 	}
 	Free(buf);
@@ -735,4 +734,80 @@ U0 GetOutOfDollar()
   CDoc *doc;
   if (fp_doc_put && (doc=(*fp_doc_put)(Fs)) && doc->flags&DOCF_IN_DOLLAR)
     '$$';
-}
+}
+CDate Now() {
+	return Str2Date("1/1/1970"); //TODO ACUTALL TIME
+}
+CDate Str2Date(U8 *_src)
+{/*"*+nnnn", "*-nnnn", "mm/dd", "mm/dd/yy"
+It also supports some funs
+SM() start of mon
+EM() end of mon
+SY() start of year
+EY() end of year
+Full expressions are not implimented
+but you can do stuff like SM(*-7)+3
+and it will return the 3rd day after
+the start of mon for seven days before
+today.
+*/
+  CDate res=0;
+  CDateStruct ds,ds_now;
+  U8 *src=MStrUtil(_src,SUF_REM_SPACES|SUF_TO_UPPER),
+	*v=StrNew(src),
+	*ptr=src;
+  Bool start_mon=FALSE,end_mon=FALSE,
+	start_year=FALSE,end_year=FALSE;
+
+  MemSet(&ds,0,sizeof(CDateStruct));
+  if (!StrNCmp(ptr,"SM(",3)) {
+    ptr+=3;
+    start_mon=TRUE;
+  } else if (!StrNCmp(ptr,"EM(",3)) {
+    ptr+=3;
+    end_mon=TRUE;
+  } else if (!StrNCmp(ptr,"SY(",3)) {
+    ptr+=3;
+    start_year=TRUE;
+  } else if (!StrNCmp(ptr,"EY(",3)) {
+    ptr+=3;
+    end_year=TRUE;
+  }
+  if (*ptr=='*') {
+    ptr++;
+    if (*ptr=='+' || *ptr=='-')
+      res.date=Str2I64(ptr,,&ptr);
+    res+=Now;
+  } else {
+    StrFirstRem(ptr,"/",v); //Put mon into v
+    ds.mon=Str2I64(v);
+    if (StrOcc(ptr,'/')) {
+      StrFirstRem(ptr,"/",v); //Put day into v leaving year in ptr
+      ds.day_of_mon=Str2I64(v);
+      ds.year=Str2I64(ptr,,&ptr);
+      if (ds.year<100) //if not 4 digit year
+	ds.year+=2000;
+    } else {
+      ds.day_of_mon=Str2I64(ptr,,&ptr);
+      Date2Struct(&ds_now,Now);
+      ds.year=ds_now.year;
+    }
+    res=Struct2Date(&ds);
+  }
+  if (*ptr==')') ptr++;
+
+  if (start_mon)
+    res.date=FirstDayOfMon(res.date);
+  else if (end_mon)
+    res.date=LastDayOfMon(res.date);
+  else if (start_year)
+    res.date=FirstDayOfYear(res.date);
+  else if (end_year)
+    res.date=LastDayOfYear(res.date);
+
+  if (*ptr=='+' || *ptr=='-')
+    res.date+=Str2I64(ptr);
+  Free(src);
+  Free(v);
+  return res;
+}

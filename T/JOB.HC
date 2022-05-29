@@ -59,8 +59,6 @@ CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
   PUSHFD
   while (LBts(&srv->srv_ctrl.flags,JOBCf_LOCKED)) {
     __SleepUntilChange(&srv->srv_ctrl.flags,1<<JOBCf_LOCKED);
-    PAUSE;
-    Yield;
   }
   if (!TaskValidate(srv)) {
     LBtr(&srv->srv_ctrl.flags,JOBCf_LOCKED);
@@ -110,8 +108,6 @@ CJob *TaskText(CTask *srv,CTask *master,U8 *data,I64 flags)
   res->ctrl=&task->srv_ctrl;
   while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
     __SleepUntilChange(&srv->srv_ctrl.flags,1<<JOBCf_LOCKED);
-    PAUSE;
-    Yield;
   }
   if (!TaskValidate(task)) {
     JobDel(res);
@@ -156,8 +152,6 @@ CJob *TaskMsg(CTask *_srv,CTask *master,
   tmpc->ctrl=&srv->srv_ctrl;
   while (LBts(&srv->srv_ctrl.flags,JOBCf_LOCKED)){
     __SleepUntilChange(&srv->srv_ctrl.flags,1<<JOBCf_LOCKED);
-    PAUSE;
-    Yield;
   }
   if (!TaskValidate(srv)) {
     JobDel(tmpc);
@@ -186,8 +180,6 @@ Bool JobResScan(CJob *rqst=NULL,I64 *_res=NULL)
     PUSHFD
     while (LBts(&ctrl->flags,JOBCf_LOCKED)) {
         __SleepUntilChange(&ctrl->flags,1<<JOBCf_LOCKED);
-        PAUSE;
-        Yield;
     }
     tmpc1=&ctrl->next_done;
     tmpc=tmpc1->next;
@@ -363,8 +355,6 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
     else if (!master) {
       while (LBts(&ctrl->flags,JOBCf_LOCKED)) {
         __SleepUntilChange(&ctrl->flags,1<<JOBCf_LOCKED);
-        PAUSE;
-        Yield;
     }
       QueIns(tmpc,ctrl->last_done);
       LBts(&tmpc->flags,JOBf_DONE);
@@ -381,7 +371,7 @@ I64 JobsHndlr(I64 run_flags,CTask *task=NULL)
   if (!task) task=Fs;
   while (TRUE) {
     while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED))
-      PAUSE;
+      __SleepUntilChange(task->srv_ctrl.flags,1<<JOBCf_LOCKED);
     if (task->srv_ctrl.next_waiting!=&task->srv_ctrl) {
       switch (JobRunOne(run_flags,&task->srv_ctrl)) {
 	case JOB_CONT:

@@ -66,8 +66,6 @@ U0 DrawCtrls(CTask *task)
 	  PUSHFD
 	  while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
         __SleepUntilChange(&task->task_flags,1<<TASKf_TASK_LOCK);
-        Yield;
-        PAUSE;
       }
 
 	  task->win_left--; //Allow drawing on border
@@ -85,8 +83,6 @@ U0 DrawCtrls(CTask *task)
 	  PUSHFD
 	  while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
         __SleepUntilChange(&task->task_flags,1<<TASKf_TASK_LOCK);
-        Yield;
-	    PAUSE;
       }
 
 	  task->win_left++;

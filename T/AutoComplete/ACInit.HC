@@ -114,8 +114,6 @@ public U0 ACInit(U8 *mask=NULL)
   AutoComplete;
   while (LBts(&ac.flags,ACf_INIT_IN_PROGRESS)) {
     __SleepUntilChange(&ac.flags,1<<ACf_INIT_IN_PROGRESS);
-    PAUSE;
-    Yield;
   }
   if (FileFind(ACD_DEF_FILENAME_Z) &&
 	!FileFind(ACD_DEF_FILENAME)) {

@@ -5,6 +5,7 @@ static  int RootPathLen();
 #include <ctype.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <time.h>
 #define VFS_T_FILE 1 
 #define VFS_T_DIR 2 
 #define VFS_T_DRIVE 3 
@@ -256,6 +257,21 @@ char *__VFsFileNameAbs(char *name) {
     vec_deinit(&path);
     VFsInplaceHostDelims(path.data);
     return NULL;
+}
+int64_t VFsUnixTime(char *name) {
+	char *fn=__VFsFileNameAbs(name);
+	struct stat s;
+	stat(fn,&s);
+	int64_t r=mktime(localtime(&s.st_ctime));
+	PoopFree(fn);
+	return r;
+}
+int64_t VFsFSize(char *name) {
+	char *fn=__VFsFileNameAbs(name);
+	struct stat s;
+	stat(fn,&s);
+	PoopFree(fn);
+	return s.st_size;
 }
 char *VFsFileNameAbs(char *name) {
     char *tmp=__VFsFileNameAbs(name),*r;
