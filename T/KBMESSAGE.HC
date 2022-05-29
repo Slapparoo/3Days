@@ -465,7 +465,10 @@ I64 KbdMsgsQue()
   }
   return msg_code;
 }
+static I64 kb_mtx=0;
 static U0 KBCb(I64 c,I64 s) {
+	while(LBts(&kb_mtx,0))
+		PAUSE;
     kbd.last_down_scan_code=s;
     BEqu(&kbd.down_bitmap,s&0x7f,!(s&SCF_KEY_UP));
     FifoI64Ins(kbd.scan_code_fifo,s);
@@ -484,6 +487,7 @@ static U0 KBCb(I64 c,I64 s) {
                 Kill(sys_focus_task);
         }
     }
+    LBtr(&kb_mtx,0);
 }
 SetKBCallback(&KBCb,sys_focus_task);
 

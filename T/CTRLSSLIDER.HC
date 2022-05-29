@@ -205,7 +205,7 @@ U0 SliderDel(CCtrl *c)
 }
 ");
 
-  ;//Kill(task); TODO RESTORE  //This frees memory.
+  Kill(task);
 
   OneTimePopUp(sys_msg_flags,ARf_MANAGE_SLIDER,
     "Modify the code to your heart's content.\n"

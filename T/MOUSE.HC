@@ -135,7 +135,11 @@ U0 MsHardSet(I64 x,I64 y,I64 z,I64 l,I64 r)
   ms_hard.bttns[1]=r;
   MsHardSetPost;
 }
+I64 ms_mtx=0;
 U0 HMSSet4(I64 x,I64 y,I64 z,I64 lr) {
+	while(LBts(&ms_mtx,0))
+		PAUSE;
     MsHardSet(x,y,z,lr>>1,lr&1);
+    LBtr(&ms_mtx,0);
 }
 SetMSCallback(&HMSSet4);
