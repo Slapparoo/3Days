@@ -123,21 +123,35 @@ I64 TaskEnd()
   return tmpt;
 }*/
 U0 Exit() {
+	CTask *child,*last,*next;
     U8 *cb;
     if(Fs->task_end_cb) {
         cb=Fs->task_end_cb;
         Fs->task_end_cb=NULL;
         Call(cb);
     }
+    
+    next=Fs->next_sibling_task;
+    last=Fs->last_sibling_task;
+    next->last_sibling_task=last;
+    last->next_sibling_task=next;
+    Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=next;
+    if(Fs->parent_task->last_child_task==Fs)
+  	  Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=NULL;
+    
+    for(;child=Fs->last_child_task;) {
+		Kill(child);
+		DeathWait(child);
+	}
     LBts(&(Fs->task_flags),TASKf_KILL_TASK);
     Fs->task_signature=0;
     TaskQueRem(Fs);
     WinZBufUpdate;
-    while(sys_focus_task==Fs) {
-        if(Fs->parent_task)
-            WinFocus(Fs->parent_task);
-        __SleepUntilChange(&sys_focus_task);
-    }       
+    if(sys_focus_task==Fs) {
+		sys_focus_task=NULL;
+		if(Fs->parent_task)
+			WinFocus(Fs->parent_task);
+    }
     __Exit;
 }
 U0 SrvTaskCont()
@@ -150,7 +164,6 @@ U0 SrvTaskCont()
     FlushMsgs;
     LBts(&(Fs->task_flags),TASKf_IDLE);
     LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
-    Sleep(10);
     Yield;
   }
 }
@@ -376,6 +389,9 @@ U0 DeathWait(CTask **_task,Bool send_exit=FALSE)
   }
   while (TaskValidate(*_task)) {
     Sleep(10);
-    Yield;
   }
+  Yield;
+}
+U0 KillAdam() {
+	Kill(adam_task);
 }

@@ -5297,3 +5297,5 @@ extern CDate Struct2Date(CDateStruct *_ds);
 extern I64 YearStartDate(I64 year);
 extern CDate Unix2CDate(I64 timestamp);
 extern I64 CDate2Unix(CDate dt);
+extern U0 KillAdam();
+extern U0 DeathWait(CTask **_task,Bool send_exit=FALSE);

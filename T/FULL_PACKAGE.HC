@@ -31,14 +31,14 @@ U0 LoadImps() {
     //Load asm externs second
     ExePrint2("#define BOOT_3DAYS\n#include \"KERNELB.HH\";\n");
 }
-U0 REPL() {
-    CTask *win_mgr;
+U0 Adam(U8 *) {
     LoadImps;
     ACInit("/KERNEL*.HH"); //Slow   
-    win_mgr=Spawn(&WinMgrTask)->_3days_spawn_ptr;
-    //Needs win_mgr 
-    __AwaitThread(win_mgr);
+    sys_winmgr_task=Spawn(&WinMgrTask);
+    //We are "adam" task
+	SrvTaskCont;
 }
-Spawn(&REPL,NULL,"Main",,Fs);
-//We are adam task
-SrvTaskCont;
+//Out entering thread doesnt have a cur_thrd,so spawn one
+adam_task=Spawn(&Adam,NULL,"Adam",,);
+//Dont Exit
+while(TaskValidate(adam_task)) Sleep(1000);

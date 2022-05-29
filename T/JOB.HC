@@ -212,13 +212,11 @@ I64 JobResGet(CJob *rqst=NULL)
     while (tmpc1==tmpc1->next) {
       LBts(&(Fs->task_flags),TASKf_IDLE);
       Sleep(10);
-      Yield;
     }
   } else {
     while (!Bt(&rqst->flags,JOBf_DONE)) {
       LBts(&(Fs->task_flags),TASKf_IDLE);
       __SleepUntilChange(&rqst->flags,1<<JOBf_DONE);
-      PAUSE;Yield;
     }
   }
   LBtr(&(Fs->task_flags),TASKf_IDLE);
@@ -241,7 +239,6 @@ U0 TaskWait(CTask *task=NULL,Bool cmd_line_pmt=FALSE)
 	    tmpc1==tmpc1->next && Bt(&task1->task_flags,TASKf_IDLE) &&
 	    (!cmd_line_pmt || Bt(&task1->task_flags,TASKf_CMD_LINE_PMT)))
 	break;
-      Yield;
       Sleep(10);
     }
     POPFD
@@ -336,8 +333,6 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
       if (!Bt(&flags,JOBf_FREE_ON_COMPLETE)) {
 	while (LBts(&master->srv_ctrl.flags,JOBCf_LOCKED)) {
       __SleepUntilChange(&master->srv_ctrl.flags,1<<JOBCf_LOCKED);
-      PAUSE;
-      Yield;
     }
 	QueIns(tmpc,master->srv_ctrl.last_done);
 	LBts(&tmpc->flags,JOBf_DONE);

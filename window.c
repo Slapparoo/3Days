@@ -455,6 +455,7 @@ void InputLoop(void *ul) {
     for(;;) {
 		if(SDL_WaitEvent(&e)) {
 			if(e.type==SDL_QUIT) {
+				__Shutdown();
 				exit(0);
 			}
 		}

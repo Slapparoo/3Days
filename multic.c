@@ -48,6 +48,7 @@ static  CThread *cur_thrd;
 static  vec_CThread_t threads;
 static  vec_CThread_t dead_threads;
 void __FreeThread(CThread *t) {
+	if(!t) return;
     PoopAllocFreeTaskMem(t->Fs);
 }
 void __Exit() {
@@ -57,10 +58,13 @@ void __Exit() {
     __Yield();
 }
 void __SetThreadPtr(CThread *t,void *ptr) {
+	if(!t) return;
     t->ctx.rip=ptr;
 }
 void __KillThread(CThread *t) {
+	if(!t) return;
     CHash **ex=map_get(&TOSLoader,"Exit");
+    if(t->to_kill) return;
     t->to_kill=1;
     if(cur_thrd==t) {
         if(ex)
@@ -100,9 +104,11 @@ CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
     return thd;
 }
 void __AwakeThread(CThread *t) {
+	if(!t) return;
     t->locked=0;
 }
 void __Suspend(CThread *t) {
+	if(!t) return;
     t->locked=1;
     if(t==cur_thrd) __Yield();
 }
@@ -120,10 +126,11 @@ void __SleepUntilChange(int64_t *ptr,int64_t mask) {
     __Yield();
 }
 void __Yield() {
+	static int flop;
+    enter:;
     #ifndef TARGET_WIN32
     sched_yield();
     #endif
-    static int flop;
     ctx_t old;
     GetContext(&old);
     int64_t i;
@@ -153,32 +160,40 @@ void __Yield() {
 		}
 	}
     loop:;
-    int64_t ms=SDL_GetTicks(),min_sleep=-1.,t;
+    int64_t ms=SDL_GetTicks(),min_sleep=-1,t,most_overdue_i=-1;
     int64_t dont_sleep=0;
     int64_t idx,idx2=threads.length-1;
     vec_find(&threads,cur_thrd,idx);
     if(idx==-1) {
-        idx2=idx=0;
-        if(threads.length)
-            goto ent;
-        else //???
-            return;
+        idx=0;
+        idx2=threads.length-1;
+        if(threads.length&&idx==idx2) goto ent;
+        else goto check;
     }
     GetContext(&threads.data[idx]->ctx);
-    if(!(flop^=1))
-        return;
+    if(!(flop^=1)) {
+		return;
+	}
+    check:
     for(idx2=(idx+1)%threads.length;idx!=idx2;idx2=(1+idx2)%threads.length) {
         if(threads.data[idx2]->locked||threads.data[idx2]->dead) {
             continue;
         } else if(threads.data[idx2]->sleep_until) {
-            t=threads.data[idx2]->sleep_until-ms;
-            if(min_sleep>0)
+			t=threads.data[idx2]->sleep_until-ms;
+			if(t<=0) {
+				if(most_overdue_i==-1)
+					most_overdue_i=idx2;
+				else if(threads.data[most_overdue_i]->sleep_until>threads.data[idx2]->sleep_until)
+					most_overdue_i=idx2;			
+			}
+            if(min_sleep==-1)
+				min_sleep=t;
+            else if(min_sleep>0)
                 min_sleep=(min_sleep<t)?min_sleep:t;
-            else if(min_sleep<0)
-                min_sleep=t;
-            if(threads.data[idx2]->sleep_until<ms) {
-                threads.data[idx2]->sleep_until=0;
-                goto pass;
+            if(min_sleep<0)
+                min_sleep=-1;
+            if(threads.data[idx2]->sleep_until<=ms) {
+				threads.data[idx2]->sleep_until=0;
             }
         } else {
             //We got here if threads.data[idx2]->sleep_until==0
@@ -187,7 +202,7 @@ void __Yield() {
             threads.data[idx]->cur_drv=cur_drv;
             threads.data[idx]->cur_dir=cur_dir;
             threads.data[idx]->Fs=Fs;
-            threads.data[idx]->self=cur_thrd;
+            threads.data[idx]->self=threads.data[idx];
             //
             ent:
             cur_thrd=threads.data[idx2]->self;
@@ -197,11 +212,17 @@ void __Yield() {
             SetContext(&threads.data[idx2]->ctx);
         }
     }
-    if(min_sleep>0&&!dont_sleep) //We skipped over the current thread when looking for canidates to swap too
-        SDL_Delay((int64_t)min_sleep);
+    if(most_overdue_i!=-1) {
+		idx2=most_overdue_i;
+		goto pass;
+	}
+    if(min_sleep>0&&!dont_sleep) {//We skipped over the current thread when looking for canidates to swap too
+		SDL_Delay((int64_t)min_sleep);
+    }
     goto loop;
 }
 void __AwaitThread(CThread *t) {
+	if(!t) return;
     for(;;) {
         if(t->dead) {
             break;

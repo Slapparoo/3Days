@@ -270,7 +270,6 @@ public Bool AutoComplete(Bool val=OFF)
 	ac.task=Spawn(&ACTask,NULL,"AutoComplete");
 	while(!TaskValidate(ac.task)) {
         Sleep(10);
-        Yield;
     }
       }
       WinToTop(ac.task);

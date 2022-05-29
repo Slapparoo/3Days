@@ -1,6 +1,7 @@
 #include "3d.h"
 #include "ext/argtable3/argtable3.h"
 #include <signal.h>
+#include <pthread.h>
 #ifndef TARGET_WIN32
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -69,9 +70,17 @@ void SignalHandler(int sig) {
     }
     exit(0);
 }
+static void Core0Exit(int sig) {
+	/*CHash **ka=map_get(&TOSLoader,"KillAdam");
+	if(ka)
+		FFI_CALL_TOS_0(ka[0]->val);*/
+	pthread_exit(0);
+} 
 static void Core0(char *name) {
+	signal(SIGUSR1,&Core0Exit);
 	Load(name,0);
 } 
+static pthread_t core0;		
 int main(int argc,char **argv) {
     char *header=NULL,*t_drive=NULL,*tmp;
     SDL_Init(SDL_INIT_EVERYTHING);
@@ -138,9 +147,9 @@ int main(int argc,char **argv) {
     #ifndef TARGET_WIN32
         if(0==access("HCRT.BIN",F_OK)) {
 			puts("Using ./HCRT.BIN as the default binary.");
-            SDL_CreateThread(Core0,"Core0","HCRT.BIN");
+            pthread_create(&core0,NULL,Core0,"HCRT.BIN");
         } else if(0==access( HCRT_INSTALLTED_DIR,F_OK)) {
-			SDL_CreateThread(Core0,"Core0",HCRT_INSTALLTED_DIR);
+			pthread_create(&core0,NULL,Core0,HCRT_INSTALLTED_DIR);
         }
     #else
       char buffer[MAX_PATH];
@@ -149,7 +158,8 @@ int main(int argc,char **argv) {
       strcat(buffer,"\\HCRT.BIN");
       puts(buffer);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
-        SDL_CreateThread(Core0,"Core0",buffer);
+		//TODO use native win thread
+        pthread_create(&core0,NULL,Core0,buffer);
       }
     #endif
     }
@@ -157,3 +167,9 @@ int main(int argc,char **argv) {
     return 0;
 }
 CLoader Loader;
+void __Shutdown() {
+	pthread_kill(core0,SIGUSR1);
+	pthread_join(core0,NULL);
+	SDL_Quit();
+	exit(0);
+}
