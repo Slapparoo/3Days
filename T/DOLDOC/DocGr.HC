@@ -51,19 +51,7 @@ public I64 PopUpColorLighting(U8 *header=NULL)
   return i;
 }
 
-class CTransformForm
-{
-  F64 x_scale	format "\dDA-TRM,A=\"X Scale :%12.6f\"\d\n";
-  F64 y_scale	format "\dDA-TRM,A=\"Y Scale :%12.6f\"\d\n";
-  F64 z_scale	format "\dDA-TRM,A=\"Z Scale :%12.6f\"\d\n";
-  F64 é_z	format "\nAngles are in degrees\n"
-		       "\dDA-TRM,A=\"Z-Axis  :%12.6f\"\d\n";
-  F64 é_y	format "\dDA-TRM,A=\"Y-Axis  :%12.6f\"\d\n";
-  F64 é_x	format "\dDA-TRM,A=\"X-Axis  :%12.6f\"\d\n";
-  F64 x_offset	format "\n\dDA-TRM,A=\"X Offset:%12.6f\"\d\n";
-  F64 y_offset	format "\dDA-TRM,A=\"Y Offset:%12.6f\"\d\n";
-  F64 z_offset	format "\dDA-TRM,A=\"Z Offset:%12.6f\"\d\n";
-};
+
 
 #help_index "Graphics/Input;Graphics/Math/3D Transformation"
 public Bool PopUpTransform(I64 *r)

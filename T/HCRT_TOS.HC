@@ -111,4 +111,7 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "AREGISTRY.HC"
 #include "AutoComplete/MakeAC.HC"
 #include "God/MakeGod.HC"
+
+#include "Find.HC"
+//#include "PSLAMODY/Load.HC"
 #endif

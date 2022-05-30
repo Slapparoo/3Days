@@ -93,6 +93,12 @@ static  int RootPathLen() {
 	return r;
 }
 int VFsCd(char *to,int flags) {
+	if(!to)  {
+		to=VFsDirCur();
+		int r=VFsCd(to,flags);
+		PoopFree(to);
+		return r; 
+	}
 	int make=flags&VFS_CDF_MAKE;
     int allow_fail=flags&VFS_CDF_FILENAME_ABS;
     //int only_dirs=flags&VFS_ONLY_DIRS;
@@ -274,6 +280,8 @@ int64_t VFsFSize(char *name) {
 	return s.st_size;
 }
 char *VFsFileNameAbs(char *name) {
+	if(!name)
+		return VFsDirCur();
     char *tmp=__VFsFileNameAbs(name),*r;
     if(!tmp) return NULL;
     char buf[strlen(tmp)+1+3];

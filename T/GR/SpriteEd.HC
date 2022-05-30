@@ -608,21 +608,7 @@ Bool SpriteEdText(CSprite **_head,I64 *_cur_elem_num)
   return res;
 }
 
-#define SPED_SEL_UNSEL_ALL	0
-#define SPED_SEL		2
-#define SPED_SEL_RECTS		3
-#define SPED_UNSEL		4
-#define SPED_UNSEL_RECTS	5
-#define SPED_SHIFT_PTS		6
-#define SPED_SHIFT_RECTS	7
-#define SPED_SHIFT_SEL		8
-#define SPED_TRANSFORM_SEL	9
-#define SPED_SET_ORIGIN		10
-#define SPED_SHIFT_SUB_ORIGIN	11
-#define SPED_TEXT_ED		12
-#define SPED_INS_CLIP		13
-#define SPED_MAIN_MENU		14
-#define SPED_EXIT		15
+
 
 U0 GrInit3()
 {

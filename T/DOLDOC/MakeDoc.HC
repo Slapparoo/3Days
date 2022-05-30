@@ -53,7 +53,7 @@ MemSet(&doldoc,0,sizeof(CDolDocGlbls));
 #include "DocEd.HC"
 #include "DocPopUp.HC"
 #include "DocGr.HC"
-//#include "DocMacro.HC"
+#//include "DocMacro.HC"
 #include "DocWidgetWiz.HC"
 #include "DocPutKey.HC"
 #include "DocPutS.HC"

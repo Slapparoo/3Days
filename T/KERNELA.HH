@@ -4231,7 +4231,6 @@ extern U8 *DefineSub(I64 sub,U8 *dname);
 extern U0 PrintErr(U8 *fmt,...);
 extern U0 PrintWarn(U8 *fmt,...);
 extern U8 *Caller(I64 num=1);
-extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0);
 extern U0 SysTry(U8 *start_label,U8 *skip_label);
 extern U0 SysUntry();
 extern U0 Msg(I64 msg_code,I64 arg1,I64 arg2,I64 flags=0);
@@ -4976,7 +4975,6 @@ extern CDirEntry *FilesFind__(U8 *files_find_mask,I64 fuf_flags=0,
 extern CDirEntry *FilesFind2(U8 *files_find_mask,I64 fuf_flags);
 extern CDirEntry *FilesFind(U8 *files_find_mask,I64 fuf_flags=0);
 extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0);
-extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0);
 extern U0 PutFileLink(U8 *filename,U8 *full_name=NULL,I64 line=0,Bool plain_text=FALSE);
 extern I64 Dir(U8 *files_find_mask=".",Bool full=FALSE);
 extern U8 *FileExtDot(U8 *src);
@@ -5299,3 +5297,440 @@ extern CDate Unix2CDate(I64 timestamp);
 extern I64 CDate2Unix(CDate dt);
 extern U0 KillAdam();
 extern U0 DeathWait(CTask **_task,Bool send_exit=FALSE);
+#define FND_REPLACE	0
+#define FND_SKIP	1
+#define FND_ALL		2
+#define FND_ED		3
+#define FND_ABORT_FILE	4
+#define FND_SKIP_FILE	5
+
+extern I64 PopUpFindMenu();
+extern I64 FindFile(U8 *needle_str,U8 *haystack_filename,
+	I64 *_fuf_flags,U8 *replace_text);
+extern I64 Find(U8 *needle_str,U8 *files_find_mask="*",
+	U8 *fu_flags=NULL,U8 *replace_text=NULL);
+extern I64 FileOcc(U8 *needle_str,
+	U8 *files_find_mask="*",U8 *fu_flags="+r+i+l");
+class CFind
+{
+  U8	find_text[STR_LEN] format "$$DA-P,"
+	"A=\"FIND        :%s\"$$\n";
+  U8	replace_text[STR_LEN] format "$$DA-P,"
+	"A=\"REPLACE     :%s\"$$\n";
+  Bool	replace		format "$$CB,\"REPLACE\"$$\n";
+  Bool	match_case	format "$$CB,\"MATCH CASE\"$$\n";
+  Bool	whole_labels	format "$$CB,\"WHOLE LABELS\"$$\n";
+  U8	filemask[STR_LEN] format "$$DA-P,A=\"FILE MASK   :%s\"$$\n";
+  Bool	recurse		format "$$CB,\"RECURSE\"$$\n";
+};
+
+extern I64 FindWiz();
+extern U0 BirthWait(CTask **_task);
+class CEdLineGoTo
+{
+  I64 line format "\dDA,A=\"Go to Line:%d\"\d";
+};
+class CTransformForm
+{
+  F64 x_scale	format "\dDA-TRM,A=\"X Scale :%12.6f\"\d\n";
+  F64 y_scale	format "\dDA-TRM,A=\"Y Scale :%12.6f\"\d\n";
+  F64 z_scale	format "\dDA-TRM,A=\"Z Scale :%12.6f\"\d\n";
+  F64 é_z	format "\nAngles are in degrees\n"
+		       "\dDA-TRM,A=\"Z-Axis  :%12.6f\"\d\n";
+  F64 é_y	format "\dDA-TRM,A=\"Y-Axis  :%12.6f\"\d\n";
+  F64 é_x	format "\dDA-TRM,A=\"X-Axis  :%12.6f\"\d\n";
+  F64 x_offset	format "\n\dDA-TRM,A=\"X Offset:%12.6f\"\d\n";
+  F64 y_offset	format "\dDA-TRM,A=\"Y Offset:%12.6f\"\d\n";
+  F64 z_offset	format "\dDA-TRM,A=\"Z Offset:%12.6f\"\d\n";
+};
+class CEdFileLink
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	file[512]	format "$$DA-P,A=\"File          :%s\"$$\n";
+  I64	book;
+  U8	aux[512];
+  I64	num;
+  U8	html_link[512]	format "$$DA-P,A=\"Html Link     :%s\"$$\n";
+  Bool	pop_up		format "$$CB,\"PopUp\"$$\n",
+	quote		format "$$CB,\"Quote\"$$\n",
+	hide;
+};
+
+class CEdFileAnchorLink
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	file[512]	format "$$DA-P,A=\"File          :%s\"$$\n";
+  I64	book;
+  U8	aux[512]	format "$$DA-P,A=\"Anchor Label  :%s\"$$\n";
+  I64	num;
+  U8	html_link[512]	format "$$DA-P,A=\"Html Link     :%s\"$$\n";
+  Bool	pop_up		format "$$CB,\"PopUp\"$$\n",
+	quote		format "$$CB,\"Quote\"$$\n",
+	hide;
+};
+
+class CEdFileFindLink
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	file[512]	format "$$DA-P,A=\"File          :%s\"$$\n";
+  I64	book;
+  U8	aux[512]	format "$$DA-P,A=\"Str        :%s\"$$\n";
+  I64	num		format "$$DA-TRM,A=\"Occurrence Num:%04d\"$$\n";
+  U8	html_link[512]	format "$$DA-P,A=\"Html Link     :%s\"$$\n";
+  Bool	pop_up		format "$$CB,\"PopUp\"$$\n",
+	quote		format "$$CB,\"Quote\"$$\n",
+	hide;
+};
+
+class CEdFileLineLink
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	file[512]	format "$$DA-P,A=\"File          :%s\"$$\n";
+  I64	book;
+  U8	aux[512];
+  I64	num		format "$$DA-TRM,A=\"Line Num      :%04d\"$$\n";
+  U8	html_link[512]	format "$$DA-P,A=\"Html Link     :%s\"$$\n";
+  Bool	pop_up		format "$$CB,\"PopUp\"$$\n",
+	quote		format "$$CB,\"Quote\"$$\n",
+	hide;
+};
+
+class CEdManPageLink
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	file[512];
+  I64	book;
+  U8	aux[512]	format "$$DA-P,A=\"Label         :%s\"$$\n";
+  I64	num;
+  U8	html_link[512]	format "$$DA-P,A=\"Html Link     :%s\"$$\n";
+  Bool	pop_up		format "$$CB,\"PopUp\"$$\n",
+	quote		format "$$CB,\"Quote\"$$\n",
+	hide;
+};
+
+class CEdAddrLink
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	file[512];
+  I64	book;
+  U8	aux[512]	format "$$DA-P,A=\"Addr Exp   :%s\"$$\n";
+  I64	num		format "$$DA-TRM,A=\"Bin Size      :%04d\"$$\n";
+  U8	html_link[512]	format "$$DA-P,A=\"Html Link     :%s\"$$\n";
+  Bool	pop_up		format "$$CB,\"PopUp\"$$\n",
+	quote		format "$$CB,\"Quote\"$$\n",
+	hide;
+};
+
+class CEdPlaceAnchor
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	file[512];
+  I64	book;
+  U8	aux[512]	format "$$DA-P,A=\"Anchor Label  :%s\"$$\n";
+  I64	num;
+  U8	html_link[512]	format "$$DA-P,A=\"Html Link     :%s\"$$\n";
+  Bool	pop_up,
+	quote		format "$$CB,\"Quote\"$$\n",
+	hide		format "$$CB,\"Hide\"$$\n";
+};
+
+class CEdBibleLink
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	file[512];
+  I64	book		format "$$LS,D=\"ST_BIBLE_BOOKS\"$$\n";
+  U8	aux[512]	format "$$DA-P,A=\"Chapter Verse :%s\"$$\n";
+  I64	num;
+
+  U8	html_link[512]	format "$$DA-P,A=\"Html Link     :%s\"$$\n";
+  Bool	pop_up		format "$$CB,\"PopUp\"$$\n",
+	quote		format "$$CB,\"Quote\"$$\n",
+	hide;
+};
+
+class CEdDefLink
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	file[512];
+  I64	book;
+  U8	aux[512]	format "$$DA-P,A=\"Word          :%s\"$$\n";
+  I64	num		format "$$DA-TRM,A=\"Def Num       :%4d\"$$\n";
+  U8	html_link[512]	format "$$DA-P,A=\"Html Link     :%s\"$$\n";
+  Bool	pop_up		format "$$CB,\"PopUp\"$$\n",
+	quote		format "$$CB,\"Quote\"$$\n",
+	hide;
+};
+
+class CEdProject
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	file[512]	format "$$DA-P,A=\"File          :%s\"$$\n";
+  I64	book;
+  U8	aux[512];
+  I64	num;
+  U8	html_link[512]	format "$$DA-P,A=\"Html Link     :%s\"$$\n";
+  Bool	pop_up		format "$$CB,\"PopUp\"$$\n",
+	quote		format "$$CB,\"Quote\"$$\n",
+	hide;
+};
+class CEdPageSetting1
+{
+  U8	val[512]	format "$$DA-P,A=\"Setting Val:%s\"$$\n";
+  Bool	winrel;
+};
+
+class CEdPageSetting2
+{
+  U8	val[512]	format "$$DA-P,A=\"Setting Val:%s\"$$\n";
+  Bool	winrel		format "$$CB,\"Win Relative\"$$\n";
+};
+class CEdText
+{
+  U8	tag[512]  format "$$DA-P,A=\"Tag Text      :%s\"$$\n";
+  Bool	left_x	  format "$$CB,\"Left X\"$$\n",
+	center_x  format "$$CB,\"Center X\"$$\n",
+	right_x   format "$$CB,\"Right X\"$$\n",
+	margin_rel format "$$CB,\"Margin Rel X\"$$\n",
+	blink	  format "$$CB,\"Blink\"$$\n",
+	invert	  format "$$CB,\"Invert\"$$\n",
+	underline format "$$CB,\"Underline\"$$\n",
+	tree	  format "$$CB,\"Tree\"$$\n",
+	collapsed format "$$CB,\"Collapsed\"$$\n";
+  U8	scroll_x [512]	format "$$DA-P,A=\"Scroll X Length Expression:%s\"$$\n",
+	shift_x  [512]	format "$$DA-P,A=\"X Offset Expression       :%s\"$$\n",
+	shift_y  [512]	format "$$DA-P,A=\"Y Offset Expression       :%s\"$$\n",
+	define_str[512]	format "$$DA-P,A=\"Define Str                :%s\"$$\n",
+	html_link[512]	format "$$DA-P,A=\"Html Link                 :%s\"$$\n";
+};
+class CEdMacroMenu
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text                  :%s\"$$\n",
+	left_macro[512]	format "$$DA-P,A=\"Left Click Macro          :%s\"$$\n",
+	left_exp[512]	format "$$DA-P,A=\"Left Click Expression     :%s\"$$\n";
+  Bool	popup		format "$$CB,\"PopUp\"$$\n",
+	left_is_in_str	format "$$CB,\"Left is InStr\"$$\n",
+	left_x		format "$$CB,\"Left X \"$$\n",
+	center_x	format "$$CB,\"Center X \"$$\n",
+	right_x		format "$$CB,\"Right X \"$$\n",
+	margin_rel	format "$$CB,\"Margin Rel X\"$$\n",
+	blink		format "$$CB,\"Blink\"$$\n",
+	invert		format "$$CB,\"Invert\"$$\n",
+	underline	format "$$CB,\"Underline\"$$\n",
+	escape		format "$$CB,\"Escape\"$$\n";
+  U8	scroll_x[512]	format "$$DA-P,A=\"Scroll X Length Expression:%s\"$$\n",
+	shift_x[512]	format "$$DA-P,A=\"X Offset Expression       :%s\"$$\n",
+	shift_y[512]	format "$$DA-P,A=\"Y Offset Expression       :%s\"$$\n";
+};
+class CEdBttn
+{
+  U8	tag[512]   format "$$DA-P,A=\"Tag Text      :%s\"$$\n";
+  Bool	popup	   format "$$CB,\"PopUp\"$$\n",
+	left_x	   format "$$CB,\"Left X \"$$\n",
+	center_x   format "$$CB,\"Center X \"$$\n",
+	right_x	   format "$$CB,\"Right X \"$$\n",
+	margin_rel format "$$CB,\"Margin Rel X\"$$\n",
+	escape	   format "$$CB,\"Escape\"$$\n";
+  U8	left_macro[512]	format "$$DA-P,A=\"Left Click Macro:%s\"$$\n";
+  Bool	left_is_in_str	format "$$CB,\"Left is InStr\"$$\n";
+  U8	left_exp[512]	format "$$DA-P,A=\"Left Click Expression:%s\"$$\n";
+  Bool	quote		format "$$CB,\"Quote\"$$\n";
+};
+class CEdCursorMovement
+{
+  U8	left_exp[512]	 format "$$DA-P,A=\"X Expression (LE):%s\"$$\n",
+	right_exp[512]	 format "$$DA-P,A=\"Y Expression (RE):%s\"$$\n";
+  Bool	left_x	 format "$$CB,\"Left   X \"$$\n",
+	center_x format "$$CB,\"Center X \"$$\n",
+	right_x  format "$$CB,\"Right  X \"$$\n",
+	margin_rel format "$$CB,\"Margin Rel X\"$$\n",
+	top_y	 format "$$CB,\"Top    Y \"$$\n",
+	center_y format "$$CB,\"Center Y \"$$\n",
+	bottom_y format "$$CB,\"Bottom Y \"$$\n",
+	page_rel format "$$CB,\"Page Rel Y\"$$\n",
+	quote	 format "$$CB,\"Quote\"$$\n";
+};
+class CEdSong
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n",
+	song[512]	format "$$DA-P,A=\"Song          :%s\"$$\n";
+};
+class CEdHtmlCode
+{
+  U8	tag[512]	format "$$DA-P,A=\"Html Code:%s\"$$\n";
+};
+class CEdDataNum
+{
+  U8	fmt_str[512]	format "$$DA-P,A=\"Format Str:%s\"$$\n";
+  I64	len;
+  Bool	term		format "$$CB,\"Form Field Terminator\"$$\n",
+	remalloc,
+	refresh		format "$$CB,\"Refresh Data\"$$\n",
+	update		format "$$CB,\"Update Data\"$$\n";
+};
+
+class CEdDataStr
+{
+  U8	fmt_str[512]	format "$$DA-P,A=\"Format Str:%s\"$$\n";
+  I64	len		format "$$DA,A=\"Length:%d\"$$\n";
+  Bool	term		format "$$CB,\"Zero Terminator\"$$\n",
+	remalloc	format "$$CB,\"Remalloc for Unlimited Length\"$$\n",
+	refresh		format "$$CB,\"Refresh Data\"$$\n",
+	update		format "$$CB,\"Update Data\"$$\n";
+};
+class CEdCheckBox
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n";
+  Bool	refresh		format "$$CB,\"Refresh Data\"$$\n";
+  I64	type		format "$$LS,D=\"ST_INT_SIZE_TYPES\"$$\n";
+};
+class CEdLst
+{
+  U8	tag[512]	format "$$DA-P,A=\"Dft Sel    :%s\"$$\n",
+	define_str[512]	format "$$DA-P,A=\"Define Str    :%s\"$$\n";
+  Bool	refresh		format "$$CB,\"Refresh Data\"$$\n";
+  I64	type		format "$$LS,D=\"ST_INT_SIZE_TYPES\"$$\n";
+};
+class CEdHexEd
+{
+  I64	cnt	format "$$DA,A=\"Count:%d\"$$\n",
+	cols	format "$$DA,A=\"Columns:%d\"$$\n";
+  Bool	zero	format "$$CB,\"Zero Based\"$$\n",
+	refresh	format "$$CB,\"Refresh Data\"$$\n";
+};
+class CEdBin
+{
+  U8	tag[512]		format "$$DA-P,A=\"Tag Text      :%s\"$$\n";
+  I64	bin_num			format "$$DA,A=\"Bin Num:%d\"$$\n";
+  U8	bin_ptr_link_file[512]	format "$$DA-P,A=\"File:%s\"$$\n";
+  I64	bin_ptr_link_bin_num	format "$$DA,A=\"File Bin Num:%d\"$$\n";
+  U8	bin_ptr_link_tag[512]	format "$$DA-P,A=\"File Bin Tag:%s\"$$\n";
+};
+class CEdTree
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text      :%s\"$$\n";
+  I64	indent		format "$$DA,A=\"Indention:%d\"$$\n";
+  Bool	collapsed	format "$$CB,\"Collapsed\"$$\n";
+};
+class CEdMacroSprite
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text       :%s\"$$\n",
+	exp[512]	format "$$DA-P,A=\"Macro          :%s\"$$\n";
+  Bool	escape		format "$$CB,\"Escape\"$$\n",
+	popup		format "$$CB,\"PopUp\"$$\n",
+	is_in_str		format "$$CB,\"InStr\"$$\n";
+};
+
+class CEdMenuSprite
+{
+  U8	tag[512]	format "$$DA-P,A=\"Tag Text       :%s\"$$\n",
+	exp[512]	format "$$DA-P,A=\"Expression     :%s\"$$\n";
+  Bool	escape		format "$$CB,\"Escape\"$$\n",
+	popup,
+	is_in_str;
+};
+
+#define SPF_SEL			128
+#define SPf_SEL			7
+
+#define SPT_END			0	//$LK,"CSpriteBase",A="MN:CSpriteBase"$
+#define SPT_COLOR		1	//$LK,"CSpriteColor",A="MN:CSpriteColor"$
+#define SPT_DITHER_COLOR	2	//$LK,"CSpriteDitherColor",A="MN:CSpriteDitherColor"$
+#define SPT_THICK		3	//$LK,"CSpriteT",A="MN:CSpriteT"$
+#define SPT_PLANAR_SYMMETRY	4	//$LK,"CSpritePtPt",A="MN:CSpritePtPt"$
+#define SPT_TRANSFORM_ON	5	//$LK,"CSpriteBase",A="MN:CSpriteBase"$
+#define SPT_TRANSFORM_OFF	6	//$LK,"CSpriteBase",A="MN:CSpriteBase"$
+#define SPT_SHIFT		7	//$LK,"CSpritePt",A="MN:CSpritePt"$
+#define SPT_PT			8	//$LK,"CSpritePt",A="MN:CSpritePt"$
+#define SPT_POLYPT		9	//$LK,"CSpriteNumPtU8s",A="MN:CSpriteNumPtU8s"$
+#define SPT_LINE		10	//$LK,"CSpritePtPt",A="MN:CSpritePtPt"$
+#define SPT_POLYLINE		11	//$LK,"CSpriteNumU8s",A="MN:CSpriteNumU8s"$
+#define SPT_RECT		12	//$LK,"CSpritePtPt",A="MN:CSpritePtPt"$
+#define SPT_ROTATED_RECT	13	//$LK,"CSpritePtPtAng",A="MN:CSpritePtPtAng"$
+#define SPT_CIRCLE		14	//$LK,"CSpritePtRad",A="MN:CSpritePtRad"$
+#define SPT_ELLIPSE		15	//$LK,"CSpritePtWHAng",A="MN:CSpritePtWHAng"$
+#define SPT_POLYGON		16	//$LK,"CSpritePtWHAngSides",A="MN:CSpritePtWHAngSides"$
+#define SPT_BSPLINE2		17	//$LK,"CSpriteNumU8s",A="MN:CSpriteNumU8s"$
+#define SPT_BSPLINE2_CLOSED	18	//$LK,"CSpriteNumU8s",A="MN:CSpriteNumU8s"$
+#define SPT_BSPLINE3		19	//$LK,"CSpriteNumU8s",A="MN:CSpriteNumU8s"$
+#define SPT_BSPLINE3_CLOSED	20	//$LK,"CSpriteNumU8s",A="MN:CSpriteNumU8s"$
+#define SPT_FLOOD_FILL		21	//$LK,"CSpritePt",A="MN:CSpritePt"$
+#define SPT_FLOOD_FILL_NOT	22	//$LK,"CSpritePt",A="MN:CSpritePt"$
+#define SPT_BITMAP		23	//$LK,"CSpritePtWHU8s",A="MN:CSpritePtWHU8s"$
+#define SPT_MESH		24	//$LK,"CSpriteMeshU8s",A="MN:CSpriteMeshU8s"$ See $MA-X+PU,"::/Apps/GrModels",LM="Cd(\"::/Apps/GrModels\");Dir;View;\n"$.
+#define SPT_SHIFTABLE_MESH	25	//$LK,"CSpritePtMeshU8s",A="MN:CSpritePtMeshU8s"$ See $MA-X+PU,"::/Apps/GrModels",LM="Cd(\"::/Apps/GrModels\");Dir;View;\n"$.
+#define SPT_ARROW		26	//$LK,"CSpritePtPt_I",A="MN:CSpritePtPt"$
+#define SPT_TEXT		27	//$LK,"CSpritePtStr",A="MN:CSpritePtStr"$
+#define SPT_TEXT_BOX		28	//$LK,"CSpritePtStr",A="MN:CSpritePtStr"$
+#define SPT_TEXT_DIAMOND	29	//$LK,"CSpritePtStr",A="MN:CSpritePtStr"$
+#define SPT_TYPES_NUM		30
+#define SPG_TYPE_MASK		0x7F
+
+#define EST_SPRITE		0
+#define EST_SPRITE_PTR		1
+#define EST_DUP_SPRITE		2
+#define EST_SPRITE_SIZE		3
+#define EST_SPRITE_MACRO	4
+#define EST_SPRITE_MENU		5
+#define EST_SPRITE_LINK		6
+
+#define SPT_MENU	-2
+#define SPT_INS_SCRN_BITMAP		-3
+#define SPT_INS_TRANSPARENT_SCRN_BITMAP	-4
+#define SPT_ED_MENU	-5
+#define SPT_EXIT	-6
+
+#define SPED_SEL_UNSEL_ALL	0
+#define SPED_SEL		2
+#define SPED_SEL_RECTS		3
+#define SPED_UNSEL		4
+#define SPED_UNSEL_RECTS	5
+#define SPED_SHIFT_PTS		6
+#define SPED_SHIFT_RECTS	7
+#define SPED_SHIFT_SEL		8
+#define SPED_TRANSFORM_SEL	9
+#define SPED_SET_ORIGIN		10
+#define SPED_SHIFT_SUB_ORIGIN	11
+#define SPED_TEXT_ED		12
+#define SPED_INS_CLIP		13
+#define SPED_MAIN_MENU		14
+#define SPED_EXIT		15
+
+#define GR_WIDTH 640
+#define GR_HEIGHT 480
+
+#define TEXT_ROWS (GR_HEIGHT/8)
+#define TEXT_COLS (GR_WIDTH/8)
+
+extern U0 BibleInit();
+extern U8 *BibleLine2Verse(I64 line,I64 separate_ch=CH_SPACE);
+extern U0 BookLines(CDoc *doc_out=NULL,I64 start,I64 lines,
+	U8 *book_filename=BIBLE_FILENAME);
+extern U0 BibleVerse(CDoc *doc_out=NULL,U8 *verse,I64 lines);
+extern CDoc *BibleDoc();
+extern U0 BibleView();
+extern U0 GodDoodleDraw(CTask *task,CDC *dc);
+extern U0 GodDoodleSmooth(I64 num);
+extern U0 GodDoodleBitsIns(I64 num_bits,I64 n);
+extern U0 GodDoodleHexIns(U8 *st);
+extern I64 GodDoodleBits(I64 num_bits);
+extern U8 *GodDoodleSprite(U8 *hex=NULL);
+extern U0 GodDoodle(U8 *hex=NULL);
+extern U0 InsNote(CMakeSongSettings *mss,U8 *buf,I64 k,I64 *j);
+extern U8 *GodSongStr();
+extern U0 GodSong();
+extern U8 *TimeStampCB(CDoc *,CDocEntry *,CTask *mem_task);
+extern U8 *KbdMsTimeCB(CDoc *,CDocEntry *,CTask *mem_task);
+extern I64 PopUpTimerOk(U8 *header=NULL,U8 *footer=NULL);
+extern I64 GodPick(U8 *msg=NULL);
+extern U0 GodBitsIns(I64 num_bits,I64 n);
+extern U0 GodHexIns(U8 *st);
+extern I64 GodBits(I64 num_bits,U8 *msg=NULL);
+extern I64 GodInit(U8 *files_find_mask="/God/Vocab.DD*",U8 *fu_flags=NULL);
+extern U8 *GodWordStr(I64 bits=17);
+extern U0 GodWord(I64 bits=17);
+extern U0 GodBiblePassage(I64 num_lines=20);
+#define EF_REINDENT	0
+#define EF_CMP_CHK	1
+#define EF_RENUM_ASM	2
+#define EF_CTRL_SLIDER	3
+#define EF_CH_SC	4

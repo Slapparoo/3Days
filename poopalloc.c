@@ -128,8 +128,8 @@ typedef struct CMemBlk {
 typedef struct CMemUnused {
     struct CMemUnused *last,*next;
     CMemBlk *parent;
-    int64_t sz:63;
-    int64_t occupied:1;
+    int32_t sz;
+    int8_t occupied;
     void *task;
 } CMemUnused;
 typedef struct CHeap {
@@ -188,11 +188,13 @@ static void *__PoopMAlloc(int64_t sz,int64_t low32) {
     
     if(cache[l]) {
         unused=cache[l];
+        assert(!unused->occupied);
         cache[l]=unused->next;
         if(cache[l]) cache[l]->last=NULL;
         UnlockHeap();
         unused->sz=sz;
         unused->occupied=1;
+        assert(unused!=unused->next);
         return memset(unused+1,0,SizeUp(sz));
     } else {
         UnlockHeap();
@@ -215,6 +217,7 @@ void PoopFree(void *ptr) {
     CMemUnused *un=ptr,**cache;
     CMemBlk *next,*last;
     --un;
+    if(!un->occupied) return;
     un->occupied=0;
     int64_t l=Log2I(un->parent->item_sz);
     if(un->parent->is_self_contained) {
@@ -225,6 +228,7 @@ void PoopFree(void *ptr) {
         if(next) next->last=last;
         if(heap.blks==un->parent)
             heap.blks=next;
+        assert(un!=un->next);
         UnlockHeap();
         FreeVirtualChunk(un->parent,un->parent->blk_sz);
         return;
@@ -236,6 +240,7 @@ void PoopFree(void *ptr) {
         un->task=NULL;
         un->next=cache[l];
         cache[l]=un;
+        assert(un!=un->next);
     }
     UnlockHeap();
 }

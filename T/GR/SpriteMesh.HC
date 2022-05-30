@@ -468,7 +468,7 @@ U0 MPDrawIt(CMeshFrame *e)
 
   if (e->grid_on)
 //Draw grid with different cores.
-    for (i=-500+25*0;i<=500;i+=25*0) {
+    for (i=-500+25*1;i<=500;i+=25*1) {
       if (i) {
 	dc->color=DKGRAY;
 	GrLine3(dc,i,-500,0,i,500,0);
@@ -702,7 +702,7 @@ U0 MeshClipPaste(CMeshFrame *e)
 
 MeshClipInit;
 
-U0 DrawIt(CTask *task,CDC *dc)
+U0 MDrawIt(CTask *task,CDC *dc)
 {
   CMeshFrame *e=FramePtr("CMeshFrame",task);
   CCtrl *c=CtrlFindUnique(task,CTRLT_VIEWING_ANGLES);
@@ -754,8 +754,10 @@ U0 DrawIt(CTask *task,CDC *dc)
   e->depth_buf=dc->depth_buf;
   //for (i=0;i<1;i++) TODO SUPER URGENT RESTORE 
   //  JobQue(&MPDrawIt,e,i);
+  TOSPrint("onion\n");
   MPDrawIt(e);
-
+  TOSPrint("onion2\n");
+  
   tmpv=e->vertex_head.next;
   while (tmpv!=&e->vertex_head) {
     x=tmpv->pt.x; y=tmpv->pt.y; z=tmpv->pt.z;
@@ -1073,7 +1075,7 @@ See \dLK,"::/Demo/Graphics/SpritePlot3D.HC"\d.
   if (head)
     MeshLoad(&e,head);
   FramePtrAdd("CMeshFrame",&e);
-  Fs->draw_it=&DrawIt;
+  Fs->draw_it=&MDrawIt;
   MeshCurSnap(&e);
   MeshRecalcCxCy(Fs,&e);
 

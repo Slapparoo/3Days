@@ -595,7 +595,7 @@ U0 EdCodeTools2(CDoc *doc,I64 tool_action,Bool beep=TRUE)
   if (!unlock)
     DocLock(doc);
   if (task)
-    ;//Kill(task,FALSE); TODO RESTORE
+	Kill(task);
 }
 
 U0 EdPopUpChSC(I64 *_ch,I64 *_sc)

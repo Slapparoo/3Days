@@ -569,9 +569,9 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 		    !(doc->flags&(DOCF_PLAIN_TEXT|DOCF_PLAIN_TEXT_TABS))) {
 		DocUnlock(doc);
 		if (doc_ce->type_u8==DOCT_SPRITE)
-		  ;//TODO RESTORE EdSpriteEd(doc);
+		  EdSpriteEd(doc);
 		else
-		  ;//EdSpriteIns(doc) TOOD RESTORE;
+			EdSpriteIns(doc);
 		DocLock(doc);
 	      }
 	  }

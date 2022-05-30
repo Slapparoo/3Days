@@ -29,7 +29,6 @@ typedef struct {
     struct CThread *thd;
 } CPair;
 typedef struct CThread {
-    struct CThread *self;
     void *Fs;
     uint64_t sleep_until;
     int8_t locked;
@@ -91,7 +90,6 @@ CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
     signal(SIGBUS,FualtCB);
     #endif
     VFsThrdInit();
-    thd->self=thd;
     thd->Fs=p->fs;
     thd->cur_dir=cur_dir;
     thd->cur_drv=cur_drv;
@@ -167,13 +165,14 @@ void __Yield() {
     if(idx==-1) {
         idx=0;
         idx2=threads.length-1;
-        if(threads.length&&idx==idx2) goto ent;
-        else goto check;
+        goto ent;
     }
     GetContext(&threads.data[idx]->ctx);
     if(!(flop^=1)) {
 		return;
 	}
+	//idx doesnt change but the phyiscall index of the CAN CHANGE,SO RECOMPUTE 
+    vec_find(&threads,cur_thrd,idx);
     check:
     for(idx2=(idx+1)%threads.length;idx!=idx2;idx2=(1+idx2)%threads.length) {
         if(threads.data[idx2]->locked||threads.data[idx2]->dead) {
@@ -202,10 +201,9 @@ void __Yield() {
             threads.data[idx]->cur_drv=cur_drv;
             threads.data[idx]->cur_dir=cur_dir;
             threads.data[idx]->Fs=Fs;
-            threads.data[idx]->self=threads.data[idx];
             //
             ent:
-            cur_thrd=threads.data[idx2]->self;
+            cur_thrd=threads.data[idx2];
             Fs=threads.data[idx2]->Fs;
             cur_dir=threads.data[idx2]->cur_dir;
             cur_drv=threads.data[idx2]->cur_drv;

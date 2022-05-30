@@ -45,9 +45,3 @@ public class CGrGlbls
 //See $LK,"RLf_VGA",A="FF:::/Kernel/KStart16.HC,RLf_VGA"$
 //See $LK,"SysGrInit",A="MN:SysGrInit"$()
 //Allows consts to be used instead of vars.
-#define GR_WIDTH 640
-#define GR_HEIGHT 480
-
-#help_index "Char;TextBase Layer/Char"
-#define TEXT_ROWS (GR_HEIGHT/8)
-#define TEXT_COLS (GR_WIDTH/8)

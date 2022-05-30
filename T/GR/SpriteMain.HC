@@ -1,11 +1,5 @@
 #help_index "Graphics/Sprite;Sprites"
 
-#define SPT_MENU	-2
-#define SPT_INS_SCRN_BITMAP		-3
-#define SPT_INS_TRANSPARENT_SCRN_BITMAP	-4
-#define SPT_ED_MENU	-5
-#define SPT_EXIT	-6
-
 I64 PopUpSpriteMain(CSprite **_head,I64 *_cur_elem_num,
 	CDoc *_doc,CDocEntry *_doc_e)
 {

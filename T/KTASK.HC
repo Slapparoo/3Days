@@ -381,6 +381,9 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
   LBtr(&task->task_flags,TASKf_TASK_LOCK);
   POPFD
 }
+U0 BirthWait(CTask **_task) {
+	while (!TaskValidate(*_task)) Sleep(10);
+}
 U0 DeathWait(CTask **_task,Bool send_exit=FALSE)
 {//Wait for task death.
   if (send_exit && TaskValidate(*_task)) {

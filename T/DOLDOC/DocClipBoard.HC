@@ -76,7 +76,6 @@ public U0 ClipPaste(CDoc *doc)
   I64 c;
   Bool unlock_doc=DocLock(doc);
   CDocEntry *doc_ce=doc->cur_entry,*doc_e;
-  TOSPrint("plain\n");
   if(plain=GetClipboardText) {
     for(c=0;plain[c];++c)
         if(plain[c]=='\d')

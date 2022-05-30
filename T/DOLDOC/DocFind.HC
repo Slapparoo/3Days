@@ -570,10 +570,6 @@ Bool sel=TRUE,Bool match_case=TRUE,Bool whole_labels=FALSE)
   return res;
 }
 
-class CEdLineGoTo
-{
-  I64 line format "\dDA,A=\"Go to Line:%d\"\d";
-};
 
 U0 EdGoToLine(CDoc *doc)
 {//Prompt with form and go to line num.
