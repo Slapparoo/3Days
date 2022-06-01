@@ -109,8 +109,8 @@ CAOT *CmpJoin(CCmpCtrl *cc,I64 cmp_flags,U8 *map_name=NULL,U8 mapfile_drv_let=0)
         LinkedLstDel(aotc->bin);
         res=NULL;
     } else {
-        //if (map_name)
-        //  MapFileWrite(cc->htc.glbl_hash_table,map_name,mapfile_drv_let);
+        if (map_name)
+			DbgInfoWrite(cc->htc.glbl_hash_table,map_name);
         HashTableDel(cc->htc.local_hash_table);
         if(cc->flags&CCF_AOT_COMPILE) {
 			for(i=0;i!=cc->htc.glbl_hash_table->mask+1;i++)
@@ -476,7 +476,7 @@ end:
     }
 }
 
-I64 Cmp(U8 *filename,U8 *map_name=NULL,U8 *out_name=NULL,U8 mapfile_drv_let=0)
+I64 Cmp(U8 *filename,U8 *dbg_file=NULL,U8 *out_name=NULL,U8 mapfile_drv_let=0)
 {   //AOT Compile HC or PRJ file a and output BIN file. Returns err_cnt.
     U8 *ptr,*fbuf=NULL,*fbuf2=NULL,*fbuf3=NULL,
              *patch_table=MAlloc(0x20000);
@@ -491,8 +491,8 @@ I64 Cmp(U8 *filename,U8 *map_name=NULL,U8 *out_name=NULL,U8 mapfile_drv_let=0)
     
     fbuf=ExtDft(filename,"PRJ.Z");
     fbuf2=MStrPrint("#include \"%s\"",fbuf);
-    if (map_name)
-        fbuf3=ExtDft(map_name,"MAP.Z");
+    if (dbg_file)
+        fbuf3=ExtDft(dbg_file,"MAP.Z");
 
     if (tmpaot=CmpBuf(fbuf2,fbuf3,&error_cnt,&warning_cnt,mapfile_drv_let)) {
         aot_U8s=tmpaot->aot_U8s;

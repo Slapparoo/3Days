@@ -278,4 +278,76 @@ I64 FramePtrDel(U8 *name,CTask *t=NULL)
     }
     return res;
 }
-
+/**
+ * Has format 
+ * FUNC_NAME(U8[])
+ * FUNC_FILE(U8[])
+ * U32 s,e;
+ * U32 line_offsets[]
+ * ...
+ */
+I64 __DbgInfoWrite(CHashTable *h,U8 *to) {
+	I64 i,ln,size,min,max;
+	CHashSrcSym *tmph;
+	CDbgInfo *dbg_info;
+	U32 start_ptr;
+	U8 *src_link,buffer[1024],*bptr=&buffer;
+	for (i=0;i<=h->mask;i++) {
+		for(tmph=h->body[i];tmph;tmph=tmph->next)
+			if (tmph->src_link && !(tmph->type & (HTF_IMPORT | HTF_PRIVATE)) && (dbg_info=tmph->dbg_info)) {
+				StrScan(tmph->src_link,"FL:%s,%d",&bptr,&ln);
+				if(to) StrCpy(to+size,tmph->str);
+				size+=StrLen(tmph->str)+1;
+				if(to) StrCpy(to+size,buffer);
+				size+=StrLen(buffer)+1;
+				min=dbg_info->min_line;
+				max=dbg_info->max_line;
+				if(to) (to+size)(U32*)[0]=min;
+				if(to) (to+size)(U32*)[1]=max;
+				size+=2*sizeof(U32);
+				max-=min;
+				min-=min;
+				start_ptr=dbg_info->body[0];
+				for(ln=0;ln<=max;ln++) {
+					if(to) (to+size)(U32*)[0]=dbg_info->body[ln]-start_ptr;
+					size+=4;
+				}
+			}
+	}
+	return size;
+}
+U0 DbgInfoWrite(CHashTable *h,U8 *name) {
+	I64 len=__DbgInfoWrite(h,NULL);
+	U8 *buf=MAlloc(len);
+	__DbgInfoWrite(h,buf);
+	FileWrite(name,buf,len);
+	Free(buf);
+}
+U0 DbgInfoRead(U8 *name) {
+	I64 len,min,max,ln;
+	CHashSrcSym *tmph;
+	CDbgInfo *dbg_info;
+	U8 *body=FileRead(name,&len),*ptr=body,*fn;
+	while(ptr<body+len) {
+		tmph=HashFind(ptr,Fs->hash_table,HTT_FUN);
+		TOSPrint("%s\n",ptr);
+		ptr+=StrLen(ptr)+1;
+		fn=ptr;
+		ptr+=StrLen(ptr)+1;
+		min=ptr(U32*)[0];
+		max=ptr(U32*)[1];
+		ptr+=2*sizeof(U32);
+		if(tmph&&tmph->type&HTT_FUN) {
+			Free(tmph->src_link);
+			tmph->src_link=MStrPrint("FL:%s,%d",fn,min);
+			tmph->dbg_info=MAlloc(sizeof(CDbgInfo)+sizeof(U32)*(max-min));
+			tmph->dbg_info->min_line=min;
+			tmph->dbg_info->max_line=max;
+			for(ln=min;ln<=max;ln++) {
+				tmph->dbg_info->body[ln-min]=tmph(CHashFun*)->exe_addr(U8*)+ptr(U32*)[ln-min];
+			}
+		}
+		ptr+=sizeof(U32)*(max-min+1);
+	}
+	Free(body);
+}

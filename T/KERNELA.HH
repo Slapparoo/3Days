@@ -5739,3 +5739,5 @@ extern U8 *MAllocIdent(U8 *ptr,CTask *t=0);
 extern U0 Free(U8 *ptr);
 extern U8 *MAlloc32(I64 sz,CTask *t=0);
 extern U8 *MAlloc(I64 sz,CTask *t=0);
+extern U8 *StrScan(U8 *src,U8 *fmt,...);
+extern U0 DbgInfoRead(U8 *name)
