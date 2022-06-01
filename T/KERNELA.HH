@@ -141,6 +141,10 @@ extern class CFile;
 #define ARGT_XMM0	55 // Not implemented
 #define OCF_ALIAS	1
 #ifdef IMPORT_BUILTINS
+import U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
+import U0i __MAlloc32(I64i sz,CTask *t);
+import U0i __MAlloc(I64i sz,CTask *t);
+import U0i __Free(U8i *);
 import I64i FSize(U8i *);
 import I64i FUnixTime(U8i *);
 import U0 __SleepUntilChange(I64i *ptr,U64i mask=~0);
@@ -150,15 +154,10 @@ public import Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public import Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public import U0 FClose(CFile *f);
 public import CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
-public import U0i Free(U8i *addr);
-public import U8i *MAlloc(I64i size,CTask *task=0);
-public import U8i *MAlloc32(I64i size,CTask *task=0);
-public import U8i *MAllocIdent(U8i *src,CTask *task=0);
 public import I64i MSize(U8i *src);   //size of heap object
 public import I64i MSize2(U8i *src); //Internal size
 public import U8i *CAlloc(I64i size,CTask *t=0);
 public import U0i TOSPrint(U8i *,...);
-public import U8i *StrNew(U8i *,CTask *t=0);
 public import U8i *__FileRead(U8i *filename,I64i *_size=0,CTask *t=0);
 public import I64i __FileWrite(U8i *filename,
 	U8i *fbuf,I64i size);
@@ -193,22 +192,23 @@ import U0i SetMSCallback(U8i *fp);
 public import U0i Sleep(I64i mS);
 import U0 __Del(U8 *);
 import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
+import I64i __InBounds(U8i *,I64i sz);
 #else
+extern I64i __InBounds(U8i *,I64i sz);
+extern U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
+extern U0i __MAlloc32(I64i sz,CTask *t);
+extern U0i __MAlloc(I64i sz,CTask *t);
+extern U0i __Free(U8i *);
 extern I64i FSize(U8i *);
 extern I64i FUnixTime(U8i *);
 extern U8i *GetClipboardText();
 extern U8i *SetClipboardText(U8i *);
 extern U0 __Del(U8 *);
-public extern U8i *MAlloc32(I64i size,CTask *t=0);
 public extern U8 *DirCur();
-public extern U0i Free(U8i *addr);
-public extern U8i *MAlloc(I64i size,CTask *t=0);
-public extern U8i *MAllocIdent(U8i *src,CTask *y=0);
 public extern I64i MSize(U8i *src);   //size of heap object
 public extern I64i MSize2(U8i *src); //Internal size
 public extern U8i *CAlloc(I64i size,CTask *t=0);
 public extern U0i TOSPrint(U8i *,...);
-public extern U8i StrNew(U8 *,CTask *t=0);
 public extern U8i *__FileRead(U8i *filename,I64i *_size=0,CTask *t=0);
 public extern I64i __FileWrite(U8i *filename,
 	U8i *fbuf,I64i size);
@@ -5734,3 +5734,8 @@ extern U0 GodBiblePassage(I64 num_lines=20);
 #define EF_RENUM_ASM	2
 #define EF_CTRL_SLIDER	3
 #define EF_CH_SC	4
+extern U8 *StrNew(U8 *str,CTask *t=0) ;
+extern U8 *MAllocIdent(U8 *ptr,CTask *t=0);
+extern U0 Free(U8 *ptr);
+extern U8 *MAlloc32(I64 sz,CTask *t=0);
+extern U8 *MAlloc(I64 sz,CTask *t=0);

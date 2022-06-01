@@ -286,7 +286,6 @@ void UnblockSignals() {
     sigprocmask(SIG_UNBLOCK,&set,NULL);
     #endif
 }
-char *GetBuiltinMacrosText();
 int64_t STK_FileRead(int64_t *stk) {
     void *r=VFsFileRead(stk[0],stk[1]);
     if(r) PoopAllocSetTask(r,stk[2]);
@@ -327,11 +326,11 @@ int64_t STK_BFFS(int64_t *stk) {
 int64_t STK_BCLZ(int64_t *stk) {
     return BCLZ(stk[0]);
 }
-int64_t STK_PoopMAlloc(int64_t *stk) {
-    return PoopAllocSetTask(PoopMAlloc(stk[0]),stk[1]);
+void *STK_PoopMAlloc(int64_t *stk) {
+    return PoopMAlloc(stk[0]);
 }
-int64_t STK_PoopMAlloc32(int64_t *stk) {
-    return PoopAllocSetTask(PoopMAlloc32(stk[0]),stk[1]);
+void *STK_PoopMAlloc32(int64_t *stk) {
+    return PoopMAlloc32(stk[0]);
 }
 int64_t STK_FOpen(int64_t *stk) {
     return fopen(stk[1],stk[2]);
@@ -474,14 +473,8 @@ int64_t STK___Dir(int64_t *stk) {
 int64_t STK_memset(int64_t *stk) {
     return memset(stk[0],stk[1],stk[2]);
 }
-int64_t STK_GetBuiltinMacrosText(int64_t *stk) {
-    return (int64_t)GetBuiltinMacrosText();
-}
 int64_t STK_IsDir(int64_t *stk) {
     return IsDir(stk[0]);
-}
-int64_t STK___GetBuiltinMacrosText(int64_t *stk) {
-    return GetBuiltinMacrosText();
 }
 int64_t STK_NewDrawWindow(int64_t *stk) {
     return NewDrawWindow();
@@ -558,12 +551,35 @@ int64_t STK_FSize(int64_t *stk) {
 int64_t STK_FUnixTime(int64_t *stk) {
 	return VFsUnixTime(stk[0]);
 }
+int64_t STK_SetPtrCallers(int64_t *stk) {
+	assert(stk[1]==5);
+	PoopAllocSetCallers(stk[0],stk[1],stk+2);
+}
+/*
+ * TODO give a better name
+ * Returns NULL if in bounds
+ * Retusn ptr to nearest item if slightly out of bounds
+ * Returns 0x7FFFFFFFFFFFFFFFll if really out of bounds
+ */
+int64_t STK_InBounds(int64_t *stk) {
+	void *near=NULL;
+	if(InBounds(stk[0],stk[1],&near)) {
+		return NULL;
+	}
+	if(!near) return 0x7FFFFFFFFFFFFFFFll;
+	return near;
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+	STK_RegisterFunctionPtr(&ffi_blob,"__InBounds",STK_InBounds,2);
+	STK_RegisterFunctionPtr(&ffi_blob,"SetPtrCallers",STK_SetPtrCallers,2+5);
+	STK_RegisterFunctionPtr(&ffi_blob,"__MAlloc32",STK_PoopMAlloc32,2);
+	STK_RegisterFunctionPtr(&ffi_blob,"__MAlloc",STK_PoopMAlloc,2);
+	STK_RegisterFunctionPtr(&ffi_blob,"__Free",STK_PoopFree,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"FUnixTime",STK_FUnixTime,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"FSize",STK_FSize,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__SleepUntilChange",STK___SleepUntilChange,2);
@@ -577,7 +593,6 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"SndFreq",STK_SndFreq,1);
     STK_RegisterFunctionPtr(&ffi_blob,"Sleep",&STK_Sleep,1);
     STK_RegisterFunctionPtr(&ffi_blob,"Fs",STK_GetFs,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"StrNew",STK_StrNew,2);
     STK_RegisterFunctionPtr(&ffi_blob,"SetKBCallback",STK_SetKBCallback,2);
     STK_RegisterFunctionPtr(&ffi_blob,"SetMSCallback",STK_SetMSCallback,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__AddTimer",STK___AddTimer,2);
@@ -590,7 +605,6 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"__Spawn",STK___Spawn,4);
     STK_RegisterFunctionPtr(&ffi_blob,"__Suspend",STK___Suspend,1);
     STK_RegisterFunctionPtr(&ffi_blob,"Yield",STK_Yield,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"MAllocIdent",STK_MAllocIdent,2);
     STK_RegisterFunctionPtr(&ffi_blob,"UnblockSignals",STK_UnblockSignals,0);
     STK_RegisterFunctionPtr(&ffi_blob,"signal",STK_Signal,2);
     STK_RegisterFunctionPtr(&ffi_blob,"__BootstrapForeachSymbol",STK_ForeachFunc,1);
@@ -607,10 +621,6 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"MSize2",STK_MSize,1);
     STK_RegisterFunctionPtr(&ffi_blob,"Bsf",STK_BFFS,1);
     STK_RegisterFunctionPtr(&ffi_blob,"Bsr",STK_BCLZ,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"MAlloc",STK_PoopMAlloc,2);
-    STK_RegisterFunctionPtr(&ffi_blob,"MAlloc32",STK_PoopMAlloc32,2);
-    STK_RegisterFunctionPtr(&ffi_blob,"CAlloc",STK_PoopMAlloc,2);
-    STK_RegisterFunctionPtr(&ffi_blob,"Free",STK_PoopFree,1);
     STK_RegisterFunctionPtr(&ffi_blob,"MemCpy",STK_MemNCpy,3);
     STK_RegisterFunctionPtr(&ffi_blob,"MemNCpy",STK_MemNCpy,3);
     STK_RegisterFunctionPtr(&ffi_blob,"StrLen",STK_strlen,1);
@@ -643,7 +653,6 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"IsWindows",STK_IsWindows,0);
     STK_RegisterFunctionPtr(&ffi_blob,"IsMac",STK_IsMac,0);
     STK_RegisterFunctionPtr(&ffi_blob,"MemSet",STK_memset,3);
-    STK_RegisterFunctionPtr(&ffi_blob,"__GetBuiltinMacrosText",STK_GetBuiltinMacrosText,0);
     char *blob=PoopMAlloc32(ffi_blob.length);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);
@@ -654,82 +663,4 @@ void TOS_RegisterFuncPtrs() {
 			s->add_to_rt_blob=0;
 		}
 	}
-}
-static void CreateMacroInt(vec_char_t *to,char *name,int64_t value) {
-    char buffer[1024];
-    sprintf(buffer,"#define %s %ld\n",name,value);
-    vec_pusharr(to,buffer,strlen(buffer));
-}
-vec_char_t CreateMacros() {
-    vec_char_t macros;
-    vec_init(&macros);
-    //SIGNALS
-    CreateMacroInt(&macros,"SIGILL",SIGILL);
-    CreateMacroInt(&macros,"SIGABRT",SIGABRT);
-    CreateMacroInt(&macros,"SIGFPE",SIGFPE);
-    #ifndef TARGET_WIN32
-    CreateMacroInt(&macros,"SIGKILL",SIGKILL);
-    CreateMacroInt(&macros,"SIGBUS",SIGBUS);
-    CreateMacroInt(&macros,"SIGSTOP",SIGSTOP);
-    #endif
-    CreateMacroInt(&macros,"SIGSEGV",SIGSEGV);
-    CreateMacroInt(&macros,"SIGTERM",SIGTERM);
-    CreateMacroInt(&macros,"SDL_INIT_TIMER",SDL_INIT_TIMER);
-    CreateMacroInt(&macros,"SDL_INIT_AUDIO",SDL_INIT_AUDIO);
-    CreateMacroInt(&macros,"SDL_INIT_VIDEO",SDL_INIT_VIDEO);
-    CreateMacroInt(&macros,"SDL_INIT_EVENTS",SDL_INIT_EVENTS);
-    CreateMacroInt(&macros,"SDL_INIT_EVERYTHING",SDL_INIT_EVERYTHING);
-    CreateMacroInt(&macros,"SDL_BLENDMODE_NONE",SDL_BLENDMODE_NONE);
-    CreateMacroInt(&macros,"SDL_BLENDMODE_BLEND",SDL_BLENDMODE_BLEND);
-    CreateMacroInt(&macros,"SDL_BLENDMODE_ADD",SDL_BLENDMODE_ADD);
-    CreateMacroInt(&macros,"SDL_BLENDMODE_MOD",SDL_BLENDMODE_MOD);
-    CreateMacroInt(&macros,"SDL_WINDOWPOS_UNDEFINED",SDL_WINDOWPOS_UNDEFINED);
-    CreateMacroInt(&macros,"SDL_WINDOWPOS_CENTERED",SDL_WINDOWPOS_CENTERED);
-    CreateMacroInt(&macros,"SDL_WINDOW_FULLSCREEN",SDL_WINDOW_FULLSCREEN);
-    CreateMacroInt(&macros,"SDL_WINDOW_FULLSCREEN_DESKTOP",SDL_WINDOW_FULLSCREEN_DESKTOP);
-    CreateMacroInt(&macros,"SDL_WINDOW_RESIZABLE",SDL_WINDOW_RESIZABLE);
-    CreateMacroInt(&macros,"SDL_WINDOW_MINIMIZED",SDL_WINDOW_MINIMIZED);
-    CreateMacroInt(&macros,"SDL_WINDOW_MAXIMIZED",SDL_WINDOW_MAXIMIZED);
-    CreateMacroInt(&macros,"SDL_RENDERER_SOFTWARE",SDL_RENDERER_SOFTWARE);
-    CreateMacroInt(&macros,"SDL_RENDERER_ACCELERATED",SDL_RENDERER_ACCELERATED);
-    CreateMacroInt(&macros,"SDL_RENDERER_PRESENTVSYNC",SDL_RENDERER_PRESENTVSYNC);
-    CreateMacroInt(&macros,"SDL_RENDERER_TARGETTEXTURE",SDL_RENDERER_TARGETTEXTURE);
-    CreateMacroInt(&macros,"SDL_TEXTUREACCESS_TARGET",SDL_TEXTUREACCESS_TARGET);
-    CreateMacroInt(&macros,"SDL_TEXTUREACCESS_STREAMING",SDL_TEXTUREACCESS_STREAMING);
-    CreateMacroInt(&macros,"SDL_TEXTUREACCESS_STATIC",SDL_TEXTUREACCESS_STATIC);
-    CreateMacroInt(&macros,"SDL_PIXELFORMAT_RGBA8888",SDL_PIXELFORMAT_RGBA8888);
-    CreateMacroInt(&macros,"SDL_WINDOWEVENT",SDL_WINDOWEVENT);
-    CreateMacroInt(&macros,"SDL_WINDOWEVENT_RESIZED",SDL_WINDOWEVENT_RESIZED);
-    CreateMacroInt(&macros,"SDL_KEYUP",SDL_KEYUP);
-    CreateMacroInt(&macros,"SDL_KEYDOWN",SDL_KEYDOWN);
-    CreateMacroInt(&macros,"KMOD_LSHIFT",KMOD_LSHIFT);
-    CreateMacroInt(&macros,"KMOD_RSHIFT",KMOD_RSHIFT);
-    CreateMacroInt(&macros,"KMOD_SHIFT",KMOD_SHIFT);
-    CreateMacroInt(&macros,"KMOD_LCTRL",KMOD_LCTRL);
-    CreateMacroInt(&macros,"KMOD_RCTRL",KMOD_RCTRL);
-    CreateMacroInt(&macros,"KMOD_CTRL",KMOD_CTRL);
-    CreateMacroInt(&macros,"KMOD_LALT",KMOD_LALT);
-    CreateMacroInt(&macros,"KMOD_RALT",KMOD_RALT);
-    CreateMacroInt(&macros,"KMOD_ALT",KMOD_ALT);
-    CreateMacroInt(&macros,"KMOD_LGUI",KMOD_LGUI);
-    CreateMacroInt(&macros,"KMOD_RGUI",KMOD_RGUI);
-    CreateMacroInt(&macros,"KMOD_GUI",KMOD_GUI);
-    CreateMacroInt(&macros,"KMOD_CAPS",KMOD_CAPS);
-    CreateMacroInt(&macros,"SDL_TEXTEDITING",SDL_TEXTEDITING);
-    CreateMacroInt(&macros,"SDL_TEXTINPUT",SDL_TEXTINPUT);
-    CreateMacroInt(&macros,"SDL_MOUSEMOTION",SDL_MOUSEMOTION);
-    CreateMacroInt(&macros,"SDL_BUTTON_LMASK",SDL_BUTTON_LMASK);
-    CreateMacroInt(&macros,"SDL_BUTTON_RMASK",SDL_BUTTON_RMASK);
-    CreateMacroInt(&macros,"SDL_BUTTON_MMASK",SDL_BUTTON_MMASK);
-    CreateMacroInt(&macros,"SDL_MOUSEBUTTONUP",SDL_MOUSEBUTTONUP);
-    CreateMacroInt(&macros,"SDL_MOUSEBUTTONDOWN",SDL_MOUSEBUTTONDOWN);
-    CreateMacroInt(&macros,"SDL_PRESSED",SDL_PRESSED);
-    CreateMacroInt(&macros,"SDL_RELEASED",SDL_RELEASED);
-    CreateMacroInt(&macros,"SDL_QUIT",SDL_QUIT);
-    return macros;
-}
-char *GetBuiltinMacrosText() {
-    vec_char_t macros=CreateMacros();
-    vec_push(&macros,0);
-    return macros.data;
 }

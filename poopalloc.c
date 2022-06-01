@@ -8,6 +8,8 @@
 //https://man7.org/linux/man-pages/man2/futex.2.html
 #include <sys/syscall.h>
 #include <linux/futex.h>
+struct CMemBlk;
+int64_t InBounds(void *ptr,int64_t sz,void **target);
 static uint32_t fmtx=1;
 static void LockHeap() {
 		uint32_t one=1;
@@ -114,7 +116,7 @@ static int64_t SizeUp(int64_t n) {
     int64_t k=1;
     while(k<n)
         k<<=1;
-    if(k<16) k=16;
+    if(k<32) k=32;
     return k;
 }
 static int64_t Log2I(int64_t n) {
@@ -126,19 +128,29 @@ typedef struct CMemBlk {
     struct CMemBlk *last,*next;
 } CMemBlk;
 typedef struct CMemUnused {
-    struct CMemUnused *last,*next;
+    struct CMemUnused *next;
     CMemBlk *parent;
     int32_t sz;
     int8_t occupied;
     void *task;
+    void *caller[5];
 } CMemUnused;
+void PoopAllocSetCallers(void *ptr,int64_t c,void **callers) {
+	int64_t i;
+	CMemUnused *blk=ptr;
+	blk--;
+	for(i=0;i!=c&&i<5;i++) {
+		blk->caller[i]=callers[i];
+	}
+}
 typedef struct CHeap {
    CMemUnused *cache64[16+1];
    CMemUnused *cache32[16+1];
    CMemBlk *blks;
 } CHeap;
 static CHeap heap;
-static CMemBlk *AllocateBlock(int64_t sz,int64_t low32) {
+struct CMemBlk;
+CMemBlk *AllocateBlock(int64_t sz,int64_t low32) {
     CMemBlk *ret=NewVirtualChunk(0x400000,low32); //4MB
     CMemUnused *un=ret+1,*last=NULL,*first=NULL,**cache=(low32)?heap.cache32:heap.cache64;
     ret->is_self_contained=0;
@@ -147,28 +159,25 @@ static CMemBlk *AllocateBlock(int64_t sz,int64_t low32) {
     ret->use_cnt=0;
     while((void*)un+sizeof(CMemUnused)+sz<(void*)ret+0x400000) {
         un->parent=ret;
-        un->last=last;
+        if(last) last->next=un;
         if(!first) first=un;
-        if(last)
-            last->next=un;
         last=un;
         un=(void*)un+sizeof(CMemUnused)+sz;
     }
     LockHeap();
     ret->next=heap.blks;
-    heap.blks=ret;
-    if(ret->next)
-        ret->next->last=ret;
     ret->last=NULL;
+    if(heap.blks)
+		heap.blks->last=ret;
+    heap.blks=ret;
     if(last) {
         last->next=cache[Log2I(sz)];
-        if(last->next) last->next->last=last;
     }
     cache[Log2I(sz)]=first;
     UnlockHeap();
     return ret;
 }
-static void *__PoopMAlloc(int64_t sz,int64_t low32) {
+static void *__PoopMAlloc(int64_t sz,int64_t low32,void *task) {
     int64_t l=Log2I(SizeUp(sz));
     CMemBlk *ret_blk;
     CMemUnused *unused,**cache=(low32)?heap.cache32:heap.cache64;
@@ -177,30 +186,44 @@ static void *__PoopMAlloc(int64_t sz,int64_t low32) {
         ret_blk=NewVirtualChunk(sz+sizeof(CMemBlk)+sizeof(CMemUnused),low32);
         ret_blk->is_self_contained=1;
         ret_blk->item_sz=sz;
-        ret_blk->blk_sz=sz;
+        ret_blk->blk_sz=sz+sizeof(CMemBlk)+sizeof(CMemUnused);
+        ret_blk->next=heap.blks;
+		ret_blk->last=NULL;
+		if(heap.blks)
+			heap.blks=ret_blk;
         unused=ret_blk+1;
         unused->parent=ret_blk;
         unused->sz=sz;
+        unused->task=task;
         return memset(unused+1,0,sz);
     }
     loop:
     LockHeap();
-    
     if(cache[l]) {
-        unused=cache[l];
+		CMemUnused *last=NULL;
+		unused=cache[l];
+		if(!unused) goto alloc;
         assert(!unused->occupied);
-        cache[l]=unused->next;
-        if(cache[l]) cache[l]->last=NULL;
+        if(cache[l]==unused)
+			cache[l]=cache[l]->next;
         UnlockHeap();
         unused->sz=sz;
         unused->occupied=1;
+        unused->task=task;
         assert(unused!=unused->next);
         return memset(unused+1,0,SizeUp(sz));
     } else {
+		alloc:
         UnlockHeap();
         AllocateBlock(sz,low32);
         goto loop;
     }
+}
+void PoopMallocTask(int64_t sz,void *t) {
+	return __PoopMAlloc(sz,0,t);
+}
+void PoopMalloc32Task(int64_t sz,void *t) {
+	return __PoopMAlloc(sz,1,t);
 }
 int64_t MSize(void *ptr) {
     if(!ptr) return 0;
@@ -216,7 +239,9 @@ void PoopFree(void *ptr) {
     if(!ptr) return;
     CMemUnused *un=ptr,**cache;
     CMemBlk *next,*last;
-    --un;
+    if(!InBounds(ptr,0,&un)) return;
+    if(!un) return;
+    un--;
     if(!un->occupied) return;
     un->occupied=0;
     int64_t l=Log2I(un->parent->item_sz);
@@ -227,7 +252,7 @@ void PoopFree(void *ptr) {
         if(last) last->next=next;
         if(next) next->last=last;
         if(heap.blks==un->parent)
-            heap.blks=next;
+            heap.blks=(next)?next:last;
         assert(un!=un->next);
         UnlockHeap();
         FreeVirtualChunk(un->parent,un->parent->blk_sz);
@@ -236,8 +261,6 @@ void PoopFree(void *ptr) {
     LockHeap();
     cache=(un->parent->is_32bit)?heap.cache32:heap.cache64;
     if(l<=16) {
-        un->last=NULL;
-        un->task=NULL;
         un->next=cache[l];
         cache[l]=un;
         assert(un!=un->next);
@@ -245,10 +268,10 @@ void PoopFree(void *ptr) {
     UnlockHeap();
 }
 void *PoopMAlloc(int64_t sz) {
-    return __PoopMAlloc(sz,0);
+    return __PoopMAlloc(sz,0,NULL);
 }
 void *PoopMAlloc32(int64_t sz) {
-    return __PoopMAlloc(sz,1);
+    return __PoopMAlloc(sz,1,NULL);
 }
 void *PoopReAlloc(void *ptr,int64_t sz) {
     void *ret=PoopMAlloc(sz);
@@ -279,7 +302,8 @@ void PoopAllocFreeTaskMem(void *task) {
             while((void*)un+sizeof(CMemUnused)+sz<(void*)blk+0x400000) {
                 if(!un->occupied) goto next;
                 if(un->task==task) {
-                    UnlockHeap();
+					UnlockHeap();
+                    un->task=NULL;
                     PoopFree(un+1);
                     LockHeap();
                 }
@@ -289,4 +313,56 @@ void PoopAllocFreeTaskMem(void *task) {
         }
     }
     UnlockHeap();
+}
+#define LINEAR_PROBES 16
+#define HASH_SHIFT 9
+int64_t InBounds(void *ptr,int64_t sz,void **target) {
+	LockHeap();
+	if(target) *target=NULL;
+	int64_t probe=0,idx,pidx;
+	CMemBlk *blk=heap.blks;
+	if(!ptr) return 0;
+	for(;blk;blk=blk->next) {
+		if(ptr>=blk&&ptr<=(void*)blk+blk->blk_sz)
+			break;
+	} 
+	if(!blk) return 0;
+	ptr+=sz;
+	if(blk+1<=ptr&&ptr<=(void*)blk+blk->blk_sz) {
+		if(blk->is_self_contained) {
+			if(blk+1<=ptr) {
+				if(target) *target=(CMemUnused*)blk+1;
+				UnlockHeap();
+				return 1;
+			}
+		} else {
+			void *delta=ptr-(void*)(blk+1);
+			int64_t i=(int64_t)delta/(sizeof(CMemUnused)+blk->item_sz);
+			void *valid_start=sizeof(CMemUnused)+i*(sizeof(CMemUnused)+blk->item_sz);
+			valid_start+=(int64_t)(blk+1);
+			CMemUnused *un=valid_start;
+			--un;
+			if(target) *target=un+1;
+			if(valid_start<=ptr&&ptr<=valid_start+un->sz) {
+				UnlockHeap();
+				return un->occupied;
+			} else if(un-1>=ptr&&ptr<=un) {
+				UnlockHeap();
+				return 0;
+			}
+		}
+	}
+	UnlockHeap();
+	return 0;
+}
+void BoundsCheckTests() {
+	void *ptr=PoopMAlloc(10);
+	assert(!InBounds(ptr+10,1,NULL));
+	PoopFree(ptr);
+	assert(!InBounds(ptr,1,NULL));
+	ptr=PoopMAlloc(1<<17);
+	assert(InBounds(ptr,1,NULL));
+	assert(InBounds(ptr+(1<<17)-2,1,NULL));
+	assert(!InBounds(ptr+(1<<17),1,NULL));
+	PoopFree(ptr);
 }

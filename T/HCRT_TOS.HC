@@ -1,5 +1,6 @@
 #define FPTRS 1
 #include "KERNELA.HH"
+#include "MAlloc2.HC"
 #include "KGLBLS.HC"
 U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
 	I64 len2;
@@ -113,5 +114,15 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "God/MakeGod.HC"
 
 #include "Find.HC"
+U8 *StrNew(U8 *s,CTask *t=0) {
+	U8 *r;
+	StrCpy(r=MAlloc(StrLen(s)+2,t),s);
+	return r;
+} 
+U8 *MAllocIdent(U8 *s,CTask *t=0) {
+	U8 *r;
+	MemCpy(r=MAlloc(MSize(s),t),s,MSize(s));
+	return r;
+} 
 //#include "PSLAMODY/Load.HC"
 #endif

@@ -165,6 +165,7 @@ void __Yield() {
     if(idx==-1) {
         idx=0;
         idx2=threads.length-1;
+        if(idx2==-1) return;
         goto ent;
     }
     GetContext(&threads.data[idx]->ctx);

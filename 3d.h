@@ -165,3 +165,7 @@ void __SleepUntilChange(int64_t *ptr,int64_t mask);
 int64_t VFsUnixTime(char *name);
 int64_t VFsFSize(char *name) ;
 void __Shutdown();
+void BoundsCheckTests();
+void PoopAllocSetCallers(void *ptr,int64_t c,void **callers);
+struct CMemBlk;
+int64_t InBounds(void *ptr,int64_t sz,void **target);

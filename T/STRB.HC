@@ -736,7 +736,7 @@ U0 GetOutOfDollar()
     '$$';
 }
 CDate Now() {
-	return Str2Date("1/1/1970"); //TODO ACUTALL TIME
+	return 0;//Str2Date("1/1/1970"); //TODO ACUTALL TIME
 }
 CDate Str2Date(U8 *_src)
 {/*"*+nnnn", "*-nnnn", "mm/dd", "mm/dd/yy"

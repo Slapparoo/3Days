@@ -82,6 +82,7 @@ static void Core0(char *name) {
 } 
 static pthread_t core0;		
 int main(int argc,char **argv) {
+	BoundsCheckTests();
     char *header=NULL,*t_drive=NULL,*tmp;
     SDL_Init(SDL_INIT_EVERYTHING);
     InitSound();
