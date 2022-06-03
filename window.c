@@ -18,7 +18,7 @@ CDrawWindow *NewDrawWindow() {
 	if(!win) { 
 		CDrawWindow *ret=PoopMAlloc(sizeof(CDrawWindow));
 		ret->window=SDL_CreateWindow("HolyC Drawer",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,640,480,SDL_WINDOW_RESIZABLE);
-		ret->surf=SDL_CreateRGBSurfaceWithFormat(0,640,480,32,SDL_PIXELFORMAT_BGR24);
+		ret->surf=SDL_CreateRGBSurfaceWithFormat(0,640,480,32,SDL_PIXELFORMAT_BGRA32);
 		SDL_SetWindowMaximumSize(ret->window,640,480);
 		//Let 3Days draw the mouse from HolyC
 		SDL_ShowCursor(SDL_DISABLE);
@@ -28,7 +28,7 @@ CDrawWindow *NewDrawWindow() {
 }
 void DrawWindowUpdate(CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h) {
     SDL_Surface *s=win->surf;
-    int64_t x,y,c,i;
+    int64_t x,y,c,i,i2;
     SDL_LockSurface(s);
     for(y=0;y!=h;y++) {
         for(x=0;x!=internal_width;x++) {
@@ -38,9 +38,11 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *colors,int64_t internal_width,int
                 c=0;
             } else 
                 c=colors[i];
-            ((char*)s->pixels)[i*3]=gr_palette_std[c]&0xff;
-            ((char*)s->pixels)[i*3+1]=(gr_palette_std[c]>>8)&0xff;
-            ((char*)s->pixels)[i*3+2]=(gr_palette_std[c]>>16)&0xff;
+            i2=x+y*s->pitch/4;
+            ((char*)s->pixels)[i2*4]=gr_palette_std[c]&0xff;
+            ((char*)s->pixels)[i2*4+1]=(gr_palette_std[c]>>8)&0xff;
+            ((char*)s->pixels)[i2*4+2]=(gr_palette_std[c]>>16)&0xff;
+            ((char*)s->pixels)[i2*4+3]=0xff;
         }
     }
     SDL_UnlockSurface(s);

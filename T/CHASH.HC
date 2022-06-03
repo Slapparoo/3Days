@@ -308,7 +308,7 @@ I64 __DbgInfoWrite(CHashTable *h,U8 *to) {
 				max-=min;
 				min-=min;
 				start_ptr=dbg_info->body[0];
-				for(ln=0;ln<=max;ln++) {
+				for(ln=0;ln<=max+1;ln++) {
 					if(to) (to+size)(U32*)[0]=dbg_info->body[ln]-start_ptr;
 					size+=4;
 				}
@@ -340,14 +340,14 @@ U0 DbgInfoRead(U8 *name) {
 		if(tmph&&tmph->type&HTT_FUN) {
 			Free(tmph->src_link);
 			tmph->src_link=MStrPrint("FL:%s,%d",fn,min);
-			tmph->dbg_info=MAlloc(sizeof(CDbgInfo)+sizeof(U32)*(max-min));
+			tmph->dbg_info=MAlloc(sizeof(CDbgInfo)+sizeof(U32)*(max-min+1));
 			tmph->dbg_info->min_line=min;
 			tmph->dbg_info->max_line=max;
-			for(ln=min;ln<=max;ln++) {
+			for(ln=min;ln<=max+1;ln++) {
 				tmph->dbg_info->body[ln-min]=tmph(CHashFun*)->exe_addr(U8*)+ptr(U32*)[ln-min];
 			}
 		}
-		ptr+=sizeof(U32)*(max-min+1);
+		ptr+=sizeof(U32)*(max-min+1+1);
 	}
 	Free(body);
 }

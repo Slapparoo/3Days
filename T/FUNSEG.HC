@@ -14,35 +14,18 @@ U0 HashFunSegFind(CHashTable *h,U8 *addr,
   CHashExport *tmpex;
   U64 i,j,best=*_best;
   CHash *res=*_res;
+  CDbgInfo *info;
   for (i=0;i<=h->mask;i++) {
     tmpex=h->body[i];
-    while (tmpex) {
-      j=0;
-      if (tmpex->type&HTT_FUN) {
-	if (!Bt(&tmpex(CHashFun *)->flags,Cf_EXTERN) &&
-	      !Bt(&tmpex(CHashFun *)->flags,Ff_INTERNAL))
-	  j=tmpex(CHashFun *)->exe_addr;
-      } else if (tmpex->type&HTT_EXPORT_SYS_SYM)
-	j=tmpex->val;
-      if (j) {
-	j=addr(I64)-j;
-	if (0<=j<=best) {
-	  if (tmpex->type&HTT_EXPORT_SYS_SYM) {
-	    if (j<best || j==best && !has_lower) {
-	      has_lower=HasLower(tmpex->str);
-	      best=j;
-	      res=tmpex;
-	    }
-	  } else if (tmpex->type&HTT_FUN) {
-	    if (j<best || j==best &&
-		  (res && res->type&HTT_EXPORT_SYS_SYM||!has_lower)) {
-          has_lower=HasLower(tmpex->str);
-	      best=j;
-	      res=tmpex;
-	    }
-	  }
-	}
-      }
+	while(tmpex) {
+	    if(tmpex->type&HTT_FUN&&tmpex(CHashSrcSym*)->dbg_info) {
+			info=tmpex(CHashSrcSym*)->dbg_info;
+			if(tmpex(CHashFun*)->exe_addr<=addr<=info->body[info->max_line-info->min_line+1]) {
+				has_lower=HasLower(tmpex->str);
+			  best=addr-tmpex(CHashFun*)->exe_addr;
+			  res=tmpex;
+			  }
+		}
       tmpex=tmpex->next;
     }
   }
@@ -61,6 +44,7 @@ CHash *FunSegFind(U8 *addr,I64 *_offset)
 	h=Fs->hash_table;
 	while (h) {
 	  HashFunSegFind(h,addr,&has_lower,&best,&res);
+	  if(res) break;
 	  h=h->next;
 	}
   if(_offset) *_offset=best;

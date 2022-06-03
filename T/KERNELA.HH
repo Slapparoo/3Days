@@ -1784,6 +1784,7 @@ public class CAutoCompleteDictGlbls
 //Disable 10-byte float consts for ã,log2_10,log10_2,loge_2
 #define OPTf_NO_BUILTIN_CONST	0x24 //Applied to funs, not stmts
 #define OPTf_USE_IMM64		0x25 //Not completely implemented
+#define OPTf_BOUNDS_CHECK 0x26    
 
 #define OPTF_ECHO		(1<<OPTf_ECHO)
 extern CAutoCompleteGlbls ac;
@@ -1880,10 +1881,11 @@ class CICTreeLinks
   CIntermediateCode *arg1_tree,*arg2_tree;
   CHashClass *class2;
 };
-
+extern class CCmpCtrl; 
 class CIntermediateCodeBase
 {
   CIntermediateCode *next,*last;
+  CCmpCtrl *cc; //CHANGED,i want to get the cc for bounds-checking the IC's
   U16	ic_code,
 	ic_precedence;
   I16	ic_cnt,
@@ -2397,7 +2399,7 @@ class CLexHashTableContext
 #define CCf_PAREN		37
 #define CCF_CLASS_DOL_OFFSET	0x4000000000
 #define CCF_DONT_MAKE_RES	0x8000000000
-
+#define CCF_BUF_PRESENT	    0x10000000000 //CHANGED Added to tell AOT buf is present
 public class CCmpCtrl
 {
   CCmpCtrl *next,*last;
@@ -4869,7 +4871,7 @@ extern U0 ICMov(CIntermediateCode *tmpi,
 	CICType t1,I64 r1,I64 d1,CICType t2,I64 r2,I64 d2,I64 rip);
 extern U0 ICLea(CIntermediateCode *tmpi,CICType t1,I64 r1,I64 d1,
 	CICType t2,I64 r2,I64 d2,CCmpCtrl *cc,U8 *buf,I64 rip);
-extern U0 ICDeref(CIntermediateCode *tmpi,I64 rip);
+extern U0 ICDeref(CIntermediateCode *tmpi,I64 rip,Bool bounds_check=FALSE);
 extern U0 LexPutToken(CCmpCtrl *cc);
 extern U8 *LexPutLine(CCmpCtrl *cc,U8 *start);
 extern U0 LexPutPos(CCmpCtrl *cc);
@@ -5740,4 +5742,5 @@ extern U0 Free(U8 *ptr);
 extern U8 *MAlloc32(I64 sz,CTask *t=0);
 extern U8 *MAlloc(I64 sz,CTask *t=0);
 extern U8 *StrScan(U8 *src,U8 *fmt,...);
-extern U0 DbgInfoRead(U8 *name)
+extern U0 DbgInfoRead(U8 *name);
+extern U0 __BoundsCheck(CIntermediateCode *tmpi,I64 rip,CICType t,I64 r,I64 disp);

@@ -32,7 +32,10 @@ U0 LoadImps() {
     ExePrint2("#define BOOT_3DAYS\n#include \"KERNELB.HH\";\n");
 }
 U0 Adam(U8 *) {
-    LoadImps;
+	LoadImps;
+    if(FileFind("HCRT.DBG.Z"))
+		DbgInfoRead("HCRT.DBG.Z");
+	boundscheck_enable=1;
     ACInit("/KERNEL*.HH"); //Slow   
     sys_winmgr_task=Spawn(&WinMgrTask);
     //We are "adam" task

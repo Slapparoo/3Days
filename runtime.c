@@ -327,10 +327,10 @@ int64_t STK_BCLZ(int64_t *stk) {
     return BCLZ(stk[0]);
 }
 void *STK_PoopMAlloc(int64_t *stk) {
-    return PoopMAlloc(stk[0]);
+    return PoopMallocTask(stk[0],stk[1]);
 }
 void *STK_PoopMAlloc32(int64_t *stk) {
-    return PoopMAlloc32(stk[0]);
+    return PoopMalloc32Task(stk[0],stk[1]);
 }
 int64_t STK_FOpen(int64_t *stk) {
     return fopen(stk[1],stk[2]);

@@ -80,6 +80,7 @@ CIntermediateCode *ICAdd(CCmpCtrl *cc,
    I64 opcode_and_precedence,I64 arg, CHashClass *c,I64 flags=0)
 {
   CIntermediateCode *tmpi=MAlloc(sizeof(CIntermediateCode));
+  tmpi->cc=cc;
   tmpi->ic_code=opcode_and_precedence.u16[0];
   tmpi->ic_precedence=opcode_and_precedence.u16[1];
   tmpi->ic_data=arg;
@@ -303,7 +304,10 @@ U8 *COCCompile(CCmpCtrl *cc,I64 *_code_size,CDbgInfo **_dbg,I64 *_type)
       Fs->last_fun=cc->htc.fun;
   }
   COCHeaderPut(cc,10,FALSE);
+  cc->flags|=CCF_BUF_PRESENT; //CHANGED
   code_size=OptPass789A(cc,reg_offsets,res,_dbg);
+  cc->flags&=~CCF_BUF_PRESENT; //CHANGED
+  
 
   COCDel(cc,&cc->coc);
   if (Bt(&cc->opts,OPTf_TRACE)) {

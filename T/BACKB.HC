@@ -11,6 +11,7 @@ U0 ICNot(CIntermediateCode *tmpi,I64 rip)
 {
   I64 i;
   if (tmpi->arg1.type.raw_type<=RT_U8 && tmpi->arg1.type&MDG_DISP_SIB_RIP) {
+	//CANIDATE
     i=ICModr1(tmpi,tmpi->arg1.type,tmpi->arg1.reg,tmpi->arg1.disp);
     ICRex(tmpi,i.u8[1]);
     ICU16(tmpi,i.u8[2]<<8+0xF6); //TEST ?,0xFF
@@ -358,6 +359,7 @@ U0 ICPostIncDec(CIntermediateCode *tmpi,I64 op,I64 rip)
 	    tmpi->arg1.type&MDG_MASK+tmpi->arg1_type_pointed_to,
 	    tmpi->arg1.reg,tmpi->arg1.disp,tmpc1->size,op.u16[3],rip);
     else
+		//CANIDATE ???
       ICSlashOp(tmpi,
 	    tmpi->arg1.type&MDG_MASK+tmpi->arg1_type_pointed_to,
 	    tmpi->arg1.reg,tmpi->arg1.disp,op,rip);
@@ -420,6 +422,7 @@ U0 ICDerefPostIncDec(CIntermediateCode *tmpi,I64 op,I64 rip)
       ICAddSubEctImm(tmpi,MDF_DISP+RT_I64,r,0,MDF_DISP+RT_I64,r,0,
 	    tmpc1->size,op.u16[3],rip);
     else
+		//CANIDATE???
       ICSlashOp(tmpi,MDF_DISP+RT_I64,r,0,op,rip);
     ICMov(tmpi,tmpi->res.type,tmpi->res.reg,tmpi->res.disp,
 	  MDF_DISP+t,REG_RDX,0,rip);
@@ -447,6 +450,7 @@ U0 ICAssignPostIncDec(CIntermediateCode *tmpi,I64 op,I64 rip)
       ICAddSubEctImm(tmpi,tmpi->arg1.type,tmpi->arg1.reg,tmpi->arg1.disp,
 	    MDF_REG+RT_I64,r,0,tmpc1->size,op.u16[3],rip);
     else
+    //CANIDATE???
       ICSlashOp(tmpi,tmpi->arg1.type,tmpi->arg1.reg,tmpi->arg1.disp,op,rip);
   } else {
     ICMov(tmpi,MDF_REG+RT_I64,REG_RDX,0,
@@ -461,6 +465,7 @@ U0 ICAssignPostIncDec(CIntermediateCode *tmpi,I64 op,I64 rip)
       ICAddSubEctImm(tmpi,MDF_DISP+RT_I64,REG_RDX,0,
 	    MDF_REG+RT_I64,REG_RCX,0,tmpc1->size,op.u16[3],rip);
     else
+    //CANIDATE???
       ICSlashOp(tmpi,MDF_DISP+RT_I64,REG_RDX,0,op,rip);
   }
 }

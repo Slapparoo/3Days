@@ -120,6 +120,7 @@ U0 ICAddSubEctImm(CIntermediateCode *tmpi,CICType t1,I64 r1,I64 d1,
 	op.u8[1]=1; //Decrement slash val
 
       if (op.u8[0]==0x03 && (d==1 || d==-1)) {	//Add
+      //CANIDATE
 	i=ICModr1(op.u8[1],t1,r1,d1);
 	if (!(t1&MDF_REG) && tmpi->ic_flags&ICF_LOCK)
 	  ICU8(tmpi,OC_LOCK_PREFIX);
@@ -142,11 +143,13 @@ U0 ICAddSubEctImm(CIntermediateCode *tmpi,CICType t1,I64 r1,I64 d1,
 	return;
       }
       if (I8_MIN<=d<=I8_MAX || t1&(RTG_MASK-RTF_UNSIGNED)==RT_I8) {
+      //CANIDATE
 	ICSlashOp(tmpi,t1,r1,d1,SLASH_OP_IMM_U8+op.u8[1],rip+1);
 	ICU8(tmpi,d);
 	return;
       }
       if (I32_MIN<=d<=I32_MAX || t1.raw_type<RT_I64) {
+      //CANIDATE
 	ICSlashOp(tmpi,t1,r1,d1,SLASH_OP_IMM_U32+op.u8[1],rip);
 	if (t1&(RTG_MASK-RTF_UNSIGNED)==RT_I16)
 	  ICU16(tmpi,d);

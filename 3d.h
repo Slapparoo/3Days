@@ -169,3 +169,5 @@ void BoundsCheckTests();
 void PoopAllocSetCallers(void *ptr,int64_t c,void **callers);
 struct CMemBlk;
 int64_t InBounds(void *ptr,int64_t sz,void **target);
+void *PoopMallocTask(int64_t sz,void *t);
+void *PoopMalloc32Task(int64_t sz,void *t);

@@ -139,5 +139,5 @@ _extern _STRIMATCH U8 *StrIMatch(
 	U8 *needle,U8 *haystack_str);//Scan for string in string, ignoring case.
 _extern _STRCPY U0 StrCpy(
 	U8 *dst,U8 *src); //Copy string.
-_extern _WHINE_OOB U0 WhineOOB(U8 *ptr,I64 sz);
+//_extern WHINE_OOB U0 WhineOOB(U8 *ptr,I64 sz);
 #endif

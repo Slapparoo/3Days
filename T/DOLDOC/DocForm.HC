@@ -100,7 +100,8 @@ U0 DocDataFmt(CDoc *doc,CDocEntry *doc_e,I64 d=DOCM_CANCEL)
 	}
 	Free(ptr);
       } else {
-	StrPrint(doc_e->tag,doc_e->aux_str,d,doc_e->my_fmt_data);
+      Free(doc_e->tag);
+	doc_e->tag=MStrPrint(doc_e->aux_str,d,doc_e->my_fmt_data); //CHANGED to avoid buffer overflows
 	i=StrLen(doc_e->tag);
       }
       if (doc_e->de_flags & DOCEF_HAS_TERMINATOR) {
