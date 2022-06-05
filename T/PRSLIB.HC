@@ -297,7 +297,7 @@ U8 *COCCompile(CCmpCtrl *cc,I64 *_code_size,CDbgInfo **_dbg,I64 *_type)
   } while (code_size<last_code_size);
 
   if (cc->flags&CCF_AOT_COMPILE)
-    res=MAlloc(code_size);
+    res=MAlloc32(code_size);
   else {
     res=MAlloc32(code_size);
     if (cc->htc.fun)

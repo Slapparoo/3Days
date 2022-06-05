@@ -93,7 +93,8 @@ cc->pass==10 is final pass, code is placed into buf.
 	}
       }
 
-      switch [tmpi->ic_code] {
+      switch (tmpi->ic_code ) {
+      default: "OP789A\n";throw('Compiler');
 	start:
 	  start:
 	    case IC_ABS_ADDR:

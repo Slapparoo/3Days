@@ -45,7 +45,8 @@ args.
     tmpi_push=tmpi;
     MemSet(&tmpi->arg1,0,3*sizeof(CICArg));
     tmpi->arg1_type_pointed_to=0;
-    switch [intermediate_code_table[code].arg_cnt] {
+    switch (intermediate_code_table[code].arg_cnt) {
+    default: "OP012,%d,%x\n",code,&tmpi->ic_code;throw('Compiler');
       case IS_V_ARG:
 	ps->ptr-=tmpi->ic_data>>2;
 	break;
@@ -65,7 +66,8 @@ args.
     }
     if (intermediate_code_table[code].not_const)
       cc->flags|=CCF_NOT_CONST;
-    switch [code] {
+    switch (code) {
+		default: "OP012.2\n";throw('Compile');
       case IC_IMM_F64:
 	tmpi->ic_flags&=~ICF_RES_TO_F64;
 	if (cc->pass==2 && tmpi->ic_flags&ICF_RES_TO_INT) {

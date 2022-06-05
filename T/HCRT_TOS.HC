@@ -112,7 +112,6 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "AREGISTRY.HC"
 #include "AutoComplete/MakeAC.HC"
 #include "God/MakeGod.HC"
-
 #include "Find.HC"
 U8 *StrNew(U8 *s,CTask *t=0) {
 	U8 *r;
@@ -124,5 +123,6 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 	MemCpy(r=MAlloc(MSize(s),t),s,MSize(s));
 	return r;
 } 
+
 //#include "PSLAMODY/Load.HC"
 #endif

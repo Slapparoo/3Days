@@ -44,7 +44,6 @@ CHash *FunSegFind(U8 *addr,I64 *_offset)
 	h=Fs->hash_table;
 	while (h) {
 	  HashFunSegFind(h,addr,&has_lower,&best,&res);
-	  if(res) break;
 	  h=h->next;
 	}
   if(_offset) *_offset=best;

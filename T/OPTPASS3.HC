@@ -61,7 +61,8 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
       } else
 	tmpil1=tmpil2=&cmp.ic_nop;
       tmpc=tmpi->ic_class;
-      switch [intermediate_code_table[code].arg_cnt] {
+      switch (intermediate_code_table[code].arg_cnt) {
+      default: "OP03\n";throw('Compiler');
 	case IS_V_ARG:
 	  ps->ptr-=tmpi->ic_data>>3;
 	  break;
@@ -95,7 +96,8 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 	tmpi->ic_flags|=ICF_RES_WAS_STK;
 	PrsPush(ps,tmpi);
       }
-      switch [code] {
+      switch (code) {
+      default: "OP3.2\n";throw('Compiler');
 	case IC_IMM_F64:
 	  tmpi->ic_flags&=~ICF_RES_TO_F64;
 	  if (tmpi->ic_flags&ICF_RES_TO_INT) {
@@ -125,7 +127,7 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 	    tmpi->arg1.type=MDF_DISP+tmpi->res.type.raw_type;
 	    tmpi->arg1_type_pointed_to=CmpRawTypePointed(tmpc);
 	    tmpi->ic_code=IC_MOV;
-	    OptFree(tmpi1);
+	    OptSetNOP1(tmpi1);
 	    if (tmpi->arg1.reg==REG_RBP)
 	      for (i=0;i<member_cnt;i++)
 		if (mv[i].offset_start==tmpi->arg1.disp) {
@@ -141,8 +143,8 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 	      tmpi->arg1.type=MDF_DISP+tmpi->res.type.raw_type;
 	      tmpi->arg1_type_pointed_to=CmpRawTypePointed(tmpc);
 	      tmpi->ic_code=IC_MOV;
-	      OptFree(tmpil2);
-	      OptFree(tmpil1);
+	      OptSetNOP1(tmpil2);
+	      OptSetNOP1(tmpil1);
 	    }
 	  }
 	  break;
@@ -183,7 +185,7 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 	    tmpi->ic_code=IC_ADD_CONST;
 	    tmpi->arg1_type_pointed_to=tmpi->res.type.raw_type;
 	    tmpi->arg2.type=MDF_NULL;
-	    OptFree(tmpi1);
+	    OptSetNOP1(tmpi1);
 	    if (tmpil2->ic_code==IC_REG && tmpil2->arg1.reg==REG_RBP) {
 	      tmpi->ic_flags|=tmpil2->ic_flags;
 	      tmpi->ic_code=IC_LEA;
@@ -196,7 +198,7 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 		  mv[i].score++;
 		  break;
 		}
-	      OptFree(tmpil2);
+	      OptSetNOP1(tmpil2);
 	    }
 	  }
 	  break;
@@ -210,7 +212,7 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 	    tmpi->ic_data=tmpi2->ic_data;
 	    tmpi->ic_code=IC_SUB_CONST;
 	    tmpi->arg2.type=MDF_NULL;
-	    OptFree(tmpi2);
+	    OptSetNOP1(tmpi2);
 	  }
 	  break;
 	case IC_LESS:
@@ -286,7 +288,7 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 	case IC_BR_EQU_EQU:
 	  if ((tmpi1->ic_code==IC_IMM_I64 ||
 		tmpi1->ic_code==IC_IMM_F64) && !tmpi1->ic_data) {
-	    OptFree(tmpi1);
+	    OptSetNOP1(tmpi1);
 	    MemCpy(&tmpi->arg1,&tmpi->arg2,sizeof(CICArg));
 	    tmpi->arg2.type=MDF_NULL;
 	    if (code==IC_BR_EQU_EQU)
@@ -297,7 +299,7 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 	    tmpc1=tmpc2;
 	  } else if ((tmpi2->ic_code==IC_IMM_I64 ||
 		tmpi2->ic_code==IC_IMM_F64) && !tmpi2->ic_data) {
-	    OptFree(tmpi2);
+	    OptSetNOP1(tmpi2);
 	    tmpi->arg2.type=MDF_NULL;
 	    if (code==IC_BR_EQU_EQU)
 	      code=tmpi->ic_code=IC_BR_ZERO;
@@ -309,11 +311,11 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 	case IC_BR_NOT_ZERO:
 	  if (tmpi1->ic_code==IC_IMM_I64 || tmpi1->ic_code==IC_IMM_F64) {
 	    if (code==IC_BR_ZERO ^^ tmpi1->ic_data) {
-	      OptFree(tmpi1);
+	      OptSetNOP1(tmpi1);
 	      tmpi->arg1.type=MDF_NULL;
 	      tmpi->ic_code=IC_JMP;
 	    } else {
-	      OptFree(tmpi1);
+	      OptSetNOP1(tmpi1);
 	      tmpi=OptFree(tmpi);
 	      break;
 	    }

@@ -42,7 +42,7 @@ U0 FaultCB(U8 **rbp,U8 *fptr) {
         TOSPrint("[%d] %s\n",0,ln);
     Free(ln);
     
-    for(bt=1;bt<=5;bt++) {
+    for(bt=0;bt<=5;bt++) {
         ln=SrcEdLink(__CallerBP(rbp,bt));
         if(!ln) ln=StrNew("???");
         f=FunSegFind(__CallerBP(rbp,bt),NULL);

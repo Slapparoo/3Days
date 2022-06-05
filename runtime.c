@@ -563,7 +563,7 @@ int64_t STK_SetPtrCallers(int64_t *stk) {
  */
 int64_t STK_InBounds(int64_t *stk) {
 	void *near=NULL;
-	if(InBounds(stk[0],stk[1],&near)) {
+	if(InBounds(stk[0],0&stk[1],&near)) {
 		return NULL;
 	}
 	if(!near) return 0x7FFFFFFFFFFFFFFFll;

@@ -143,16 +143,20 @@ void PoopAllocSetCallers(void *ptr,int64_t c,void **callers) {
 		blk->caller[i]=callers[i];
 	}
 }
+typedef struct CHeapFL {
+	CMemUnused *first,*final;
+} CHeapFL;
 typedef struct CHeap {
-   CMemUnused *cache64[16+1];
-   CMemUnused *cache32[16+1];
+   CHeapFL cache64[16+1];
+   CHeapFL cache32[16+1];
    CMemBlk *blks;
 } CHeap;
 static CHeap heap;
 struct CMemBlk;
 CMemBlk *AllocateBlock(int64_t sz,int64_t low32) {
     CMemBlk *ret=NewVirtualChunk(0x400000,low32); //4MB
-    CMemUnused *un=ret+1,*last=NULL,*first=NULL,**cache=(low32)?heap.cache32:heap.cache64;
+    CMemUnused *un=ret+1,*last=NULL,*first=NULL;
+    CHeapFL *cache=(low32)?heap.cache32:heap.cache64;
     ret->is_self_contained=0;
     ret->item_sz=sz=SizeUp(sz);
     ret->blk_sz=0x400000;
@@ -171,16 +175,18 @@ CMemBlk *AllocateBlock(int64_t sz,int64_t low32) {
 		heap.blks->last=ret;
     heap.blks=ret;
     if(last) {
-        last->next=cache[Log2I(sz)];
+        last->next=cache[Log2I(sz)].first;
     }
-    cache[Log2I(sz)]=first;
+    cache[Log2I(sz)].first=first;
+    cache[Log2I(sz)].final=last;
     UnlockHeap();
     return ret;
 }
 static void *__PoopMAlloc(int64_t sz,int64_t low32,void *task) {
     int64_t l=Log2I(SizeUp(sz));
     CMemBlk *ret_blk;
-    CMemUnused *unused,**cache=(low32)?heap.cache32:heap.cache64;
+    CMemUnused *unused;
+    CHeapFL *cache=(low32)?heap.cache32:heap.cache64;
     void *ptr;
     if(l>16) {
         ret_blk=NewVirtualChunk(sz+sizeof(CMemBlk)+sizeof(CMemUnused),low32);
@@ -203,13 +209,16 @@ static void *__PoopMAlloc(int64_t sz,int64_t low32,void *task) {
     }
     loop:
     LockHeap();
-    if(cache[l]) {
+    if(cache[l].first) {
 		CMemUnused *last=NULL;
-		unused=cache[l];
+		unused=cache[l].first;
+		cache[l].first=unused->next;
 		if(!unused) goto alloc;
         assert(!unused->occupied);
-        if(cache[l]==unused)
-			cache[l]=cache[l]->next;
+        if(cache[l].first==unused)
+			cache[l].first=cache[l].first->next;
+		if(cache[l].final==unused)
+			cache[l].final=cache[l].first;
         UnlockHeap();
         unused->sz=sz;
         unused->occupied=1;
@@ -232,6 +241,8 @@ void *PoopMalloc32Task(int64_t sz,void *t) {
 int64_t MSize(void *ptr) {
     if(!ptr) return 0;
     CMemUnused *un=ptr;
+    if(!un[-1].occupied)
+		return -1;
     return un[-1].sz;
 }
 int64_t MSize2(void *ptr) {
@@ -241,7 +252,8 @@ int64_t MSize2(void *ptr) {
 }
 void PoopFree(void *ptr) {
     if(!ptr) return;
-    CMemUnused *un=ptr,**cache;
+    CMemUnused *un=ptr;
+    CHeapFL *cache;
     CMemBlk *next,*last;
     if(!InBounds(ptr,0,&un)) return;
     if(!un) return;
@@ -265,9 +277,9 @@ void PoopFree(void *ptr) {
     LockHeap();
     cache=(un->parent->is_32bit)?heap.cache32:heap.cache64;
     if(l<=16) {
-        un->next=cache[l];
-        cache[l]=un;
-        assert(un!=un->next);
+        if(cache[l].final) cache[l].final->next=un;
+        cache[l].final=un;
+        un->next=NULL;
     }
     UnlockHeap();
 }
@@ -385,8 +397,8 @@ void BoundsCheckTests() {
 	PoopFree(ptr4);
 	PoopFree(ptr3);
 	PoopFree(ptr2);
-	assert(InBounds(ptr,1,NULL));
-	PoopFree(ptr);
+	assert(!InBounds(ptr,1,NULL));
+	PoopFree(ptr1);
 	ptr=PoopMAlloc(1<<17);
 	assert(InBounds(ptr,1,NULL));
 	assert(InBounds(ptr+(1<<17)-2,1,NULL));

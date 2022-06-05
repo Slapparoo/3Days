@@ -213,7 +213,8 @@ I64 ICModr1(I64 r,CICType t2,I64 r2,I64 d2)
 
 U0 ICModr2(CIntermediateCode *tmpi,I64 i,CICType t=0,I64 d,I64 rip=0)
 {
-  switch [i.u8[0]] {
+  switch (i.u8[0]) {
+	default: "BL\n";throw('Compiler');
     case MODR_REG:
       break;
     case MODR_INDIRECT_REG:
@@ -449,6 +450,12 @@ U0 ICMov(CIntermediateCode *tmpi,
 	b1_r1,b1_r2,b2_r1,b2_r2,last_start=tmpi->ic_cnt;
   CIntermediateCode *tmpil1;
   Bool old_lock=Btr(&tmpi->ic_flags,ICf_LOCK);
+  if(t1&(MDF_DISP|MDF_SIB)^^t2&(MDF_DISP|MDF_SIB)) {
+		if(t2&(MDF_DISP|MDF_SIB)&&GetOption(OPTf_BOUNDS_CHECK))
+			__BoundsCheck(tmpi,rip,t2,r2,d2);
+		if(t1&(MDF_DISP|MDF_SIB)&&GetOption(OPTf_BOUNDS_CHECK))
+			__BoundsCheck(tmpi,rip,t1,r1,d1);
+	}
   switch (Bsr(t1)) {
     case MDf_REG:
       if (t2&MDF_IMM) {
@@ -551,9 +558,6 @@ U0 ICMov(CIntermediateCode *tmpi,
     case MDf_RIP_DISP32:
     case MDf_SIB:
       if (t2&MDF_IMM && (t1.raw_type<RT_I64 || (I32_MIN<=d2<=I32_MAX))) {
-	if(GetOption(OPTf_BOUNDS_CHECK)) {
-        __BoundsCheck(tmpi,rip,t1,r1,d1); //CHANGED r1 is applied with the offset
-	}
 	ICSlashOp(tmpi,t1,r1,d1,SLASH_OP_MOV_IMM,rip);
 	switch (t1.raw_type) {
 	  case RT_I8:
@@ -569,9 +573,6 @@ U0 ICMov(CIntermediateCode *tmpi,
 	}
       } else {
 	if (t2&MDF_REG) {
-		if(GetOption(OPTf_BOUNDS_CHECK)) {
-		    __BoundsCheck(tmpi,rip,t1,r1,d1); //CHANGED,returned ptr in r1
-	    }
 	  ICSlashOp(tmpi,t1,r1,d1,r2+SLASH_OP_MOV,rip);
 	} else {
 	  ICMov(tmpi,MDF_REG+RT_I64,REG_RBX,0,t2,r2,d2,rip);
@@ -696,6 +697,7 @@ U0 ICLea(CIntermediateCode *tmpi,CICType t1,I64 r1,I64 d1,
   }
 }
 U0 __BoundsCheck(CIntermediateCode *tmpi,I64 rip,CICType t,I64 r,I64 disp) {
+	if(tmpi->cc->flags&CCF_ASM_EXPRESSIONS) return;
 	if(r==REG_RIP||r==REG_RBP) return;
 	I64 i;
 	CHashExport *tmpex;
@@ -703,6 +705,7 @@ U0 __BoundsCheck(CIntermediateCode *tmpi,I64 rip,CICType t,I64 r,I64 disp) {
 	tmpex=HashFind("SYS_WHINE_OOB",tmpi->cc->htc.hash_table_lst,HTT_EXPORT_SYS_SYM);
 	if(tmpi->cc->flags&CCF_AOT_COMPILE) {
 		 if (!tmpex) {
+			return;
 			tmpex=CAlloc(sizeof(CHashExport));
 			tmpex->str=StrNew("SYS_WHINE_OOB");
 			tmpex->type=HTT_EXPORT_SYS_SYM|HTF_UNRESOLVED|HTF_IMPORT;

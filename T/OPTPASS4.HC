@@ -166,7 +166,8 @@ U0 OptPass4(CCmpCtrl *cc,COptReg *reg_offsets,I64 *_type)
 	  tmpil2=tmpil3=&cmp.ic_nop;
       } else
 	tmpil1=tmpil2=tmpil3=&cmp.ic_nop;
-      switch [intermediate_code_table[code].arg_cnt] {
+      switch (intermediate_code_table[code].arg_cnt) {
+      default: "OP04\n";throw('Compiler');
 	case IS_V_ARG:
 	  ps->ptr-=tmpi->ic_data>>3;
 	  break;
@@ -180,7 +181,8 @@ U0 OptPass4(CCmpCtrl *cc,COptReg *reg_offsets,I64 *_type)
 	case IS_0_ARG: //nobound switch
 	  break;
       }
-      switch [code] {
+      switch (code) {
+      default: "OP4.2\n";throw('Compiler');
 	case IC_IMM_I64:
 	case IC_TYPE:
 	  tmpi->arg1.type=MDF_IMM+RT_I64;

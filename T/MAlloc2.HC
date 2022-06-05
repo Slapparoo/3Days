@@ -1,3 +1,4 @@
+I64 boundscheck_enable=0;
 //This includes stuff for bounds checking
 U8 *MAlloc(I64 sz,CTask *t=NULL) {
 	U8 *ret;
@@ -45,6 +46,8 @@ U8 *CAlloc(I64 sz,CTask *t=NULL) {
 }
 U0 OOBBacktrace(U8 *ptr,I64 len=5,U8 *got) {
 	//In poopalloc.c callers are stored before ptr
+	I64 old=boundscheck_enable;
+	boundscheck_enable=0;
 	TOSPrint("Out of bounds at:\n");
 	U8 **p=ptr,*link,*par,*fstr;
 	CHashFun *f;
@@ -63,7 +66,10 @@ U0 OOBBacktrace(U8 *ptr,I64 len=5,U8 *got) {
 			TOSPrint("???\n");
 	}
 	if(ptr!=INVALID_PTR&&ptr) {
-		TOSPrint("%p(size %d) was allocated at (%d bytes OOB):\n",ptr,MSize(ptr),got-(ptr+MSize(ptr)));
+		if(MSize(ptr)!=-1)
+			TOSPrint("%p(size %d) was allocated at (%d bytes OOB):\n",ptr,MSize(ptr),got-(ptr+MSize(ptr)));
+		else
+			TOSPrint("%p was free'd at:\n");
 		p-=len;
 		while(--len>=0) {
 			link=SrcEdLink(par=*p++);
@@ -79,11 +85,11 @@ U0 OOBBacktrace(U8 *ptr,I64 len=5,U8 *got) {
 				TOSPrint("???\n");
 		}
 	}
+	boundscheck_enable=old;
 }
 U8 *InBounds(U8 *ptr,I64 sz) {
 	return __InBounds(ptr,sz);
 }
-I64 boundscheck_enable=0;
 asm {
 	SYS_WHINE_OOB::
 	PUSH RBP
