@@ -9,7 +9,7 @@ static U0 BootstrapImportSymbol(U8 *name,U8 *ptr,I64 type) {
     CHash *find=HashFind(name,Fs->hash_table,type);
     if(find&&find->type&HTT_GLBL_VAR) {
         find(CHashGlblVar*)->data_addr=ptr;
-    } else if(find&&find->type&HTT_FUN) {
+    } else if(find&&find->type&HTT_FUN&&!(find(CHashFun*)->flags&1<<Ff_INTERNAL)) {
         find(CHashFun*)->exe_addr=ptr;
         Btr(&find(CHashFun*)->flags,Cf_EXTERN);
     } else if(name[0]=='_'||!StrNCmp(name,"SYS",3)) {
