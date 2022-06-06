@@ -16,7 +16,7 @@ CDrawWindow *NewDrawWindow() {
 	//1 Screen on main thread
 	static CDrawWindow *win;
 	if(!win) { 
-		CDrawWindow *ret=PoopMAlloc(sizeof(CDrawWindow));
+		CDrawWindow *ret=TD_MALLOC(sizeof(CDrawWindow));
 		ret->window=SDL_CreateWindow("HolyC Drawer",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,640,480,SDL_WINDOW_RESIZABLE);
 		ret->surf=SDL_CreateRGBSurfaceWithFormat(0,640,480,32,SDL_PIXELFORMAT_BGRA32);
 		SDL_SetWindowMaximumSize(ret->window,640,480);
@@ -52,7 +52,7 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *colors,int64_t internal_width,int
 void DrawWindowDel(CDrawWindow *win) {
     SDL_FreeSurface(win->surf);
     SDL_DestroyWindow(win->window);
-    PoopFree(win);
+    TD_FREE(win);
 }
 #define CH_CTRLA	0x01
 #define CH_CTRLB	0x02

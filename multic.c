@@ -16,7 +16,7 @@ static void *Fs;
 void *GetFs() {
     loop:
     if(!Fs) {
-        Fs=PoopMAlloc(2048); //Is acutally 1198 but it could change
+        Fs=TD_MALLOC(2048); //Is acutally 1198 but it could change
         goto loop;
     }
     return Fs;
@@ -82,8 +82,8 @@ static int64_t __SpawnFFI(CPair *p) {
     __Exit();
 }
 CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
-    CThread *thd=PoopMAlloc(sizeof(CThread));
-    CPair *p=PoopMAlloc(sizeof(CPair));
+    CThread *thd=TD_MALLOC(sizeof(CThread));
+    CPair *p=TD_MALLOC(sizeof(CPair));
     p->fp=fp,p->data=data,p->fs=fs,p->thd=thd;
     signal(SIGSEGV,FualtCB);
     #ifndef TARGET_WIN32
@@ -96,7 +96,7 @@ CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
     GetContext(&thd->ctx);
     if(!thd->dead) {
         vec_push(&threads,thd);
-        thd->stack=PoopMAlloc(1<<16);
+        thd->stack=TD_MALLOC(1<<16);
         MakeContext(&thd->ctx,thd->stack,&__SpawnFFI,p);
     }
     return thd;
@@ -151,8 +151,8 @@ void __Yield() {
     for(i=0;i!=dead_threads.length;i++) {
 		if(cur_thrd!=dead_threads.data[i]) {
             __FreeThread(dead_threads.data[i]);
-			PoopFree(dead_threads.data[i]->stack);
-			PoopFree(dead_threads.data[i]);
+			TD_FREE(dead_threads.data[i]->stack);
+			TD_FREE(dead_threads.data[i]);
 			vec_remove(&dead_threads,dead_threads.data[i]);
             goto rem;
 		}

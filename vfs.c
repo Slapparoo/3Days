@@ -96,7 +96,7 @@ int VFsCd(char *to,int flags) {
 	if(!to)  {
 		to=VFsDirCur();
 		int r=VFsCd(to,flags);
-		PoopFree(to);
+		TD_FREE(to);
 		return r; 
 	}
 	int make=flags&VFS_CDF_MAKE;
@@ -126,6 +126,7 @@ int VFsCd(char *to,int flags) {
 		
     } else {
         vec_deinit(&path);
+        vec_init(&path);
         vec_pusharr(&path,cur_dir,strlen(cur_dir)+1);
     }
     VFsInplaceHostDelims(path.data);
@@ -198,7 +199,7 @@ int VFsCd(char *to,int flags) {
         vec_push(&path,delim);
     vec_push(&path,0);
     if(!failed) {
-		PoopFree(cur_dir);
+		TD_FREE(cur_dir);
 		cur_dir=path.data;
 	} else
 		vec_deinit(&path);
@@ -207,7 +208,7 @@ int VFsCd(char *to,int flags) {
 int64_t VFsDel(char *p) {
 	p=__VFsFileNameAbs(p);
 	if(!__FExists(p))
-		return PoopFree(p),0;
+		return TD_FREE(p),0;
 	#ifdef TARGET_WIN32
 	if(__FIsDir(p))
 		RemoveDirectory(p);
@@ -216,7 +217,7 @@ int64_t VFsDel(char *p) {
 	#else
 	remove(p);
 	#endif
-	return PoopFree(p),!__FExists(p);
+	return TD_FREE(p),!__FExists(p);
 }
 //Returns Host OS location of file
 char *__VFsFileNameAbs(char *name) {
@@ -264,21 +265,42 @@ char *__VFsFileNameAbs(char *name) {
     VFsInplaceHostDelims(path.data);
     return NULL;
 }
+#ifndef TARGET_WIN32
 int64_t VFsUnixTime(char *name) {
 	char *fn=__VFsFileNameAbs(name);
 	struct stat s;
 	stat(fn,&s);
 	int64_t r=mktime(localtime(&s.st_ctime));
-	PoopFree(fn);
+	TD_FREE(fn);
 	return r;
 }
 int64_t VFsFSize(char *name) {
 	char *fn=__VFsFileNameAbs(name);
 	struct stat s;
 	stat(fn,&s);
-	PoopFree(fn);
+	TD_FREE(fn);
 	return s.st_size;
 }
+#else
+int64_t VFsUnixTime(char *name) {
+	char *fn=__VFsFileNameAbs(name);
+	int64_t t64;
+	FILETIME t;
+	GetFileTime(fn,NULL,NULL,&t);
+	t64=t.dwLowDateTime|(t.dwHighDateTime<<32);
+	PoopFree(fn);
+	return t64;
+}
+int64_t VFsFSize(char *name) {
+	char *fn=__VFsFileNameAbs(name);
+	int64_t s64;
+	int32_t h32;
+	s64=GetFileSize(fn,&h32);
+	s64|=h32<<32;
+	PoopFree(fn);
+	return fn;
+}
+#endif
 char *VFsFileNameAbs(char *name) {
 	if(!name)
 		return VFsDirCur();
@@ -315,7 +337,7 @@ int64_t VFsFileWrite(char *name,char *data,int64_t len) {
         fwrite(data,1,len,f);
         fclose(f);
     }
-    PoopFree(name);
+    TD_FREE(name);
     return !!name;
 }
 int64_t VFsFileRead(char *name,int64_t *len) {
@@ -333,12 +355,12 @@ int64_t VFsFileRead(char *name,int64_t *len) {
         fseek(f,0,SEEK_END);
         e=ftell(f);
         fseek(f,0,SEEK_SET);
-        fread(data=PoopMAlloc(e-s+1),1,e-s,f);
+        fread(data=TD_MALLOC(e-s+1),1,e-s,f);
         fclose(f);
         if(len) *len=e-s;
     }
     end:
-    PoopFree(name);
+    TD_FREE(name);
     return data;
 }
 void VFsThrdInit() {
@@ -401,7 +423,7 @@ static void CopyDir(char *dst,char *src) {
 		} else {
 			s=FileRead(sbuf,&sz);
 			FileWrite(buf,s,sz);
-			PoopFree(s);
+			TD_FREE(s);
 		}
 	}
 }

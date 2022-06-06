@@ -330,7 +330,6 @@ U0 DbgInfoRead(U8 *name) {
 	U8 *body=FileRead(name,&len),*ptr=body,*fn;
 	while(ptr<body+len) {
 		tmph=HashFind(ptr,Fs->hash_table,HTT_FUN);
-		TOSPrint("%s\n",ptr);
 		ptr+=StrLen(ptr)+1;
 		fn=ptr;
 		ptr+=StrLen(ptr)+1;

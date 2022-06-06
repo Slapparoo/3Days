@@ -9,7 +9,6 @@
 #include <sys/syscall.h>
 #include <linux/futex.h>
 struct CMemBlk;
-int64_t InBounds(void *ptr,int64_t sz,void **target);
 static uint32_t fmtx=1;
 static void LockHeap() {
 		uint32_t one=1;
@@ -64,6 +63,7 @@ static void UnlockHeap() {
 		LeaveCriticalSection(&fmtex);
 }
 #endif
+int64_t InBounds(void *ptr,int64_t sz,void **target);
 void *NewVirtualChunk(int64_t sz,int64_t low32) {
 	#ifndef TARGET_WIN32
     if(low32)

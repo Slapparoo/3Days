@@ -3,10 +3,8 @@ Bool CopySingleZ(U8 *f1,U8 *f2) //Just one file
   U8 *file_buf=NULL;
   I64 size,attr=0,c;
   CDirEntry de;
-  TOSPrint("TOADS:%s,%p\n",f1,f1);
   if (FileFind(f1,&de,FUF_JUST_FILES))
   {
-  TOSPrint("TOADS:%s,%p\n",f2,f1);
     Free(de.full_name);
     file_buf=FileRead(f1,&size /*,&attr*/ );
     //attr=FileAttr(f2,attr); TODO RESTORE

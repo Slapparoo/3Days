@@ -10,12 +10,20 @@
 #include "ext/C_Unescaper/escaper.h"
 #define DFT_T_DRIVE ".3DAYS_BOOT"
 #define DFT_TEMPLATE "/usr/local/include/3Days/T/"
+static void Core0Exit(int sig) {
+	/*CHash **ka=map_get(&TOSLoader,"KillAdam");
+	if(ka)
+		FFI_CALL_TOS_0(ka[0]->val);*/
+	pthread_exit(0);
+} 
 #else
 #include <windows.h>
 #include <libloaderapi.h>
+#include <processthreadsapi.h>
 #include <fileapi.h>
 #include <userenv.h>
 #include <winnt.h>
+#include <synchapi.h> 
 #define HCRT_INSTALLTED_DIR "\\HCRT\\HCRT_TOS.BIN"
 #define DFT_T_DRIVE "3DAYS_BOOT"
 //Is relative to install dir on windows
@@ -70,17 +78,17 @@ void SignalHandler(int sig) {
     }
     exit(0);
 }
-static void Core0Exit(int sig) {
-	/*CHash **ka=map_get(&TOSLoader,"KillAdam");
-	if(ka)
-		FFI_CALL_TOS_0(ka[0]->val);*/
-	pthread_exit(0);
-} 
 static void Core0(char *name) {
+	#ifndef TARGET_WIN32
 	signal(SIGUSR1,&Core0Exit);
+	#endif
 	Load(name,0);
 } 
-static pthread_t core0;		
+#ifndef TARGET_WIN32
+static pthread_t core0;
+#else
+static HANDLE core0;
+#endif
 int main(int argc,char **argv) {
 	BoundsCheckTests();
     char *header=NULL,*t_drive=NULL,*tmp;
@@ -121,9 +129,9 @@ int main(int argc,char **argv) {
 		t_drive=TDriveArg->filename[0];
 	} else  {
 		tmp=HostHomeDir();
-		t_drive=PoopMAlloc(1+1+strlen(tmp)+strlen(DFT_T_DRIVE));
+		t_drive=TD_MALLOC(1+1+strlen(tmp)+strlen(DFT_T_DRIVE));
 		strcpy(t_drive,tmp);
-		PoopFree(tmp);
+		TD_FREE(tmp);
 		#ifdef TARGET_WIN32
 		strcat(t_drive,"\\" DFT_T_DRIVE);
 		#else
@@ -159,8 +167,7 @@ int main(int argc,char **argv) {
       strcat(buffer,"\\HCRT.BIN");
       puts(buffer);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
-		//TODO use native win thread
-        pthread_create(&core0,NULL,Core0,buffer);
+		core0=CreateThread(NULL,0,&Core0,buffer,0,NULL);
       }
     #endif
     }
@@ -169,8 +176,13 @@ int main(int argc,char **argv) {
 }
 CLoader Loader;
 void __Shutdown() {
+	#ifndef TARGET_WIN32
 	pthread_kill(core0,SIGUSR1);
 	pthread_join(core0,NULL);
+	#else
+	TerminateThread(core0,0);
+	WaitForMultipleObjects(1,&core0,TRUE,INFINITE),
+	#endif
 	SDL_Quit();
 	exit(0);
 }
