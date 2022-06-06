@@ -3906,6 +3906,8 @@ public class CArcCompress
 #define LMF_IGNORE_CASE		1
 #define LMF_EXACT		2
 #define KDF_HAS_DESCS	1
+extern U8 *LstSub(I64 sub, U8 *lst);
+extern I64 LstMatch(U8 *needle, U8 *haystack_lst,I64 flags=0);
 class CKeyDevEntry
 {
   CKeyDevEntry *next,*last;
@@ -4546,6 +4548,8 @@ public extern U0 GrPaletteSet(CBGR48 *bgr48);
 public extern U0 PaletteSetStd();
 public extern Bool GrClamp(CDC *dc=NULL,I64 *left,I64 *top,I64 *right,I64 *bottom,
 	I64 width=0,I64 height=0);
+public extern U0 GrBorder(CDC *dc=NULL,I64 x1,I64 y1,I64 x2,I64 y2,
+	I64 step=1,I64 start=0);
 public extern Bool GrPlot(CDC *dc=NULL,I64 x,I64 y);
 public extern I64 GrPeek(CDC *dc=NULL,I64 x,I64 y);
 public extern I64 GrFloodFill(CDC *dc=NULL,I64 x,I64 y,
@@ -5744,3 +5748,65 @@ extern U8 *MAlloc(I64 sz,CTask *t=0);
 extern U8 *StrScan(U8 *src,U8 *fmt,...);
 extern U0 DbgInfoRead(U8 *name);
 extern U0 __BoundsCheck(CIntermediateCode *tmpi,I64 rip,CICType t,I64 r,I64 disp);
+extern U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE);
+class CMusicGlbls
+{
+  U8	*cur_song;
+  CTask	*cur_song_task;
+  I64	octave;
+  F64	note_len;
+  U8	note_map[7];
+  Bool	mute;
+  I64	meter_top,meter_bottom;
+  F64	tempo,stacatto_factor;
+
+  //If you wish to sync with a
+  //note in a Play() string.  0 is the start
+  I64	play_note_num;
+
+  F64	tM_correction,last_Beat,last_tM;
+} ;
+extern CMusicGlbls music; 
+class CGrGlbls
+{
+  I64	*to_8_bits,*to_8_colors;
+  CDC	*scrn_image,	//Read only.
+	*dc,		//Persistent
+	*dc1,
+	*dc2,		//Updated every refresh
+	*dc_cache,
+	*zoomed_dc;
+  U32	*text_base;	//See $LK,"TextBase Layer",A="HI:TextBase Layer"$. (Similar to 0xB8000 but 32 bits)
+  U16	*win_z_buf;
+
+  #define SPHT_ELEM_CODE	1
+  CHashTable *sprite_hash;
+
+  U16	*win_uncovered_bitmap;
+  I64	highest_uncovered;
+  U16	*vga_text_cache;
+  I64	pan_text_x,pan_text_y;	//[-7,7]
+  U0	(*fp_final_scrn_update)(CDC *dc);//Mouse cursor is handled here.
+  U0	(*fp_wall_paper)(CTask *task);
+  U0	(*fp_draw_ms)(CDC *dc,I64 x,I64 y);
+  U0	(*fp_draw_grab_ms)(CDC *dc,I64 x,I64 y,Bool closed);
+  U8	*empty_sprite; //Gets assigned $LK,"gr.empty_sprite",A="FF:::/Adam/AMouse.HC,empty_sprite"$
+
+  #define GR_PEN_BRUSHES_NUM 64
+  CDC	*pen_brushes[GR_PEN_BRUSHES_NUM],
+	*collision_pen_brushes[GR_PEN_BRUSHES_NUM],
+	*even_pen_brushes[GR_PEN_BRUSHES_NUM],
+	*odd_pen_brushes[GR_PEN_BRUSHES_NUM];
+  I8	circle_lo[GR_PEN_BRUSHES_NUM][GR_PEN_BRUSHES_NUM],
+	circle_hi[GR_PEN_BRUSHES_NUM][GR_PEN_BRUSHES_NUM];
+
+  #define GR_SCRN_ZOOM_MAX	8
+  U8	*scrn_zoom_tables[GR_SCRN_ZOOM_MAX+1];
+  I64	scrn_zoom,sx,sy;
+
+  //When zoomed, this keeps the mouse centered.
+  Bool	continuous_scroll,
+	hide_row,hide_col;
+};
+extern CGrGlbls gr;
+extern CMsStateGlbls	ms,ms_last;

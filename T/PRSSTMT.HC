@@ -62,7 +62,7 @@ CHashClass *PrsClass(CCmpCtrl *cc,I64 keyword,I64 fsp_flags,Bool is_extern)
 CHashFun *PrsFunJoin(CCmpCtrl *cc,CHashClass *tmp_return,
 	U8 *name,I64 fsp_flags)
 {
-  CMemberLst *tmpm,*header_lst;
+  CMemberLst *tmpm,*header_lst,*tmpm1,*tmpm2;
   CAOTCtrl *aotc=cc->aotc;
   CHashClass *header_return;
   CHashFun *tmpf;
@@ -128,6 +128,8 @@ CHashFun *PrsFunJoin(CCmpCtrl *cc,CHashClass *tmp_return,
 	cc->warning_cnt++;
       }
       if (!MemberLstCmp(tmpf->member_lst_and_root,header_lst,header_arg_cnt)) {
+      if(tmpf->arg_cnt!=header_arg_cnt)
+		PrintErr("Fun header args arity mismatch '%s'.\n",tmpf->str);
 	PrintWarn("Fun header args mismatch '%s'\n",tmpf->str);
 	cc->warning_cnt++;
       }
@@ -436,8 +438,8 @@ U0 PrsGlblVarLst(CCmpCtrl *cc,I64 saved_mode,CHashClass *saved_tmpc,
       }
       if (has_alias) {
 	if (tmpex(CHashGlblVar *)->use_cnt<2) {
-	  PrintWarn("Unused extern '%s'\n",tmpex(CHashGlblVar *)->str);
-	  cc->warning_cnt++;
+	  //PrintWarn("Unused extern '%s'\n",tmpex(CHashGlblVar *)->str);
+	  //cc->warning_cnt++;
 	}
 	tmpex(CHashGlblVar *)->flags|=GVF_ALIAS;
 	tmpex(CHashGlblVar *)->data_addr=tmpg->data_addr;

@@ -6,8 +6,9 @@
 #define USE_DOLDOC 1
 #include "HCRT_TOS.HC"
 static U0 BootstrapImportSymbol(U8 *name,U8 *ptr,I64 type) {
-    CHash *find=HashFind(name,Fs->hash_table,type);
+    CHash *find=HashFind(name,Fs->hash_table,-1);
     if(find&&find->type&HTT_GLBL_VAR) {
+		TOSPrint("ONION:%s\n",name);
         find(CHashGlblVar*)->data_addr=ptr;
     } else if(find&&find->type&HTT_FUN&&!(find(CHashFun*)->flags&1<<Ff_INTERNAL)) {
         find(CHashFun*)->exe_addr=ptr;

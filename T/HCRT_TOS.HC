@@ -33,7 +33,7 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
 	Free(fn2);
 	return data;
 }
-I64 FileWrite(U8 *fn,U8 *buf,I64 len) {
+I64i FileWrite(U8i *fn,U8i *buf,I64i len) {
 	I64 len2,r;
 	U8 *fn2=FileNameAbs(fn),*data=NULL;
 	CArcCompress *cmp;

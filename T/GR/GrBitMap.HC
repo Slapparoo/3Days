@@ -1,6 +1,5 @@
 #help_index "Graphics"
 
-Option(OPTf_WARN_HEADER_MISMATCH,OFF);
 public Bool GrPlot0(CDC *dc,I64 x,I64 y)
 {//2D. No clipping or transformation or thick.
   U8 *dst;
@@ -59,7 +58,6 @@ public Bool GrPlot0(CDC *dc,I64 x,I64 y)
   }
   return TRUE;
 }
-Option(OPTf_WARN_HEADER_MISMATCH,ON);
 
 public I64 GrPeek0(CDC *dc=NULL,I64 x,I64 y)
 {//2D. No clipping or transformation.

@@ -100,8 +100,8 @@ U0 UndefinedExtern()
 
 U0 UnusedExternWarning(CCmpCtrl *cc,CHashClass *tmpc)
 {
-  PrintWarn("Unused extern '%s'\n",tmpc->str);
-  cc->warning_cnt++;
+  //PrintWarn("Unused extern '%s'\n",tmpc->str);
+  //cc->warning_cnt++;
 }
 
 U0 ParenWarning(CCmpCtrl *cc)
