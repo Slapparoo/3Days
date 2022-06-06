@@ -134,17 +134,11 @@ if(!dc) dc=gr.dc;
   return GrPeek0(dc,x,y);
 }
 
-/*
-
-This is an easier to understand
-version of the nonrecursive routine below.
 I64 GrFloodFillRay(CDC *dc,I64 x,I64 y,I64 z,I32 *db)
 {
   I64 res,j,x1,ray_len,ray_len2;
 
-  if (UnusedStk<0x80)
-    Panic("Stk Overflow",Fs);
-
+
   res=ray_len=GrRayLen(dc,&x,y,z,db);
   y--;
   j=ray_len;
@@ -166,8 +160,7 @@ I64 GrFloodFillRay(CDC *dc,I64 x,I64 y,I64 z,I32 *db)
   }
   return res;
 }
-*/
-
+/*
 class CFFRay
 {
   I64 state,x,y,j,x1,ray_len,ray_len2;
@@ -240,7 +233,7 @@ I64 GrFloodFillRay(CDC *dc,I64 x,I64 y,I64 z,I32 *db)
   Free(f_dc);
   return res;
 }
-
+*/
 public I64 GrFloodFill(CDC *dc=NULL,I64 x,I64 y,
 	Bool not_color=FALSE,I64 z=0,I32 *db=NULL)
 {//2D. Ignore z and db.

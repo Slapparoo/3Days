@@ -96,7 +96,7 @@ CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
     GetContext(&thd->ctx);
     if(!thd->dead) {
         vec_push(&threads,thd);
-        thd->stack=TD_MALLOC(1<<16);
+        thd->stack=TD_MALLOC(2000000); //aprx 2Mb
         MakeContext(&thd->ctx,thd->stack,&__SpawnFFI,p);
     }
     return thd;
