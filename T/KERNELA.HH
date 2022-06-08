@@ -5810,3 +5810,17 @@ class CGrGlbls
 };
 extern CGrGlbls gr;
 extern CMsStateGlbls	ms,ms_last;
+
+extern Bool RegCache();
+public extern Bool RegDft(U8 *path,U8 *val,Bool is_adam_entry=FALSE);
+public extern I64 RegExe(U8 *path);
+public extern Bool RegWrite(U8 *path,U8 *fmt,...);
+public extern I64 RegCnt(U8 *path);
+public extern Bool RegAppend(U8 *path,U8 *fmt,...);
+public extern Bool OneTimePopUp(U8 *_flags,I64 flag_num,U8 *msg);
+extern U0 RegOneTimePopUp(I64 flag_num,U8 *msg);
+extern U0 RegInit();
+public extern U0 OnceFlush();
+public extern U0 Once(U8 *fmt,...);
+public extern U0 OnceDrv(U8 drv_let=0,U8 *fmt,...);
+public extern U0 OnceExe();

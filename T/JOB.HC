@@ -366,7 +366,7 @@ I64 JobsHndlr(I64 run_flags,CTask *task=NULL)
   if (!task) task=Fs;
   while (TRUE) {
     while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED))
-      __SleepUntilChange(task->srv_ctrl.flags,1<<JOBCf_LOCKED);
+      __SleepUntilChange(&task->srv_ctrl.flags,1<<JOBCf_LOCKED);
     if (task->srv_ctrl.next_waiting!=&task->srv_ctrl) {
       switch (JobRunOne(run_flags,&task->srv_ctrl)) {
 	case JOB_CONT:

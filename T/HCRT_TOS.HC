@@ -125,4 +125,5 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 } 
 
 //#include "PSLAMODY/Load.HC"
+#include "ARegistry.HC"
 #endif
