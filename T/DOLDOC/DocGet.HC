@@ -220,7 +220,6 @@ public F64 GetF64(U8 *msg=NULL,F64 dft=0,F64 lo=F64_MIN,F64 hi=F64_MAX)
       return res;
   }
 }
-/*TODO RESTORE
 public CDate GetDate(U8 *msg=NULL,CDate dft=I64_MIN,
 	CDate lo=I64_MIN,CDate hi=I64_MAX)
 {//Prompt user for date expression. (Use \dLK,"Now",A="MN:Now"\d() if you want current time.)
@@ -241,4 +240,3 @@ public CDate GetDate(U8 *msg=NULL,CDate dft=I64_MIN,
       return res;
   }
 }
-*/

@@ -49,11 +49,11 @@ CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
   if (!data || !TaskValidate(srv) || master && !TaskValidate(master) ||
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
-  res=CAlloc(sizeof(CJob));
+  res=CAlloc(sizeof(CJob),adam_task);
   res->master_task=master;
   res->job_code=JOBT_EXE_STR;
   res->flags=flags;
-  res->aux_str=StrNew(data);
+  res->aux_str=StrNew(data,adam_task);
   res->ctrl=&srv->srv_ctrl;
 
   PUSHFD
@@ -86,11 +86,11 @@ CJob *TaskText(CTask *srv,CTask *master,U8 *data,I64 flags)
   if (!data || !TaskValidate(srv) || master && !TaskValidate(master) ||
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
-  res=CAlloc(sizeof(CJob));
+  res=CAlloc(sizeof(CJob),adam_task);
   res->master_task=master; //in case somebody cares
   res->job_code=JOBT_TEXT_INPUT;
   res->flags=flags;
-  res->aux_str=StrNew(data);
+  res->aux_str=StrNew(data,adam_task);
 
   PUSHFD
   task=srv->last_input_filter_task;
@@ -131,7 +131,7 @@ CJob *TaskMsg(CTask *_srv,CTask *master,
   if (!TaskValidate(srv) || master && !TaskValidate(master)||
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
-  tmpc=CAlloc(sizeof(CJob));
+  tmpc=CAlloc(sizeof(CJob),adam_task);
   tmpc->master_task=master;
   tmpc->job_code=JOBT_MSG;
   tmpc->msg_code=AbsI64(msg_code); //negative means do a down and up
@@ -417,7 +417,7 @@ I64 PopUpPrint(U8 *fmt,...)
 
 U0 XTalk(CTask *task,U8 *fmt,...)
 {//Sends text to other task. See \dLK,"::/Misc/OSTestSuite.HC"\d.
-  U8 *buf=StrPrintJoin(NULL,fmt,argc,argv),*st=StrNew(buf),
+  U8 *buf=StrPrintJoin(NULL,fmt,argc,argv),*st=StrNew(buf,adam_task),
 	*st2=MStrPrint("\"%%s\",%d;Free(%d);",st,st);
   TaskText(task,NULL,st2,0);
   Free(st2);
@@ -426,7 +426,7 @@ U0 XTalk(CTask *task,U8 *fmt,...)
 
 U0 XTalkWait(CTask *task,U8 *fmt,...)
 {//Send text to other task and wait for it to idle.
-  U8 *buf=StrPrintJoin(NULL,fmt,argc,argv),*st=StrNew(buf),
+  U8 *buf=StrPrintJoin(NULL,fmt,argc,argv),*st=StrNew(buf,adam_task),
 	*st2=MStrPrint("\"%%s\",%d;Free(%d);",st,st);
   TaskText(task,NULL,st2,0);
   Free(st2);
@@ -454,7 +454,7 @@ U0 InFile(U8 *filename)
 
 U0 In(U8 *fmt,...)
 {//Send text to own input buffer. See \dLK,"::/Demo/AcctExample/TOS/TOSDistro.HC"\d.
-  U8 *buf=StrPrintJoin(NULL,fmt,argc,argv),*st=StrNew(buf);
+  U8 *buf=StrPrintJoin(NULL,fmt,argc,argv),*st=StrNew(buf,adam_task);
   InStr("\"%%s\",%d;Free(%d);",st,st);
   Free(buf);
 }

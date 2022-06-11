@@ -170,3 +170,4 @@ public U0 OnceExe()
     LBts(&once_mode,RLf_ONCE_USER);
   }
 }
+RegCache;

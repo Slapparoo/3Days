@@ -5842,3 +5842,6 @@ extern I64 HashEntriesCompare(CWho *h1,CWho *h2);
 public extern I64 Unzip(U8 *files_find_mask="*.Z",U8 *fu_flags=NULL);
 public extern I64 Zip(U8 *files_find_mask="*",U8 *fu_flags=NULL);
 public extern I64 FF(U8 *files_find_mask,U8 *fu_flags=NULL);
+
+extern Bool DCClipLine(CDC *dc=NULL,I64 *x1,I64 *y1,I64 *x2,I64 *y2,
+	I64 width=0,I64 height=0);
