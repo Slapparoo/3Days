@@ -699,7 +699,7 @@ U0 ICLea(CIntermediateCode *tmpi,CICType t1,I64 r1,I64 d1,
 U0 __BoundsCheck(CIntermediateCode *tmpi,I64 rip,CICType t,I64 r,I64 disp) {
 	if(tmpi->cc->flags&CCF_ASM_EXPRESSIONS) return;
 	if(r==REG_RIP||r==REG_RBP) return;
-	I64 i;
+	I64 i,width=1;
 	CHashExport *tmpex;
 	CAOTImportExport *tmpie;
 	tmpex=HashFind("SYS_WHINE_OOB",tmpi->cc->htc.hash_table_lst,HTT_EXPORT_SYS_SYM);
@@ -720,16 +720,19 @@ U0 __BoundsCheck(CIntermediateCode *tmpi,I64 rip,CICType t,I64 r,I64 disp) {
 		break;
 		case RT_I8:
 		case RT_U8:
+		width=1;
 		ICPush(tmpi,MDF_IMM+RT_I64,0,1,rip);
 		break;
 		case RT_I16:
 		case RT_U16:
+		width=2;
 		ICPush(tmpi,MDF_IMM+RT_I64,0,8,rip);
 		break;
 		case RT_I32:
 		case RT_U32:
 		case RT_F32:
 		case RT_UF32:
+		width=4;
 		ICPush(tmpi,MDF_IMM+RT_I64,0,4,rip);
 		break;
 		//case RT_PTR: aliased to RT_I64
@@ -737,16 +740,22 @@ U0 __BoundsCheck(CIntermediateCode *tmpi,I64 rip,CICType t,I64 r,I64 disp) {
 		case RT_U64:
 		case RT_F64:
 		case RT_UF64:
+		width=8;
 		ICPush(tmpi,MDF_IMM+RT_I64,0,8,rip);
 		break;
 		default:
 		throw('Compiler');
 	}
-	ICPushRegs(tmpi,1<<r);
-	if(disp) {
-		//ADD U64 [RSP],0xXXxxXXxx
-		ICU32(tmpi,0x24048148);
-		ICU32(tmpi,disp);
+	if((r>>4)&0xf==0) { //Upper 4 bits are SIB index 
+		ICPushRegs(tmpi,1<<r);
+		if(disp) {
+			//ADD U64 [RSP],0xXXxxXXxx
+			ICU32(tmpi,0x24048148);
+			ICU32(tmpi,disp);
+		}
+	} else {
+		ICLea(tmpi,MDF_REG+RT_I64,REG_RAX,0,t,r,disp,tmpi->cc,NULL,rip);
+		ICPushRegs(tmpi,1<<REG_RAX);
 	}
 	//Call _WHINE_OOB
 	i=tmpex->val-(rip+tmpi->ic_cnt+5);
