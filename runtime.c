@@ -281,7 +281,11 @@ int64_t STK_DirCur(int64_t *stk) {
     return r;
 }
 int64_t STK_DirMk(int64_t *stk) {
-    return VFsCd(stk[0],VFS_CDF_MAKE);
+	char *d=VFsDirCur();
+    int r=VFsCd(stk[0],VFS_CDF_MAKE);
+    VFsCd(d,0);
+    PoopFree(d);
+    return r;
 }
 int64_t STK_FileNameAbs(int64_t *stk) {
     char *a=VFsFileNameAbs(stk[0]),*r;
