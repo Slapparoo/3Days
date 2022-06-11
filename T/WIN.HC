@@ -3,7 +3,6 @@ CMsStateGlbls old_ms={{-1000,-1000,0},{-1000,-1000,0},{-1000,-1000,0},
   FALSE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,FALSE
 };
 
-/*TODO restore
 U0 ProgressBarsRegTf(U8 *path=NULL)
 {
   F64 t,p1,p2,p3,p4;
@@ -79,7 +78,6 @@ U0 DrawProgressBars(CDC *dc)
     }
   }
 }
-*/
 U0 DrawWinGrid(CDC *dc)
 {
   F64 d;
@@ -195,7 +193,7 @@ U0 WinFinalUpdate(CDC *dc)
   if (ms_grid.coord)
     GrPrint(dc,GR_WIDTH-FONT_WIDTH*10,FONT_HEIGHT*3,
 	  "(%03d,%03d)",ms.pos.x,ms.pos.y);
-  //DrawProgressBars(dc);
+  DrawProgressBars(dc);
   if (winmgr.show_menu)
     DrawMenu(dc);
   else

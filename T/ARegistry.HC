@@ -118,7 +118,7 @@ U0 RegInit()
 }
 
 #help_index "Boot/Once;Registry/Once"
-#help_file "::/Doc/Once"
+#help_file "::/Doc/Once.DD"
 
 public U0 OnceFlush()
 {//Flush Once() buf.

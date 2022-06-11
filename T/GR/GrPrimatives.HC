@@ -138,7 +138,7 @@ I64 GrFloodFillRay(CDC *dc,I64 x,I64 y,I64 z,I32 *db)
 {
   I64 res,j,x1,ray_len,ray_len2;
 
-
+
   res=ray_len=GrRayLen(dc,&x,y,z,db);
   y--;
   j=ray_len;

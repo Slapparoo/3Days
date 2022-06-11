@@ -218,7 +218,7 @@ public Bool Ed(U8 *link_st,I64 edf_dof_flags=0)
     case LK_HELP_INDEX:
       doc=DocNew;
       doc->desc='HelpIndx';
-      //DocHelpIdx(doc,filename); TODO URGNET RESTORE
+      DocHelpIdx(doc,filename);
 ej_doc:
       if (!(edf_dof_flags&EDF_BAIL)) {
 	DocEd(doc);

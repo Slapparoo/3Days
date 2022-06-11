@@ -5824,3 +5824,20 @@ public extern U0 OnceFlush();
 public extern U0 Once(U8 *fmt,...);
 public extern U0 OnceDrv(U8 drv_let=0,U8 *fmt,...);
 public extern U0 OnceExe();
+
+public extern U0 PopUpHelpIndex(U8 *idx,CTask *parent=NULL);
+public extern U0 DocHelpIdx(CDoc *doc,U8 *idx);
+public extern I64 HashDepthRep(CHashTable *table=NULL);
+public extern U0 Who(U8 *fu_flags=NULL,CHashTable *h=NULL,
+	U8 *idx=NULL,CDoc *doc=NULL);
+extern class CWho;
+extern I64 HashEntriesCompare3(CWho *h1,CWho *h2);
+extern U8 *HelpComment(CTask *task,CHash *tmph,U8 *_src_link);
+extern U8 *HelpIndexStr(U8 **_ptr,U8 *idx);
+extern I64 HelpIndexCnt(U8 *ptr,U8 *idx);
+extern I64 HashEntriesCompare2(CWho *h1,CWho *h2);
+extern I64 HashEntriesCompare(CWho *h1,CWho *h2);
+
+public extern I64 Unzip(U8 *files_find_mask="*.Z",U8 *fu_flags=NULL);
+public extern I64 Zip(U8 *files_find_mask="*",U8 *fu_flags=NULL);
+public extern I64 FF(U8 *files_find_mask,U8 *fu_flags=NULL);

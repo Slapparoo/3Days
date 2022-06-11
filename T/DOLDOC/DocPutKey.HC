@@ -241,9 +241,9 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 			KeyDescSet("Cmd /Help");
 		    } else {
 		      if (sc&SCF_SHIFT)
-			Ed("::/Doc/AboutTempleOS.DD.Z");
+			Ed("::/Doc/AboutTempleOS.DD");
 		      else
-			Ed("::/Doc/HelpIndex.DD.Z");
+			Ed("::/Doc/HelpIndex.DD");
 		    }
 		    break;
 		  case SC_F2:

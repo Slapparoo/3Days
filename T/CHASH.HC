@@ -280,10 +280,15 @@ I64 FramePtrDel(U8 *name,CTask *t=NULL)
 }
 /**
  * Has format 
- * FUNC_NAME(U8[])
- * FUNC_FILE(U8[])
- * U32 s,e;
- * U32 line_offsets[]
+ * if(HTT_FUN)
+ *     FUNC_NAME(U8[])
+ *     FUNC_FILE(U8[])
+ *     FUNC_HELP_IDX(U8[])
+ *     U32 s,e;
+ *     U32 line_offsets[]
+ * if(HTT_HELP_FILE)
+ *     POINTS_TO_FILE(U8[])
+ *     HELP_IDX(U8[])
  * ...
  */
 I64 __DbgInfoWrite(CHashTable *h,U8 *to) {
@@ -295,23 +300,41 @@ I64 __DbgInfoWrite(CHashTable *h,U8 *to) {
 	for (i=0;i<=h->mask;i++) {
 		for(tmph=h->body[i];tmph;tmph=tmph->next)
 			if (tmph->src_link && !(tmph->type & (HTF_IMPORT | HTF_PRIVATE)) && (dbg_info=tmph->dbg_info)) {
-				StrScan(tmph->src_link,"FL:%s,%d",&bptr,&ln);
+				if(tmph->type&HTT_FUN) {
+					if(to) (to+size)(I64*)[0]=tmph->type&(HTT_FUN|HTF_PUBLIC);
+					size+=sizeof(I64);
+					StrScan(tmph->src_link,"FL:%s,%d",&bptr,&ln);
+					if(to) StrCpy(to+size,tmph->str);
+					size+=StrLen(tmph->str)+1;
+					if(to) StrCpy(to+size,buffer);
+					size+=StrLen(buffer)+1;
+					if(tmph->idx) {
+						if(to) StrCpy(to+size,tmph->idx);
+						size+=StrLen(tmph->idx)+1;
+					} else {
+						if(to) StrCpy(to+size,"");
+						size+=StrLen("")+1;
+					}
+					min=dbg_info->min_line;
+					max=dbg_info->max_line;
+					if(to) (to+size)(U32*)[0]=min;
+					if(to) (to+size)(U32*)[1]=max;
+					size+=2*sizeof(U32);
+					max-=min;
+					min-=min;
+					start_ptr=dbg_info->body[0];
+					for(ln=0;ln<=max+1;ln++) {
+						if(to) (to+size)(U32*)[0]=dbg_info->body[ln]-start_ptr;
+						size+=4;
+					}
+				}
+			} else if(tmph->type&HTT_HELP_FILE){
+				if(to) (to+size)(I64*)[0]=HTT_HELP_FILE;
+				size+=sizeof(I64);
 				if(to) StrCpy(to+size,tmph->str);
 				size+=StrLen(tmph->str)+1;
-				if(to) StrCpy(to+size,buffer);
-				size+=StrLen(buffer)+1;
-				min=dbg_info->min_line;
-				max=dbg_info->max_line;
-				if(to) (to+size)(U32*)[0]=min;
-				if(to) (to+size)(U32*)[1]=max;
-				size+=2*sizeof(U32);
-				max-=min;
-				min-=min;
-				start_ptr=dbg_info->body[0];
-				for(ln=0;ln<=max+1;ln++) {
-					if(to) (to+size)(U32*)[0]=dbg_info->body[ln]-start_ptr;
-					size+=4;
-				}
+				if(to) StrCpy(to+size,tmph->idx);
+				size+=StrLen(tmph->idx)+1;
 			}
 	}
 	return size;
@@ -324,29 +347,49 @@ U0 DbgInfoWrite(CHashTable *h,U8 *name) {
 	Free(buf);
 }
 U0 DbgInfoRead(U8 *name) {
-	I64 len,min,max,ln;
+	I64 len,min,max,ln,type;
 	CHashSrcSym *tmph;
 	CDbgInfo *dbg_info;
-	U8 *body=FileRead(name,&len),*ptr=body,*fn;
+	U8 *body=FileRead(name,&len),*ptr=body,*fn,*idx;
 	while(ptr<body+len) {
-		tmph=HashFind(ptr,Fs->hash_table,HTT_FUN);
-		ptr+=StrLen(ptr)+1;
-		fn=ptr;
-		ptr+=StrLen(ptr)+1;
-		min=ptr(U32*)[0];
-		max=ptr(U32*)[1];
-		ptr+=2*sizeof(U32);
-		if(tmph&&tmph->type&HTT_FUN) {
-			Free(tmph->src_link);
-			tmph->src_link=MStrPrint("FL:%s,%d",fn,min);
-			tmph->dbg_info=MAlloc(sizeof(CDbgInfo)+sizeof(U32)*(max-min+1));
-			tmph->dbg_info->min_line=min;
-			tmph->dbg_info->max_line=max;
-			for(ln=min;ln<=max+1;ln++) {
-				tmph->dbg_info->body[ln-min]=tmph(CHashFun*)->exe_addr(U8*)+ptr(U32*)[ln-min];
+		type=ptr(I64*)[0];
+		ptr+=8;
+		if(type&HTT_FUN) {
+			tmph=HashFind(ptr,Fs->hash_table,HTT_FUN);
+			ptr+=StrLen(ptr)+1;
+			fn=ptr;
+			ptr+=StrLen(ptr)+1;
+			idx=ptr;
+			ptr+=StrLen(ptr)+1;
+			min=ptr(U32*)[0];
+			max=ptr(U32*)[1];
+			ptr+=2*sizeof(U32);
+			if(tmph&&tmph->type&HTT_FUN) {
+				tmph->type|=type; //type may include HTF_PUBLIC
+				Free(tmph->src_link);
+				Free(tmph->idx);
+				if(StrLen(idx))
+					tmph->idx=StrNew(idx);
+				else
+					tmph->idx=NULL;
+				tmph->src_link=MStrPrint("FL:%s,%d",fn,min);
+				tmph->dbg_info=MAlloc(sizeof(CDbgInfo)+sizeof(U32)*(max-min+1));
+				tmph->dbg_info->min_line=min;
+				tmph->dbg_info->max_line=max;
+				for(ln=min;ln<=max+1;ln++) {
+					tmph->dbg_info->body[ln-min]=tmph(CHashFun*)->exe_addr(U8*)+ptr(U32*)[ln-min];
+				}
 			}
+			ptr+=sizeof(U32)*(max-min+1+1);
+		} else if(type&HTT_HELP_FILE) {
+			tmph=MAlloc(sizeof(CHashSrcSym));
+			tmph->type=HTF_PUBLIC|HTT_HELP_FILE;
+			tmph->str=StrNew(ptr);
+			ptr+=StrLen(ptr)+1;
+			tmph->idx=StrNew(ptr);
+			ptr+=StrLen(ptr)+1;
+			HashAdd(tmph,Fs->hash_table);
 		}
-		ptr+=sizeof(U32)*(max-min+1+1);
 	}
 	Free(body);
 }
