@@ -255,8 +255,6 @@ void PoopFree(void *ptr) {
     CMemUnused *un=ptr;
     CHeapFL *cache;
     CMemBlk *next,*last;
-    if(!InBounds(ptr,0,&un)) return;
-    if(!un) return;
     un--;
     if(!un->occupied) return;
     un->occupied=0;

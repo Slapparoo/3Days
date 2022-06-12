@@ -2,6 +2,36 @@
 #include <sched.h>
 #include <signal.h>
 #include <stdatomic.h>
+#include <pthread.h>
+typedef struct CThread {
+    void *Fs;
+    uint64_t sleep_until;
+    int8_t locked;
+    int8_t dead;
+    int8_t to_kill;
+    int8_t in_yield;
+    int64_t *wait_for_ptr;
+    int64_t wait_for_ptr_old_value;
+    int64_t wait_for_ptr_mask;
+    void *stack;
+    char *cur_dir;
+    char cur_drv;
+    ctx_t ctx;
+} CThread;
+typedef vec_t(CThread*) vec_CThread_t;
+typedef struct CCore {
+	vec_CThread_t *threads;
+	vec_CThread_t *dead_threads;
+	pthread_t pt;
+	pthread_mutex_t mutex;
+	pthread_cond_t wake_cond;
+	int flop;
+	int ready;
+	void *gs;
+} CCore;
+static __thread int core_num;
+static int core_cnt; 
+CCore cores[64];
 static void MakeContext(ctx_t *ctx,void *stack,void(*fptr)(void*),void *data) {
     ctx->rip=fptr;
     #ifdef TARGET_WIN32
@@ -12,7 +42,7 @@ static void MakeContext(ctx_t *ctx,void *stack,void(*fptr)(void*),void *data) {
     ctx->rsp=stack+MSize(stack)-8*8;//Include area for home registers and minimum of 4 stack items
 }
 #include <sys/time.h>
-static void *Fs;
+static __thread void *Fs;
 void *GetFs() {
     loop:
     if(!Fs) {
@@ -21,31 +51,15 @@ void *GetFs() {
     }
     return Fs;
 }
-struct CThread;
 typedef struct {
     void *fp;
     void *data;
     void *fs;
     struct CThread *thd;
 } CPair;
-typedef struct CThread {
-    void *Fs;
-    uint64_t sleep_until;
-    int8_t locked;
-    int8_t dead;
-    int8_t to_kill;
-    int64_t *wait_for_ptr;
-    int64_t wait_for_ptr_old_value;
-    int64_t wait_for_ptr_mask;
-    void *stack;
-    char *cur_dir;
-    char cur_drv;
-    ctx_t ctx;
-} CThread;
-typedef vec_t(CThread*) vec_CThread_t;
-static  CThread *cur_thrd;
-static  vec_CThread_t threads;
-static  vec_CThread_t dead_threads;
+static __thread CThread *cur_thrd;
+static __thread vec_CThread_t threads;
+static __thread vec_CThread_t dead_threads;
 void __FreeThread(CThread *t) {
 	if(!t) return;
     PoopAllocFreeTaskMem(t->Fs);
@@ -75,13 +89,14 @@ void __KillThread(CThread *t) {
 }
 static int64_t __SpawnFFI(CPair *p) {
     CHash **ex;
+    VFsThrdInit();
     FFI_CALL_TOS_1(p->fp,p->data);
     if(ex=map_get(&TOSLoader,"Exit")) {
         FFI_CALL_TOS_0(ex[0]->val);
     }
     __Exit();
 }
-CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
+CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name) {
     CThread *thd=TD_MALLOC(sizeof(CThread));
     CPair *p=TD_MALLOC(sizeof(CPair));
     p->fp=fp,p->data=data,p->fs=fs,p->thd=thd;
@@ -89,18 +104,24 @@ CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
     #ifndef TARGET_WIN32
     signal(SIGBUS,FualtCB);
     #endif
-    VFsThrdInit();
     thd->Fs=p->fs;
     thd->cur_dir=cur_dir;
     thd->cur_drv=cur_drv;
     GetContext(&thd->ctx);
     if(!thd->dead) {
-        vec_push(&threads,thd);
-        thd->stack=TD_MALLOC(2000000); //aprx 2Mb
+		thd->stack=TD_MALLOC(2000000); //aprx 2Mb
         MakeContext(&thd->ctx,thd->stack,&__SpawnFFI,p);
+        while(!atomic_load(&cores[core].ready))
+			sched_yield();
+		pthread_mutex_lock(&cores[core].mutex);
+        vec_push(cores[core].threads,thd);
+        pthread_mutex_unlock(&cores[core].mutex);
     }
     return thd;
 }
+CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
+	return __MPSpawn(core_num,fs,fp,data,name);
+} 
 void __AwakeThread(CThread *t) {
 	if(!t) return;
     t->locked=0;
@@ -120,11 +141,17 @@ void __SleepUntilChange(int64_t *ptr,int64_t mask) {
         cur_thrd->wait_for_ptr=ptr;
         cur_thrd->wait_for_ptr_old_value=*ptr;
         cur_thrd->wait_for_ptr_mask=mask;
+        cur_thrd->locked=1;
     }
     __Yield();
 }
+static int ThrdIsReady(CThread *thr) {
+	if(thr->dead||thr->locked) return 0;
+	if(thr->sleep_until&&(thr->sleep_until>=SDL_GetTicks()))
+		return 0;
+	return 1;
+}
 void __Yield() {
-	static int flop;
     enter:;
     #ifndef TARGET_WIN32
     sched_yield();
@@ -132,6 +159,7 @@ void __Yield() {
     ctx_t old;
     GetContext(&old);
     int64_t i;
+    pthread_mutex_lock(&cores[core_num].mutex);
     for(i=0;i!=threads.length;i++)
         if(threads.data[i]->to_kill) {
             if(cur_thrd!=threads.data[i]) {
@@ -165,12 +193,20 @@ void __Yield() {
     if(idx==-1) {
         idx=0;
         idx2=threads.length-1;
-        if(idx2==-1) return;
+        if(idx2==-1) {
+			pthread_mutex_unlock(&cores[core_num].mutex);
+			return;
+		}
         goto ent;
     }
+    threads.data[idx]->in_yield=1;
     GetContext(&threads.data[idx]->ctx);
-    if(!(flop^=1)) {
-		return;
+    if(ThrdIsReady(threads.data[idx])) {
+		if(!(cores[core_num].flop^=1)) {
+			threads.data[idx]->in_yield=0;
+			pthread_mutex_unlock(&cores[core_num].mutex);
+			return;
+		}
 	}
 	//idx doesnt change but the phyiscall index of the CAN CHANGE,SO RECOMPUTE 
     vec_find(&threads,cur_thrd,idx);
@@ -199,16 +235,21 @@ void __Yield() {
             //We got here if threads.data[idx2]->sleep_until==0
             dont_sleep=1;
             pass:
-            threads.data[idx]->cur_drv=cur_drv;
-            threads.data[idx]->cur_dir=cur_dir;
-            threads.data[idx]->Fs=Fs;
-            //
-            ent:
-            cur_thrd=threads.data[idx2];
-            Fs=threads.data[idx2]->Fs;
-            cur_dir=threads.data[idx2]->cur_dir;
-            cur_drv=threads.data[idx2]->cur_drv;
-            SetContext(&threads.data[idx2]->ctx);
+            if(ThrdIsReady(threads.data[idx2])) {
+				threads.data[idx]->cur_drv=cur_drv;
+				threads.data[idx]->cur_dir=cur_dir;
+				threads.data[idx]->Fs=Fs;
+				//
+				ent:
+				cur_thrd=threads.data[idx2];
+				Fs=threads.data[idx2]->Fs;
+				cur_dir=threads.data[idx2]->cur_dir;
+				cur_drv=threads.data[idx2]->cur_drv;
+				if(!threads.data[idx]->in_yield)
+					pthread_mutex_unlock(&cores[core_num].mutex);
+				SetContext(&threads.data[idx2]->ctx);
+			}
+			break;
         }
     }
     if(most_overdue_i!=-1) {
@@ -229,16 +270,39 @@ void __AwaitThread(CThread *t) {
             __Yield();
     }
 }
-void InitThreads() {
+int InitThreadsForCore() {
     vec_init(&threads);
     vec_init(&dead_threads);
-    /*
-    struct itimerval timer;
-    timer.it_value.tv_sec=0;
-    timer.it_value.tv_usec=10000;
-    timer.it_interval.tv_sec=0;
-    timer.it_interval.tv_usec=10000;
-    signal(SIGPROF,&Yield);
-    setitimer(ITIMER_PROF,&timer,NULL);
-    */
+    VFsThrdInit(); 
+    int num=atomic_fetch_add(&core_cnt,1);
+    core_num=num;
+    cores[num].pt=pthread_self();
+    cores[num].mutex=PTHREAD_MUTEX_INITIALIZER;
+    cores[num].wake_cond=PTHREAD_COND_INITIALIZER;
+    cores[num].gs=PoopMAlloc(512); //Should be enough
+    cores[num].threads=&threads;
+    cores[num].dead_threads=&dead_threads;
+    atomic_fetch_add(&cores[num].ready,1);
+    return num;
+}
+static void Loop(void*ul) {
+		//Make a dummy "thread" to yield out to if we have no other threads 
+		CThread *thd=TD_MALLOC(sizeof(CThread));
+		InitThreadsForCore();
+		vec_push(&threads,thd);
+		GetContext(&thd->ctx);
+		for(;;) {
+			SDL_Delay(50);
+			__Yield();
+		}
+}
+void SpawnCore() {
+	pthread_t dummy;
+	pthread_create(&dummy,NULL,&Loop,NULL);
+}
+int CoreNum() {
+	return core_num;
+}
+void *GetGs() {
+	return cores[core_num].gs;
 }

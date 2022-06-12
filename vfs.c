@@ -9,8 +9,8 @@ static  int RootPathLen();
 #define VFS_T_FILE 1 
 #define VFS_T_DIR 2 
 #define VFS_T_DRIVE 3 
-char* cur_dir;
-char cur_drv;
+__thread char* cur_dir;
+__thread char cur_drv;
 static map_str_t mount_points;
 void VFsGlobalInit() {
 	map_init(&mount_points);

@@ -307,7 +307,10 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
   MemCpy(task->task_name,task_name,TASK_NAME_LEN);
   StrCpy(task->task_title,task->task_name);
   task->title_src=TTS_TASK_NAME;
-  task->_3days_spawn_ptr=__Spawn(task,fp_start_addr,data,task_name);
+  if(target_cpu==-1)
+	task->_3days_spawn_ptr=__Spawn(task,fp_start_addr,data,task_name);
+  else
+    task->_3days_spawn_ptr=__MPSpawn(target_cpu,task,fp_start_addr,data,task_name);
   if (Bt(&flags,JOBf_ADD_TO_QUE)) {
     TaskQueInsChild(task);
     TaskQueIns(task);

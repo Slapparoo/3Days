@@ -110,8 +110,8 @@ char *VFsFileNameAbs(char *name);
 //Will not fail if not exists
 #define VFS_CDF_FILENAME_ABS (1<<1)
 int VFsCd(char *to,int flags);
-extern char* cur_dir;
-extern char cur_drv;
+extern __thread char* cur_dir;
+extern __thread char cur_drv;
 char *VFsDirCur();
 char *__VFsFileNameAbs(char *name);
 void VFsThrdInit();
@@ -171,3 +171,7 @@ struct CMemBlk;
 int64_t InBounds(void *ptr,int64_t sz,void **target);
 void *PoopMallocTask(int64_t sz,void *t);
 void *PoopMalloc32Task(int64_t sz,void *t);
+int InitThreadsForCore();
+int CoreNum();
+void *GetGs();
+void SpawnCore();

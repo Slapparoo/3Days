@@ -140,8 +140,14 @@ extern class CFile;
 #define ARGT_XMM128	54 // Not implemented
 #define ARGT_XMM0	55 // Not implemented
 #define OCF_ALIAS	1
+extern class CCPU;
 #ifdef IMPORT_BUILTINS
+import I64i mp_cnt();
+import CCPU *Gs();
 import U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
+import U8i *__MPSpawn(I64i,CTask *,U8i *,U8i *,U8i *);
+import I64i __CoreNum();
+import U0i __SpawnCore();
 import U0i __MAlloc32(I64i sz,CTask *t);
 import U0i __MAlloc(I64i sz,CTask *t);
 import U0i __Free(U8i *);
@@ -194,6 +200,12 @@ import U0 __Del(U8 *);
 import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 #else
+extern I64i mp_cnt();
+extern CCPU *Gs();
+extern U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
+extern U8i *__MPSpawn(I64i,CTask *,U8i *,U8i *,U8i *);
+extern I64i __CoreNum();
+extern U0i __SpawnCore();
 extern I64i __InBounds(U8i *,I64i sz);
 extern U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
 extern U0i __MAlloc32(I64i sz,CTask *t);
@@ -251,7 +263,6 @@ extern U0i Exit();
 extern class CAOT;
 extern class CAOTHeapGlbl;
 extern class CAOTImportExport;
-extern class CCPU;
 extern class CDC;
 extern class CDirContext;
 extern class CDoc;
@@ -261,7 +272,6 @@ extern class CHashFun;
 extern class CHeapCtrl;
 extern class CIntermediateCode;
 extern class CJobCtrl;
-extern class CTask;
 
 #define NULL	0
 #define TRUE	1

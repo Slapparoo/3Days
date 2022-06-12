@@ -392,12 +392,23 @@ int64_t STK_InBounds(int64_t *stk) {
 	if(!near_alloc) return 0x7FFFFFFFFFFFFFFFll;
 	return near_alloc;
 }
+int64_t STK___MPSpawn(int64_t *stk) {
+	return __MPSpawn(stk[0],stk[1],stk[2],stk[3],stk[4]);
+}
+int64_t mp_cnt(int64_t *stk) {
+	return sysconf(_SC_NPROCESSORS_ONLN);
+} 
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+	STK_RegisterFunctionPtr(&ffi_blob,"mp_cnt",mp_cnt,0);
+	STK_RegisterFunctionPtr(&ffi_blob,"Gs",GetGs,0);
+	STK_RegisterFunctionPtr(&ffi_blob,"__MPSpawn",STK___MPSpawn,5);
+	STK_RegisterFunctionPtr(&ffi_blob,"__SpawnCore",SpawnCore,0);
+	STK_RegisterFunctionPtr(&ffi_blob,"__CoreNum",CoreNum,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"__InBounds",STK_InBounds,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"SetPtrCallers",STK_SetPtrCallers,2+5);
 	STK_RegisterFunctionPtr(&ffi_blob,"__MAlloc32",STK_PoopMAlloc32,2);

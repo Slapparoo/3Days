@@ -8,7 +8,7 @@
 #define RS_ATTR_RESIDENT       0x200     
 #define RS_ATTR_COMPRESSED     0x400     
 #define RS_ATTR_CONTIGUOUS     0x800     
-#define RS_ATTR_FIXED          0x1000    #
+#define RS_ATTR_FIXED          0x1000
 #define RS_BLK_SIZE            512
 #define RS_DRV_OFFSET	       0xB000
 #define RS_ROOT_CLUS           0x5A
@@ -25,11 +25,7 @@ U0 WriteDirent(U8 *body,U8 *cbody,U8 *to) {
 	if(!StrLen(dirent->name)) return;
 	if(!StrCmp(".",dirent->name)||!StrCmp("..",dirent->name)) goto next;
 	U8 *full_name=MStrPrint("%s/%s",to,dirent->name),*buf;
-	if(dirent&RS_ATTR_DELETED) {
-		Free(full_name);
-		goto next;
-	}
-	TOSPrint("cbody:%p\n",cbody);
+	TOSPrint("cbody:%p\n",cbody-body);
 	if(dirent->attr&RS_ATTR_DIR) {
 		DirMk(full_name);
 		TOSPrint("Directory %s:\n",full_name);
@@ -38,7 +34,7 @@ U0 WriteDirent(U8 *body,U8 *cbody,U8 *to) {
 	} else {
 		TOSPrint("File %s:\n",full_name);
 		if(IsDotZ(full_name)) {
-			buf=ExpandBuf(body+RS_BLK_SIZE*dirent->clus,Fs);
+			buf=ExpandBuf(body+RS_BLK_SIZE*dirent->clus,Fs);
 			FileWrite(full_name,buf,(body+RS_BLK_SIZE*dirent->clus)(CArcCompress*)->expanded_size);
 			Free(buf);
 		} else
@@ -58,4 +54,4 @@ public U0 ReadISOFile(U8 *isoc,U8 *to=".") {
 	WriteDirent(body,offset+body,to);
 	Free(body);
 }
-ReadISOFile("TOS_Supplemental1.ISO.C","SUP1");
+ReadISOFile("TOS_Distro.ISO","Distro");

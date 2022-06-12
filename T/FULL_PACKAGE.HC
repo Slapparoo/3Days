@@ -31,8 +31,17 @@ U0 LoadImps() {
     //Load asm externs second
     ExePrint2("#define BOOT_3DAYS\n#include \"KERNELB.HH\";\n");
 }
+static U0 SetGsNum(I64) {
+	Gs->num=__CoreNum;
+}
 U0 Adam(U8 *) {
+	I64 idx;
 	LoadImps;
+	Gs->num=__CoreNum;//It should be 0
+	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
+		__SpawnCore;
+		Spawn(&SetGsNum,,,idx);
+	}
     if(FileFind("HCRT.DBG.Z"))
 		DbgInfoRead("HCRT.DBG.Z");
 	boundscheck_enable=1;

@@ -79,6 +79,7 @@ void SignalHandler(int sig) {
     exit(0);
 }
 static void Core0(char *name) {
+	InitThreadsForCore();
 	#ifndef TARGET_WIN32
 	signal(SIGUSR1,&Core0Exit);
 	#endif
@@ -95,7 +96,6 @@ int main(int argc,char **argv) {
     SDL_Init(SDL_INIT_EVERYTHING);
     InitSound();
     VFsGlobalInit();
-    InitThreads();
     #ifndef TARGET_WIN32
     char *rp=realpath(argv[0],NULL);
     if(rp==NULL)

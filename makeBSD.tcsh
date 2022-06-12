@@ -1,5 +1,5 @@
 #!/bin/tcsh
-set gFindLoc = `which gfind`
+set gFindLoc = `which find`
 set binary = 3d_loader
 set cc = gcc
 if ! $#gFindLoc then
@@ -15,7 +15,7 @@ if ! -e $binary then
   end
 else
   foreach f ( $CFiles )
-    set find = `$gFindLoc -wholename    $f -newer $binary `
+    set find = `$gFindLoc . -wholename    $f -newer $binary `
     if($#find)  $cc $CFlags -c $f -o $f.o || rm $f.o 
   end
 endif
@@ -26,7 +26,7 @@ if ! -e $binary then
   end
 else
   foreach f ( $AsmFiles )
-    set find = `$gFindLoc -wholename $f -newer $binary `
+    set find = `$gFindLoc . -wholename $f -newer $binary `
     if($#find) yasm -f elf64 $f -o $f.o || rm $f.o
   end
 endif
