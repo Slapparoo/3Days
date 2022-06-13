@@ -140,6 +140,7 @@ public U0 JukeBox(U8 *dirname="/Psalmody/Examples",U8 **_filename=NULL)
 	DocPrint(doc,"\n");
       if (FileOcc("Play(",tmpde->full_name,"")) {
 	st=StrNew(tmpde->name);
+	"Loaded:%s\n",st;
 	FileExtRem(st);
 	s=DocRead(tmpde->full_name);
 	doc_e=s->head.next;

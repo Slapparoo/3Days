@@ -175,3 +175,5 @@ int InitThreadsForCore();
 int CoreNum();
 void *GetGs();
 void SpawnCore();
+int VFsFileExists(char *path);
+void __SleepUntilValue(int64_t *ptr,int64_t,int64_t);

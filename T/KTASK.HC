@@ -5,7 +5,7 @@ U0 TaskQueIns(CTask *task,CTask *pred=NULL)
   CTask *last;
   if (!pred) pred=Fs;
   while(LBts(&tq_lock,0)) {
-    __SleepUntilChange(&tq_lock);
+    __SleepUntilValue(&tq_lock,,0);
   }
   last=pred->last_task;
   last->next_task=pred->last_task=task;
@@ -19,7 +19,7 @@ U0 TaskQueRem(CTask *task)
 //Use \dLK,"Suspend",A="MN:Suspend"\d().
   CTask *next,*last;
   while(LBts(&tq_lock,0)) {
-    __SleepUntilChange(&tq_lock);
+    __SleepUntilValue(&tq_lock,,0);
   }
   next=task->next_task;
   last=task->last_task;
@@ -32,7 +32,7 @@ U0 TaskQueInsChild(CTask *task)
 {
   CTask *last,*pred;
   while(LBts(&tq_lock,0)) {
-    __SleepUntilChange(&tq_lock);
+    __SleepUntilValue(&tq_lock,,0);
   }
   pred=task->parent_task->last_child_task;
   //I reworked this 
@@ -83,10 +83,10 @@ I64 TaskEnd()
     LBts(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0);
 
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)){
-    __SleepUntilChange(&task->task_flags,1<<TASKf_TASK_LOCK);
+    __SleepUntilValue(&task->task_flags,1<<TASKf_TASK_LOCK,0);
   }
   while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
-    __SleepUntilChange(&task->srv_ctrl.flags,1<<JOBCf_LOCKED);
+    __SleepUntilValue(&task->srv_ctrl.flags,1<<JOBCf_LOCKED,0);
   }
 
   JobQueDel(&task->srv_ctrl.next_waiting);
@@ -373,7 +373,7 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (!task) task=Fs;
   PUSHFD
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
-    __SleepUntilChange(&task->task_flags,1<<TASKf_TASK_LOCK);
+    __SleepUntilValue(&task->task_flags,1<<TASKf_TASK_LOCK,0);
   }
   WinDerivedValsUpdate(task);
   if (fp_update_ctrls) {

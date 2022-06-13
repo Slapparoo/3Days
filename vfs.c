@@ -459,3 +459,9 @@ void CreateTemplateBootDrv(char *to,char *template,int overwrite) {
     CopyDir(to,buffer2);
     MountDrive('T',to);
 }
+int VFsFileExists(char *path) {
+	path=__VFsFileNameAbs(path);
+	int e=__FExists(path);
+	PoopFree(path);
+	return e;
+}

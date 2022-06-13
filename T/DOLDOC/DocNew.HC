@@ -4,7 +4,7 @@ public Bool DocLock(CDoc *doc)
 {//Make this task have exclusive access to this doc.
   if (!Bt(&doc->locked_flags,DOClf_LOCKED) || doc->owning_task!=Fs) {
     while (LBts(&doc->locked_flags,DOClf_LOCKED)) {
-      __SleepUntilChange(&doc->locked_flags,1<<DOClf_LOCKED);
+      __SleepUntilValue(&doc->locked_flags,1<<DOClf_LOCKED,0);
     }
     if (doc->owning_task!=Fs) {
       LBEqu(&doc->flags,DOCf_BREAK_UNLOCKED,BreakLock(Fs));

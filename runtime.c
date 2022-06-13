@@ -365,8 +365,8 @@ int64_t STK_GetClipboardText(int64_t *stk) {
 int64_t STK___SetThreadPtr(int64_t *stk) {
     __SetThreadPtr(stk[0],stk[1]);
 }
-int64_t STK___SleepUntilChange(int64_t *stk) {
-    __SleepUntilChange(stk[0],stk[1]);
+int64_t STK___SleepUntilValue(int64_t *stk) {
+    __SleepUntilValue(stk[0],stk[1],stk[2]);
 }
 int64_t STK_FSize(int64_t *stk) {
 	return VFsFSize(stk[0]);
@@ -377,6 +377,9 @@ int64_t STK_FUnixTime(int64_t *stk) {
 int64_t STK_SetPtrCallers(int64_t *stk) {
 	assert(stk[1]==5);
 	PoopAllocSetCallers(stk[0],stk[1],stk+2);
+}
+int64_t STK___FExists(int64_t *stk) {
+	return VFsFileExists(stk[0]);
 }
 /*
  * TODO give a better name
@@ -404,6 +407,7 @@ void TOS_RegisterFuncPtrs() {
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+	STK_RegisterFunctionPtr(&ffi_blob,"__FExists",STK___FExists,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"mp_cnt",mp_cnt,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"Gs",GetGs,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"__MPSpawn",STK___MPSpawn,5);
@@ -416,7 +420,7 @@ void TOS_RegisterFuncPtrs() {
 	STK_RegisterFunctionPtr(&ffi_blob,"__Free",STK_PoopFree,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"FUnixTime",STK_FUnixTime,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"FSize",STK_FSize,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__SleepUntilChange",STK___SleepUntilChange,2);
+    STK_RegisterFunctionPtr(&ffi_blob,"__SleepUntilValue",STK___SleepUntilValue,3);
     STK_RegisterFunctionPtr(&ffi_blob,"__SetThreadPtr",STK___SetThreadPtr,2);
     STK_RegisterFunctionPtr(&ffi_blob,"SetClipboardText",STK_SetClipboardText,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetClipboardText",STK_GetClipboardText,0);

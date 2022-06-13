@@ -135,6 +135,6 @@ asm {
 	POP RBX
 	POP RAX
 	@@ret:
-	LEAVE
+	POP RBP
 	RET1 0x10
 };

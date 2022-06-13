@@ -11,7 +11,7 @@ typedef struct CThread {
     int8_t to_kill;
     int8_t in_yield;
     int64_t *wait_for_ptr;
-    int64_t wait_for_ptr_old_value;
+    int64_t wait_for_ptr_expected;
     int64_t wait_for_ptr_mask;
     void *stack;
     char *cur_dir;
@@ -128,7 +128,7 @@ void __AwakeThread(CThread *t) {
 }
 void __Suspend(CThread *t) {
 	if(!t) return;
-    t->locked=1;
+    t->locked=3;
     if(t==cur_thrd) __Yield();
 }
 void __Sleep(int64_t t) {
@@ -136,12 +136,12 @@ void __Sleep(int64_t t) {
         cur_thrd->sleep_until=t+SDL_GetTicks();
     __Yield();
 }
-void __SleepUntilChange(int64_t *ptr,int64_t mask) {
+void __SleepUntilValue(int64_t *ptr,int64_t mask,int64_t expected) {
     if(cur_thrd) {
         cur_thrd->wait_for_ptr=ptr;
-        cur_thrd->wait_for_ptr_old_value=*ptr;
+        cur_thrd->wait_for_ptr_expected=expected;
         cur_thrd->wait_for_ptr_mask=mask;
-        cur_thrd->locked=1;
+        cur_thrd->locked=2;
     }
     __Yield();
 }
@@ -168,7 +168,7 @@ void __Yield() {
             }
         } else if(threads.data[i]->wait_for_ptr) {
             int64_t mask=threads.data[i]->wait_for_ptr_mask;
-            if((threads.data[i]->wait_for_ptr_old_value&mask)==(mask&atomic_load(threads.data[i]->wait_for_ptr))) {
+            if((threads.data[i]->wait_for_ptr_expected&mask)==(mask&atomic_load(threads.data[i]->wait_for_ptr))) {
                 threads.data[i]->locked=1;
             } else {
                 threads.data[i]->wait_for_ptr=NULL;
@@ -188,7 +188,7 @@ void __Yield() {
     loop:;
     int64_t ms=SDL_GetTicks(),min_sleep=-1,t,most_overdue_i=-1;
     int64_t dont_sleep=0;
-    int64_t idx,idx2=threads.length-1;
+    int64_t idx,idx2=threads.length-1,idx3=-1;
     vec_find(&threads,cur_thrd,idx);
     if(idx==-1) {
         idx=0;
@@ -201,6 +201,9 @@ void __Yield() {
     }
     threads.data[idx]->in_yield=1;
     GetContext(&threads.data[idx]->ctx);
+    //idx doesnt change but the phyiscall index of the CAN CHANGE,SO RECOMPUTE 
+    vec_find(&threads,cur_thrd,idx);
+    ms=SDL_GetTicks();
     if(ThrdIsReady(threads.data[idx])) {
 		if(!(cores[core_num].flop^=1)) {
 			threads.data[idx]->in_yield=0;
@@ -208,8 +211,6 @@ void __Yield() {
 			return;
 		}
 	}
-	//idx doesnt change but the phyiscall index of the CAN CHANGE,SO RECOMPUTE 
-    vec_find(&threads,cur_thrd,idx);
     check:
     for(idx2=(idx+1)%threads.length;idx!=idx2;idx2=(1+idx2)%threads.length) {
         if(threads.data[idx2]->locked||threads.data[idx2]->dead) {
@@ -230,11 +231,12 @@ void __Yield() {
                 min_sleep=-1;
             if(threads.data[idx2]->sleep_until<=ms) {
 				threads.data[idx2]->sleep_until=0;
+				goto pass;
             }
         } else {
-            //We got here if threads.data[idx2]->sleep_until==0
-            dont_sleep=1;
-            pass:
+			if(idx3==-1) idx3=idx2;
+			continue;
+			pass:
             if(ThrdIsReady(threads.data[idx2])) {
 				threads.data[idx]->cur_drv=cur_drv;
 				threads.data[idx]->cur_dir=cur_dir;
@@ -245,7 +247,7 @@ void __Yield() {
 				Fs=threads.data[idx2]->Fs;
 				cur_dir=threads.data[idx2]->cur_dir;
 				cur_drv=threads.data[idx2]->cur_drv;
-				if(!threads.data[idx]->in_yield)
+				if(!threads.data[idx2]->in_yield)
 					pthread_mutex_unlock(&cores[core_num].mutex);
 				SetContext(&threads.data[idx2]->ctx);
 			}
@@ -255,7 +257,10 @@ void __Yield() {
     if(most_overdue_i!=-1) {
 		idx2=most_overdue_i;
 		goto pass;
-	}
+	} else if(idx3!=-1) {
+		idx2=idx3;
+		goto pass;
+    }
     if(min_sleep>0&&!dont_sleep) {//We skipped over the current thread when looking for canidates to swap too
 		SDL_Delay((int64_t)min_sleep);
     }

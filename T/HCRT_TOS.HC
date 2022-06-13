@@ -10,15 +10,11 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
         return StrNew("");
     }
 	U8 *fn2=FileNameAbs(fn),*data=NULL,*exp;
-	if(!fn2) {
+	if(!__FExists(fn2)) {
         PrintErr("File \"%s\" not found!",fn);
-        return NULL;
+        throw('FILE');
     }
 	if(!t) t=Fs;
-    if(!FileFind(fn2)) {
-		"File %s not found!!!\n",fn2;
-		throw('FILE');
-	}
 	data=__FileRead(fn,&len2,t);
 	if(IsDotZ(fn2)) {
 		exp=ExpandBuf(data,t);

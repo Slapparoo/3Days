@@ -142,6 +142,7 @@ extern class CFile;
 #define OCF_ALIAS	1
 extern class CCPU;
 #ifdef IMPORT_BUILTINS
+import U8i __FExists(U8i *);
 import I64i mp_cnt();
 import CCPU *Gs();
 import U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
@@ -153,7 +154,7 @@ import U0i __MAlloc(I64i sz,CTask *t);
 import U0i __Free(U8i *);
 import I64i FSize(U8i *);
 import I64i FUnixTime(U8i *);
-import U0 __SleepUntilChange(I64i *ptr,U64i mask=~0);
+import U0 __SleepUntilValue(I64i *ptr,U64i mask=~0,U64i);
 import U8i *GetClipboardText();
 import U8i *SetClipboardText(U8i *);
 public import Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
@@ -200,6 +201,7 @@ import U0 __Del(U8 *);
 import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 #else
+extern U8i __FExists(U8i *);
 extern I64i mp_cnt();
 extern CCPU *Gs();
 extern U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
@@ -257,7 +259,7 @@ public extern Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public extern Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public extern U0 FClose(CFile *f);
 public extern CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
-extern U0 __SleepUntilChange(I64i *ptr,U64i mask=~0);
+extern U0 __SleepUntilValue(I64i *ptr,U64i mask=~0,U64i expected);
 #endif
 extern U0i Exit();
 extern class CAOT;
@@ -5855,3 +5857,4 @@ public extern I64 FF(U8 *files_find_mask,U8 *fu_flags=NULL);
 
 extern Bool DCClipLine(CDC *dc=NULL,I64 *x1,I64 *y1,I64 *x2,I64 *y2,
 	I64 width=0,I64 height=0);
+extern CTask *sys_winmgr_task;
