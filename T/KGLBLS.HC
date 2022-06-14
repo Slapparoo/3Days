@@ -81,3 +81,4 @@ public _extern SYS_PROGRESSES
 	CProgress sys_progresses[PROGRESS_BARS_NUM]; //All progress bars.
 CBlkDevGlbls	blkdev;
 CGodGlbls god;
+CKeyDevGlbls keydev;

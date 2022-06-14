@@ -76,7 +76,9 @@ CInit;
 #endif
 #include "AMATH.HC"
 #include "FONT.HC"
+#include "FONT2.HC"
 #include "KMISC.HC"
+#include "KeyDev.HC"
 #include "KBMESSAGE.HC"
 #include "MOUSE.HC"
 #include "JOB.HC"
@@ -94,8 +96,28 @@ CInit;
 #include "MENU.HC"
 #include "WIN.HC"
 #include "DOLDOC/MakeDoc.HC"
-
-fp_puts2=&KDDocPutS;
+//See KeyDev.HC in TempleOS
+Bool PutS(U8 *st) {
+	I64 ch;
+	Bool cont;
+	U8 *ptr;
+	CKeyDevEntry *tmpk=keydev.put_key_head.next;
+	if(!st) return;
+	KDDocPutS(st);
+	while (cont && tmpk!=&keydev.put_key_head) {
+      if (tmpk->put_s) {
+	if ((*tmpk->put_s)(st))
+	  break;
+      } else {
+	ptr=st;
+	while (ch=*ptr++)
+	  if ((*tmpk->put_key)(ch,0))
+	    cont=FALSE;
+      }
+      tmpk=tmpk->next;
+    }
+}
+fp_puts2=&PutS;
 U0 PutKey(I64 ch,I64 s)	 {
     DocPutKey(DocPut,ch,s);
 }

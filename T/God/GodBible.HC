@@ -345,4 +345,4 @@ U0 CtrlAltB(I64)
 {
   PopUp("BibleView;");
 }
-//CtrlAltCBSet('B',&CtrlAltB,"Cmd /Bible"); TODO URGENT RESTORE
+CtrlAltCBSet('B',&CtrlAltB,"Cmd /Bible");

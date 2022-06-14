@@ -102,7 +102,6 @@ U0 WinGrid(Bool val)
   } else
     MemCpy(&ms_grid,&last_grid,sizeof(CGridGlbls));
 }
-/* TODO RESTORE
 U0 CtrlAltG(I64 sc)
 {
   if (sc&SCF_SHIFT)
@@ -145,7 +144,6 @@ U0 CtrlAltA(I64)
     Spawn(&ExtendedASCII);
 }
 CtrlAltCBSet('A',&CtrlAltA,"Cmd /Extended ASCII");
-*/
 public U0 WinScrollNull(CTask *task,CD3I64 *s)
 {//If panning a window has been done, restore to zero.
   s->x=task->scroll_x;

@@ -5858,3 +5858,10 @@ public extern I64 FF(U8 *files_find_mask,U8 *fu_flags=NULL);
 extern Bool DCClipLine(CDC *dc=NULL,I64 *x1,I64 *y1,I64 *x2,I64 *y2,
 	I64 width=0,I64 height=0);
 extern CTask *sys_winmgr_task;
+extern U0 KeyDescSet(U8 *fmt,...);
+extern U0 KeyDevRem(CKeyDevEntry *tmpk);
+extern CKeyDevEntry *KeyDevAdd(Bool (*fp_put_key)(I64 ch,I64 sc),
+	Bool (*fp_puts)(U8 *st),I64 priority,Bool key_descs=FALSE);
+extern U0 CtrlAltCBSet(U8 ch,U0 (*fp_hndlr)(I64 sc),
+	U8 *no_shift_desc=NULL,U8 *shift_desc=NULL,Bool in_irq=FALSE);
+extern U0 UserCmdLine(I64 dummy=0);

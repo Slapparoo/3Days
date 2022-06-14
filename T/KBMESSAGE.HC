@@ -347,6 +347,12 @@ Bool ScanKey(I64 *_ch=NULL,I64 *_scan_code=NULL,Bool echo=FALSE)
     if (_scan_code) *_scan_code=sc;
     if (echo)
       PutKey(ch,sc);
+    ch=ToUpper(ScanCode2Char(sc&0xff));
+    if(sc&SCF_CTRL&&sc&SCF_ALT&&('A'<=ch<='Z')) {
+		ch-='A';
+		if(keydev.fp_ctrl_alt_cbs[ch])
+			(*keydev.fp_ctrl_alt_cbs[ch])(sc);
+	}
     return TRUE;
   } else {
     if (_ch) *_ch=0;
@@ -473,20 +479,6 @@ static U0 KBCb(I64 c,I64 s) {
     BEqu(&kbd.down_bitmap,s&0x7f,!(s&SCF_KEY_UP));
     FifoI64Ins(kbd.scan_code_fifo,s);
     kbd.timestamp=__GetTicks;
-    //If we get a CTRL_ALT_b we break,CTRL_ALT_t terminates(?)
-    if(sys_focus_task&&!(s&SCF_KEY_UP)) {
-        if(s&SCF_CTRL&&s&SCF_ALT) {
-            if(ScanCode2Char(s)==CH_CTRLB) {
-                if(!Bt(&sys_focus_task->task_flags,TASKf_BREAK_LOCKED)) {
-                    __SetThreadPtr(sys_focus_task->_3days_spawn_ptr,&Break);
-                } else {
-                    Bts(&sys_focus_task->task_flags,TASKf_PENDING_BREAK);
-                }
-            }
-            if(ScanCode2Char(s)==CH_CTRLT)
-                Kill(sys_focus_task);
-        }
-    }
     LBtr(&kb_mtx,0);
 }
 SetKBCallback(&KBCb,sys_focus_task);
