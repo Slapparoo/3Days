@@ -1,7 +1,4 @@
 #help_index "DolDoc/Output;StdOut/DolDoc"
-U0 KeyDescSet(U8 *fmt,...) { //TODO RESTORE
-	
-}
 public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 {//\dLK,"PutKey",A="MN:PutKey"\d(ch,sc) at doc insert pt, cur_entry.
   I64 i,x,y;

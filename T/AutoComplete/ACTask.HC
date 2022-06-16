@@ -175,19 +175,17 @@ U0 ACTaskCtrl(I64 sc,I64 last_sc,
     if (sc!=last_sc) {
       if (sc&SCF_ALT) {
 	ACDocRst(27,3);
-    /*
 	if (TaskValidate(original_focus_task) &&
 	      !Bt(&original_focus_task->win_inhibit,WIf_SELF_KEY_DESC))
 	  KeyMapFamily(original_focus_task,0,
 		ToBool(!(sc&SCF_SHIFT)),ToBool(sc&SCF_SHIFT));
 	KeyMapCtrlAltFamily(
-	      ToBool(!(sc&SCF_SHIFT)),ToBool(sc&SCF_SHIFT));
-          */
+	      ToBool(!(sc&SCF_SHIFT)),ToBool(sc&SCF_SHIFT));
       } else if (TaskValidate(original_focus_task) &&
 	    !Bt(&original_focus_task->win_inhibit,WIf_SELF_KEY_DESC)) {
 	ACDocRst(27,3);
-	//KeyMapFamily(original_focus_task,SCF_CTRL,
-	 //     ToBool(!(sc&SCF_SHIFT)),ToBool(sc&SCF_SHIFT));
+	KeyMapFamily(original_focus_task,SCF_CTRL,
+	      ToBool(!(sc&SCF_SHIFT)),ToBool(sc&SCF_SHIFT));
       }
     }
     if (!LBts(&(Fs->display_flags),DISPLAYf_SHOW))
@@ -201,8 +199,8 @@ U0 ACTaskAlt(I64 sc,I64 last_sc,
   if (sc!=last_sc && TaskValidate(original_focus_task) &&
 	!Bt(&original_focus_task->win_inhibit,WIf_SELF_KEY_DESC)) {
     ACDocRst(27,3);
-    //KeyMapFamily(original_focus_task,SCF_ALT,
-	//  ToBool(!(sc&SCF_SHIFT)),ToBool(sc&SCF_SHIFT));
+    KeyMapFamily(original_focus_task,SCF_ALT,
+	  ToBool(!(sc&SCF_SHIFT)),ToBool(sc&SCF_SHIFT));
   }
   if (!LBts(&(Fs->display_flags),DISPLAYf_SHOW))
     WinZBufUpdate;
@@ -244,7 +242,7 @@ U0 ACTask(I64)
       else
 	ACTaskNormal(scan_code,last_scan_code,focus_task,original_focus_task);
     }
-    Sleep(333);
+    Sleep(333);
     if (ScanMsg(&ch,,1<<MSG_KEY_DOWN) && (ch==CH_ESC||ch==CH_SHIFT_ESC))
       break;
     doc=DocPut;

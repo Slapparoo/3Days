@@ -5865,3 +5865,12 @@ extern CKeyDevEntry *KeyDevAdd(Bool (*fp_put_key)(I64 ch,I64 sc),
 extern U0 CtrlAltCBSet(U8 ch,U0 (*fp_hndlr)(I64 sc),
 	U8 *no_shift_desc=NULL,U8 *shift_desc=NULL,Bool in_irq=FALSE);
 extern U0 UserCmdLine(I64 dummy=0);
+extern U0 KeyMap(CTask *task=NULL);
+extern U0 KeyMapFamily(CTask *task,I64 scf,Bool no_shift,Bool shift);
+extern U0 KeyMapFamily2(U8 **entries,CTask *task,I64 scf);
+extern I64 KMCompare(U8 *e1,U8 *e2);
+extern U0 KMComparePrepare(U8 *buf,I64 *src);
+extern U0 KeyMapCtrlAltFamily(Bool no_shift,Bool shift);
+extern U0 KeyMapKeyPrint(I64 sc,U0 (*fp_hndlr)(I64 sc),U8 *desc,CTask *task=NULL);
+extern U8 *KeyMapKeyMStrPrint(I64 sc,U0 (*fp_hndlr)(I64 sc),
+	U8 *desc,CTask *task=NULL);
