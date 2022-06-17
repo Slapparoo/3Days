@@ -51,7 +51,7 @@ U0 LexPutPos(CCmpCtrl *cc)
 {//Print token, line link and, then, $LK,"LexPutLine",A="MN:LexPutLine"$().
   LexPutToken(cc);
   FixSet(cc->lex_include_stk->full_name,cc->lex_include_stk->line_num);
-  if (0)
+  if (__IsCmdLine)
     "%s,%d ",cc->lex_include_stk->full_name,cc->lex_include_stk->line_num;
   else {
     PutFileLink(cc->lex_include_stk->full_name,,cc->lex_include_stk->line_num);
@@ -68,7 +68,7 @@ U0 LexWarn(CCmpCtrl *cc,U8 *str=NULL)
   if (str) PrintWarn(str);
   if (cc->htc.fun) {
     "in fun '%s'.\n",cc->htc.fun->str;
-    if (0)
+    if (__IsCmdLine)
       "%s\n",cc->htc.fun->src_link;
     else {
       "$$LK,\"%s\"$$\n",cc->htc.fun->src_link;
