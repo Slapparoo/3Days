@@ -45,12 +45,17 @@ U0 Adam(U8 *) {
     if(FileFind("HCRT.DBG.Z"))
 		DbgInfoRead("HCRT.DBG.Z");
 	boundscheck_enable=1;
-    ACInit("/KERNEL*.HH"); //Slow   
-    sys_winmgr_task=Spawn(&WinMgrTask);
-    //We are "adam" task
+	if(!__IsCmdLine) {
+		ACInit("/KERNEL*.HH"); //Slow   
+		sys_winmgr_task=Spawn(&WinMgrTask);
+	} else {
+		DeathWait(User);
+		Exit3Days;
+	}
+	//We are "adam" task
 	SrvTaskCont;
 }
-//Out entering thread doesnt have a cur_thrd,so spawn one
+//Our entering thread doesnt have a cur_thrd,so spawn one
 adam_task=Spawn(&Adam,NULL,"Adam",,);
 //Dont Exit
-while(TaskValidate(adam_task)) Sleep(1000);
+while(TaskValidate(adam_task)) Sleep(500);

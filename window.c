@@ -13,6 +13,8 @@ static int32_t gr_palette_std[]={
 static void StartInputScanner();
 
 CDrawWindow *NewDrawWindow() {
+	if(!SDL_WasInit(SDL_INIT_EVERYTHING))
+		return NULL;
 	//1 Screen on main thread
 	static CDrawWindow *win;
 	if(!win) { 
@@ -27,6 +29,8 @@ CDrawWindow *NewDrawWindow() {
     return win;
 }
 void DrawWindowUpdate(CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h) {
+	if(!SDL_WasInit(SDL_INIT_EVERYTHING))
+		return NULL;
     SDL_Surface *s=win->surf;
     int64_t x,y,c,i,i2;
     SDL_LockSurface(s);
@@ -454,7 +458,7 @@ void SetMSCallback(void *fptr) {
 }
 void InputLoop(void *ul) {
     SDL_Event e;
-    for(;;) {
+    for(;!*(int64_t*)ul;) {
 		if(SDL_WaitEvent(&e)) {
 			if(e.type==SDL_QUIT) {
 				__Shutdown();

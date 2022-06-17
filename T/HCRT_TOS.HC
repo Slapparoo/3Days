@@ -98,24 +98,28 @@ CInit;
 #include "DOLDOC/MakeDoc.HC"
 //See KeyDev.HC in TempleOS
 Bool PutS(U8 *st) {
-	I64 ch;
-	Bool cont;
-	U8 *ptr;
-	CKeyDevEntry *tmpk=keydev.put_key_head.next;
-	if(!st) return;
-	KDDocPutS(st);
-	while (cont && tmpk!=&keydev.put_key_head) {
-      if (tmpk->put_s) {
-	if ((*tmpk->put_s)(st))
-	  break;
-      } else {
-	ptr=st;
-	while (ch=*ptr++)
-	  if ((*tmpk->put_key)(ch,0))
-	    cont=FALSE;
-      }
-      tmpk=tmpk->next;
-    }
+	if(!__IsCmdLine) {
+		I64 ch;
+		Bool cont;
+		U8 *ptr;
+		CKeyDevEntry *tmpk=keydev.put_key_head.next;
+		if(!st) return;
+		KDDocPutS(st);
+		while (cont && tmpk!=&keydev.put_key_head) {
+		  if (tmpk->put_s) {
+		if ((*tmpk->put_s)(st))
+		  break;
+		  } else {
+		ptr=st;
+		while (ch=*ptr++)
+		  if ((*tmpk->put_key)(ch,0))
+			cont=FALSE;
+		  }
+		  tmpk=tmpk->next;
+		}
+	} else {
+		TOSPrint("%s",st);
+	}
 }
 fp_puts2=&PutS;
 U0 PutKey(I64 ch,I64 s)	 {

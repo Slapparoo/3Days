@@ -19,6 +19,7 @@
 #include <SDL_audio.h>
 #include "ext/map/src/map.h"
 #include "ext/vec/src/vec.h"
+#include "ext/linenoise/linenoise.h"
 #define AOT_NO_IMPORT_SYMS (1<<0)
 #define AOT_MALLOCED_SYM (1<<1)
 extern char CompilerPath[1024];
@@ -119,7 +120,6 @@ void __Sleep(int64_t t);
 int64_t VFsDel(char *p);
 char *HostHomeDir();
 void CreateTemplateBootDrv(char *to,char *template,int overwrite);
-void VFsGlobalInit();
 //Not VFs
 void* FileRead(char *fn,int64_t *sz);
 int64_t FileWrite(char *fn,void *data,int64_t sz);
@@ -177,3 +177,8 @@ void *GetGs();
 void SpawnCore();
 int VFsFileExists(char *path);
 void __SleepUntilValue(int64_t *ptr,int64_t,int64_t);
+void VFsGlobalInit();
+int VFsMountDrive(char let,char *path);
+int64_t IsCmdLine();
+char VFsChDrv(char to);
+char *CmdLineBootText();

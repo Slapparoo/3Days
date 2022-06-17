@@ -32,7 +32,9 @@ static void Core0Exit(int sig) {
 
 static struct arg_lit *helpArg;
 static struct arg_file *TDriveArg;
+static struct arg_file *cmdLineFiles;
 static struct arg_lit *OverwriteBootDrvArg;
+static struct arg_lit *commandLineArg;
 static struct arg_end *endArg;
 char CompilerPath[1024];
 #ifdef TARGET_WIN32
@@ -90,11 +92,19 @@ static pthread_t core0;
 #else
 static HANDLE core0;
 #endif
+static int is_cmd_line=0;
+static int64_t shutdown=0;
+int64_t IsCmdLine() {
+	return is_cmd_line;
+}
+static char *cmd_ln_boot_txt=NULL;
+char *CmdLineBootText() {
+	if(!cmd_ln_boot_txt) return NULL;
+	return strdup(cmd_ln_boot_txt);
+}
 int main(int argc,char **argv) {
 	BoundsCheckTests();
     char *header=NULL,*t_drive=NULL,*tmp;
-    SDL_Init(SDL_INIT_EVERYTHING);
-    InitSound();
     VFsGlobalInit();
     #ifndef TARGET_WIN32
     char *rp=realpath(argv[0],NULL);
@@ -113,8 +123,10 @@ int main(int argc,char **argv) {
     #endif
     void *argtable[]= {
         helpArg=arg_lit0("h", "help", "Display this help message."),
+        commandLineArg=arg_lit0("c", "com", "Start in command line mode,mount drive '/' at /."),
         TDriveArg=arg_file0("t",NULL,"T(boot) Drive","This tells 3days where to use(or create) the boot drive folder."),
         OverwriteBootDrvArg=arg_lit0("O", "overwrite", "Create a fresh version of the boot drive folder."),
+        cmdLineFiles=arg_filen(NULL,NULL,"<files>",0,100,"Files for use with command line mode."),
         endArg=arg_end(1),
     };
     int errs=arg_parse(argc, argv, argtable);
@@ -149,9 +161,33 @@ int main(int argc,char **argv) {
     CreateTemplateBootDrv(t_drive,template,OverwriteBootDrvArg->count);
     //IMPORTANT,init thread VFs after we make drive T
     VFsThrdInit();
+    if(commandLineArg->count) {
+		char buf[1024];
+		VFsMountDrive('R',"/");
+		is_cmd_line=1;
+		vec_char_t boot_str;
+		vec_init(&boot_str);
+		strcpy(buf,"ChDrv('R');\nCd(\"");
+		vec_pusharr(&boot_str,buf,strlen(buf));
+		getcwd(buf,sizeof(buf));
+		vec_pusharr(&boot_str,buf,strlen(buf));
+		strcpy(buf,"\");\n");
+		vec_pusharr(&boot_str,buf,strlen(buf));
+		int64_t i;
+		for(i=0;i!=cmdLineFiles->count;i++) {
+			sprintf(buf,"#include \"%s\";\n",cmdLineFiles->filename[i]);
+			vec_pusharr(&boot_str,buf,strlen(buf));
+		}
+		vec_push(&boot_str,0);
+		cmd_ln_boot_txt=boot_str.data;
+	} else {
+		SDL_Init(SDL_INIT_EVERYTHING);
+		InitSound();
+	}
     if(1) {
 		//Create the Window,there is 1 screen God willing.
-		NewDrawWindow();
+		if(!is_cmd_line)
+			NewDrawWindow();
         int flags=0;
     #ifndef TARGET_WIN32
         if(0==access("HCRT.BIN",F_OK)) {
@@ -171,11 +207,17 @@ int main(int argc,char **argv) {
       }
     #endif
     }
-    InputLoop(NULL);
+    if(SDL_WasInit(SDL_INIT_EVERYTHING)) {
+		InputLoop(&shutdown);
+		SDL_Quit();
+	} else 
+		pthread_join(core0,NULL);
+    exit(0);
     return 0;
 }
 CLoader Loader;
 void __Shutdown() {
+	shutdown=1;
 	#ifndef TARGET_WIN32
 	pthread_kill(core0,SIGUSR1);
 	pthread_join(core0,NULL);
@@ -183,6 +225,4 @@ void __Shutdown() {
 	TerminateThread(core0,0);
 	WaitForMultipleObjects(1,&core0,TRUE,INFINITE),
 	#endif
-	SDL_Quit();
-	exit(0);
 }

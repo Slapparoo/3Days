@@ -140,16 +140,12 @@ U8 *CmdLinePmt()
     }
     Fs->new_answer=FALSE;
   }
-  if (st=DirCur) {
-    "%s",st;
-    Free(st);
-  }
-  ">";
   //if (IsDbgMode&&IsRaw) TODO RESTORE
   //  RawDr;
 
   LBts(&(Fs->task_flags),TASKf_CMD_LINE_PMT);
-  st=GetStr(,,GSF_SHIFT_ESC_EXIT);
+  st=GetStr(res=MStrPrint("%s>",DirCur),,GSF_SHIFT_ESC_EXIT);
+  Free(res);
   LBtr(&(Fs->task_flags),TASKf_CMD_LINE_PMT);
 
   i=StrLen(st);

@@ -392,10 +392,27 @@ I64 GetChar(I64 *_scan_code=NULL,Bool echo=TRUE,Bool raw_cursor=FALSE)
     "\dPT\d%c\dFG\d",ch1;
   return ch1;
 }
-
+static U8 *boot_text=__CmdLineBootText;
 U8 *GetStr(U8 *msg=NULL,U8 *dft=NULL,I64 flags=0)
 {//Returns a \dLK,"MAlloc",A="MN:MAlloc"\d()ed prompted string.  See \dLK,"Flags",A="MN:GSF_SHIFT_ESC_EXIT"\d.
-  U8 *st;
+  U8 *st,*bt2;
+  if(__IsCmdLine) {
+	if(boot_text) {
+		bt2=boot_text;
+		boot_text=StrFirstOcc(boot_text,"\n");
+		if(boot_text)
+			*boot_text++=0;
+		return StrNew(bt2);
+	}
+	st=__GetStr(msg);
+	if(!st) {
+	  if(dft)
+	    st=StrNew(dft);
+	  else
+	    st=StrNew("");
+	}
+	return st;
+  }
   if (msg)
     "" msg,dft;
   st=(*fp_getstr2)(flags);

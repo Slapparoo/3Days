@@ -13,6 +13,7 @@ set CFiles = ( \
  "./window.c" \
  "./multic.c" \
  "./vfs.c" \
+ "./ext/linenoise/linenoise.c" \
 )
 set AsmFiles = ( \
   "./FFI_SYSV.yasm" \

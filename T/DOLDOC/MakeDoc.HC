@@ -62,7 +62,13 @@ MemSet(&doldoc,0,sizeof(CDolDocGlbls));
 #include "DocTerm.HC"
 
 //KeyDevAdd(&KDDocPutKey,&KDDocPutS,0x80000000,TRUE);
-fp_getstr2=&DocGetStr2;
+I64 __GetStr2(I64 flags=0) {
+	return __GetStr;
+}
+if(!__IsCmdLine)
+	fp_getstr2=&DocGetStr2;
+else
+	fp_getstr2=&__GetStr2;
 fp_doc_put=&DocPut;
 
 #exe {Cd("..");};;

@@ -142,6 +142,8 @@ extern class CFile;
 #define OCF_ALIAS	1
 extern class CCPU;
 #ifdef IMPORT_BUILTINS
+import U0i Exit3Days();
+import I64i __IsCmdLine();
 import U8i __FExists(U8i *);
 import I64i mp_cnt();
 import CCPU *Gs();
@@ -176,6 +178,7 @@ public import Bool DirMk(U8i *filename); //TODO
 public import U8 **__Dir(U8i *); //TODO
 public import U8 *DirCur();
 public import U8 *__GetStr(U8 *pmt="");
+import U8i ChDrv(U8i);
 import U0i SndFreq(I64i freq);
 import U0 __BootstrapForeachSymbol(U0 *fptr);
 extern C3DaysDrawWin;
@@ -200,7 +203,11 @@ public import U0i Sleep(I64i mS);
 import U0 __Del(U8 *);
 import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
+import U8i *__CmdLineBootText();
 #else
+extern U8i *__CmdLineBootText();
+extern U0i Exit3Days();
+extern I64i __IsCmdLine();
 extern U8i __FExists(U8i *);
 extern I64i mp_cnt();
 extern CCPU *Gs();
@@ -253,6 +260,7 @@ extern U0i __Exit();
 extern U0i __AwaitThread(U8i *thr);
 extern U0i __KillThread(U8i *thr);
 extern U0i SetMSCallback(U8i *fp);
+extern U8i ChDrv(U8i);
 public extern U0i Sleep(I64i mS);
 extern U0i SndFreq(I64i freq);
 public extern Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
@@ -5874,3 +5882,19 @@ extern U0 KeyMapCtrlAltFamily(Bool no_shift,Bool shift);
 extern U0 KeyMapKeyPrint(I64 sc,U0 (*fp_hndlr)(I64 sc),U8 *desc,CTask *task=NULL);
 extern U8 *KeyMapKeyMStrPrint(I64 sc,U0 (*fp_hndlr)(I64 sc),
 	U8 *desc,CTask *task=NULL);
+public extern U8 *MStrPrint(U8 *fmt,...);
+public extern U8 *MStrUtil(U8 *src,I64 flags,F64 indent_scale_factor=0);
+public extern U8 *ScaleIndent(U8 *src,F64 indent_scale_factor);
+public extern I64 Spaces2Tabs(U8 *dst,U8 *src);
+public extern U8 *StrFind(U8 *needle,U8 *haystack_str,I64 flags=0);
+public extern U8 *StrFirstOcc(U8 *src,U8 *marker);
+public extern U8 *StrFirstRem(U8 *src,U8 *marker,U8 *dst=NULL);
+public extern U8 *StrLastOcc(U8 *src,U8 *marker);
+public extern U8 *StrLastRem(U8 *src,U8 *marker,U8 *dst=NULL);
+public extern I64 StrOcc(U8 *src, U8 ch);
+public extern U8 *StrPrint(U8 *dst,U8 *fmt,...);
+public extern U8 *StrPrintJoin(U8 *dst,U8 *fmt,I64 argc,I64 *argv);
+public extern U8 *StrUtil(U8 *_src,I64 flags);
+public extern U8 *Tabs2Spaces(U8 *src);
+public extern Bool WildMatch(U8 *test_str,U8 *wild_str);
+

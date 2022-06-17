@@ -350,8 +350,16 @@ int64_t STK_Yield(int64_t *stk) {
 int64_t STK_SndFreq(int64_t *stk) {
     SndFreq(stk[0]);
 }
-   int64_t STK_SetClipboardText(int64_t *stk) {
+int64_t STK_SetClipboardText(int64_t *stk) {
     SDL_SetClipboardText(stk[0]);
+}
+int64_t STK___GetStr(int64_t *stk) {
+	char *s=linenoise(stk[0]);
+	if(!s) return s;
+	linenoiseHistoryAdd(s);
+	char *r=strdup(s);
+	free(s);
+	return r;
 }
 int64_t STK_GetClipboardText(int64_t *stk) {
     char *find,*ret;
@@ -381,6 +389,9 @@ int64_t STK_SetPtrCallers(int64_t *stk) {
 int64_t STK___FExists(int64_t *stk) {
 	return VFsFileExists(stk[0]);
 }
+int64_t STK_ChDrv(int64_t *stk) {
+	return VFsChDrv(stk[0]);
+}
 /*
  * TODO give a better name
  * Returns NULL if in bounds
@@ -407,6 +418,11 @@ void TOS_RegisterFuncPtrs() {
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+	STK_RegisterFunctionPtr(&ffi_blob,"__CmdLineBootText",CmdLineBootText,0);
+	STK_RegisterFunctionPtr(&ffi_blob,"Exit3Days",__Shutdown,0);
+	STK_RegisterFunctionPtr(&ffi_blob,"ChDrv",STK_ChDrv,1);
+	STK_RegisterFunctionPtr(&ffi_blob,"__GetStr",STK___GetStr,1);
+	STK_RegisterFunctionPtr(&ffi_blob,"__IsCmdLine",IsCmdLine,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"__FExists",STK___FExists,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"mp_cnt",mp_cnt,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"Gs",GetGs,0);
