@@ -33,4 +33,4 @@ end
 foreach f ( $AsmFiles )
   set Objs = ( $Objs "$f.obj" )
 end
-$CC $Objs SDL2.dll -lm -lshlwapi -ldbghelp -o 3d_loader.exe
+$CC $Objs ext/wineditline-2.206/lib64/libedit_static.a SDL2.dll -lm -lshlwapi -ldbghelp -o 3d_loader.exe

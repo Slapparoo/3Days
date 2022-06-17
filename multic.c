@@ -2,7 +2,13 @@
 #include <sched.h>
 #include <signal.h>
 #include <stdatomic.h>
+#ifndef TARGET_WIN32
 #include <pthread.h>
+#else
+#include <windows.h>
+#include <synchapi.h>
+#include <processthreadsapi.h>
+#endif
 typedef struct CThread {
     void *Fs;
     uint64_t sleep_until;
@@ -22,9 +28,14 @@ typedef vec_t(CThread*) vec_CThread_t;
 typedef struct CCore {
 	vec_CThread_t *threads;
 	vec_CThread_t *dead_threads;
+	#ifdef TARGET_WIN32
+	HANDLE pt;
+	HANDLE mutex;
+	HANDLE wake_cond;
+	#else
 	pthread_t pt;
 	pthread_mutex_t mutex;
-	pthread_cond_t wake_cond;
+	#endif
 	int flop;
 	int ready;
 	void *gs;
@@ -112,10 +123,18 @@ CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name) {
 		thd->stack=TD_MALLOC(2000000); //aprx 2Mb
         MakeContext(&thd->ctx,thd->stack,&__SpawnFFI,p);
         while(!atomic_load(&cores[core].ready))
-			sched_yield();
+		#ifndef TARGET_WIN32
+		sched_yield();
 		pthread_mutex_lock(&cores[core].mutex);
+		#else
+		WaitForSingleObject(cores[core].mutex,INFINITE);
+		#endif
         vec_push(cores[core].threads,thd);
-        pthread_mutex_unlock(&cores[core].mutex);
+        #ifndef TARGET_WIN32
+		pthread_mutex_unlock(&cores[core].mutex);
+        #else
+        ReleaseMutex(cores[core].mutex);
+        #endif
     }
     return thd;
 }
@@ -159,7 +178,11 @@ void __Yield() {
     ctx_t old;
     GetContext(&old);
     int64_t i;
+    #ifndef TARGET_WIN32
     pthread_mutex_lock(&cores[core_num].mutex);
+    #else
+    WaitForSingleObject(cores[core_num].mutex,INFINITE);
+    #endif
     for(i=0;i!=threads.length;i++)
         if(threads.data[i]->to_kill) {
             if(cur_thrd!=threads.data[i]) {
@@ -194,7 +217,11 @@ void __Yield() {
         idx=0;
         idx2=threads.length-1;
         if(idx2==-1) {
+			#ifndef TARGET_WIN32
 			pthread_mutex_unlock(&cores[core_num].mutex);
+			#else
+			ReleaseMutex(cores[core_num].mutex);
+			#endif
 			return;
 		}
         goto ent;
@@ -207,7 +234,11 @@ void __Yield() {
     if(ThrdIsReady(threads.data[idx])) {
 		if(!(cores[core_num].flop^=1)) {
 			threads.data[idx]->in_yield=0;
+			#ifndef TARGET_WIN32
 			pthread_mutex_unlock(&cores[core_num].mutex);
+			#else
+			ReleaseMutex(cores[core_num].mutex);
+			#endif
 			return;
 		}
 	}
@@ -248,7 +279,11 @@ void __Yield() {
 				cur_dir=threads.data[idx2]->cur_dir;
 				cur_drv=threads.data[idx2]->cur_drv;
 				if(!threads.data[idx2]->in_yield)
+					#ifndef TARGET_WIN32
 					pthread_mutex_unlock(&cores[core_num].mutex);
+					#else
+					ReleaseMutex(cores[core_num].mutex);
+					#endif
 				SetContext(&threads.data[idx2]->ctx);
 			}
 			break;
@@ -281,9 +316,13 @@ int InitThreadsForCore() {
     VFsThrdInit(); 
     int num=atomic_fetch_add(&core_cnt,1);
     core_num=num;
+    #ifndef TARGET_WIN32
     cores[num].pt=pthread_self();
-    cores[num].mutex=PTHREAD_MUTEX_INITIALIZER;
-    cores[num].wake_cond=PTHREAD_COND_INITIALIZER;
+    pthread_mutex_init(&cores[num].mutex,NULL);
+    #else
+    cores[num].pt=GetCurrentThread();
+    cores[num].mutex=CreateMutex(NULL,0,NULL);
+    #endif
     cores[num].gs=PoopMAlloc(512); //Should be enough
     cores[num].threads=&threads;
     cores[num].dead_threads=&dead_threads;
@@ -302,8 +341,12 @@ static void Loop(void*ul) {
 		}
 }
 void SpawnCore() {
+	#ifndef TARGET_WIN32
 	pthread_t dummy;
 	pthread_create(&dummy,NULL,&Loop,NULL);
+	#else
+	CreateThread(NULL,0,&Loop,NULL,0,NULL);
+	#endif
 }
 int CoreNum() {
 	return core_num;

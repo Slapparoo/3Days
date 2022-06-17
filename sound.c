@@ -11,6 +11,12 @@ static void AudioCB(void *ud,float *data,int len) {
         if(!freq)
             data[--len]=0;
         else
+			// What we do here is we Get the remainder of 2*freq*t and 1(we never go above 1)
+			// We round to get a 0 or 1 value for a square wave
+			//          ______       ____
+			//  1       |     |     |
+			//          |     |     |
+			// -1   ____|     |_____|
             data[--len]=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
     }
     sample%=audio_spec.samples;

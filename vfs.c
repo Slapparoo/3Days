@@ -6,16 +6,29 @@ static  int RootPathLen();
 #include <dirent.h>
 #include <unistd.h>
 #include <time.h>
+#ifndef TARGET_WIN32
 #include <pthread.h>
+#else
+#include <windows.h>
+#include <synchapi.h>
+#include <processthreadsapi.h>
+#endif
 #define VFS_T_FILE 1 
 #define VFS_T_DIR 2 
 #define VFS_T_DRIVE 3 
 __thread char* cur_dir;
 __thread char cur_drv;
 static __thread map_str_t drive_dirs;
-pthread_mutex_t mp_mtx=PTHREAD_MUTEX_INITIALIZER;
+#ifndef TARGET_WIN32
+	pthread_mutex_t mp_mtx=PTHREAD_MUTEX_INITIALIZER;
+#else
+	HANDLE mp_mtx=NULL;
+#endif
 static map_str_t mount_points;
 void VFsGlobalInit() {
+	#ifdef TARGET_WIN32
+	mp_mtx=CreateMutex(NULL,0,NULL);
+	#endif
 	map_init(&mount_points);
 }
 #define TOS_delim '/'
@@ -87,9 +100,17 @@ static int __FIsDir(char *path) {
 #endif
 static  int RootPathLen() {
 	char buffer[2]={cur_drv,0},**base;
+	#ifndef TARGET_WIN32
 	pthread_mutex_lock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
 	assert(base=map_get(&mount_points,buffer));
+	#ifndef TARGET_WIN32
 	pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
 	int64_t r=strlen(*base);
 	if(base[0][r-1]==delim)
 		r--;
@@ -97,9 +118,17 @@ static  int RootPathLen() {
 }
 static char *GetHomeDirForDrive(char drv) {
 	char drv_buf[2]={drv,0};
+	#ifndef TARGET_WIN32
 	pthread_mutex_lock(&mp_mtx);
-    char *root=*map_get(&mount_points,drv_buf);
-    pthread_mutex_unlock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
+	char *root=*map_get(&mount_points,drv_buf);
+        #ifndef TARGET_WIN32
+	pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
     if(root) {
 		if(*root=='/') { //TODO check for windows
 			return HostHomeDir();
@@ -134,9 +163,17 @@ int VFsCd(char *to,int flags) {
         to=strrchr(to,':')+1;
     }
     char drv_buf[2]={drv,0};
-    pthread_mutex_lock(&mp_mtx);
-    root=*map_get(&mount_points,drv_buf);
-    pthread_mutex_unlock(&mp_mtx);
+        #ifndef TARGET_WIN32
+	pthread_mutex_lock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
+        root=*map_get(&mount_points,drv_buf);
+        #ifndef TARGET_WIN32
+	pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
     vec_pusharr(&path,root,strlen(root)+1);
     if(to[0]==TOS_delim) {
 		//Is an absolute path
@@ -399,12 +436,20 @@ int64_t VFsFileRead(char *name,int64_t *len) {
     return data;
 }
 void VFsThrdInit() {
+	#ifndef TARGET_WIN32
 	pthread_mutex_lock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
 	map_init(&drive_dirs);
 	cur_drv='T';
 	char buf[]={cur_drv,0};
 	cur_dir=strdup(map_get(&mount_points,buf)[0]);
-    pthread_mutex_unlock(&mp_mtx);
+	#ifndef TARGET_WIN32
+        pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
 }
 #ifdef TARGET_WIN32
 #include <shlobj.h> 
@@ -497,7 +542,15 @@ int VFsFileExists(char *path) {
 }
 int VFsMountDrive(char let,char *path) {
 	char buf[]={let,0};
+	#ifndef TARGET_WIN32
 	pthread_mutex_lock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
 	map_set(&mount_points,buf,strdup(path));
+	#ifndef TARGET_WIN32
 	pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
 }

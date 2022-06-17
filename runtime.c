@@ -34,6 +34,7 @@ extern void HCLongJmp(void *ptr);
 #include <fileapi.h>
 #include <shlwapi.h>
 #include <memoryapi.h>
+#include "ext/wineditline-2.206/include/editline/readline.h"
 #else
 #include <sys/mman.h>
 #endif
@@ -354,11 +355,20 @@ int64_t STK_SetClipboardText(int64_t *stk) {
     SDL_SetClipboardText(stk[0]);
 }
 int64_t STK___GetStr(int64_t *stk) {
+	#ifndef TARGET_WIN32
 	char *s=linenoise(stk[0]);
 	if(!s) return s;
 	linenoiseHistoryAdd(s);
 	char *r=strdup(s);
 	free(s);
+	return r;
+	#else
+	char *s=readline(stk[0]),*r;
+	if(!s) return s;
+	r=strdup(s);
+	add_history(r);
+	rl_free(s);
+	#endif
 	return r;
 }
 int64_t STK_GetClipboardText(int64_t *stk) {
@@ -410,7 +420,13 @@ int64_t STK___MPSpawn(int64_t *stk) {
 	return __MPSpawn(stk[0],stk[1],stk[2],stk[3],stk[4]);
 }
 int64_t mp_cnt(int64_t *stk) {
+	#ifndef TARGET_WIN32
 	return sysconf(_SC_NPROCESSORS_ONLN);
+	#else
+	SYSTEM_INFO info;
+	GetSystemInfo(&info);
+	return info.dwNumberOfProcessors;
+	#endif
 } 
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;

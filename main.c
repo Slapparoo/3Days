@@ -1,8 +1,8 @@
 #include "3d.h"
 #include "ext/argtable3/argtable3.h"
 #include <signal.h>
-#include <pthread.h>
 #ifndef TARGET_WIN32
+#include <pthread.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 #define HCRT_INSTALLTED_DIR "/usr/local/include/3Days/HCRT.BIN"
@@ -10,12 +10,6 @@
 #include "ext/C_Unescaper/escaper.h"
 #define DFT_T_DRIVE ".3DAYS_BOOT"
 #define DFT_TEMPLATE "/usr/local/include/3Days/T/"
-static void Core0Exit(int sig) {
-	/*CHash **ka=map_get(&TOSLoader,"KillAdam");
-	if(ka)
-		FFI_CALL_TOS_0(ka[0]->val);*/
-	pthread_exit(0);
-} 
 #else
 #include <windows.h>
 #include <libloaderapi.h>
@@ -29,7 +23,16 @@ static void Core0Exit(int sig) {
 //Is relative to install dir on windows
 #define DFT_TEMPLATE ".\\T\\"
 #endif
-
+static void Core0Exit(int sig) {
+	/*CHash **ka=map_get(&TOSLoader,"KillAdam");
+	if(ka)
+		FFI_CALL_TOS_0(ka[0]->val);*/
+	#ifndef TARGET_WIN32
+	pthread_exit(0);
+	#else
+	ExitThread(0);
+	#endif
+} 
 static struct arg_lit *helpArg;
 static struct arg_file *TDriveArg;
 static struct arg_file *cmdLineFiles;
@@ -93,7 +96,7 @@ static pthread_t core0;
 static HANDLE core0;
 #endif
 static int is_cmd_line=0;
-static int64_t shutdown=0;
+static int64_t _shutdown=0;
 int64_t IsCmdLine() {
 	return is_cmd_line;
 }
@@ -169,7 +172,11 @@ int main(int argc,char **argv) {
 		vec_init(&boot_str);
 		strcpy(buf,"ChDrv('R');\nCd(\"");
 		vec_pusharr(&boot_str,buf,strlen(buf));
+		#ifndef TARGET_WIN32
 		getcwd(buf,sizeof(buf));
+		#else
+		_getcwd(buf,sizeof(buf));
+		#endif
 		vec_pusharr(&boot_str,buf,strlen(buf));
 		strcpy(buf,"\");\n");
 		vec_pusharr(&boot_str,buf,strlen(buf));
@@ -208,21 +215,26 @@ int main(int argc,char **argv) {
     #endif
     }
     if(SDL_WasInit(SDL_INIT_EVERYTHING)) {
-		InputLoop(&shutdown);
+		InputLoop(&_shutdown);
 		SDL_Quit();
-	} else 
+	} else {
+		#ifndef TARGET_WIN32
 		pthread_join(core0,NULL);
+		#else
+		WaitForSingleObject(core0,INFINITE);
+		#endif
+	}
     exit(0);
     return 0;
 }
 CLoader Loader;
 void __Shutdown() {
-	shutdown=1;
+	_shutdown=1;
 	#ifndef TARGET_WIN32
 	pthread_kill(core0,SIGUSR1);
 	pthread_join(core0,NULL);
 	#else
 	TerminateThread(core0,0);
-	WaitForMultipleObjects(1,&core0,TRUE,INFINITE),
+	WaitForMultipleObjects(1,&core0,TRUE,INFINITE);
 	#endif
 }
