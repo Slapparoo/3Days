@@ -83,6 +83,7 @@ void __Exit() {
 }
 void __SetThreadPtr(CThread *t,void *ptr) {
 	if(!t) return;
+	t->in_yield=0;
     t->ctx.rip=ptr;
 }
 void __KillThread(CThread *t) {

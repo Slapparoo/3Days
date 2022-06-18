@@ -150,5 +150,5 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 #include "ARegistry.HC"
 #include "AHash.HC"
 #include "ADskB.HC"
-#include "Training.HC";
+///#include "Training.HC";
 #endif
