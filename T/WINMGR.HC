@@ -252,7 +252,8 @@ I64 WinMgrSleep(Bool flush_msgs=FALSE)
   } else {
     WinRefocus(sys_focus_task);
     if (!TaskValidate(sys_focus_task))
-      FifoI64Flush(kbd.scan_code_fifo);
+      //FifoI64Flush(kbd.scan_code_fifo); CHANGED,we empty the fifo via KbdMsgsQue
+      KbdMsgsQue; 
   }
   if (sys_focus_task)
     LBtr(&sys_focus_task->task_flags,TASKf_HAS_SONG);

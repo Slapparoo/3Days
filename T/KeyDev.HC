@@ -80,7 +80,7 @@ U0 UCL2(I64) {
 }
 U0 CtrlAltT(I64)
 {
-  Spawn(&UCL2,,,,sys_winmgr_task);
+  Spawn(&UCL2,,,,);
 }
 
 U0 CtrlAltX(I64)
