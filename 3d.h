@@ -19,7 +19,7 @@
 #include <SDL_audio.h>
 #include "ext/map/src/map.h"
 #include "ext/vec/src/vec.h"
-#include "ext/linenoise/linenoise.h"
+#include "ext/ln/linenoise.h"
 #define AOT_NO_IMPORT_SYMS (1<<0)
 #define AOT_MALLOCED_SYM (1<<1)
 extern char CompilerPath[1024];
