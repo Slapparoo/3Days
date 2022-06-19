@@ -9,6 +9,17 @@
 #include <synchapi.h>
 #include <processthreadsapi.h>
 #endif
+
+#ifndef TARGET_WIN32
+#define LOCK_CORE(core) pthread_mutex_lock(&cores[core].mutex);
+#else
+#define LOCK_CORE(core) WaitForSingleObject(cores[core].mutex,INFINITY);
+#endif
+#ifndef TARGET_WIN32
+#define UNLOCK_CORE(core) pthread_mutex_unlock(&cores[core].mutex);
+#else
+#define UNLOCK_CORE(core) ReleaseMutex(cores[core].mutex);
+#endif
 typedef struct CThread {
     void *Fs;
     uint64_t sleep_until;
@@ -19,6 +30,7 @@ typedef struct CThread {
     int64_t *wait_for_ptr;
     int64_t wait_for_ptr_expected;
     int64_t wait_for_ptr_mask;
+    int64_t core;
     void *stack;
     char *cur_dir;
     char cur_drv;
@@ -28,17 +40,23 @@ typedef vec_t(CThread*) vec_CThread_t;
 typedef struct CCore {
 	vec_CThread_t *threads;
 	vec_CThread_t *dead_threads;
-	#ifdef TARGET_WIN32
-	HANDLE pt;
-	HANDLE mutex;
-	HANDLE wake_cond;
-	#else
+	#ifndef TARGET_WIN32
 	pthread_t pt;
 	pthread_mutex_t mutex;
+	#else
+	HANDLE pt;
+	HANDLE mutex;
 	#endif
 	int flop;
 	int ready;
 	void *gs;
+	//
+	//This is used to tell the core which thread to interupt
+	// Once it is intereputed,it's RIP register is put to __interupt_to
+	//
+	CThread *__interupt_thread;
+	void *__interupt_to;
+	
 } CCore;
 static __thread int core_num;
 static int core_cnt; 
@@ -81,10 +99,17 @@ void __Exit() {
     cur_thrd->dead=1;
     __Yield();
 }
-void __SetThreadPtr(CThread *t,void *ptr) {
+static void __SetThreadPtr2(CThread *t,void *ptr) {
 	if(!t) return;
 	t->in_yield=0;
     t->ctx.rip=ptr;
+}
+void __SetThreadPtr(CThread *t,void *ptr) {
+	LOCK_CORE(t->core);
+	cores[t->core].__interupt_thread=t;
+	cores[t->core].__interupt_to=ptr;
+	pthread_kill(cores[t->core].pt,SIGUSR2);
+	UNLOCK_CORE(t->core);
 }
 void __KillThread(CThread *t) {
 	if(!t) return;
@@ -99,6 +124,22 @@ void __KillThread(CThread *t) {
         __SetThreadPtr(t,ex[0]->val);
     }
 }
+#ifndef TARGET_WIN32
+static void SigUsr2(int sig) {
+	sigset_t set;
+	pthread_sigmask(0,NULL,&set);
+	sigdelset(&set,SIGUSR2);
+	pthread_sigmask(SIG_SETMASK,&set,NULL);
+	LOCK_CORE(core_num);
+	if(cores[core_num].__interupt_thread==cur_thrd) {
+		UNLOCK_CORE(core_num);
+		FFI_CALL_TOS_0(cores[core_num].__interupt_to);
+	} else {
+		__SetThreadPtr2(cores[core_num].__interupt_thread,cores[core_num].__interupt_to);
+	}
+	UNLOCK_CORE(core_num);
+}
+#endif
 static int64_t __SpawnFFI(CPair *p) {
     CHash **ex;
     VFsThrdInit();
@@ -119,23 +160,16 @@ CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name) {
     thd->Fs=p->fs;
     thd->cur_dir=cur_dir;
     thd->cur_drv=cur_drv;
+    thd->core=core;
     GetContext(&thd->ctx);
     if(!thd->dead) {
 		thd->stack=TD_MALLOC(2000000); //aprx 2Mb
         MakeContext(&thd->ctx,thd->stack,&__SpawnFFI,p);
         while(!atomic_load(&cores[core].ready))
-		#ifndef TARGET_WIN32
-		sched_yield();
-		pthread_mutex_lock(&cores[core].mutex);
-		#else
-		WaitForSingleObject(cores[core].mutex,INFINITE);
-		#endif
+			sched_yield();
+		LOCK_CORE(core);
         vec_push(cores[core].threads,thd);
-        #ifndef TARGET_WIN32
-		pthread_mutex_unlock(&cores[core].mutex);
-        #else
-        ReleaseMutex(cores[core].mutex);
-        #endif
+        UNLOCK_CORE(core);
     }
     return thd;
 }
@@ -179,11 +213,7 @@ void __Yield() {
     ctx_t old;
     GetContext(&old);
     int64_t i;
-    #ifndef TARGET_WIN32
-    pthread_mutex_lock(&cores[core_num].mutex);
-    #else
-    WaitForSingleObject(cores[core_num].mutex,INFINITE);
-    #endif
+    LOCK_CORE(core_num);
     for(i=0;i!=threads.length;i++)
         if(threads.data[i]->to_kill) {
             if(cur_thrd!=threads.data[i]) {
@@ -218,11 +248,7 @@ void __Yield() {
         idx=0;
         idx2=threads.length-1;
         if(idx2==-1) {
-			#ifndef TARGET_WIN32
-			pthread_mutex_unlock(&cores[core_num].mutex);
-			#else
-			ReleaseMutex(cores[core_num].mutex);
-			#endif
+			UNLOCK_CORE(core_num);
 			return;
 		}
         goto ent;
@@ -235,11 +261,7 @@ void __Yield() {
     if(ThrdIsReady(threads.data[idx])) {
 		if(!(cores[core_num].flop^=1)) {
 			threads.data[idx]->in_yield=0;
-			#ifndef TARGET_WIN32
-			pthread_mutex_unlock(&cores[core_num].mutex);
-			#else
-			ReleaseMutex(cores[core_num].mutex);
-			#endif
+			UNLOCK_CORE(core_num);
 			return;
 		}
 	}
@@ -280,11 +302,7 @@ void __Yield() {
 				cur_dir=threads.data[idx2]->cur_dir;
 				cur_drv=threads.data[idx2]->cur_drv;
 				if(!threads.data[idx2]->in_yield)
-					#ifndef TARGET_WIN32
-					pthread_mutex_unlock(&cores[core_num].mutex);
-					#else
-					ReleaseMutex(cores[core_num].mutex);
-					#endif
+					UNLOCK_CORE(core_num);
 				SetContext(&threads.data[idx2]->ctx);
 			}
 			break;
@@ -317,13 +335,8 @@ int InitThreadsForCore() {
     VFsThrdInit(); 
     int num=atomic_fetch_add(&core_cnt,1);
     core_num=num;
-    #ifndef TARGET_WIN32
     cores[num].pt=pthread_self();
-    pthread_mutex_init(&cores[num].mutex,NULL);
-    #else
-    cores[num].pt=GetCurrentThread();
-    cores[num].mutex=CreateMutex(NULL,0,NULL);
-    #endif
+    cores[num].mutex=PTHREAD_MUTEX_INITIALIZER;
     cores[num].gs=PoopMAlloc(512); //Should be enough
     cores[num].threads=&threads;
     cores[num].dead_threads=&dead_threads;
@@ -342,9 +355,10 @@ static void Loop(void*ul) {
 		}
 }
 void SpawnCore() {
-	#ifndef TARGET_WIN32
 	pthread_t dummy;
+	#ifndef TARGET_WIN32
 	pthread_create(&dummy,NULL,&Loop,NULL);
+	signal(SIGUSR2,SigUsr2);
 	#else
 	CreateThread(NULL,0,&Loop,NULL,0,NULL);
 	#endif
