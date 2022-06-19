@@ -1,13 +1,17 @@
 #include "3d.h"
 #include <math.h>
-static SDL_AudioSpec audio_spec;
+#define MA_NO_DECODING
+#define MA_NO_ENCODING
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
+static ma_device_config audio_spec;
+static ma_device audio_device;
 static int64_t freq=0;
 static int64_t sample;
-static void AudioCB(void *ud,float *data,int len) {
-    len/=sizeof(float);
+static void AudioCB(ma_device *d,float *data,void *ud,ma_uint32 len) {
     int olen=len;
     for(;len>0;) {
-        double t=(double)++sample/(double)audio_spec.freq;
+        double t=(double)++sample/(double)audio_spec.sampleRate;
         if(!freq)
             data[--len]=0;
         else
@@ -19,18 +23,20 @@ static void AudioCB(void *ud,float *data,int len) {
 			// -1   ____|     |_____|
             data[--len]=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
     }
-    sample%=audio_spec.samples;
+    sample%=audio_spec.sampleRate;
 } 
 void InitSound() {
-    SDL_AudioSpec want;
-    SDL_memset(&want, 0, sizeof(want));
-    want.freq=48000;
-    want.format=AUDIO_F32;
-    want.channels=1;
-    want.samples=8192;
-    want.callback=AudioCB;
-    SDL_PauseAudioDevice(SDL_OpenAudioDevice(NULL,0,&want, &audio_spec,SDL_AUDIO_ALLOW_ANY_CHANGE),0);
+	audio_spec=ma_device_config_init(ma_device_type_playback);
+	audio_spec.playback.format=ma_format_f32;
+	audio_spec.playback.channels=1;
+	audio_spec.sampleRate=24000;
+	audio_spec.dataCallback=&AudioCB;
+    assert(ma_device_init(NULL,&audio_spec,&audio_device)==MA_SUCCESS);
 }
 void SndFreq(int64_t f) {
+	if(!f)
+		assert(ma_device_stop(&audio_device)==MA_SUCCESS);
+	else
+		assert(ma_device_start(&audio_device)==MA_SUCCESS);
     freq=f;
 }

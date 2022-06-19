@@ -12,21 +12,6 @@
 #include <sys/types.h>
 extern int64_t HCSetJmp(void *ptr);
 extern void HCLongJmp(void *ptr);
-#ifndef MACOS
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_video.h>
-#include <SDL2/SDL_render.h>
-#include <SDL2/SDL_rect.h>
-#include <SDL2/SDL_clipboard.h>
-#include <SDL2/SDL_events.h>
-#else
-#include <SDL.h>
-#include <SDL_video.h>
-#include <SDL_render.h>
-#include <SDL_rect.h>
-#include <SDL_clipboard.h>
-#include <SDL_events.h>
-#endif
 #include <stddef.h>
 #include <stdalign.h>
 #ifdef TARGET_WIN32
