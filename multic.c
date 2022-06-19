@@ -336,7 +336,7 @@ int InitThreadsForCore() {
     int num=atomic_fetch_add(&core_cnt,1);
     core_num=num;
     cores[num].pt=pthread_self();
-    cores[num].mutex=PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_init(&cores[num].mutex,NULL);
     cores[num].gs=PoopMAlloc(512); //Should be enough
     cores[num].threads=&threads;
     cores[num].dead_threads=&dead_threads;
