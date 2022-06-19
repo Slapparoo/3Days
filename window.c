@@ -418,7 +418,7 @@ void SetKBCallback(void *fptr,void *data) {
 //x,y,z,(l<<1)|r
 static void(*ms_cb)();
 static int SDLCALL MSCallback(void *d,SDL_Event *e) {
-    int64_t x,y;
+    static int64_t x,y;
     static int state;
     static int z;
     if(ms_cb)
@@ -438,7 +438,7 @@ static int SDLCALL MSCallback(void *d,SDL_Event *e) {
                 state&=~1;
             goto ent;
             case SDL_MOUSEWHEEL:
-            z+=e->wheel.y;
+            z-=e->wheel.y; //???,inverted otherwise
             goto ent;
             case SDL_MOUSEMOTION:
             x=e->motion.x,y=e->motion.y;

@@ -500,7 +500,7 @@ wmt_start:
       }
 
       //grab scroll
-      if (0&&!Bt(&task->win_inhibit,WIf_SELF_GRAB_SCROLL) &&
+      if (!Bt(&task->win_inhibit,WIf_SELF_GRAB_SCROLL) &&
 	    (!TaskValidate(sys_focus_task)||
 	    !Bt(&sys_focus_task->win_inhibit,WIf_FOCUS_TASK_GRAB_SCROLL)) &&
 	    kbd.scan_code&SCF_CTRL  && TaskValidate(task)) {
