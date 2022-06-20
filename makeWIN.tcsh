@@ -1,7 +1,7 @@
 #!/bin/tcsh
 source filelistWIN.tcsh
 set CC = "x86_64-w64-mingw32-gcc"
-set CFlags = "-DTARGET_WIN32 -I./SDL2-mingw64/include -I./SDL2-mingw64/include/SDL2 -Os -g3 -lm -fno-omit-frame-pointer"
+set CFlags = "-DTARGET_WIN32 -I./SDL2-mingw64/include -I./SDL2-mingw64/include/SDL2 -Ofast -s -g3 -lm -funroll-loops -fno-omit-frame-pointer -static"
 rm 3d_loader.exe
 if ! -e 3d_loader.exe then
   foreach f ( $CFiles )
@@ -33,4 +33,4 @@ end
 foreach f ( $AsmFiles )
   set Objs = ( $Objs "$f.obj" )
 end
-$CC $Objs ext/wineditline-2.206/lib64/libedit_static.a SDL2.dll -lm -lshlwapi -ldbghelp -o 3d_loader.exe
+$CC $Objs ext/wineditline-2.206/lib64/libedit_static.a SDL2.dll -lm -lshlwapi -ldbghelp -static -s -Ofast -o 3d_loader.exe
