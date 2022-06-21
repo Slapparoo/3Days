@@ -38,4 +38,4 @@ end
 foreach f ( $AsmFiles )
   set Objs = ( $Objs "$f.o" )
 end
-$cc $Objs `sdl2-config --libs` -lm -lpthread -o $binary
+$cc $Objs  -lm -lpthread -lX11 -o $binary

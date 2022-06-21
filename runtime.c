@@ -101,9 +101,6 @@ static char **__Dir(char *fn) {
     vec_deinit(&items);
     return ret;
 }
-static char *hc_SDL_GetWindowTitle(SDL_Window *win) {
-    return POOP_STRDUP(SDL_GetWindowTitle(win));
-}
 static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
   map_iter_t iter;
   const char *key;
@@ -298,7 +295,13 @@ int64_t STK_DrawWindowDel(int64_t *stk) {
     DrawWindowDel(stk[0]);
 }
 int64_t STK___GetTicks() {
-    return SDL_GetTicks();
+	//https://stackoverflow.com/questions/2958291/equivalent-to-gettickcount-on-linux
+    struct timespec ts;
+    int64_t theTick = 0U;
+    clock_gettime( CLOCK_REALTIME, &ts );
+    theTick  = ts.tv_nsec / 1000000;
+    theTick += ts.tv_sec * 1000;
+    return theTick;
 }
 int64_t STK___Spawn(int64_t *stk) {
     __Spawn(stk[0],stk[1],stk[2],stk[3]);
@@ -337,7 +340,7 @@ int64_t STK_SndFreq(int64_t *stk) {
     SndFreq(stk[0]);
 }
 int64_t STK_SetClipboardText(int64_t *stk) {
-    SDL_SetClipboardText(stk[0]);
+    //SDL_SetClipboardText(stk[0]);
 }
 int64_t STK___GetStr(int64_t *stk) {
 	#ifndef TARGET_WIN32
@@ -357,13 +360,7 @@ int64_t STK___GetStr(int64_t *stk) {
 	return r;
 }
 int64_t STK_GetClipboardText(int64_t *stk) {
-    char *find,*ret;
-    if(!SDL_HasClipboardText())
-        return NULL;
-    find=SDL_GetClipboardText();
-    ret=POOP_STRDUP(find);
-    SDL_free(find);
-    return ret;
+    return strdup("");
 }
 int64_t STK___SetThreadPtr(int64_t *stk) {
     __SetThreadPtr(stk[0],stk[1]);

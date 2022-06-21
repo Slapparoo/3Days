@@ -9,7 +9,15 @@
 #include <synchapi.h>
 #include <processthreadsapi.h>
 #endif
-
+static int64_t GetTicks() {
+	//https://stackoverflow.com/questions/2958291/equivalent-to-gettickcount-on-linux
+	struct timespec ts;
+    int64_t theTick = 0U;
+    clock_gettime( CLOCK_REALTIME, &ts );
+    theTick  = ts.tv_nsec / 1000000;
+    theTick += ts.tv_sec * 1000;
+    return theTick;
+}
 #ifndef TARGET_WIN32
 #define LOCK_CORE(core) pthread_mutex_lock(&cores[core].mutex);
 #else
@@ -187,7 +195,7 @@ void __Suspend(CThread *t) {
 }
 void __Sleep(int64_t t) {
     if(cur_thrd)
-        cur_thrd->sleep_until=t+SDL_GetTicks();
+        cur_thrd->sleep_until=t+GetTicks();
     __Yield();
 }
 void __SleepUntilValue(int64_t *ptr,int64_t mask,int64_t expected) {
@@ -201,7 +209,7 @@ void __SleepUntilValue(int64_t *ptr,int64_t mask,int64_t expected) {
 }
 static int ThrdIsReady(CThread *thr) {
 	if(thr->dead||thr->locked) return 0;
-	if(thr->sleep_until&&(thr->sleep_until>=SDL_GetTicks()))
+	if(thr->sleep_until&&(thr->sleep_until>=GetTicks()))
 		return 0;
 	return 1;
 }
@@ -240,7 +248,7 @@ void __Yield() {
 		}
 	}
     loop:;
-    int64_t ms=SDL_GetTicks(),min_sleep=-1,t,most_overdue_i=-1;
+    int64_t ms=GetTicks(),min_sleep=-1,t,most_overdue_i=-1;
     int64_t dont_sleep=0;
     int64_t idx,idx2=threads.length-1,idx3=-1;
     vec_find(&threads,cur_thrd,idx);
@@ -257,7 +265,7 @@ void __Yield() {
     GetContext(&threads.data[idx]->ctx);
     //idx doesnt change but the phyiscall index of the CAN CHANGE,SO RECOMPUTE 
     vec_find(&threads,cur_thrd,idx);
-    ms=SDL_GetTicks();
+    ms=GetTicks();
     if(ThrdIsReady(threads.data[idx])) {
 		if(!(cores[core_num].flop^=1)) {
 			threads.data[idx]->in_yield=0;
@@ -316,7 +324,7 @@ void __Yield() {
 		goto pass;
     }
     if(min_sleep>0&&!dont_sleep) {//We skipped over the current thread when looking for canidates to swap too
-		SDL_Delay((int64_t)min_sleep);
+		usleep(1000*(int64_t)min_sleep);
     }
     goto loop;
 }
@@ -350,7 +358,7 @@ static void Loop(void*ul) {
 		vec_push(&threads,thd);
 		GetContext(&thd->ctx);
 		for(;;) {
-			SDL_Delay(50);
+			usleep(50*1000);
 			__Yield();
 		}
 }

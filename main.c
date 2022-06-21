@@ -188,7 +188,6 @@ int main(int argc,char **argv) {
 		vec_push(&boot_str,0);
 		cmd_ln_boot_txt=boot_str.data;
 	} else {
-		SDL_Init(SDL_INIT_EVERYTHING);
 		InitSound();
 	}
     if(1) {
@@ -214,9 +213,9 @@ int main(int argc,char **argv) {
       }
     #endif
     }
-    if(SDL_WasInit(SDL_INIT_EVERYTHING)) {
+    if(!commandLineArg->count) {
 		InputLoop(&_shutdown);
-		SDL_Quit();
+		exit(0);
 	} else {
 		#ifndef TARGET_WIN32
 		pthread_join(core0,NULL);
