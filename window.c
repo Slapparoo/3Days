@@ -198,10 +198,11 @@ static int32_t __ScanKey(int64_t *ch,int64_t *sc,XEvent *_e) {
     XEvent e=*_e;
     static int64_t persist_mod=0;
     #define PERSIST_KEY(flag) \ 
-    if(e.type==KeyRelease) \
+    if(e.type==KeyRelease) { \
 		persist_mod&=~(flag); \
-    else \
-		persist_mod|=(flag);
+		mod&=~(flag); \
+    } else \
+		mod|=(persist_mod|=(flag));
     int64_t mod=persist_mod,cond,dummy;
     if(!ch) ch=&dummy;
     if(!sc) sc=&dummy;    
