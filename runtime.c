@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/types.h>
+#include <time.h>
 extern int64_t HCSetJmp(void *ptr);
 extern void HCLongJmp(void *ptr);
 #include <stddef.h>
