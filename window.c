@@ -71,6 +71,10 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	XUnlockDisplay(dw->disp);
 }
 void DrawWindowDel(CDrawWindow *win) {
+	XLockDisplay(dw->disp);
+	XFreeGC(dw->disp,win->gc);
+	XDestroyWindow(dw->disp,win->window);
+	XCloseDisplay(dw->disp);
 }
 #define CH_CTRLA	0x01
 #define CH_CTRLB	0x02
@@ -463,6 +467,10 @@ void InputLoop(void *ul) {
     XEvent e;
     for(;!*(int64_t*)ul;) {
 		XNextEvent(dw->disp,&e);
+		if(e.type==DestroyNotify ){
+			DrawWindowDel(dw);
+			break;
+		}
 		if(kb_cb)
 			KBCallback(kb_cb_data,&e);
 		if(ms_cb)

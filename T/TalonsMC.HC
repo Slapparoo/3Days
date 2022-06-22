@@ -2,7 +2,6 @@
 
 RegDft("TempleOS/Talons","F64 best_score=9999;\n");
 RegExe("TempleOS/Talons");
-
 //Keep these power of two so shift is used instead of multiply
 //to index arrays.
 #define MAP_WIDTH		1024
@@ -50,6 +49,11 @@ RegExe("TempleOS/Talons");
 
 
 			$SP,"<2>",BI=2$
+
+
+
+
+
 
 
 
@@ -182,7 +186,6 @@ F64 game_t0,game_tf,pitch,roll,heading,è,speed;
 Bool invert_pitch,rolled_over;
 I64 strip_height,x,y,z,fish_left;
 CD3 v;
-
 U0 WrapAngles()
 {
   I64 r[4][4],x,y,z;
@@ -368,7 +371,7 @@ U0 MPDoPanels(CTask *task)
 	    poly[0].z=elevations[j%MAP_HEIGHT][i%MAP_WIDTH];
 	    poly[1].x=MAP_SCALE*(i+w);
 	    poly[1].y=MAP_SCALE*j;
-	    poly[1].z=elevations[j%MAP_HEIGHT][(i+w)%MAP_WIDTH];
+	    poly[1].z=elevations[j%MAP_HEIGHT][(i+w)%MAP_WIDTH];
 	    poly[2].x=MAP_SCALE*(i+w);
 	    poly[2].y=MAP_SCALE*(j+h);
 	    poly[2].z=elevations[(j+h)%MAP_HEIGHT][(i+w)%MAP_WIDTH];
@@ -502,12 +505,16 @@ U0 ClawsDraw(CTask *task,CDC *dc)
 }
 
 CDC *main_dc;
+I64 main_dc_lock=0;
 U0 DrawIt(CTask *task,CDC *dc)
 {
+  __SleepUntilValue(&main_dc_lock,1,0);
+  main_dc_lock=1;
   main_dc->flags|=DCF_NO_TRANSPARENTS;
   GrBlot(dc,0,0,main_dc);
   if (claws_down)
     ClawsDraw(task,dc);
+  main_dc_lock=0;
 }
 
 /*
@@ -730,8 +737,7 @@ U0 CoreAPTalonsTask(CTask *master_task)
 {
   CDC *dc=DCAlias(main_dc,master_task);
   while (!mp.app_done) {
-    while (!Bt(&mp.update_not_done_flags,Gs->num) && !mp.app_done)
-      Sleep(1);
+    __SleepUntilValue(&mp.update_not_done_flags,1<<Gs->num,1<<Gs->num);
     if (!mp.app_done)
       MPDrawIt(master_task,dc);
   }
@@ -852,6 +858,8 @@ U0 DrawHorizon(CDC *dc)
 
 U0 Core0Talons()
 {
+  __SleepUntilValue(&main_dc_lock,1,0);
+  main_dc_lock=1;
   CDC *dc=DCAlias(main_dc,Fs);
   I64 i,xx,yy,elev,height,cx=Fs->pix_width>>1,cy=Fs->pix_height>>1;
   F64 min_strip_width,tt;
@@ -886,8 +894,7 @@ U0 Core0Talons()
     DCDepthBufRst(dc);
     mp.update_not_done_flags=1<<mp_cnt-1;
     MPDrawIt(Fs,dc);
-    while (mp.update_not_done_flags)
-      Sleep(1);
+    __SleepUntilValue(&mp.update_not_done_flags,-1,0);
 
     min_strip_width=F64_MAX;
     for (i=0;i<mp_cnt;i++)
@@ -895,6 +902,7 @@ U0 Core0Talons()
     strip_height=ClampI64(
 	  strip_height*Clamp(0.25*min_strip_width/strip_height,0.9,1.1),
 	  64,1024);
+
 
     tt=tS-game_t0;
     if (tt<5.0 && Blink) {
@@ -924,6 +932,7 @@ U0 Core0Talons()
   GrPrint(dc,0,FONT_HEIGHT,"Fish Remaining:%d Time:%3.2f Best:%3.2f",
 	fish_left,tt,best_score);
 
+  main_dc_lock=0;
   //We made an alias of this we don't want freed.
   dc->depth_buf=NULL;
   DCDel(dc);
@@ -1030,6 +1039,7 @@ U0 AnimateTask(I64)
 	while (tmpb!=&b_head[i]) {
 	  tmpb->p.x+=10*ms/1000*MAP_SCALE*Cos(tmpb->é);
 	  tmpb->p.y+=10*ms/1000*MAP_SCALE*Sin(tmpb->é);
+
 	  tmpb->p.z=BIRD_ELEVATION*MAP_SCALE+
 		elevations[tmpb->p.y/MAP_SCALE%MAP_HEIGHT][tmpb->p.x/MAP_SCALE%MAP_WIDTH];
 	  tmpb->é+=2*ã*ms/1000/10;
@@ -1046,6 +1056,7 @@ U0 MPEnd()
   update_jiffy_limit=0;
   mp.app_not_done_flags=1<<mp_cnt-1-1;
   mp.app_done=TRUE;
+  mp.update_not_done_flags=1<<mp_cnt-1-1;
 //Wait for all cores to exit
   while (mp.app_not_done_flags)
     Sleep(1);
@@ -1188,23 +1199,24 @@ U0 Talons()
 	switch (ch) {
 	  case 0:
 	    switch (sc.u8[0]) {
-	      start:
-		case SC_CURSOR_DOWN:
+	      	case SC_CURSOR_DOWN:
 		  è-=CTRLS_SCALE*Cos(roll);
 		  heading-=CTRLS_SCALE*Sin(roll)*Sin(è);
+		  WrapAngles;
 		  break;
 		case SC_CURSOR_UP:
 		  è+=CTRLS_SCALE*Cos(roll);
 		  heading+=CTRLS_SCALE*Sin(roll)*Sin(è);
+		  WrapAngles;
 		  break;
 		case SC_CURSOR_RIGHT:
 		  roll+=CTRLS_SCALE;
+		  WrapAngles; 
 		  break;
 		case SC_CURSOR_LEFT:
 		  roll-=CTRLS_SCALE;
+		  WrapAngles;
 		  break;
-	      end:
-		WrapAngles;
 	    }
 	    break;
 	  case '\n':
@@ -1214,9 +1226,13 @@ U0 Talons()
 	    Init;
 	    Fs->draw_it=&DrawIt;
 	    break;
+          default:
+            goto c0;
 	}
-      } else
+      } else{
+	c0:
 	Core0Talons;
+      }
     } while (ch!=CH_SHIFT_ESC && ch!=CH_ESC);
   catch
     PutExcept;

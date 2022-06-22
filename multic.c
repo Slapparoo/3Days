@@ -243,14 +243,6 @@ void __Yield() {
                 __KillThread(threads.data[i]);
                 threads.data[i]->to_kill=0;
             }
-        } else if(threads.data[i]->wait_for_ptr) {
-            int64_t mask=threads.data[i]->wait_for_ptr_mask;
-            if((threads.data[i]->wait_for_ptr_expected&mask)==(mask&atomic_load(threads.data[i]->wait_for_ptr))) {
-                threads.data[i]->locked=1;
-            } else {
-                threads.data[i]->wait_for_ptr=NULL;
-                threads.data[i]->locked=0;
-            }
         }
     rem:
     for(i=0;i!=dead_threads.length;i++) {
@@ -291,6 +283,15 @@ void __Yield() {
 	}
     check:
     for(idx2=(idx+1)%threads.length;idx!=idx2;idx2=(1+idx2)%threads.length) {
+        if(threads.data[idx2]->wait_for_ptr) {
+            int64_t mask=threads.data[idx2]->wait_for_ptr_mask;
+            if((threads.data[idx2]->wait_for_ptr_expected&mask)!=(mask&atomic_load(threads.data[idx2]->wait_for_ptr))) {
+                threads.data[idx2]->locked=1;
+            } else {
+                threads.data[idx2]->wait_for_ptr=NULL;
+                threads.data[idx2]->locked=0;
+            }
+        }
         if(threads.data[idx2]->locked||threads.data[idx2]->dead) {
             continue;
         } else if(threads.data[idx2]->sleep_until) {

@@ -7,7 +7,7 @@ if ! $#gFindLoc then
 	exit
 endif
 source filelist.tcsh
-set CFlags = "-Os -g3 `sdl2-config --cflags --libs` -lm -fno-omit-frame-pointer -lpthread"
+set CFlags = "-Os -g3 -lm -fno-omit-frame-pointer -lpthread"
 
 if ! -e $binary then
   foreach f ( $CFiles )
@@ -38,4 +38,4 @@ end
 foreach f ( $AsmFiles )
   set Objs = ( $Objs "$f.o" )
 end
-$cc $Objs `sdl2-config --libs` -lm -lpthread -o $binary
+$cc $Objs -lm -lpthread -lX11 -o $binary

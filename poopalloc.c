@@ -131,6 +131,7 @@ typedef struct CMemUnused {
     struct CMemUnused *next;
     CMemBlk *parent;
     int32_t sz;
+    int16_t ok; //Is 'OK' if it is occupied
     int8_t occupied;
     void *task;
     void *caller[5];
@@ -205,6 +206,7 @@ static void *__PoopMAlloc(int64_t sz,int64_t low32,void *task) {
         unused->sz=sz;
         unused->task=task;
         unused->occupied=1;
+        unused->ok=0x4B4F;
         return memset(unused+1,0,sz);
     }
     loop:
@@ -222,6 +224,7 @@ static void *__PoopMAlloc(int64_t sz,int64_t low32,void *task) {
         UnlockHeap();
         unused->sz=sz;
         unused->occupied=1;
+        unused->ok=0x4B4F;
         unused->task=task;
         assert(unused!=unused->next);
         return memset(unused+1,0,SizeUp(sz));
@@ -257,6 +260,9 @@ void PoopFree(void *ptr) {
     CMemBlk *next,*last;
     un--;
     if(!un->occupied) return;
+    if(un->ok!=0x4B4F)
+		return;
+    un->ok=0;
     un->occupied=0;
     int64_t l=Log2I(un->parent->item_sz);
     if(un->parent->is_self_contained) {
