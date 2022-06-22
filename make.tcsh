@@ -7,7 +7,7 @@ if ! $#gFindLoc then
 	exit
 endif
 source filelist.tcsh
-set CFlags = "-Os -g3 -lm -fno-omit-frame-pointer -lpthread"
+set CFlags = "-O0 -g3 `pkg-config --cflags portaudio-2.0`  -lm -fno-omit-frame-pointer -lpthread"
 
 if ! -e $binary then
   foreach f ( $CFiles )
@@ -15,7 +15,7 @@ if ! -e $binary then
   end
 else
   foreach f ( $CFiles )
-    set find = `$gFindLoc -wholename    $f -newer $binary `
+    set find = `$gFindLoc . -wholename    $f -newer $binary `
     if($#find)  $cc $CFlags -c $f -o $f.o || rm $f.o 
   end
 endif
@@ -26,7 +26,7 @@ if ! -e $binary then
   end
 else
   foreach f ( $AsmFiles )
-    set find = `$gFindLoc -wholename $f -newer $binary `
+    set find = `$gFindLoc . -wholename $f -newer $binary `
     if($#find) yasm -f elf64 $f -o $f.o || rm $f.o
   end
 endif
@@ -38,4 +38,4 @@ end
 foreach f ( $AsmFiles )
   set Objs = ( $Objs "$f.o" )
 end
-$cc $Objs -lm -lpthread -lX11 -o $binary
+$cc $Objs `pkg-config --libs portaudio-2.0` -lm -lpthread -lX11 -o $binary
