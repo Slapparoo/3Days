@@ -169,3 +169,4 @@ int VFsMountDrive(char let,char *path);
 int64_t IsCmdLine();
 char VFsChDrv(char to);
 char *CmdLineBootText();
+char *ClipboardText();

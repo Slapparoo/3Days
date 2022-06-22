@@ -7,6 +7,7 @@ typedef struct CDrawWindow {
     Window window;
     Display *disp;
     GC gc;
+    Atom clip3days;
     int64_t sz_x,sz_y;
     int64_t scroll_x,scroll_y;
 } CDrawWindow;
@@ -17,7 +18,14 @@ static int32_t gr_palette_std[]={
 0xFF5555,0xFF55FF,0xFFFF55,0xFFFFFF};
 static XColor palette[16];
 static void StartInputScanner();
-static CDrawWindow *dw;
+static CDrawWindow *dw=NULL;
+static char *clip_text=NULL;
+static void
+utf8_prop(Display *dpy, Window w);
+char *ClipboardText() {
+	utf8_prop(dw->disp,dw->window);
+	return strdup(clip_text);
+}
 CDrawWindow *NewDrawWindow() {
 	if(!dw) {
 		XInitThreads();
@@ -465,6 +473,7 @@ void SetMSCallback(void *fptr) {
 }
 void InputLoop(void *ul) {
     XEvent e;
+    XSelectionEvent *sev;
     for(;!*(int64_t*)ul;) {
 		XNextEvent(dw->disp,&e);
 		if(e.type==DestroyNotify ){
@@ -476,4 +485,34 @@ void InputLoop(void *ul) {
 		if(ms_cb)
 			MSCallback(NULL,&e);
 	}
+}
+//https://www.google.com/search?q=xlib+clipboard&client=firefox-b-1-e&sxsrf=ALiCzsb9A6kPI8rhFAVztJKwMeVH6WiTJQ%3A1655908750653&ei=jimzYuS0J_6fptQP6pStoAs&ved=0ahUKEwjks_PmpMH4AhX-j4kEHWpKC7QQ4dUDCA0&uact=5&oq=xlib+clipboard&gs_lcp=Cgdnd3Mtd2l6EAMyBggAEB4QFjIGCAAQHhAWMgUIABCGAzIFCAAQhgMyBQgAEIYDMgUIABCGAzoHCAAQRxCwAzoHCAAQsAMQQzoKCAAQ5AIQsAMYAToSCC4QxwEQowIQyAMQsAMQQxgCOgwILhDIAxCwAxBDGAI6BAgjECc6BAgAEEM6CwgAEIAEELEDEIMBOgUIABCABDoICAAQgAQQsQM6CwguEIAEEMcBENEDOgoIABCABBCHAhAUSgQIQRgASgQIRhgBULkCWKMXYIkaaAFwAXgAgAGYA4gB1B2SAQcyLTQuNy4xmAEAoAEByAERwAEB2gEGCAEQARgJ2gEGCAIQARgI&sclient=gws-wiz
+static void
+utf8_prop(Display *dpy, Window w)
+{
+	XLockDisplay(dpy);
+	Atom sel = XInternAtom(dw->disp, "CLIPBOARD", False);
+	Atom utf8 = XInternAtom(dw->disp, "UTF8_STRING", False);
+	Window owner = XGetSelectionOwner(dw->disp, sel);
+	Atom target=XInternAtom(dw->disp, "3DaysCLIP", False);
+	XConvertSelection(dw->disp, sel, utf8, target, dw->window,
+						  CurrentTime);
+	XEvent ev;
+	do
+		XNextEvent(dpy, &ev);
+	while(ev.type!=SelectionNotify);
+    Atom da, incr, type;
+    int di;
+    unsigned long size, dul;
+	unsigned char *prop_ret = NULL;
+	XGetWindowProperty(dpy, w, target, 0, 0, False, AnyPropertyType,
+                       &type, &di, &dul, &size, &prop_ret);
+    XFree(prop_ret);
+    XGetWindowProperty(dpy, w, target, 0, size, False, AnyPropertyType,
+                       &da, &di, &dul, &dul, &prop_ret);
+    PoopFree(clip_text);
+    clip_text=strdup(prop_ret);
+    XFree(prop_ret);
+    XDeleteProperty(dpy, w, target);
+    XUnlockDisplay(dpy);
 }

@@ -361,7 +361,7 @@ int64_t STK___GetStr(int64_t *stk) {
 	return r;
 }
 int64_t STK_GetClipboardText(int64_t *stk) {
-    return strdup("");
+    return ClipboardText();
 }
 int64_t STK___SetThreadPtr(int64_t *stk) {
     __SetThreadPtr(stk[0],stk[1]);
