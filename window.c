@@ -21,11 +21,7 @@ static void StartInputScanner();
 static CDrawWindow *dw=NULL;
 static char *clip_text=NULL;
 static void
-utf8_prop(Display *dpy, Window w);
-char *ClipboardText() {
-	utf8_prop(dw->disp,dw->window);
-	return strdup(clip_text);
-}
+utf8_prop(Display *dpy, XEvent ev);
 CDrawWindow *NewDrawWindow() {
 	if(!dw) {
 		XInitThreads();
@@ -471,37 +467,86 @@ static int MSCallback(void *d,XEvent *e) {
 void SetMSCallback(void *fptr) {
     ms_cb=fptr;
 }
-void InputLoop(void *ul) {
+static void utf8_send(char *text,XEvent ev) {
+	Display *dpy=dw->disp;
+    XLockDisplay(dpy);
+	Atom utf8 = XInternAtom(dpy, "UTF8_STRING", False);
+    XSelectionRequestEvent *sev;
+	loop:;
+	sev=&ev.xselectionrequest;
+	XSelectionEvent ssev;
+    XChangeProperty(dpy, sev->requestor, sev->property, utf8, 8, PropModeReplace,
+                    (unsigned char *)text, strlen(text));
+    ssev.type = SelectionNotify;
+    ssev.requestor = sev->requestor;
+    ssev.selection = sev->selection;
+    ssev.target = sev->target;
+    ssev.property = sev->property;
+    ssev.time = sev->time;
+    XSendEvent(dpy, sev->requestor, True, NoEventMask, (XEvent *)&ssev);
+    end:
+    XUnlockDisplay(dpy);
+}
+void SetClipboard(char *text) {
+	PoopFree(clip_text);
+	XLockDisplay(dw->disp);
+	Atom sel = XInternAtom(dw->disp, "CLIPBOARD", False);
+    XSetSelectionOwner(dw->disp, sel, dw->window, CurrentTime);
+	XUnlockDisplay(dw->disp);
+	clip_text=strdup(text);
+}
+static void __InputLoop(void *ul,int64_t clip_only) {
     XEvent e;
     XSelectionEvent *sev;
     for(;!*(int64_t*)ul;) {
 		XNextEvent(dw->disp,&e);
-		if(e.type==DestroyNotify ){
+		if(e.type==DestroyNotify){
 			DrawWindowDel(dw);
 			break;
-		}
+		} else if(e.type==SelectionRequest) {
+			utf8_send(clip_text,e);
+		} else if(e.type==SelectionNotify)
+			utf8_prop(dw->disp,e);
 		if(kb_cb)
 			KBCallback(kb_cb_data,&e);
 		if(ms_cb)
 			MSCallback(NULL,&e);
 	}
 }
-//https://www.google.com/search?q=xlib+clipboard&client=firefox-b-1-e&sxsrf=ALiCzsb9A6kPI8rhFAVztJKwMeVH6WiTJQ%3A1655908750653&ei=jimzYuS0J_6fptQP6pStoAs&ved=0ahUKEwjks_PmpMH4AhX-j4kEHWpKC7QQ4dUDCA0&uact=5&oq=xlib+clipboard&gs_lcp=Cgdnd3Mtd2l6EAMyBggAEB4QFjIGCAAQHhAWMgUIABCGAzIFCAAQhgMyBQgAEIYDMgUIABCGAzoHCAAQRxCwAzoHCAAQsAMQQzoKCAAQ5AIQsAMYAToSCC4QxwEQowIQyAMQsAMQQxgCOgwILhDIAxCwAxBDGAI6BAgjECc6BAgAEEM6CwgAEIAEELEDEIMBOgUIABCABDoICAAQgAQQsQM6CwguEIAEEMcBENEDOgoIABCABBCHAhAUSgQIQRgASgQIRhgBULkCWKMXYIkaaAFwAXgAgAGYA4gB1B2SAQcyLTQuNy4xmAEAoAEByAERwAEB2gEGCAEQARgJ2gEGCAIQARgI&sclient=gws-wiz
-static void
-utf8_prop(Display *dpy, Window w)
-{
-	XLockDisplay(dpy);
+char *ClipboardText() {
+	XLockDisplay(dw->disp);
+	char *ret;
 	Atom sel = XInternAtom(dw->disp, "CLIPBOARD", False);
-	Atom utf8 = XInternAtom(dw->disp, "UTF8_STRING", False);
 	Window owner = XGetSelectionOwner(dw->disp, sel);
+	if(owner==dw->window) {
+		ret=strdup(clip_text);
+		XUnlockDisplay(dw->disp);
+		return ret;
+	}
+	Atom utf8=XInternAtom(dw->disp, "UTF8_STRING", False);
 	Atom target=XInternAtom(dw->disp, "3DaysCLIP", False);
 	XConvertSelection(dw->disp, sel, utf8, target, dw->window,
 						  CurrentTime);
-	XEvent ev;
-	do
-		XNextEvent(dpy, &ev);
-	while(ev.type!=SelectionNotify);
-    Atom da, incr, type;
+	PoopFree(clip_text);
+	clip_text=NULL;
+	XUnlockDisplay(dw->disp);
+	while(!clip_text)
+		__Yield();
+	return strdup(clip_text);
+}
+void InputLoop(void *ul) {
+	__InputLoop(ul,0);
+}
+//https://www.google.com/search?q=xlib+clipboard&client=firefox-b-1-e&sxsrf=ALiCzsb9A6kPI8rhFAVztJKwMeVH6WiTJQ%3A1655908750653&ei=jimzYuS0J_6fptQP6pStoAs&ved=0ahUKEwjks_PmpMH4AhX-j4kEHWpKC7QQ4dUDCA0&uact=5&oq=xlib+clipboard&gs_lcp=Cgdnd3Mtd2l6EAMyBggAEB4QFjIGCAAQHhAWMgUIABCGAzIFCAAQhgMyBQgAEIYDMgUIABCGAzoHCAAQRxCwAzoHCAAQsAMQQzoKCAAQ5AIQsAMYAToSCC4QxwEQowIQyAMQsAMQQxgCOgwILhDIAxCwAxBDGAI6BAgjECc6BAgAEEM6CwgAEIAEELEDEIMBOgUIABCABDoICAAQgAQQsQM6CwguEIAEEMcBENEDOgoIABCABBCHAhAUSgQIQRgASgQIRhgBULkCWKMXYIkaaAFwAXgAgAGYA4gB1B2SAQcyLTQuNy4xmAEAoAEByAERwAEB2gEGCAEQARgJ2gEGCAIQARgI&sclient=gws-wiz
+static void
+utf8_prop(Display *dpy, XEvent ev)
+{
+	Window w=dw->window;
+	XLockDisplay(dpy);
+	Atom sel = XInternAtom(dw->disp, "CLIPBOARD", False);
+	Atom utf8 = XInternAtom(dw->disp, "UTF8_STRING", False);
+	Atom target=XInternAtom(dw->disp, "3DaysCLIP", False);
+	Atom da, incr, type;
     int di;
     unsigned long size, dul;
 	unsigned char *prop_ret = NULL;
@@ -511,7 +556,10 @@ utf8_prop(Display *dpy, Window w)
     XGetWindowProperty(dpy, w, target, 0, size, False, AnyPropertyType,
                        &da, &di, &dul, &dul, &prop_ret);
     PoopFree(clip_text);
-    clip_text=strdup(prop_ret);
+    if(!size)
+		clip_text=strdup("");
+	else
+		clip_text=strdup(prop_ret);
     XFree(prop_ret);
     XDeleteProperty(dpy, w, target);
     XUnlockDisplay(dpy);

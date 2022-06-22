@@ -342,6 +342,7 @@ int64_t STK_SndFreq(int64_t *stk) {
 }
 int64_t STK_SetClipboardText(int64_t *stk) {
     //SDL_SetClipboardText(stk[0]);
+    SetClipboard(stk[0]);
 }
 int64_t STK___GetStr(int64_t *stk) {
 	#ifndef TARGET_WIN32
