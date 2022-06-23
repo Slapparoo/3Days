@@ -296,7 +296,8 @@ void *PoopMAlloc32(int64_t sz) {
 void *PoopReAlloc(void *ptr,int64_t sz) {
     void *ret=PoopMAlloc(sz);
     int64_t copy=(sz>MSize(ptr))?MSize(ptr):sz;
-    memcpy(ret,ptr,copy);
+    if(ptr&&ret)
+		memcpy(ret,ptr,copy);
     PoopFree(ptr);
     return ret;
 } 

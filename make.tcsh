@@ -2,18 +2,17 @@
 set gFindLoc = `which find`
 set binary = 3d_loader
 set cc = gcc
-if ! $#gFindLoc then
-	echo "Install findutils for your BSD,im or if your up to it,port this file to use the BSD find."
-	exit
-endif
 source filelist.tcsh
-set CFlags = "-O0 -g3 `pkg-config --cflags portaudio-2.0`  -lm -fno-omit-frame-pointer -lpthread"
-
+set CFlags = "-Ofast -g3 `pkg-config --cflags portaudio-2.0`  -lm -fno-omit-frame-pointer -lpthread"
+enter:
 if ! -e $binary then
   foreach f ( $CFiles )
      $cc $CFlags -c $f -o $f.o || rm $f.o
   end
 else
+  set find = `$gFindLoc . -wholename  make.tcsh  -newer $binary `
+  if( ! $#find ) rm $binary
+  if( ! $#find ) goto enter
   foreach f ( $CFiles )
     set find = `$gFindLoc . -wholename    $f -newer $binary `
     if($#find)  $cc $CFlags -c $f -o $f.o || rm $f.o 
