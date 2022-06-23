@@ -45,7 +45,7 @@ CDrawWindow *NewDrawWindow() {
 			0,0,640,480,0,1,palette[i].pixel
 		);
 		XSelectInput(dw->disp,dw->window,
-			KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask);
+			KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|FocusChangeMask);
 		dw->gc=XCreateGC(dw->disp,dw->window,0,0);
 	}
 	return dw;
@@ -202,9 +202,9 @@ static int64_t K2SC(char ch) {
         if(keys[i]==ch) return i;
     }
 }
+static int64_t persist_mod=0;
 static int32_t __ScanKey(int64_t *ch,int64_t *sc,XEvent *_e) {
     XEvent e=*_e;
-    static int64_t persist_mod=0;
     #define PERSIST_KEY(flag) \ 
     if(e.type==KeyRelease) { \
 		persist_mod&=~(flag); \
@@ -216,7 +216,7 @@ static int32_t __ScanKey(int64_t *ch,int64_t *sc,XEvent *_e) {
     if(!sc) sc=&dummy;    
     cond=1;
     if(cond) {
-        if(e.type==KeyPress) {
+		if(e.type==KeyPress) {
             ent:
             *ch=*sc=0;
             if(e.xkey.state&ShiftMask)
@@ -507,6 +507,18 @@ static void __InputLoop(void *ul,int64_t clip_only) {
 			utf8_send(clip_text,e);
 		} else if(e.type==SelectionNotify)
 			utf8_prop(dw->disp,e);
+		else if(e.type==FocusOut) {
+			if((persist_mod|SCF_ALT)&&kb_cb)
+				FFI_CALL_TOS_2(kb_cb,0,SC_ALT|SCF_ALT|SCF_KEY_UP|SCF_NO_SHIFT);
+			if((persist_mod|SCF_CTRL)&&kb_cb)
+				FFI_CALL_TOS_2(kb_cb,0,SC_CTRL|SCF_CTRL|SCF_KEY_UP|SCF_NO_SHIFT);
+			if((persist_mod|SCF_SHIFT)&&kb_cb)
+				FFI_CALL_TOS_2(kb_cb,0,SC_SHIFT|SCF_SHIFT|SCF_KEY_UP);
+			if((persist_mod|SCF_CAPS)&&kb_cb)
+				FFI_CALL_TOS_2(kb_cb,0,SC_CAPS|SCF_NO_SHIFT|SCF_KEY_UP);
+			persist_mod&=~(SCF_CAPS|SCF_SHIFT|SCF_CTRL|SCF_ALT);
+			continue;
+		}
 		if(kb_cb)
 			KBCallback(kb_cb_data,&e);
 		if(ms_cb)

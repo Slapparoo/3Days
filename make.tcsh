@@ -11,8 +11,8 @@ if ! -e $binary then
   end
 else
   set find = `$gFindLoc . -wholename  make.tcsh  -newer $binary `
-  if( ! $#find ) rm $binary
-  if( ! $#find ) goto enter
+  if( $#find ) rm $binary
+  if( $#find ) goto enter
   foreach f ( $CFiles )
     set find = `$gFindLoc . -wholename    $f -newer $binary `
     if($#find)  $cc $CFlags -c $f -o $f.o || rm $f.o 
