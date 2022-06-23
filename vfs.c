@@ -310,8 +310,8 @@ char *__VFsFileNameAbs(char *name) {
     VFsInplaceHostDelims(path.data);
     vec_pusharr(&head,path.data,path.length);
     VFsInplaceConvertDelims(head.data);
-    file=strrchr(head.data,TOS_delim)+1;
-    file[-1]=0;
+    file=strdup(1+strrchr(head.data,TOS_delim));
+    strrchr(head.data,TOS_delim)[1]=0;
     failed=!VFsCd(head.data,VFS_CDF_FILENAME_ABS);
     vec_deinit(&path);
     vec_init(&path);
@@ -321,6 +321,7 @@ char *__VFsFileNameAbs(char *name) {
     VFsCd(old_dir,0);
     end:
     vec_deinit(&head);
+    PoopFree(file);
     if(!failed)
         return path.data;
     vec_deinit(&path);

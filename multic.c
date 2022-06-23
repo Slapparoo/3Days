@@ -94,6 +94,7 @@ typedef struct {
     void *data;
     void *fs;
     struct CThread *thd;
+    char *cd_to;
 } CPair;
 static __thread CThread *cur_thrd;
 static __thread vec_CThread_t threads;
@@ -162,23 +163,26 @@ static void SigUsr2(int sig) {
 static int64_t __SpawnFFI(CPair *p) {
     CHash **ex;
     VFsThrdInit();
+    VFsCd(p->cd_to,0);
     FFI_CALL_TOS_1(p->fp,p->data);
     if(ex=map_get(&TOSLoader,"Exit")) {
         FFI_CALL_TOS_0(ex[0]->val);
     }
     __Exit();
 }
-CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name) {
+CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name,char *new_dir) {
     CThread *thd=TD_MALLOC(sizeof(CThread));
     CPair *p=TD_MALLOC(sizeof(CPair));
     p->fp=fp,p->data=data,p->fs=fs,p->thd=thd;
+    if(new_dir) {
+		p->cd_to=strdup(new_dir);
+	} else 
+		p->cd_to=VFsDirCur();
     signal(SIGSEGV,FualtCB);
     #ifndef TARGET_WIN32
     signal(SIGBUS,FualtCB);
     #endif
     thd->Fs=p->fs;
-    thd->cur_dir=cur_dir;
-    thd->cur_drv=cur_drv;
     thd->core=core;
     GetContext(&thd->ctx);
     if(!thd->dead) {
@@ -197,7 +201,10 @@ CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name) {
     return thd;
 }
 CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
-	return __MPSpawn(core_num,fs,fp,data,name);
+	char *tmp=VFsDirCur();
+	CThread *ret=__MPSpawn(core_num,fs,fp,data,name,tmp);
+	PoopFree(tmp);
+	return ret;
 } 
 void __AwakeThread(CThread *t) {
 	if(!t) return;

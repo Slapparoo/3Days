@@ -401,7 +401,7 @@ int64_t STK_InBounds(int64_t *stk) {
 	return near_alloc;
 }
 int64_t STK___MPSpawn(int64_t *stk) {
-	return __MPSpawn(stk[0],stk[1],stk[2],stk[3],stk[4]);
+	return __MPSpawn(stk[0],stk[1],stk[2],stk[3],stk[4],NULL);
 }
 int64_t mp_cnt(int64_t *stk) {
 	#ifndef TARGET_WIN32

@@ -21,11 +21,14 @@ static int paCallback(const void *inp,void *_out,unsigned long fpb,const PaStrea
 void InitSound() {
 	int err=Pa_Initialize();
 	err=Pa_OpenDefaultStream(&pa_stream,0,2,paInt8,SAMPLE_RATE,256,&paCallback,&freq);
+	Pa_StartStream(pa_stream);
 }
 void SndFreq(int64_t f) {
 	freq=f;
+	/*
 	if(freq)
 		Pa_StartStream(pa_stream);
 	else
 		Pa_StopStream(pa_stream);
+	*/
 }
