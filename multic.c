@@ -161,7 +161,8 @@ static void SigUsr2(int sig) {
 	UNLOCK_CORE(core_num);
 }
 #endif
-static int64_t __SpawnFFI(CPair *p) {
+//We call from __MPSpawn whose stack is PoopMAlloc'ed may not be aligned.
+static __attribute__((force_align_arg_pointer)) int64_t __SpawnFFI(CPair *p) {
     CHash **ex;
     VFsThrdInit();
     VFsCd(p->cd_to,0);
