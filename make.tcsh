@@ -3,7 +3,7 @@ set gFindLoc = `which find`
 set binary = 3d_loader
 set cc = gcc
 source filelist.tcsh
-set CFlags = "-Ofast -g3 `pkg-config --cflags portaudio-2.0`  -lm -fno-omit-frame-pointer -lpthread"
+set CFlags = "-Ofast -s -g3 `pkg-config --cflags portaudio-2.0`  -lm -fno-omit-frame-pointer -lpthread"
 enter:
 if ! -e $binary then
   foreach f ( $CFiles )
@@ -37,4 +37,4 @@ end
 foreach f ( $AsmFiles )
   set Objs = ( $Objs "$f.o" )
 end
-$cc $Objs `pkg-config --libs portaudio-2.0` -lm -lpthread -lX11 -o $binary
+$cc $Objs `pkg-config --libs portaudio-2.0` -Ofast -s -lm -lpthread -lX11 -o $binary
