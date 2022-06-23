@@ -109,6 +109,7 @@ int main(int argc,char **argv) {
 	BoundsCheckTests();
     char *header=NULL,*t_drive=NULL,*tmp;
     VFsGlobalInit();
+    PreInitCores();
     #ifndef TARGET_WIN32
     char *rp=realpath(argv[0],NULL);
     if(rp==NULL)

@@ -2,6 +2,7 @@
 #include <sched.h>
 #include <signal.h>
 #include <stdatomic.h>
+#include <unistd.h>
 #ifndef TARGET_WIN32
 #include <pthread.h>
 #else
@@ -65,7 +66,7 @@ typedef struct CCore {
 	//
 	CThread *__interupt_thread;
 	void *__interupt_to;
-	
+	int64_t __no_lock;
 } CCore;
 static __thread int core_num;
 static int core_cnt; 
@@ -188,15 +189,11 @@ CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name,char *new_di
     if(!thd->dead) {
 		thd->stack=TD_MALLOC(2000000); //aprx 2Mb
         MakeContext(&thd->ctx,thd->stack,&__SpawnFFI,p);
-        while(!atomic_load(&cores[core].ready))
-			#ifndef TARGET_WIN32
-			sched_yield();
-			#else
-			Yield();
-			#endif
-		LOCK_CORE(core);
+        if(!cores[core_num].__no_lock)
+			LOCK_CORE(core);
         vec_push(cores[core].threads,thd);
-        UNLOCK_CORE(core);
+        if(!cores[core_num].__no_lock)
+			UNLOCK_CORE(core);
     }
     return thd;
 }
@@ -362,35 +359,34 @@ void __AwaitThread(CThread *t) {
             __Yield();
     }
 }
+static void Looper() {
+	for(;;) {
+		__Sleep(200);
+	}
+}
 int InitThreadsForCore() {
-    vec_init(&threads);
+	vec_init(&threads);
     vec_init(&dead_threads);
     VFsThrdInit(); 
     int num=atomic_fetch_add(&core_cnt,1);
     core_num=num;
-    #ifndef TARGET_WIN32
+    LOCK_CORE(core_num);
     cores[num].pt=pthread_self();
-    pthread_mutex_init(&cores[num].mutex,NULL);
-    #else
-    cores[num].pt=GetCurrentThread();
-    cores[num].mutex=CreateMutex(NULL,0,NULL);
-    #endif
     cores[num].gs=PoopMAlloc(512); //Should be enough
     cores[num].threads=&threads;
     cores[num].dead_threads=&dead_threads;
     atomic_fetch_add(&cores[num].ready,1);
+    cores[num].__no_lock=1;
+    __Spawn(PoopMAlloc(2048),Looper,NULL,"Loopeer");
+    cores[num].__no_lock=0;
+    UNLOCK_CORE(core_num);
     return num;
 }
 static void Loop(void*ul) {
 		//Make a dummy "thread" to yield out to if we have no other threads 
-		CThread *thd=TD_MALLOC(sizeof(CThread));
 		InitThreadsForCore();
-		vec_push(&threads,thd);
-		GetContext(&thd->ctx);
-		for(;;) {
-			usleep(50*1000);
+		for(;;)
 			__Yield();
-		}
 }
 void SpawnCore() {
 	#ifndef TARGET_WIN32
@@ -400,6 +396,23 @@ void SpawnCore() {
 	#else
 	CreateThread(NULL,0,&Loop,NULL,0,NULL);
 	#endif
+}
+void PreInitCores() {
+	int cc;
+	#ifndef TARGET_WIN32
+	cc=sysconf(_SC_NPROCESSORS_ONLN);
+	#else
+	SYSTEM_INFO info;
+	GetSystemInfo(&info);
+	cc=info.dwNumberOfProcessors;
+	#endif
+	while(--cc>=0) {
+		#ifndef TARGET_WIN32
+		pthread_mutex_init(&cores[cc].mutex,NULL);
+		#else
+		cores[cc].mutex=CreateMutex(NULL,0,NULL);
+		#endif
+	}
 }
 int CoreNum() {
 	return core_num;

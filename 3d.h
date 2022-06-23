@@ -171,3 +171,4 @@ char VFsChDrv(char to);
 char *CmdLineBootText();
 char *ClipboardText();
 void SetClipboard(char *text);
+void PreInitCores();
