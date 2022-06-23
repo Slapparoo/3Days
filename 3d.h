@@ -172,3 +172,5 @@ char *CmdLineBootText();
 char *ClipboardText();
 void SetClipboard(char *text);
 void PreInitCores();
+struct CPair;
+__attribute__((force_align_arg_pointer)) int64_t __SpawnFFI(struct CPair *p);

@@ -412,6 +412,8 @@ int64_t mp_cnt(int64_t *stk) {
 	return info.dwNumberOfProcessors;
 	#endif
 } 
+void SpawnCore() {
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;

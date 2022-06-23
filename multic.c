@@ -90,7 +90,7 @@ void *GetFs() {
     }
     return Fs;
 }
-typedef struct {
+typedef struct CPair {
     void *fp;
     void *data;
     void *fs;
@@ -162,7 +162,7 @@ static void SigUsr2(int sig) {
 }
 #endif
 //We call from __MPSpawn whose stack is PoopMAlloc'ed may not be aligned.
-static __attribute__((force_align_arg_pointer)) int64_t __SpawnFFI(CPair *p) {
+__attribute__((force_align_arg_pointer)) int64_t __SpawnFFI(CPair *p) {
     CHash **ex;
     VFsThrdInit();
     VFsCd(p->cd_to,0);
@@ -190,10 +190,10 @@ CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name,char *new_di
     if(!thd->dead) {
 		thd->stack=TD_MALLOC(2000000); //aprx 2Mb
         MakeContext(&thd->ctx,thd->stack,&__SpawnFFI,p);
-        if(!cores[core_num].__no_lock)
+        if(!cores[core].__no_lock)
 			LOCK_CORE(core);
         vec_push(cores[core].threads,thd);
-        if(!cores[core_num].__no_lock)
+        if(!cores[core].__no_lock)
 			UNLOCK_CORE(core);
     }
     return thd;
@@ -380,6 +380,7 @@ int InitThreadsForCore() {
     cores[num].__no_lock=1;
     __Spawn(PoopMAlloc(2048),Looper,NULL,"Loopeer");
     cores[num].__no_lock=0;
+    cores[num].ready=1;
     UNLOCK_CORE(core_num);
     return num;
 }
@@ -389,29 +390,33 @@ static void Loop(void*ul) {
 		for(;;)
 			__Yield();
 }
-void SpawnCore() {
-	#ifndef TARGET_WIN32
-	pthread_t dummy;
-	pthread_create(&dummy,NULL,&Loop,NULL);
-	signal(SIGUSR2,SigUsr2);
-	#else
-	CreateThread(NULL,0,&Loop,NULL,0,NULL);
-	#endif
-}
 void PreInitCores() {
-	int cc;
+	int origc,cc;
 	#ifndef TARGET_WIN32
-	cc=sysconf(_SC_NPROCESSORS_ONLN);
+	origc=cc=sysconf(_SC_NPROCESSORS_ONLN);
 	#else
 	SYSTEM_INFO info;
 	GetSystemInfo(&info);
-	cc=info.dwNumberOfProcessors;
+	origc=cc=info.dwNumberOfProcessors;
 	#endif
 	while(--cc>=0) {
 		#ifndef TARGET_WIN32
 		pthread_mutex_init(&cores[cc].mutex,NULL);
 		#else
 		cores[cc].mutex=CreateMutex(NULL,0,NULL);
+		#endif
+	}
+	for(cc=0;cc<origc;cc++) {
+		#ifndef TARGET_WIN32
+		pthread_t dummy;
+		pthread_create(&dummy,NULL,&Loop,NULL);
+		signal(SIGUSR2,SigUsr2);
+		for(;!cores[cc].ready;)
+			sched_yield();
+		#else
+		CreateThread(NULL,0,&Loop,NULL,0,NULL);
+		for(;!cores[cc].ready;)
+			Yield();
 		#endif
 	}
 }
