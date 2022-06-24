@@ -362,7 +362,7 @@ void __AwaitThread(CThread *t) {
 }
 static void Looper() {
 	for(;;) {
-		__Sleep(200);
+		__Sleep(20);
 	}
 }
 int InitThreadsForCore() {

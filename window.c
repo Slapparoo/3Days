@@ -45,7 +45,7 @@ CDrawWindow *NewDrawWindow() {
 			0,0,640,480,0,1,palette[i].pixel
 		);
 		XSelectInput(dw->disp,dw->window,
-			KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|FocusChangeMask);
+			KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask);
 		dw->gc=XCreateGC(dw->disp,dw->window,0,0);
 	}
 	return dw;
@@ -446,14 +446,14 @@ static int MSCallback(void *d,XEvent *e) {
 				z--;
 			else if(e->xbutton.button==5)
 				z++;
-			else if(e->xbutton.button==2)
+			else if(e->xbutton.button==3)
                 state|=1;
             goto ent;
             case ButtonRelease:
             x=e->xbutton.x,y=e->xbutton.y;
             if(e->xbutton.button==1)
                 state&=~2;
-            else if(e->xbutton.button==2)
+            else if(e->xbutton.button==3)
                 state&=~1;
             goto ent;
             case MotionNotify:
