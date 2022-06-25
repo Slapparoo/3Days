@@ -58,7 +58,8 @@ U0 CtrlAltDel(I64)
 
 U0 CtrlAltC(I64)
 {
-	__SetThreadPtr(sys_focus_task->_3days_spawn_ptr,&Break);
+    if(TaskValidate(sys_focus_task))
+		__SetThreadPtr(sys_focus_task->_3days_spawn_ptr,&Break);
 }
 
 U0 CtrlAltF(I64)
@@ -85,7 +86,8 @@ U0 CtrlAltT(I64)
 
 U0 CtrlAltX(I64)
 {
-  Kill(sys_focus_task);
+  if(TaskValidate(sys_focus_task))
+	Kill(sys_focus_task);
 }
 
 U0 CtrlAltCBSet(U8 ch,U0 (*fp_hndlr)(I64 sc),
