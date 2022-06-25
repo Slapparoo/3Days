@@ -151,14 +151,14 @@ static void SigUsr2(int sig) {
 	pthread_sigmask(0,NULL,&set);
 	sigdelset(&set,SIGUSR2);
 	pthread_sigmask(SIG_SETMASK,&set,NULL);
-	LOCK_CORE(core_num);
 	if(cores[core_num].__interupt_thread==cur_thrd) {
-		UNLOCK_CORE(core_num);
 		FFI_CALL_TOS_0(cores[core_num].__interupt_to);
 	} else {
+		LOCK_CORE(core_num);
 		__SetThreadPtr2(cores[core_num].__interupt_thread,cores[core_num].__interupt_to);
+		UNLOCK_CORE(core_num);
 	}
-	UNLOCK_CORE(core_num);
+	
 }
 #endif
 //We call from __MPSpawn whose stack is PoopMAlloc'ed may not be aligned.
@@ -362,7 +362,7 @@ void __AwaitThread(CThread *t) {
 }
 static void Looper() {
 	for(;;) {
-		__Sleep(20);
+		__Sleep(100);
 	}
 }
 int InitThreadsForCore() {
