@@ -475,6 +475,8 @@ static void utf8_send(char *text,XEvent ev) {
 	loop:;
 	sev=&ev.xselectionrequest;
 	XSelectionEvent ssev;
+	if(!text)
+		text="";
     XChangeProperty(dpy, sev->requestor, sev->property, utf8, 8, PropModeReplace,
                     (unsigned char *)text, strlen(text));
     ssev.type = SelectionNotify;

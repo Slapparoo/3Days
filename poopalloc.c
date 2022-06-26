@@ -13,15 +13,16 @@ static uint32_t fmtx=1;
 static void LockHeap() {
 		uint32_t one=1;
 		for(;;) {
+			one=1;
 			if(atomic_compare_exchange_strong(&fmtx,&one,0)) 
 				break;
-			syscall(SYS_futex,&fmtx,FUTEX_WAIT,0,NULL,NULL,0);
+			assert(-1!=syscall(SYS_futex,&fmtx,FUTEX_WAIT,0,NULL,NULL,0));
 		}
 }
 static void UnlockHeap() {
 		uint32_t zero=0;
 		if(atomic_compare_exchange_strong(&fmtx,&zero,1))  {
-			syscall(SYS_futex,&fmtx,FUTEX_WAKE,1,NULL,NULL,0);
+			assert(-1!=syscall(SYS_futex,&fmtx,FUTEX_WAKE,1,NULL,NULL,0));
 		}
 }
 #elif defined __FreeBSD__
