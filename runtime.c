@@ -10,23 +10,9 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/types.h>
+#include <time.h>
 extern int64_t HCSetJmp(void *ptr);
 extern void HCLongJmp(void *ptr);
-#ifndef MACOS
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_video.h>
-#include <SDL2/SDL_render.h>
-#include <SDL2/SDL_rect.h>
-#include <SDL2/SDL_clipboard.h>
-#include <SDL2/SDL_events.h>
-#else
-#include <SDL.h>
-#include <SDL_video.h>
-#include <SDL_render.h>
-#include <SDL_rect.h>
-#include <SDL_clipboard.h>
-#include <SDL_events.h>
-#endif
 #include <stddef.h>
 #include <stdalign.h>
 #ifdef TARGET_WIN32
@@ -115,9 +101,6 @@ static char **__Dir(char *fn) {
     ret=memcpy(PoopMAlloc(sz),items.data,sz);
     vec_deinit(&items);
     return ret;
-}
-static char *hc_SDL_GetWindowTitle(SDL_Window *win) {
-    return POOP_STRDUP(SDL_GetWindowTitle(win));
 }
 static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
   map_iter_t iter;
@@ -313,7 +296,13 @@ int64_t STK_DrawWindowDel(int64_t *stk) {
     DrawWindowDel(stk[0]);
 }
 int64_t STK___GetTicks() {
-    return SDL_GetTicks();
+	//https://stackoverflow.com/questions/2958291/equivalent-to-gettickcount-on-linux
+    struct timespec ts;
+    int64_t theTick = 0U;
+    clock_gettime( CLOCK_REALTIME, &ts );
+    theTick  = ts.tv_nsec / 1000000;
+    theTick += ts.tv_sec * 1000;
+    return theTick;
 }
 int64_t STK___Spawn(int64_t *stk) {
     __Spawn(stk[0],stk[1],stk[2],stk[3]);
@@ -352,7 +341,8 @@ int64_t STK_SndFreq(int64_t *stk) {
     SndFreq(stk[0]);
 }
 int64_t STK_SetClipboardText(int64_t *stk) {
-    SDL_SetClipboardText(stk[0]);
+    //SDL_SetClipboardText(stk[0]);
+    SetClipboard(stk[0]);
 }
 int64_t STK___GetStr(int64_t *stk) {
 	#ifndef TARGET_WIN32
@@ -372,13 +362,7 @@ int64_t STK___GetStr(int64_t *stk) {
 	return r;
 }
 int64_t STK_GetClipboardText(int64_t *stk) {
-    char *find,*ret;
-    if(!SDL_HasClipboardText())
-        return NULL;
-    find=SDL_GetClipboardText();
-    ret=POOP_STRDUP(find);
-    SDL_free(find);
-    return ret;
+    return ClipboardText();
 }
 int64_t STK___SetThreadPtr(int64_t *stk) {
     __SetThreadPtr(stk[0],stk[1]);
@@ -417,7 +401,7 @@ int64_t STK_InBounds(int64_t *stk) {
 	return near_alloc;
 }
 int64_t STK___MPSpawn(int64_t *stk) {
-	return __MPSpawn(stk[0],stk[1],stk[2],stk[3],stk[4]);
+	return __MPSpawn(stk[0],stk[1],stk[2],stk[3],stk[4],NULL);
 }
 int64_t mp_cnt(int64_t *stk) {
 	#ifndef TARGET_WIN32
@@ -428,6 +412,8 @@ int64_t mp_cnt(int64_t *stk) {
 	return info.dwNumberOfProcessors;
 	#endif
 } 
+void SpawnCore() {
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;

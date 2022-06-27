@@ -4,19 +4,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include <signal.h>
-#ifdef TARGET_WIN32
-//https://stackoverflow.com/questions/17048072/sdl-2-undefined-reference-to-winmain16-and-several-sdl-functions
-#define SDL_MAIN_HANDLED
-#endif
-#include <SDL.h>
-#include <SDL_video.h>
-#include <SDL_render.h>
-#include <SDL_rect.h>
-#include <SDL_clipboard.h>
-#include <SDL_events.h>
-#include <SDL_thread.h>
-#include <SDL_mutex.h>
-#include <SDL_audio.h>
 #include "ext/map/src/map.h"
 #include "ext/vec/src/vec.h"
 #include "ext/ln/linenoise.h"
@@ -182,3 +169,8 @@ int VFsMountDrive(char let,char *path);
 int64_t IsCmdLine();
 char VFsChDrv(char to);
 char *CmdLineBootText();
+char *ClipboardText();
+void SetClipboard(char *text);
+void PreInitCores();
+struct CPair;
+__attribute__((force_align_arg_pointer)) int64_t __SpawnFFI(struct CPair *p);

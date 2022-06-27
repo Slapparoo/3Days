@@ -2,6 +2,7 @@
 #include <sched.h>
 #include <signal.h>
 #include <stdatomic.h>
+#include <unistd.h>
 #ifndef TARGET_WIN32
 #include <pthread.h>
 #else
@@ -9,7 +10,15 @@
 #include <synchapi.h>
 #include <processthreadsapi.h>
 #endif
-
+static int64_t GetTicks() {
+	//https://stackoverflow.com/questions/2958291/equivalent-to-gettickcount-on-linux
+	struct timespec ts;
+    int64_t theTick = 0U;
+    clock_gettime( CLOCK_REALTIME, &ts );
+    theTick  = ts.tv_nsec / 1000000;
+    theTick += ts.tv_sec * 1000;
+    return theTick;
+}
 #ifndef TARGET_WIN32
 #define LOCK_CORE(core) pthread_mutex_lock(&cores[core].mutex);
 #else
@@ -57,7 +66,7 @@ typedef struct CCore {
 	//
 	CThread *__interupt_thread;
 	void *__interupt_to;
-	
+	int64_t __no_lock;
 } CCore;
 static __thread int core_num;
 static int core_cnt; 
@@ -81,11 +90,12 @@ void *GetFs() {
     }
     return Fs;
 }
-typedef struct {
+typedef struct CPair {
     void *fp;
     void *data;
     void *fs;
     struct CThread *thd;
+    char *cd_to;
 } CPair;
 static __thread CThread *cur_thrd;
 static __thread vec_CThread_t threads;
@@ -141,55 +151,58 @@ static void SigUsr2(int sig) {
 	pthread_sigmask(0,NULL,&set);
 	sigdelset(&set,SIGUSR2);
 	pthread_sigmask(SIG_SETMASK,&set,NULL);
-	LOCK_CORE(core_num);
 	if(cores[core_num].__interupt_thread==cur_thrd) {
-		UNLOCK_CORE(core_num);
 		FFI_CALL_TOS_0(cores[core_num].__interupt_to);
 	} else {
+		LOCK_CORE(core_num);
 		__SetThreadPtr2(cores[core_num].__interupt_thread,cores[core_num].__interupt_to);
+		UNLOCK_CORE(core_num);
 	}
-	UNLOCK_CORE(core_num);
+	
 }
 #endif
-static int64_t __SpawnFFI(CPair *p) {
+//We call from __MPSpawn whose stack is PoopMAlloc'ed may not be aligned.
+__attribute__((force_align_arg_pointer)) int64_t __SpawnFFI(CPair *p) {
     CHash **ex;
     VFsThrdInit();
+    VFsCd(p->cd_to,0);
     FFI_CALL_TOS_1(p->fp,p->data);
     if(ex=map_get(&TOSLoader,"Exit")) {
         FFI_CALL_TOS_0(ex[0]->val);
     }
     __Exit();
 }
-CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name) {
+CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name,char *new_dir) {
     CThread *thd=TD_MALLOC(sizeof(CThread));
     CPair *p=TD_MALLOC(sizeof(CPair));
     p->fp=fp,p->data=data,p->fs=fs,p->thd=thd;
+    if(new_dir) {
+		p->cd_to=strdup(new_dir);
+	} else 
+		p->cd_to=VFsDirCur();
     signal(SIGSEGV,FualtCB);
     #ifndef TARGET_WIN32
     signal(SIGBUS,FualtCB);
     #endif
     thd->Fs=p->fs;
-    thd->cur_dir=cur_dir;
-    thd->cur_drv=cur_drv;
     thd->core=core;
     GetContext(&thd->ctx);
     if(!thd->dead) {
 		thd->stack=TD_MALLOC(2000000); //aprx 2Mb
         MakeContext(&thd->ctx,thd->stack,&__SpawnFFI,p);
-        while(!atomic_load(&cores[core].ready))
-			#ifndef TARGET_WIN32
-			sched_yield();
-			#else
-			Yield();
-			#endif
-		LOCK_CORE(core);
+        if(!cores[core].__no_lock)
+			LOCK_CORE(core);
         vec_push(cores[core].threads,thd);
-        UNLOCK_CORE(core);
+        if(!cores[core].__no_lock)
+			UNLOCK_CORE(core);
     }
     return thd;
 }
 CThread *__Spawn(void *fs,void *fp,void *data,char *name) {
-	return __MPSpawn(core_num,fs,fp,data,name);
+	char *tmp=VFsDirCur();
+	CThread *ret=__MPSpawn(core_num,fs,fp,data,name,tmp);
+	PoopFree(tmp);
+	return ret;
 } 
 void __AwakeThread(CThread *t) {
 	if(!t) return;
@@ -202,7 +215,7 @@ void __Suspend(CThread *t) {
 }
 void __Sleep(int64_t t) {
     if(cur_thrd)
-        cur_thrd->sleep_until=t+SDL_GetTicks();
+        cur_thrd->sleep_until=t+GetTicks();
     __Yield();
 }
 void __SleepUntilValue(int64_t *ptr,int64_t mask,int64_t expected) {
@@ -216,7 +229,7 @@ void __SleepUntilValue(int64_t *ptr,int64_t mask,int64_t expected) {
 }
 static int ThrdIsReady(CThread *thr) {
 	if(thr->dead||thr->locked) return 0;
-	if(thr->sleep_until&&(thr->sleep_until>=SDL_GetTicks()))
+	if(thr->sleep_until&&(thr->sleep_until>=GetTicks()))
 		return 0;
 	return 1;
 }
@@ -235,14 +248,6 @@ void __Yield() {
                 __KillThread(threads.data[i]);
                 threads.data[i]->to_kill=0;
             }
-        } else if(threads.data[i]->wait_for_ptr) {
-            int64_t mask=threads.data[i]->wait_for_ptr_mask;
-            if((threads.data[i]->wait_for_ptr_expected&mask)==(mask&atomic_load(threads.data[i]->wait_for_ptr))) {
-                threads.data[i]->locked=1;
-            } else {
-                threads.data[i]->wait_for_ptr=NULL;
-                threads.data[i]->locked=0;
-            }
         }
     rem:
     for(i=0;i!=dead_threads.length;i++) {
@@ -255,7 +260,7 @@ void __Yield() {
 		}
 	}
     loop:;
-    int64_t ms=SDL_GetTicks(),min_sleep=-1,t,most_overdue_i=-1;
+    int64_t ms=GetTicks(),min_sleep=-1,t,most_overdue_i=-1;
     int64_t dont_sleep=0;
     int64_t idx,idx2=threads.length-1,idx3=-1;
     vec_find(&threads,cur_thrd,idx);
@@ -273,7 +278,7 @@ void __Yield() {
 		GetContext(&threads.data[idx]->ctx);
     //idx doesnt change but the phyiscall index of the CAN CHANGE,SO RECOMPUTE 
     vec_find(&threads,cur_thrd,idx);
-    ms=SDL_GetTicks();
+    ms=GetTicks();
     if(ThrdIsReady(threads.data[idx])) {
 		if(!(cores[core_num].flop^=1)) {
 			threads.data[idx]->in_yield=0;
@@ -283,6 +288,15 @@ void __Yield() {
 	}
     check:
     for(idx2=(idx+1)%threads.length;idx!=idx2;idx2=(1+idx2)%threads.length) {
+        if(threads.data[idx2]->wait_for_ptr) {
+            int64_t mask=threads.data[idx2]->wait_for_ptr_mask;
+            if((threads.data[idx2]->wait_for_ptr_expected&mask)!=(mask&atomic_load(threads.data[idx2]->wait_for_ptr))) {
+                threads.data[idx2]->locked=1;
+            } else {
+                threads.data[idx2]->wait_for_ptr=NULL;
+                threads.data[idx2]->locked=0;
+            }
+        }
         if(threads.data[idx2]->locked||threads.data[idx2]->dead) {
             continue;
         } else if(threads.data[idx2]->sleep_until) {
@@ -333,7 +347,7 @@ void __Yield() {
 		goto pass;
     }
     if(min_sleep>0&&!dont_sleep) {//We skipped over the current thread when looking for canidates to swap too
-		SDL_Delay((int64_t)min_sleep);
+		usleep(1000*(int64_t)min_sleep);
     }
     goto loop;
 }
@@ -346,44 +360,65 @@ void __AwaitThread(CThread *t) {
             __Yield();
     }
 }
+static void Looper() {
+	for(;;) {
+		__Sleep(100);
+	}
+}
 int InitThreadsForCore() {
-    vec_init(&threads);
+	vec_init(&threads);
     vec_init(&dead_threads);
     VFsThrdInit(); 
     int num=atomic_fetch_add(&core_cnt,1);
     core_num=num;
-    #ifndef TARGET_WIN32
+    LOCK_CORE(core_num);
     cores[num].pt=pthread_self();
-    pthread_mutex_init(&cores[num].mutex,NULL);
-    #else
-    cores[num].pt=GetCurrentThread();
-    cores[num].mutex=CreateMutex(NULL,0,NULL);
-    #endif
     cores[num].gs=PoopMAlloc(512); //Should be enough
     cores[num].threads=&threads;
     cores[num].dead_threads=&dead_threads;
     atomic_fetch_add(&cores[num].ready,1);
+    cores[num].__no_lock=1;
+    __Spawn(PoopMAlloc(2048),Looper,NULL,"Loopeer");
+    cores[num].__no_lock=0;
+    cores[num].ready=1;
+    UNLOCK_CORE(core_num);
     return num;
 }
 static void Loop(void*ul) {
 		//Make a dummy "thread" to yield out to if we have no other threads 
-		CThread *thd=TD_MALLOC(sizeof(CThread));
 		InitThreadsForCore();
-		vec_push(&threads,thd);
-		GetContext(&thd->ctx);
-		for(;;) {
-			SDL_Delay(50);
+		for(;;)
 			__Yield();
-		}
 }
-void SpawnCore() {
+void PreInitCores() {
+	int origc,cc;
 	#ifndef TARGET_WIN32
-	pthread_t dummy;
-	pthread_create(&dummy,NULL,&Loop,NULL);
-	signal(SIGUSR2,SigUsr2);
+	origc=cc=sysconf(_SC_NPROCESSORS_ONLN);
 	#else
-	CreateThread(NULL,0,&Loop,NULL,0,NULL);
+	SYSTEM_INFO info;
+	GetSystemInfo(&info);
+	origc=cc=info.dwNumberOfProcessors;
 	#endif
+	while(--cc>=0) {
+		#ifndef TARGET_WIN32
+		pthread_mutex_init(&cores[cc].mutex,NULL);
+		#else
+		cores[cc].mutex=CreateMutex(NULL,0,NULL);
+		#endif
+	}
+	for(cc=0;cc<origc;cc++) {
+		#ifndef TARGET_WIN32
+		pthread_t dummy;
+		pthread_create(&dummy,NULL,&Loop,NULL);
+		signal(SIGUSR2,SigUsr2);
+		for(;!cores[cc].ready;)
+			sched_yield();
+		#else
+		CreateThread(NULL,0,&Loop,NULL,0,NULL);
+		for(;!cores[cc].ready;)
+			Yield();
+		#endif
+	}
 }
 int CoreNum() {
 	return core_num;

@@ -54,4 +54,5 @@ public U0 ReadISOFile(U8 *isoc,U8 *to=".") {
 	WriteDirent(body,offset+body,to);
 	Free(body);
 }
-ReadISOFile("TOS_Distro.ISO","Distro");
+//Example usage.
+//ReadISOFile("TOS_Distro.ISO","Distro");

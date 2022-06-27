@@ -754,9 +754,7 @@ U0 MDrawIt(CTask *task,CDC *dc)
   e->depth_buf=dc->depth_buf;
   //for (i=0;i<1;i++) TODO SUPER URGENT RESTORE 
   //  JobQue(&MPDrawIt,e,i);
-  TOSPrint("onion\n");
   MPDrawIt(e);
-  TOSPrint("onion2\n");
   
   tmpv=e->vertex_head.next;
   while (tmpv!=&e->vertex_head) {

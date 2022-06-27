@@ -314,7 +314,7 @@ extern class CJobCtrl;
 #define F64_MIN (0xFFEFFFFFFFFFFFFF(F64))
 #define inf	(0x7FF0000000000000(F64))
 #define pi	(0x400921FB54442D18(F64))
-#define ã pi
+#define ã pi
 #define exp_1	(0x4005BF0A8B145769(F64)) //The number "e"
 #define log2_10 (0x400A934F0979A371(F64))
 #define log2_e	(0x3FF71547652B82FE(F64))
@@ -1031,7 +1031,7 @@ public class CArrayDim
 };
 
 #define MLMF_IS_STR	1
-public class CMemberLstMeta
+public class CMemberLstMeta
 {
   CMemberLstMeta *next;
   U8	*str;
@@ -5897,4 +5897,14 @@ public extern U8 *StrPrintJoin(U8 *dst,U8 *fmt,I64 argc,I64 *argv);
 public extern U8 *StrUtil(U8 *_src,I64 flags);
 public extern U8 *Tabs2Spaces(U8 *src);
 public extern Bool WildMatch(U8 *test_str,U8 *wild_str);
-
+#define	GR_SCALE	(1<<32)
+#define RIGHT_INCLUDE	0
+#define RIGHT_AINCLUDE	1
+#define RIGHT_COPY	2
+#define RIGHT_MOVE	3
+#define RIGHT_DELETE	4
+#define RIGHT_TYPE	5
+#define RIGHT_ED	6
+#define RIGHT_MOUNT	7
+#define RIGHT_PLAIN	8
+#define RIGHT_INFILE	9
