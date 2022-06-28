@@ -4,6 +4,7 @@
 #include <wingdi.h>
 #include <shellapi.h>
 #include <windowsx.h>
+#include <winbase.h>
 #include <shellscalingapi.h>
 LPSTR* WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int* numargs);
 typedef struct CDrawWindow {
@@ -170,7 +171,7 @@ static int64_t persist_mod=0;
 static int32_t __ScanKey(int64_t *ch,int64_t *sc,UINT msg,WPARAM w,LPARAM *_e) {
     LPARAM e=*_e;
     #define PERSIST_KEY(flag) \ 
-    if(msg==WM_KEYUP) { \
+    if(msg==WM_KEYUP||msg==WM_SYSKEYUP) { \
 		persist_mod&=~(flag); \
 		mod&=~(flag); \
     } else \
@@ -332,9 +333,9 @@ static int MSCallback(HWND hwnd,void *d,UINT msg,WPARAM w,LPARAM e) {
     static int state;
     static int z;
     RECT rect;
-    if(ms_cb)
+    if(ms_cb) {
 		GetClientRect(hwnd,&rect);
-        switch(msg) {
+		switch(msg) {
 			case WM_MOUSEWHEEL:
 			z+=GET_WHEEL_DELTA_WPARAM(w);
 			goto ent;
@@ -369,6 +370,7 @@ static int MSCallback(HWND hwnd,void *d,UINT msg,WPARAM w,LPARAM e) {
             ent:
             FFI_CALL_TOS_4(ms_cb,x,y,z,state);
         }
+    }
     return 0;
 }
 
@@ -386,12 +388,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
     wc.lpfnWndProc=WndProc;
     wc.lpszClassName="Holy Drawer";
 	wc.hInstance=hInstance;
+	ShowCursor(0);
 	RegisterClassA(&wc);
 	hwnd=CreateWindowExA(
 		NULL,
 		wc.lpszClassName,
 		"Holy Drawer",
-		WS_OVERLAPPED | WS_SYSMENU,
+		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT,
 		CW_USEDEFAULT,
 		0,0,
@@ -406,8 +409,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 		NULL,
 		NULL,
 		NULL,
-		ceilf(640.*dpi/96.),
-		ceilf(480.*dpi/96.),
+		10+ceil(640.*dpi/96.),
+		10+ceil(480.*dpi/96.),
 		SWP_NOMOVE
 	);
 	NewDrawWindow()->win=hwnd;
@@ -443,9 +446,29 @@ void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_wi
 	);
 }
 char *ClipboardText() {
-	return strdup("");
+	char *ret;
+	OpenClipboard(0);
+	HGLOBAL glob=GetClipboardData(CF_TEXT); 
+	void *locked=GlobalLock(glob);
+	if(locked)
+		ret=strdup(locked);
+	else
+		ret=strdup("");
+	CloseClipboard();
+	GlobalUnlock(glob);
+	return ret;
 }
-void SetClipboard(char *text) {}
+void SetClipboard(char *text) {
+	//https://stackoverflow.com/questions/1264137/how-to-copy-string-to-clipboard-in-c
+	int64_t len=strlen(text)+1;
+	HGLOBAL hMem =  GlobalAlloc(GMEM_MOVEABLE, len);
+	memcpy(GlobalLock(hMem), text, len);
+	GlobalUnlock(hMem);
+	OpenClipboard(0);
+	EmptyClipboard();
+	SetClipboardData(CF_TEXT, hMem);
+	CloseClipboard();
+}
 LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 	PAINTSTRUCT ps;
 	HBITMAP bmp;
@@ -453,6 +476,13 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 	HDC dc,dc2;
 	RECT rct;
 	switch(msg) {
+		case WM_KILLFOCUS:
+			if(persist_mod&SCF_ALT)
+				FFI_CALL_TOS_2(kb_cb,' ',SC_ALT|SCF_KEY_UP);
+			if(persist_mod&SCF_CTRL)
+				FFI_CALL_TOS_2(kb_cb,' ',SC_CTRL|SCF_KEY_UP);
+			persist_mod=0;
+			break;
 		case WM_SYSKEYDOWN:
 		case WM_SYSKEYUP:
 		case WM_KEYDOWN:
