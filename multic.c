@@ -398,10 +398,10 @@ static void Loop(void*ul) {
 }
 void PreInitCores() {
 	int origc,cc;
-	GetSystemTime(&genesis);
 	#ifndef TARGET_WIN32
 	origc=cc=sysconf(_SC_NPROCESSORS_ONLN);
 	#else
+	GetSystemTime(&genesis);
 	SYSTEM_INFO info;
 	GetSystemInfo(&info);
 	origc=cc=info.dwNumberOfProcessors;
