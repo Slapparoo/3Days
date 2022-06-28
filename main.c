@@ -105,25 +105,15 @@ char *CmdLineBootText() {
 	if(!cmd_ln_boot_txt) return NULL;
 	return strdup(cmd_ln_boot_txt);
 }
-int main(int argc,char **argv) {
+#ifdef TARGET_WIN32
+int _main(int argc,char **argv)
+#else
+int main(int argc,char **argv)
+#endif
+{
 	BoundsCheckTests();
     char *header=NULL,*t_drive=NULL,*tmp;
     VFsGlobalInit();
-    #ifndef TARGET_WIN32
-    char *rp=realpath(argv[0],NULL);
-    if(rp==NULL)
-      rp=strcpy(calloc(strlen(argv[0])+1,1),argv[0]);
-    strcpy(CompilerPath,rp);
-    free(rp);
-    #else
-    SetConsoleCtrlHandler(CtrlCHandlerRoutine,TRUE);
-    GetFullPathNameA(argv[0],sizeof(CompilerPath),CompilerPath,NULL);
-    DWORD omode, origOmode;
-    GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &omode);
-    origOmode = omode;
-    omode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), omode);
-    #endif
     void *argtable[]= {
         helpArg=arg_lit0("h", "help", "Display this help message."),
         commandLineArg=arg_lit0("c", "com", "Start in command line mode,mount drive '/' at /."),
@@ -210,12 +200,14 @@ int main(int argc,char **argv) {
       GetModuleFileNameA(NULL,buffer,sizeof(buffer));
       dirname(buffer);
       strcat(buffer,"\\HCRT.BIN");
+      hcrt_bin_loc=strdup(buffer);
       puts(buffer);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
-		core0=CreateThread(NULL,0,&Core0,buffer,0,NULL);
+		__MPSpawn(0,PoopMAlloc(2048),Core0,NULL,"core0","T:/");
       }
     #endif
     }
+    #ifndef TARGET_WIN32
     if(!commandLineArg->count) {
 		InputLoop(&_shutdown);
 		exit(0);
@@ -227,6 +219,7 @@ int main(int argc,char **argv) {
 		#endif
 	}
     exit(0);
+    #endif
     return 0;
 }
 CLoader Loader;

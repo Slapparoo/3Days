@@ -13,6 +13,7 @@ static int paCallback(const void *inp,void *_out,unsigned long fpb,const PaStrea
 		double t=(double)++sample/SAMPLE_RATE;
 		double amp=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
 		char maxed=(amp>0)?127:-127;
+		if(!freq) maxed=0;
 		out[2*i]=maxed;
 		out[2*i+1]=maxed;
 	}

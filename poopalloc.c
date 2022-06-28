@@ -1,9 +1,17 @@
 #include "poopalloc.h"
+#include <stdio.h>
+#include <assert.h>
+#include <stdint.h>
+#include <string.h>
+#include <setjmp.h>
+#include <stdlib.h>
 #ifndef TARGET_WIN32
+#include <stddef.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdatomic.h>
 #include <assert.h>
+#include <errno.h>
 #ifdef __linux__
 //https://man7.org/linux/man-pages/man2/futex.2.html
 #include <sys/syscall.h>
@@ -13,15 +21,26 @@ static uint32_t fmtx=1;
 static void LockHeap() {
 		uint32_t one=1;
 		for(;;) {
+			one=1;
 			if(atomic_compare_exchange_strong(&fmtx,&one,0)) 
 				break;
-			syscall(SYS_futex,&fmtx,FUTEX_WAIT,0,NULL,NULL,0);
+			if(-1==syscall(SYS_futex,&fmtx,FUTEX_WAIT,one,NULL,NULL,0)) {
+					if(errno==EAGAIN)
+						continue;
+					printf("%d,%s\n",errno,strerror(errno));
+					assert(0);
+			}
 		}
 }
 static void UnlockHeap() {
 		uint32_t zero=0;
 		if(atomic_compare_exchange_strong(&fmtx,&zero,1))  {
-			syscall(SYS_futex,&fmtx,FUTEX_WAKE,1,NULL,NULL,0);
+			while(-1==syscall(SYS_futex,&fmtx,FUTEX_WAKE,1,NULL,NULL,0)) {
+				if(errno==EAGAIN)
+					continue;
+				printf("%d,%s\n",errno,strerror(errno));
+				assert(0);
+			}
 		}
 }
 #elif defined __FreeBSD__
@@ -31,6 +50,7 @@ static long fmtx=1;
 static void LockHeap() {
     long one=1;
     for(;;) {
+		one=1;
         if(atomic_compare_exchange_strong(&fmtx,&one,0)) 
             break;
         assert(-1!=_umtx_op(&fmtx,UMTX_OP_WAIT_UINT_PRIVATE,0,NULL,NULL));
@@ -104,13 +124,6 @@ void FreeVirtualChunk(void *ptr,size_t s) {
 	munmap(ptr,s);
 	#endif
 }
-#include <stdio.h>
-#include <assert.h>
-#include <stdint.h>
-#include <string.h>
-#include <setjmp.h>
-#include <stdlib.h>
-#include <stddef.h>
 //https://www.techiedelight.com/round-next-highest-power-2/
 static int64_t SizeUp(int64_t n) {
     int64_t k=1;

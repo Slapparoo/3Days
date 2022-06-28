@@ -58,3 +58,4 @@ Good things would include
  - https://github.com/rxi/vec
  - C_Unescaper(me nrootconauto@gmail.com)
  - https://github.com/argtable/argtable3
+ - https://github.com/futurist/CommandLineToArgvA

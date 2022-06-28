@@ -1,7 +1,5 @@
 #help_index "Graphics/Math/3D Transformation"
 
-#define	GR_SCALE	(1<<32)
-
 public U0 Mat4x4MulXYZ(I64 *r,I64 *_x,I64 *_y,I64 *_z)
 {//Rotate 3D point using 4x4 matrix. Uses \dLK,"fixed-point",A="FI:::/Demo/Lectures/FixedPoint.HC"\d.
   I64 x1,y1,z1,xx=*_x,yy=*_y,zz=*_z;

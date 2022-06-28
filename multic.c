@@ -8,9 +8,12 @@
 #else
 #include <windows.h>
 #include <synchapi.h>
+#include <sysinfoapi.h>
 #include <processthreadsapi.h>
+static SYSTEMTIME genesis;
 #endif
 static int64_t GetTicks() {
+	#ifndef TARGET_WIN32
 	//https://stackoverflow.com/questions/2958291/equivalent-to-gettickcount-on-linux
 	struct timespec ts;
     int64_t theTick = 0U;
@@ -18,6 +21,9 @@ static int64_t GetTicks() {
     theTick  = ts.tv_nsec / 1000000;
     theTick += ts.tv_sec * 1000;
     return theTick;
+    #else
+    return GetTickCount();
+    #endif
 }
 #ifndef TARGET_WIN32
 #define LOCK_CORE(core) pthread_mutex_lock(&cores[core].mutex);
@@ -151,14 +157,14 @@ static void SigUsr2(int sig) {
 	pthread_sigmask(0,NULL,&set);
 	sigdelset(&set,SIGUSR2);
 	pthread_sigmask(SIG_SETMASK,&set,NULL);
-	LOCK_CORE(core_num);
 	if(cores[core_num].__interupt_thread==cur_thrd) {
-		UNLOCK_CORE(core_num);
 		FFI_CALL_TOS_0(cores[core_num].__interupt_to);
 	} else {
+		LOCK_CORE(core_num);
 		__SetThreadPtr2(cores[core_num].__interupt_thread,cores[core_num].__interupt_to);
+		UNLOCK_CORE(core_num);
 	}
-	UNLOCK_CORE(core_num);
+	
 }
 #endif
 //We call from __MPSpawn whose stack is PoopMAlloc'ed may not be aligned.
@@ -362,7 +368,7 @@ void __AwaitThread(CThread *t) {
 }
 static void Looper() {
 	for(;;) {
-		__Sleep(200);
+		__Sleep(100);
 	}
 }
 int InitThreadsForCore() {
@@ -395,6 +401,7 @@ void PreInitCores() {
 	#ifndef TARGET_WIN32
 	origc=cc=sysconf(_SC_NPROCESSORS_ONLN);
 	#else
+	GetSystemTime(&genesis);
 	SYSTEM_INFO info;
 	GetSystemInfo(&info);
 	origc=cc=info.dwNumberOfProcessors;
@@ -415,7 +422,7 @@ void PreInitCores() {
 			sched_yield();
 		#else
 		CreateThread(NULL,0,&Loop,NULL,0,NULL);
-		for(;!cores[cc].ready;)
+		for(;!atomic_load(&cores[cc].ready);)
 			Yield();
 		#endif
 	}
