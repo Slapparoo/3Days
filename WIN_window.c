@@ -327,33 +327,45 @@ void SetKBCallback(void *fptr,void *data) {
 }
 //x,y,z,(l<<1)|r
 static void(*ms_cb)();
-static int MSCallback(void *d,UINT msg,WPARAM w,LPARAM e) {
+static int MSCallback(HWND hwnd,void *d,UINT msg,WPARAM w,LPARAM e) {
     static int64_t x,y;
     static int state;
     static int z;
+    RECT rect;
     if(ms_cb)
+		GetClientRect(hwnd,&rect);
         switch(msg) {
 			case WM_MOUSEWHEEL:
 			z+=GET_WHEEL_DELTA_WPARAM(w);
 			goto ent;
             case WM_LBUTTONDOWN:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
+            x=((double)x*640./rect.right);
+            y=((double)y*480./rect.bottom);
             state|=2;
             goto ent;
             case WM_RBUTTONDOWN:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
+            x=((double)x*640./rect.right);
+            y=((double)y*480./rect.bottom);
             state|=1;
             goto ent;
             case WM_RBUTTONUP:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
+            x=((double)x*640./rect.right);
+            y=((double)y*480./rect.bottom);
             state&=~1;
             goto ent;
             case WM_LBUTTONUP:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
+            x=(double)x*640./rect.right;
+            y=(double)y*480./rect.bottom;
             state&=~2;
             goto ent;
             case WM_MOUSEMOVE:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
+            x=(double)x*640./rect.right;
+            y=(double)y*480./rect.bottom;
             ent:
             FFI_CALL_TOS_4(ms_cb,x,y,z,state);
         }
@@ -455,7 +467,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 		case WM_MOUSEWHEEL:
 		case WM_MOUSEMOVE:
 			if(kb_cb)
-				MSCallback(NULL,msg,wParam,lParam);
+				MSCallback(hwnd,NULL,msg,wParam,lParam);
 			break;
 		case WM_PAINT:
 			dc=BeginPaint(hwnd,&ps);
