@@ -1,11 +1,11 @@
 #include "poopalloc.h"
-#ifndef TARGET_WIN32
 #include <stdio.h>
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
 #include <setjmp.h>
 #include <stdlib.h>
+#ifndef TARGET_WIN32
 #include <stddef.h>
 #include <sys/mman.h>
 #include <unistd.h>

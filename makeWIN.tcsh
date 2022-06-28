@@ -1,8 +1,9 @@
 #!/bin/tcsh
 source filelistWIN.tcsh
-set CC = "x86_64-w64-mingw32-gcc"
-set CFlags = "-DTARGET_WIN32 -I./SDL2-mingw64/include -I./SDL2-mingw64/include/SDL2 -Ofast -s -g3 -lm -funroll-loops -fno-omit-frame-pointer -static"
-rm 3d_loader.exe
+set PATH = /mingw64/bin:$PATH
+set CC = "/mingw64/bin/gcc"
+set PKG_CONF = "/mingw64/bin/pkg-config" 
+set CFlags = "-DTARGET_WIN32 -Ofast -g3 -lm -fno-omit-frame-pointer -static `$PKG_CONF --cflags portaudio-2.0` -w"
 if ! -e 3d_loader.exe then
   foreach f ( $CFiles )
     $CC $CFlags -c $f -o $f.obj || rm $f.obj
@@ -33,4 +34,4 @@ end
 foreach f ( $AsmFiles )
   set Objs = ( $Objs "$f.obj" )
 end
-$CC $Objs ext/wineditline-2.206/lib64/libedit_static.a SDL2.dll -lm -lshlwapi -ldbghelp -static -s -Ofast -o 3d_loader.exe
+$CC $Objs ext/wineditline-2.206/lib64/libedit_static.a  -mwindows -lm -lshlwapi -ldbghelp `$PKG_CONF --libs --static portaudio-2.0` -lShcore -Ofast -o 3d_loader.exe

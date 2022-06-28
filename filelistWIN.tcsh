@@ -10,9 +10,10 @@ set CFiles = ( \
  "./runtime.c" \
  "./poopalloc.c" \
  "./tos_aot.c" \
- "./window.c" \
+ "./WIN_window.c" \
  "./multic.c" \
  "./vfs.c" \
+ "./CommandLineToArgvA.c" \
 )
 set AsmFiles = ( \
     "FFI_WIN64.yasm" \

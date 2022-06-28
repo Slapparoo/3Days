@@ -444,7 +444,7 @@ void VFsThrdInit() {
 	#endif
 	map_init(&drive_dirs);
 	cur_drv='T';
-	char buf[]={cur_drv,0};
+	char buf[2]={cur_drv,0};
 	cur_dir=strdup(map_get(&mount_points,buf)[0]);
 	#ifndef TARGET_WIN32
         pthread_mutex_unlock(&mp_mtx);
@@ -542,7 +542,7 @@ int VFsFileExists(char *path) {
 	return e;
 }
 int VFsMountDrive(char let,char *path) {
-	char buf[]={let,0};
+	char buf[2]={let,0};
 	#ifndef TARGET_WIN32
 	pthread_mutex_lock(&mp_mtx);
 	#else
