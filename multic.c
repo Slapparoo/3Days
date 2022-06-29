@@ -243,10 +243,12 @@ void __Yield() {
     enter:;
     #ifndef TARGET_WIN32
     sched_yield();
+    #else
+    Yield();
     #endif
     ctx_t old;
     GetContext(&old);
-    int64_t i;
+    int64_t i,force_run;
     LOCK_CORE(core_num);
     for(i=0;i!=threads.length;i++)
         if(threads.data[i]->to_kill) {
@@ -292,8 +294,13 @@ void __Yield() {
 			return;
 		}
 	}
-    check:
-    for(idx2=(idx+1)%threads.length;idx!=idx2;idx2=(1+idx2)%threads.length) {
+    check:;
+    force_run=1==threads.length;
+    //
+    // Force if 1 thread. run as idx will always ==idx2
+    //
+    for(idx2=(idx+1)%threads.length;force_run||idx!=idx2;idx2=(1+idx2)%threads.length) {
+		force_run=0;
         if(threads.data[idx2]->wait_for_ptr) {
             int64_t mask=threads.data[idx2]->wait_for_ptr_mask;
             if((threads.data[idx2]->wait_for_ptr_expected&mask)!=(mask&atomic_load(threads.data[idx2]->wait_for_ptr))) {
@@ -353,7 +360,15 @@ void __Yield() {
 		goto pass;
     }
     if(min_sleep>0&&!dont_sleep) {//We skipped over the current thread when looking for canidates to swap too
-		usleep(1000*(int64_t)min_sleep);
+		struct timespec ts;
+		ts.tv_sec=min_sleep/1000;
+		ts.tv_nsec=(min_sleep%1000)*1000000l;
+		#ifndef TARGET_WIN32
+		sched_yield();
+		#else
+		Yield();
+		#endif
+		nanosleep(&ts,NULL);
     }
     goto loop;
 }
@@ -368,7 +383,7 @@ void __AwaitThread(CThread *t) {
 }
 static void Looper() {
 	for(;;) {
-		__Sleep(100);
+		__Sleep(200);
 	}
 }
 int InitThreadsForCore() {
