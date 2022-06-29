@@ -9,7 +9,6 @@ typedef struct CDrawWindow {
     GC gc;
     Atom clip3days;
     int64_t sz_x,sz_y;
-    int64_t scroll_x,scroll_y;
 } CDrawWindow;
 static int32_t gr_palette_std[]={
 0x000000,0x0000AA,0x000AA00,0x00AAAA,
@@ -30,7 +29,7 @@ CDrawWindow *NewDrawWindow() {
 		long screen=DefaultScreen(dw->disp);
 		Colormap cmap;
 		XColor c;
-		int64_t i;
+		int64_t i,black,white;
 		for(i=0;i!=16;i++) {
 			c.pixel=i;
 			c.blue=(gr_palette_std[i]&0xff);
@@ -39,21 +38,36 @@ CDrawWindow *NewDrawWindow() {
 			c.flags=DoRed|DoGreen|DoBlue;
 			palette[i]=c;
 		}
+		black=BlackPixel(dw->disp,screen);
 		dw->window=XCreateSimpleWindow(
 			dw->disp,
 			RootWindow(dw->disp,screen),
-			0,0,640,480,0,1,palette[i].pixel
+			0,0,640,480,0,1,black
 		);
 		XSelectInput(dw->disp,dw->window,
-			KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask);
+			KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask|StructureNotifyMask);
 		dw->gc=XCreateGC(dw->disp,dw->window,0,0);
+		dw->sz_x=640,dw->sz_y=480;
+		white=WhitePixel(dw->disp,screen);
+		XSetBackground(dw->disp,dw->gc,white);
+		XSetForeground(dw->disp,dw->gc,black);
 	}
 	return dw;
+}
+static void CenterImage(CDrawWindow *win,int64_t *x_off,int64_t *y_off) {
+	if(win->sz_x>640) {
+		*x_off=(win->sz_x-640)/2;
+	} else 
+		*x_off=0;
+	if(win->sz_y>480) {
+		*y_off=(win->sz_y-480)/2;
+	} else 
+		*y_off=0;
 }
 char buf[640*480*4];
 void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,int64_t h) {
 	uint8_t *colors=_colors;
-	int64_t x,y,mul=4,b;
+	int64_t x,y,mul=4,b,black,white;
 	XLockDisplay(dw->disp);
 	long screen=DefaultScreen(dw->disp);
 	Visual *vis=XDefaultVisual(dw->disp,screen);
@@ -69,8 +83,10 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 			img->data[b*mul+2]=palette[colors[b]].red;
 			img->data[b*mul+3]=0;
 		}
-	XPutImage(dw->disp,dw->window,dw->gc,img,0,0,0,0,640,480);
+	CenterImage(dw,&x,&y);
+	XPutImage(dw->disp,dw->window,dw->gc,img,0,0,x,y,640,480);
 	XMapWindow(dw->disp,dw->window);
+	XFlush(dw->disp);
 	XFree(img);
 	XUnlockDisplay(dw->disp);
 }
@@ -433,7 +449,7 @@ void SetKBCallback(void *fptr,void *data) {
 //x,y,z,(l<<1)|r
 static void(*ms_cb)();
 static int MSCallback(void *d,XEvent *e) {
-    static int64_t x,y;
+    static int64_t x,y,cx,cy;
     static int state;
     static int z;
     if(ms_cb)
@@ -459,7 +475,8 @@ static int MSCallback(void *d,XEvent *e) {
             case MotionNotify:
             x=e->xmotion.x,y=e->xmotion.y;
             ent:
-            FFI_CALL_TOS_4(ms_cb,x,y,z,state);
+            CenterImage(dw,&cx,&cy);
+            FFI_CALL_TOS_4(ms_cb,x-cx,y-cy,z,state);
         }
     return 0;
 }
@@ -505,6 +522,9 @@ static void __InputLoop(void *ul,int64_t clip_only) {
 		if(e.type==DestroyNotify){
 			DrawWindowDel(dw);
 			break;
+		} else if(e.type==ConfigureNotify&&dw) {
+			dw->sz_x=e.xconfigure.width;
+			dw->sz_y=e.xconfigure.height;
 		} else if(e.type==SelectionRequest) {
 			utf8_send(clip_text,e);
 		} else if(e.type==SelectionNotify)
