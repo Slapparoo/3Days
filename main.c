@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <X11/Xlib.h>
 #define HCRT_INSTALLTED_DIR "/usr/local/include/3Days/HCRT.BIN"
 #include <libgen.h>
 #include "ext/C_Unescaper/escaper.h"
@@ -111,6 +112,9 @@ int _main(int argc,char **argv)
 int main(int argc,char **argv)
 #endif
 {
+	#ifndef TARGET_WIN32
+	assert(XInitThreads());
+	#endif 
 	BoundsCheckTests();
     char *header=NULL,*t_drive=NULL,*tmp;
     VFsGlobalInit();

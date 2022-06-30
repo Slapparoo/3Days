@@ -51,6 +51,11 @@ CDrawWindow *NewDrawWindow() {
 		white=WhitePixel(dw->disp,screen);
 		XSetBackground(dw->disp,dw->gc,white);
 		XSetForeground(dw->disp,dw->gc,black);
+		XMapWindow(dw->disp,dw->window);
+		XEvent e;
+		while(XNextEvent(dw->disp,&e))
+			if(e.type==Expose)
+				break;
 	}
 	return dw;
 }
@@ -67,27 +72,31 @@ static void CenterImage(CDrawWindow *win,int64_t *x_off,int64_t *y_off) {
 char buf[640*480*4];
 void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,int64_t h) {
 	uint8_t *colors=_colors;
-	int64_t x,y,mul=4,b,black,white;
+	int64_t x,y,cx,cy,mul=4,b,black,white,wx,wy,b2;
 	XLockDisplay(dw->disp);
 	long screen=DefaultScreen(dw->disp);
 	Visual *vis=XDefaultVisual(dw->disp,screen);
 	int dplanes=DisplayPlanes(dw->disp,screen);
-	XImage *img=XCreateImage(dw->disp,vis,dplanes,ZPixmap,0,buf,640,480,8,0);
-	for(y=0;y!=h;y++)
-		for(x=0;x!=internal_width;x++) {
-			if(colors[b=x+y*internal_width]>=16) {
+	wx=win->sz_x>480?win->sz_x:480;
+	wy=win->sz_y>640?win->sz_y:640;
+	char *scrn=calloc(1,4*wx*wy);
+	XImage *img=XCreateImage(dw->disp,vis,dplanes,ZPixmap,0,scrn,wx,wy,8,0);
+	CenterImage(dw,&cx,&cy);
+	for(y=cy;y!=cy+h;y++)
+		for(x=cx;x!=cx+internal_width;x++) {
+			if(colors[b=(x-cx)+(y-cy)*internal_width]>=16) {
 				colors[b]=0;
 			}
-			img->data[b*mul]=palette[colors[b]].blue;
-			img->data[b*mul+1]=palette[colors[b]].green;
-			img->data[b*mul+2]=palette[colors[b]].red;
-			img->data[b*mul+3]=0;
+			b2=x+y*wx;
+			img->data[b2*mul]=palette[colors[b]].blue;
+			img->data[b2*mul+1]=palette[colors[b]].green;
+			img->data[b2*mul+2]=palette[colors[b]].red;
+			img->data[b2*mul+3]=0;
 		}
-	CenterImage(dw,&x,&y);
-	XPutImage(dw->disp,dw->window,dw->gc,img,0,0,x,y,640,480);
-	XMapWindow(dw->disp,dw->window);
+	XPutImage(dw->disp,dw->window,dw->gc,img,0,0,0,0,wx,wy);
 	XFlush(dw->disp);
 	XFree(img);
+	free(scrn);
 	XUnlockDisplay(dw->disp);
 }
 void DrawWindowDel(CDrawWindow *win) {
@@ -476,7 +485,13 @@ static int MSCallback(void *d,XEvent *e) {
             x=e->xmotion.x,y=e->xmotion.y;
             ent:
             CenterImage(dw,&cx,&cy);
-            FFI_CALL_TOS_4(ms_cb,x-cx,y-cy,z,state);
+            cx=x-cx;
+            cy=y-cy;
+            if(cx<0) cx=0;
+            if(cy<0) cy=0;
+            if(cx>640) cx=640;
+            if(cy>480) cy=480;
+            FFI_CALL_TOS_4(ms_cb,cx,cy,z,state);
         }
     return 0;
 }
