@@ -42,9 +42,7 @@ U0 StartUpTasks()
   user2=User;
   WinToTop(user1);
   WinTileVert;
-  Silent;
-  ACInit("/KERNEL*.HH"); //No Bible, no uncompressed DD.
-  Silent(OFF);
+  DeathWait(Spawn(&ACInit,"/KERNEL*.HH",,mp_cnt-1));
   AutoComplete(ON);
 }
 U0 Adam(U8 *) {

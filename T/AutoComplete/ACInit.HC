@@ -130,6 +130,8 @@ public U0 ACInit(U8 *mask=NULL)
     ACMainFileLstTraverse(mask);
   ACDWordsLoad;
   LBtr(&ac.flags,ACf_INIT_IN_PROGRESS);
-  AutoComplete(ON);
+  //On boot we want to spawn AutoComplete on core 0
+  if(Gs->num==0)
+	AutoComplete(ON);
 }
 
