@@ -34,29 +34,37 @@ U0 LoadImps() {
 static U0 SetGsNum(I64) {
 	Gs->num=__CoreNum;
 }
+U0 StartUpTasks()
+{
+  CTask *user1,*user2;
+  WallPaperInit;
+  user1=User;
+  user2=User;
+  WinToTop(user1);
+  WinTileVert;
+  Silent;
+  ACInit("/KERNEL*.HH"); //No Bible, no uncompressed DD.
+  Silent(OFF);
+  AutoComplete(ON);
+}
 U0 Adam(U8 *) {
 	I64 idx;
 	LoadImps;
-	CTask *ac_init_t;
 	Gs->num=__CoreNum;//It should be 0
 	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
 		__SpawnCore;
-		Spawn(&SetGsNum,,,idx);
+		DeathWait(Spawn(&SetGsNum,,,idx));
 	}
     if(FileFind("HCRT.DBG.Z"))
 		DbgInfoRead("HCRT.DBG.Z");
 	boundscheck_enable=1;
 	if(!__IsCmdLine) {
-		ac_init_t=Spawn(&ACInit,"/KERNEL*.HH","ACInit",mp_cnt-1);
 		sys_winmgr_task=Spawn(&WinMgrTask);
 	} else {
 		DeathWait(User);
 		Exit3Days;
 	}
-	if(ac_init_t) {
-		DeathWait(ac_init_t);
-		AutoComplete(ON);
-	}
+	StartUpTasks;
 	//We are "adam" task
 	SrvTaskCont;
 }

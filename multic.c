@@ -4,6 +4,7 @@
 #include <stdatomic.h>
 #include <unistd.h>
 #ifndef TARGET_WIN32
+#include <errno.h>
 #include <pthread.h>
 #else
 #include <windows.h>
@@ -11,6 +12,14 @@
 #include <sysinfoapi.h>
 #include <processthreadsapi.h>
 static SYSTEMTIME genesis;
+#endif
+#ifdef linux
+//https://man7.org/linux/man-pages/man2/futex.2.html
+#include <sys/syscall.h>
+#include <linux/futex.h>
+#elif defined __FreeBSD__
+#include <sys/types.h>
+#include <sys/umtx.h>
 #endif
 static int64_t GetTicks() {
 	#ifndef TARGET_WIN32
@@ -59,6 +68,8 @@ typedef struct CCore {
 	#ifndef TARGET_WIN32
 	pthread_t pt;
 	pthread_mutex_t mutex;
+	//Used to telling Looper when a thread is spawned 
+	int32_t fmtx;
 	#else
 	HANDLE pt;
 	HANDLE mutex;
@@ -77,6 +88,17 @@ typedef struct CCore {
 static __thread int core_num;
 static int core_cnt; 
 CCore cores[64];
+static void UpdateFutex(int core) {
+	#ifdef linux
+	//We check if greater than 1 as there is 1 thread at idle(Looper)
+	for(;(cores[core].threads->length>1)&&EAGAIN==syscall(SYS_futex,&cores[core].threads->length,FUTEX_WAKE,1,NULL,NULL,0););
+	#elif defined __FreeBSD__
+	//We check if greater than 1 as there is 1 thread at idle(Looper)
+	if(cores[core].fmtx>1)
+		_umtx_op(&cores[core].threads->length,UMTX_OP_WAIT_UINT_PRIVATE,cores[core].threads->length,NULL,NULL);
+	#endif
+}
+
 static void MakeContext(ctx_t *ctx,void *stack,void(*fptr)(void*),void *data) {
     ctx->rip=fptr;
     #ifdef TARGET_WIN32
@@ -111,9 +133,12 @@ void __FreeThread(CThread *t) {
     PoopAllocFreeTaskMem(t->Fs);
 }
 void __Exit() {
-    vec_remove(&threads,cur_thrd);
+	LOCK_CORE(core_num);
+	UpdateFutex(core_num);
+	vec_remove(&threads,cur_thrd);
     vec_push(&dead_threads,cur_thrd);
     cur_thrd->dead=1;
+    UNLOCK_CORE(core_num);
     __Yield();
 }
 static void __SetThreadPtr2(CThread *t,void *ptr) {
@@ -175,8 +200,8 @@ __attribute__((force_align_arg_pointer)) int64_t __SpawnFFI(CPair *p) {
     FFI_CALL_TOS_1(p->fp,p->data);
     if(ex=map_get(&TOSLoader,"Exit")) {
         FFI_CALL_TOS_0(ex[0]->val);
-    }
-    __Exit();
+    } else
+		__Exit();
 }
 CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name,char *new_dir) {
     CThread *thd=TD_MALLOC(sizeof(CThread));
@@ -199,6 +224,7 @@ CThread *__MPSpawn(int core,void *fs,void *fp,void *data,char *name,char *new_di
         if(!cores[core].__no_lock)
 			LOCK_CORE(core);
         vec_push(cores[core].threads,thd);
+        UpdateFutex(core);
         if(!cores[core].__no_lock)
 			UNLOCK_CORE(core);
     }
@@ -382,8 +408,24 @@ void __AwaitThread(CThread *t) {
     }
 }
 static void Looper() {
-	for(;;) {
-		__Sleep(200);
+	for(;;) { 
+		//We have 1 thread at empty(Looper)
+		#ifndef TARGET_WIN32
+		int32_t one=1;
+		if(-1==syscall(SYS_futex,&cores[core_num].threads->length,FUTEX_WAIT,one,NULL,NULL,0)) {
+			if(errno==EAGAIN)
+				goto pass;
+			printf("%d,%s\n",errno,strerror(errno));
+			assert(0);
+		}
+		#elif  defined __FreeBSD
+		if(-1!=_umtx_op(&cores[core_num].threads->length,UMTX_OP_WAIT_UINT_PRIVATE,1,NULL,NULL))
+			goto pass;
+		#elif defined TARGET_WIN32
+		Sleep(50);
+		#endif
+		pass:
+		__Yield();
 	}
 }
 int InitThreadsForCore() {

@@ -430,8 +430,6 @@ U0 WinMgrTask(I64)
   Fs->win_inhibit&=~WIF_SELF_CTRLS;
   GrSetUpTables; 
   scrncast.dc2_alias=DCAlias(gr.dc2);
-  WallPaperInit;
-  User; //TODO REMOVE
   WinZBufUpdate;
   while (TRUE) {
     try {

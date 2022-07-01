@@ -297,24 +297,25 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
 {//Create task on core running at address.
 //Alloc \dLK,"CTask",A="MN:CTask"\d structure from code heap so addr will be short.
   //Could be alloced off of data heap.
-  if(!parent) parent=Fs;
+  if(!parent) parent=adam_task;
   CTask *task=MAlloc(sizeof(CTask));
   if (!task_name) task_name="Unnamed Task";
   task->parent_task=parent;
-  //task->gs=parent->gs; TODO RESTORE
+  task->gs=parent->gs;
   TaskInit(task,0);
   task->hash_table->next=parent->hash_table;
   MemCpy(task->task_name,task_name,TASK_NAME_LEN);
   StrCpy(task->task_title,task->task_name);
   task->title_src=TTS_TASK_NAME;
-  if(target_cpu==-1)
-	task->_3days_spawn_ptr=__Spawn(task,fp_start_addr,data,task_name);
-  else
-    task->_3days_spawn_ptr=__MPSpawn(target_cpu,task,fp_start_addr,data,task_name);
+  //Insert the task into the QUE to avoid having despawn after it is spawned.
   if (Bt(&flags,JOBf_ADD_TO_QUE)) {
     TaskQueInsChild(task);
     TaskQueIns(task);
   }
+  if(target_cpu==-1)
+	task->_3days_spawn_ptr=__Spawn(task,fp_start_addr,data,task_name);
+  else
+    task->_3days_spawn_ptr=__MPSpawn(target_cpu,task,fp_start_addr,data,task_name);
   return task;
 }
 U0 UserTaskCont()
