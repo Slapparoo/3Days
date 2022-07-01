@@ -94,8 +94,8 @@ static void UpdateFutex(int core) {
 	for(;(cores[core].threads->length>1)&&EAGAIN==syscall(SYS_futex,&cores[core].threads->length,FUTEX_WAKE,1,NULL,NULL,0););
 	#elif defined __FreeBSD__
 	//We check if greater than 1 as there is 1 thread at idle(Looper)
-	if(cores[core].fmtx>1)
-		_umtx_op(&cores[core].threads->length,UMTX_OP_WAIT_UINT_PRIVATE,cores[core].threads->length,NULL,NULL);
+	if(cores[core].threads->length>1)
+		_umtx_op(&cores[core].threads->length,UMTX_OP_WAKE_PRIVATE,cores[core].threads->length,NULL,NULL);
 	#endif
 }
 
@@ -410,7 +410,7 @@ void __AwaitThread(CThread *t) {
 static void Looper() {
 	for(;;) { 
 		//We have 1 thread at empty(Looper)
-		#ifndef TARGET_WIN32
+		#ifdef linux
 		int32_t one=1;
 		if(-1==syscall(SYS_futex,&cores[core_num].threads->length,FUTEX_WAIT,one,NULL,NULL,0)) {
 			if(errno==EAGAIN)
@@ -418,14 +418,14 @@ static void Looper() {
 			printf("%d,%s\n",errno,strerror(errno));
 			assert(0);
 		}
-		#elif  defined __FreeBSD
+		#elif  defined __FreeBSD__
 		if(-1!=_umtx_op(&cores[core_num].threads->length,UMTX_OP_WAIT_UINT_PRIVATE,1,NULL,NULL))
 			goto pass;
 		#elif defined TARGET_WIN32
 		Sleep(50);
 		#endif
 		pass:
-		__Yield();
+		__SleepUntilValue(&threads.length,0xffFFffFF,1);
 	}
 }
 int InitThreadsForCore() {
