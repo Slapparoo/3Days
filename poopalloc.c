@@ -5,6 +5,7 @@
 #include <string.h>
 #include <setjmp.h>
 #include <stdlib.h>
+#include <signal.h>
 #ifndef TARGET_WIN32
 #include <stddef.h>
 #include <sys/mman.h>
@@ -19,6 +20,10 @@
 struct CMemBlk;
 static uint32_t fmtx=1;
 static void LockHeap() {
+		sigset_t user2;
+		sigemptyset(&user2);
+		sigaddset(&user2,SIGUSR2);
+		pthread_sigmask(SIG_BLOCK,&user2,NULL);
 		uint32_t one=1;
 		for(;;) {
 			one=1;
@@ -33,6 +38,10 @@ static void LockHeap() {
 		}
 }
 static void UnlockHeap() {
+		sigset_t user2;
+		sigemptyset(&user2);
+		sigaddset(&user2,SIGUSR2);
+		pthread_sigmask(SIG_UNBLOCK,&user2,NULL);
 		uint32_t zero=0;
 		if(atomic_compare_exchange_strong(&fmtx,&zero,1))  {
 			while(-1==syscall(SYS_futex,&fmtx,FUTEX_WAKE,1,NULL,NULL,0)) {
@@ -48,6 +57,10 @@ static void UnlockHeap() {
 #include <sys/umtx.h>
 static long fmtx=1;
 static void LockHeap() {
+	sigset_t user2;
+	sigemptyset(&user2);
+	sigaddset(&user2,SIGUSR2);
+	pthread_sigmask(SIG_BLOCK,&user2,NULL);
     long one=1;
     for(;;) {
 		one=1;
@@ -57,6 +70,10 @@ static void LockHeap() {
     }
 }
 static void UnlockHeap() {
+	sigset_t user2;
+	sigemptyset(&user2);
+	sigaddset(&user2,SIGUSR2);
+	pthread_sigmask(SIG_UNBLOCK,&user2,NULL);
     long zero=0;
     if(atomic_compare_exchange_strong(&fmtx,&zero,1))  {
         assert(-1!=_umtx_op(&fmtx,UMTX_OP_WAKE_PRIVATE,1,NULL,NULL));

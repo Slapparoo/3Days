@@ -131,7 +131,6 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "CTRLSSLIDER.HC"
 #include "WINMGR.HC"
 #include "WALLPAPER.HC"
-#include "AREGISTRY.HC"
 #include "AutoComplete/MakeAC.HC"
 #include "God/MakeGod.HC"
 #include "Find.HC"

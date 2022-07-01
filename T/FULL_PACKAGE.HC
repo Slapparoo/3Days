@@ -37,6 +37,7 @@ static U0 SetGsNum(I64) {
 U0 Adam(U8 *) {
 	I64 idx;
 	LoadImps;
+	CTask *ac_init_t;
 	Gs->num=__CoreNum;//It should be 0
 	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
 		__SpawnCore;
@@ -46,11 +47,15 @@ U0 Adam(U8 *) {
 		DbgInfoRead("HCRT.DBG.Z");
 	boundscheck_enable=1;
 	if(!__IsCmdLine) {
-		ACInit("/KERNEL*.HH"); //Slow   
+		ac_init_t=Spawn(&ACInit,"/KERNEL*.HH","ACInit",mp_cnt-1);
 		sys_winmgr_task=Spawn(&WinMgrTask);
 	} else {
 		DeathWait(User);
 		Exit3Days;
+	}
+	if(ac_init_t) {
+		DeathWait(ac_init_t);
+		AutoComplete(ON);
 	}
 	//We are "adam" task
 	SrvTaskCont;
