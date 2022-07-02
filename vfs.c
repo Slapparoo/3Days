@@ -238,7 +238,10 @@ int VFsCd(char *to,int flags) {
     if(path.data[path.length-1]!=delim)
         vec_push(&path,delim);
     vec_push(&path,0);
-    if(!__FExists(path.data)&&!make) {
+    if(!__FIsDir(path.data)) {
+		if(!allow_fail)
+			failed=1;
+    } else if(!__FExists(path.data)&&!make) {
 		if(!allow_fail)
 			failed=1;
     } else if(!__FExists(path.data)&&make) {

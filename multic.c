@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <synchapi.h>
 #include <sysinfoapi.h>
+#include <synchapi.h>
 #include <processthreadsapi.h>
 static SYSTEMTIME genesis;
 #endif
@@ -96,6 +97,8 @@ static void UpdateFutex(int core) {
 	//We check if greater than 1 as there is 1 thread at idle(Looper)
 	if(cores[core].threads->length>1)
 		_umtx_op(&cores[core].threads->length,UMTX_OP_WAKE_PRIVATE,cores[core].threads->length,NULL,NULL);
+	#elif defined TARGET_WIN32
+	WakeByAddressSingle(&cores[core].threads->length);
 	#endif
 }
 
@@ -407,7 +410,8 @@ void __AwaitThread(CThread *t) {
             __Yield();
     }
 }
-static void Looper() {
+//We call from __MPSpawn whose stack is PoopMAlloc'ed may not be aligned.
+__attribute__((force_align_arg_pointer)) static void Looper() {
 	for(;;) { 
 		//We have 1 thread at empty(Looper)
 		#ifdef linux
@@ -422,7 +426,8 @@ static void Looper() {
 		if(-1!=_umtx_op(&cores[core_num].threads->length,UMTX_OP_WAIT_UINT_PRIVATE,1,NULL,NULL))
 			goto pass;
 		#elif defined TARGET_WIN32
-		Sleep(50);
+		int32_t one=1;
+		WaitOnAddress(&cores[core_num].threads->length,&one,4,INFINITE);
 		#endif
 		pass:
 		__SleepUntilValue(&threads.length,0xffFFffFF,1);
@@ -441,7 +446,7 @@ int InitThreadsForCore() {
     cores[num].dead_threads=&dead_threads;
     atomic_fetch_add(&cores[num].ready,1);
     cores[num].__no_lock=1;
-    __Spawn(PoopMAlloc(2048),Looper,NULL,"Loopeer");
+    __Spawn(PoopMAlloc(2048),Looper,NULL,"Looper");
     cores[num].__no_lock=0;
     cores[num].ready=1;
     UNLOCK_CORE(core_num);
