@@ -237,11 +237,15 @@ static int32_t __ScanKey(int64_t *ch,int64_t *sc,XEvent *_e) {
     } else \
 		mod|=(persist_mod|=(flag));
     int64_t mod=persist_mod,cond,dummy;
+    static int64_t prev_key_press=-1;
     if(!ch) ch=&dummy;
     if(!sc) sc=&dummy;    
     cond=1;
     if(cond) {
 		if(e.type==KeyPress) {
+			if(prev_key_press==XLookupKeysym(&e,0))
+				return -1;
+			prev_key_press=XLookupKeysym(&e,0);
             ent:
             *ch=*sc=0;
             if(e.xkey.state&ShiftMask)
@@ -437,6 +441,7 @@ static int32_t __ScanKey(int64_t *ch,int64_t *sc,XEvent *_e) {
             return 1;
             }
         } else if(e.type==KeyRelease) {
+			prev_key_press=0;
             mod|=SCF_KEY_UP;
             goto ent;
         }
