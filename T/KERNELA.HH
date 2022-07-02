@@ -5908,3 +5908,4 @@ public extern Bool WildMatch(U8 *test_str,U8 *wild_str);
 #define RIGHT_MOUNT	7
 #define RIGHT_PLAIN	8
 #define RIGHT_INFILE	9
+public CTask *Noise(I64 mS,F64 min_ona,F64 max_ona);
