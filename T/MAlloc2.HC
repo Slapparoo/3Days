@@ -46,7 +46,7 @@ U8 *CAlloc(I64 sz,CTask *t=NULL) {
 }
 U0 OOBBacktrace(U8 *ptr,I64 len=5,U8 *got) {
 	//In poopalloc.c callers are stored before ptr
-	I64 old=boundscheck_enable;
+	I64 old=boundscheck_enable;
 	boundscheck_enable=0;
 	TOSPrint("Out of bounds at:\n");
 	U8 **p=ptr,*link,*par,*fstr;
@@ -118,7 +118,7 @@ asm {
 	PUSH U64 SF_ARG1[RBP]
 	PUSH 5
 	PUSH RAX
-	CALL &OOBBacktrace
+	CALL &OOBBacktrace
 	@@exit:
 	POP R15
 	POP R14

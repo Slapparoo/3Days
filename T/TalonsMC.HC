@@ -501,7 +501,7 @@ U0 ClawsDraw(CTask *task,CDC *dc)
   ClawDraw(dc,HAND_X+30,HAND_Y-50*claws_up,HAND_X+5,HAND_Y,	22,4,TRUE);
   ClawDraw(dc,HAND_X+25,HAND_Y+40*claws_up,HAND_X+5,HAND_Y,	22,4,TRUE);
 
-  ClawDraw(dc,HAND_X,HAND_Y,6*w/20,h,38,5,FALSE);
+  ClawDraw(dc,HAND_X,HAND_Y,6*w/20,h,38,5,FALSE);
 }
 
 CDC *main_dc;
@@ -514,7 +514,7 @@ U0 DrawIt(CTask *task,CDC *dc)
   GrBlot(dc,0,0,main_dc);
   if (claws_down)
     ClawsDraw(task,dc);
-  main_dc_lock=0;
+  main_dc_lock=0;
 }
 
 /*
