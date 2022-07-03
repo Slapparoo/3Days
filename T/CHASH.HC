@@ -286,6 +286,12 @@ I64 FramePtrDel(U8 *name,CTask *t=NULL)
  *     FUNC_HELP_IDX(U8[])
  *     U32 s,e;
  *     U32 line_offsets[]
+ *     U32 stk_size
+ *     U32 var_cnt
+ *          VAR_NAME(U8[])
+ *          Bool is_reg
+ *          U32 reg/offset
+ *
  * if(HTT_HELP_FILE)
  *     POINTS_TO_FILE(U8[])
  *     HELP_IDX(U8[])
@@ -294,8 +300,9 @@ I64 FramePtrDel(U8 *name,CTask *t=NULL)
 I64 __DbgInfoWrite(CHashTable *h,U8 *to) {
 	I64 i,ln,size,min,max;
 	CHashSrcSym *tmph;
+	CMemberLst *fun_mem;
 	CDbgInfo *dbg_info;
-	U32 start_ptr;
+	U32 start_ptr,cnt;
 	U8 *src_link,buffer[1024],*bptr=&buffer;
 	for (i=0;i<=h->mask;i++) {
 		for(tmph=h->body[i];tmph;tmph=tmph->next)
@@ -327,6 +334,29 @@ I64 __DbgInfoWrite(CHashTable *h,U8 *to) {
 						if(to) (to+size)(U32*)[0]=dbg_info->body[ln]-start_ptr;
 						size+=4;
 					}
+					if(to) (to+size)(U32*)[0]=tmph(CHashFun*)->size;
+					size+=4;
+					fun_mem=tmph(CHashFun*)->member_lst_and_root;
+					for(cnt=0;fun_mem;fun_mem=fun_mem->next)
+						cnt++;
+					if(to) (to+size)(U32*)[0]=cnt;
+					size+=4;
+					fun_mem=tmph(CHashFun*)->member_lst_and_root;
+					for(;fun_mem;fun_mem=fun_mem->next) {
+						if(to) StrCpy(to+size,fun_mem->str);
+						size+=StrLen(fun_mem->str)+1;
+						if(0<=fun_mem->reg<REG_REGS_NUM) {
+							if(to) (to+size)(U8*)[0]=TRUE;
+							size++;
+							if(to) (to+size)(U32*)[0]=fun_mem->reg;
+							size+=4;
+						} else {
+							if(to) (to+size)(U8*)[0]=FALSE;
+							size++;
+							if(to) (to+size)(U32*)[0]=fun_mem->offset;
+							size+=4;
+						}
+					}
 				}
 			} else if(tmph->type&HTT_HELP_FILE){
 				if(to) (to+size)(I64*)[0]=HTT_HELP_FILE;
@@ -349,6 +379,7 @@ U0 DbgInfoWrite(CHashTable *h,U8 *name) {
 U0 DbgInfoRead(U8 *name) {
 	I64 len,min,max,ln,type;
 	CHashSrcSym *tmph;
+	CMemberLst *tmpm=NULL,*tmpm2=NULL;
 	CDbgInfo *dbg_info;
 	U8 *body=FileRead(name,&len),*ptr=body,*fn,*idx;
 	while(ptr<body+len) {
@@ -381,6 +412,32 @@ U0 DbgInfoRead(U8 *name) {
 				}
 			}
 			ptr+=sizeof(U32)*(max-min+1+1);
+			if(tmph) tmph(CHashFun*)->size=ptr(U32*)[0];
+			ptr+=sizeof(U32);
+			max=ptr(U32*)[0];
+			ptr+=sizeof(U32);
+			for(min=0;min!=max;min++) {
+				tmpm2=tmpm;
+				if(tmph) tmpm=MAlloc(sizeof(CMemberLst));
+				if(tmpm2) tmpm2->next=tmpm;
+				tmpm2=tmpm;
+				if(tmph) tmpm->str=StrNew(ptr);
+				ptr+=StrLen(ptr)+1;
+				if(*ptr++) {
+					if(tmph) tmpm->reg=ptr(U32*)[0];
+				} else {
+					if(tmph) tmpm->offset=ptr(I32*)[0];
+				}
+				ptr+=4;
+			}
+			if(tmph) {
+				tmpm=tmph(CHashFun*)->member_lst_and_root;
+				for(;tmpm&&tmpm->next;tmpm=tmpm->next);
+				if(tmpm)
+					tmpm->next=tmpm2;
+				else
+					tmph(CHashFun*)->member_lst_and_root=tmpm2;
+			}
 		} else if(type&HTT_HELP_FILE) {
 			tmph=MAlloc(sizeof(CHashSrcSym));
 			tmph->type=HTF_PUBLIC|HTT_HELP_FILE;

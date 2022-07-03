@@ -5909,3 +5909,9 @@ public extern Bool WildMatch(U8 *test_str,U8 *wild_str);
 #define RIGHT_PLAIN	8
 #define RIGHT_INFILE	9
 public CTask *Noise(I64 mS,F64 min_ona,F64 max_ona);
+extern Bool Man(U8 *st,I64 edf_dof_flags=0);
+extern Bool E(U8 *addr,I64 cnt=512,I64 edf_dof_flags=0);
+extern Bool PutSrcLink(U8 *addr,I64 cnt=1,U8 *buf=NULL);
+extern U8 *U(U8 *rip,I64 cnt=20,I64 seg_size=64);
+public U0 Uf(U8 *st);
+public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL);
