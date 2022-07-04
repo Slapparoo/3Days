@@ -1035,7 +1035,7 @@ U0 AnimateTask(I64)
 	  tmpb->p.x+=10*ms/1000*MAP_SCALE*Cos(tmpb->é);
 	  tmpb->p.y+=10*ms/1000*MAP_SCALE*Sin(tmpb->é);
 
-	  tmpb->p.z=BIRD_ELEVATION*MAP_SCALE+
+	  tmpb->p.z=BIRD_ELEVATION*MAP_SCALE+
 		elevations[tmpb->p.y/MAP_SCALE%MAP_HEIGHT][tmpb->p.x/MAP_SCALE%MAP_WIDTH];
 	  tmpb->é+=2*ã*ms/1000/10;
 	  tmpb=tmpb->next;
@@ -1187,7 +1187,7 @@ U0 Talons()
   Init;
   Fs->animate_task=Spawn(&AnimateTask,NULL,"Animate",,Fs);
   Fs->draw_it=&DrawIt;
-  try //in case <CTRL-ALT-c> is pressed.
+  try //in case <CTRL-ALT-c> is pressed.
     do {
       if (ScanKey(&ch,&sc)) {
 	switch (ch) {

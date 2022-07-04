@@ -6,7 +6,6 @@ U0 TaskQueIns(CTask *task,CTask *pred=NULL)
   if (!pred) pred=Fs;
   while(LBts(&tq_lock,0)) {
     PAUSE;
-    Yield;
   }
   last=pred->last_task;
   last->next_task=pred->last_task=task;
@@ -86,11 +85,9 @@ I64 TaskEnd()
     LBts(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0);
 
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)){
-    PAUSE;
     Yield;
   }
   while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
-    PAUSE;
     Yield;
   }
 
@@ -160,7 +157,7 @@ CTask *TaskEnd() {
     }
     LBts(&(Fs->task_flags),TASKf_KILL_TASK);
     while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
-		PAUSE;
+		Yield;
 	QueIns(Fs,Gs->last_dying);
     LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);
     return tmpt;
@@ -393,7 +390,6 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (!task) task=Fs;
   PUSHFD
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
-    PAUSE;
     Yield;
   }
   WinDerivedValsUpdate(task);
@@ -424,7 +420,7 @@ U0 KillAdam() {
 }
 U0 TaskKillDying() {
 	while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
-      PAUSE;
+      Yield;
     CTaskDying *task=Gs->next_dying,*task1;
     while (task!=&(Gs->next_dying)) {
       task1=task->next;

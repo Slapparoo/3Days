@@ -14,8 +14,7 @@ public U0 Refresh(I64 cnt=1,Bool force=FALSE)
   while (Bt(&sys_semas[SEMA_REFRESH_IN_PROGRESS],0)) {
     if (force && sys_winmgr_task)
       sys_winmgr_task->wake_jiffy=__GetTicks;
-    PAUSE;
-    Sleep(10);
+    Yield;
   }
   if (cnt>1 && old_doc)
     old_full_refresh=LBts(&old_doc->flags,DOCf_DO_FULL_REFRESH);
@@ -188,29 +187,20 @@ U0 WinCalcIdles()
   I64 i,k,total_jiffies,total_jiffies_delta,idle_pt_hits[MP_PROCESSORS_NUM];
   CCPU *c;
   CWinMgrTimingGlbls *t=winmgr.t;
-    /* TODO RESTORE
+  winmgr.ideal_refresh_tS=tS+WINMGR_PERIOD;
   if ((t->calc_idle_delta_time=
 	(calc_idle_time=tS)-t->last_calc_idle_time)>.25) {
     PUSHFD
-    total_jiffies=cpu_structs[0].total_jiffies;
+    total_jiffies=1000;
     for (i=0;i<mp_cnt;i++)
-      idle_pt_hits[i]=cpu_structs[i].idle_pt_hits;
+      idle_pt_hits[i]=1000;
     POPFD
 
     total_jiffies_delta=total_jiffies-t->last_total_jiffies;
-    for (i=0;i<mp_cnt;i++) {
-      c=&cpu_structs[i];
-      if (total_jiffies_delta && (k=idle_pt_hits[i]-t->last_idle_pt_hits[i])>=0)
-	c->idle_factor=Clamp(ToF64(k)/total_jiffies_delta,0.01,0.99);
-      else
-	c->idle_factor=0.01;
-      t->last_idle_pt_hits[i]=idle_pt_hits[i];
-    }
     t->last_total_jiffies=total_jiffies;
     t->last_calc_idle_time=calc_idle_time;
     t->calc_idle_cnt++;
   }
-  */
 }
 
 I64 WinMgrSleep(Bool flush_msgs=FALSE)
@@ -223,15 +213,17 @@ I64 WinMgrSleep(Bool flush_msgs=FALSE)
   CDC *diff;
   CDate cdt;
 
+  //TimeCal;
   if ((t_delta=(t=tS)-winmgr.last_refresh_tS)>0.01)
     winmgr.fps=Max(1.0/t_delta,1);
   else
     winmgr.fps=99;
+  TOSPrint("FPS:%n\n",winmgr.fps);
   winmgr.last_refresh_tS=t;
   WinCalcIdles;
 
   if (flush_msgs)
-    ;
+    FifoI64Flush(kbd.scan_code_fifo);
   else if (TaskValidate(sys_focus_task)) {
     KbdMsgsQue;
 
@@ -251,8 +243,7 @@ I64 WinMgrSleep(Bool flush_msgs=FALSE)
   } else {
     WinRefocus(sys_focus_task);
     if (!TaskValidate(sys_focus_task))
-      //FifoI64Flush(kbd.scan_code_fifo); CHANGED,we empty the fifo via KbdMsgsQue
-      KbdMsgsQue; 
+      FifoI64Flush(kbd.scan_code_fifo);
   }
   if (sys_focus_task)
     LBtr(&sys_focus_task->task_flags,TASKf_HAS_SONG);
@@ -286,7 +277,7 @@ I64 WinMgrSleep(Bool flush_msgs=FALSE)
 	scrncast.dc->body=MAllocIdent(scrncast.dc2_alias->body);
       }
     } else if (scrncast.dc) {
-      DCDel(scrncast.dc); //TODO: \dLK,"MemRep",A="MN:MemRep"\d can crash.
+      DCDel(scrncast.dc); //TODO: $LK,"MemRep",A="MN:MemRep"$ can crash.
       scrncast.dc=NULL;
     }
     if (sys_focus_task && !Bt(&sys_focus_task->task_flags,TASKf_HAS_SONG)) {
@@ -301,7 +292,8 @@ I64 WinMgrSleep(Bool flush_msgs=FALSE)
       music.cur_song_task=NULL;
     }
     winmgr.updates++;
-    Sleep(33);
+    TOSPrint("%d\n",timeout_val);
+    SleepUntil(timeout_val);
   }
   return msg_code;
 }

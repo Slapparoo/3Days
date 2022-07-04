@@ -58,7 +58,6 @@ CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
 
   PUSHFD
   while (LBts(&srv->srv_ctrl.flags,JOBCf_LOCKED)) {
-    PAUSE;
     Yield;
   }
   if (!TaskValidate(srv)) {
@@ -108,8 +107,7 @@ CJob *TaskText(CTask *srv,CTask *master,U8 *data,I64 flags)
   }
   res->ctrl=&task->srv_ctrl;
   while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
-	PAUSE;
-    Yield;
+	Yield;
   }
   if (!TaskValidate(task)) {
     JobDel(res);
@@ -153,7 +151,6 @@ CJob *TaskMsg(CTask *_srv,CTask *master,
     srv=srv->next_input_filter_task;
   tmpc->ctrl=&srv->srv_ctrl;
   while (LBts(&srv->srv_ctrl.flags,JOBCf_LOCKED)){
-    PAUSE;
     Yield;
   }
   if (!TaskValidate(srv)) {
@@ -182,7 +179,6 @@ Bool JobResScan(CJob *rqst=NULL,I64 *_res=NULL)
       ctrl=rqst->ctrl;
     PUSHFD
     while (LBts(&ctrl->flags,JOBCf_LOCKED)) {
-		PAUSE;
 		Yield;
     }
     tmpc1=&ctrl->next_done;
@@ -337,7 +333,6 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
     if (master=tmpc->master_task) {
       if (!Bt(&flags,JOBf_FREE_ON_COMPLETE)) {
 	while (LBts(&master->srv_ctrl.flags,JOBCf_LOCKED)) {
-      PAUSE;
       Yield;
     }
 	QueIns(tmpc,master->srv_ctrl.last_done);
@@ -355,8 +350,7 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
       JobDel(tmpc);
     else if (!master) {
       while (LBts(&ctrl->flags,JOBCf_LOCKED)) {
-        PAUSE;
-		Yield;
+        Yield;
       }
       QueIns(tmpc,ctrl->last_done);
       LBts(&tmpc->flags,JOBf_DONE);
@@ -373,7 +367,6 @@ I64 JobsHndlr(I64 run_flags,CTask *task=NULL)
   if (!task) task=Fs;
   while (TRUE) {
     while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
-		PAUSE;
 		Yield;
     }
     if (task->srv_ctrl.next_waiting!=&task->srv_ctrl) {
