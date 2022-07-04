@@ -76,6 +76,7 @@ void DrawWindowDel(struct CDrawWindow *win);
 void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h);
 struct CDrawWindow *NewDrawWindow();
 void *GetFs();
+void SetFs(void *f);
 void __WaitForSpawn(void *sp);
 struct CThread;
 struct CThread *__Spawn(void *fs,void *fp,void *data,char *name);

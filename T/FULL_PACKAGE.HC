@@ -37,11 +37,11 @@ static U0 SetGsNum(I64) {
 U0 StartUpTasks()
 {
   CTask *user1,*user2;
-  WallPaperInit;
   user1=User;
   user2=User;
   WinToTop(user1);
   WinTileVert;
+  WallPaperInit;
   DeathWait(Spawn(&ACInit,"/KERNEL*.HH",,mp_cnt-1));
   AutoComplete(ON);
 }
@@ -62,11 +62,26 @@ U0 Adam(U8 *) {
 		DeathWait(User);
 		Exit3Days;
 	}
+	Refresh; //Wait for window manager.
 	StartUpTasks;
 	//We are "adam" task
 	SrvTaskCont;
 }
+U0 SethTask(I64) {
+	for(;TRUE;) {
+		TaskKillDying;
+		Yield;
+	}
+}
+Gs->seth_task=Spawn(&SethTask,NULL,"Seth");
 //Our entering thread doesnt have a cur_thrd,so spawn one
 adam_task=Spawn(&Adam,NULL,"Adam",,);
 //Dont Exit
-while(TaskValidate(adam_task)) Sleep(500);
+DeathWait(adam_task);
+U0 Sleep(I64 ms) {
+	I64 target=__GetTicks+ms;
+	while(__GetTicks<target) {
+		Yield;
+		__Sleep(1);
+	}
+}

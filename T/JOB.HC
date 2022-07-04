@@ -271,13 +271,13 @@ U0 Msg(I64 msg_code,I64 arg1,I64 arg2,I64 flags=0)
 #define JOB_DONE	0
 #define JOB_CONT	1
 #define JOB_EXIT	2
-Bool Suspend(CTask *t=NULL,Bool state=TRUE) {
-    if(!t) t=Fs;
-    if(state)
-        __Suspend(t->_3days_spawn_ptr);
+Bool Suspend(CTask *task=NULL,Bool state=TRUE) {
+    I64 res;
+    if(!task) task=Fs;
+    if (TaskValidate(task))
+      res=LBEqu(&task->task_flags,TASKf_SUSPENDED,state);
     else
-        __AwakeThread(t->_3days_spawn_ptr);
-    //TODO
+      res=FALSE;//TODO
     return !state;
 }
 I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
@@ -473,6 +473,33 @@ U0 XTalkStrWait(CTask *task,U8 *fmt,...)
   Free(buf);
   TaskWait(task);
 }
-U0 Kill(CTask *t) {
-    __KillThread(t->_3days_spawn_ptr);
+
+Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE)
+{//Terminate other task.
+  I64 i;
+  if (TaskValidate(task)) {
+    if (just_break) {
+      if (task!=Fs)
+	Break;
+      else {//TODO wait
+	sys_focus_task=task;
+	LBts(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_C);
+	return TRUE;
+      }
+    } else {
+      if (task!=sys_winmgr_task) {
+	//TODOurgent restore
+	//for (i=0;i<mp_cnt;i++)
+	//   if (task==cpu_structs[i].seth_task)
+	//    return FALSE;
+	LBts(&task->task_flags,TASKf_KILL_TASK);
+	if (wait) {
+	  do Yield;
+	  while (TaskValidate(task) && Bt(&task->task_flags,TASKf_KILL_TASK));
+	}
+	return TRUE;
+      }
+    }
+  }
+  return FALSE;
 }

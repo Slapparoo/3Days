@@ -1,5 +1,20 @@
 #define FPTRS 1
 #include "KERNELA.HH"
+U32 SYS_CTRL_ALT_FLAGS=0;
+CTask *__Fs=MAlloc(sizeof(CTask));
+CCPU __gs;
+__gs.seth_task=__Fs;
+QueInit(&__gs.next_dying);
+CTask *Fs() {
+	return __Fs;
+}
+TaskInit(Fs,0);
+I64 mp_cnt() {
+	return 1;
+}
+CCPU *Gs() {
+	return &__gs;
+}
 #include "MAlloc2.HC"
 #include "KGLBLS.HC"
 U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
@@ -48,9 +63,6 @@ I64i FileWrite(U8i *fn,U8i *buf,I64i len) {
 #include "GR/Gr.HH"
 public extern I64 ExeCmdLine(CCmpCtrl *cc);
 CTask *adam_task=Fs;
-#ifdef INIT_EVERYTHING
-TaskInit(Fs,0);
-#endif
 #include "KMATH.HC"
 #include "STR.HC"
 #include "HASH.HC"
@@ -150,5 +162,6 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 #include "AHash.HC"
 #include "ADskB.HC"
 #include "ADBG.HC"
-///#include "Training.HC";
+#include "Sched.HC"
+///#include "Training.HC";
 #endif

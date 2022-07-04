@@ -584,8 +584,8 @@ char *ClipboardText() {
 	PoopFree(clip_text);
 	clip_text=NULL;
 	XUnlockDisplay(dw->disp);
-	while(!clip_text)
-		__Yield();
+	if(!clip_text)
+		clip_text="";
 	return strdup(clip_text);
 }
 void InputLoop(void *ul) {

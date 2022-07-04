@@ -149,7 +149,7 @@ Bool BreakUnlock(CTask *task=NULL)
     if (task==Fs)
       Break;
     else
-      __SetThreadPtr(task->_3days_spawn_ptr,&Break);
+      task->rip=&Break;
   }
   return res;
 }

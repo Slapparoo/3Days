@@ -361,10 +361,6 @@ sf_done:
     DocUnlock(doc);
 }
 
-#define RSAC_REPLACE	0
-#define RSAC_SKIP	1
-#define RSAC_ALL	2
-
 I64 PopUpReplaceSkipAllCancel(U8 *header=NULL,U8 *footer=NULL)
 {
   I64 i;

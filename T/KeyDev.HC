@@ -59,7 +59,7 @@ U0 CtrlAltDel(I64)
 U0 CtrlAltC(I64)
 {
     if(TaskValidate(sys_focus_task))
-		__SetThreadPtr(sys_focus_task->_3days_spawn_ptr,&Break);
+		sys_focus_task->rip=&Break;
 }
 
 U0 CtrlAltF(I64)

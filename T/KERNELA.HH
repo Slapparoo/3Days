@@ -142,10 +142,10 @@ extern class CFile;
 #define OCF_ALIAS	1
 extern class CCPU;
 #ifdef IMPORT_BUILTINS
+import U0i FreeTaskMem(CTask*);
 import U0i Exit3Days();
 import I64i __IsCmdLine();
 import U8i __FExists(U8i *);
-import I64i mp_cnt();
 import CCPU *Gs();
 import U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
 import U8i *__MPSpawn(I64i,CTask *,U8i *,U8i *,U8i *);
@@ -199,17 +199,17 @@ import U0i __Exit();
 import U0i __AwaitThread(U8i *thr);
 import U0i __KillThread(U8i *thr);
 import U0i SetMSCallback(U8i *fp);
-public import U0i Sleep(I64i mS);
+public import U0i __Sleep(I64i mS);
 import U0 __Del(U8 *);
 import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 #else
+extern U0i FreeTaskMem(CTask*);
 extern U8i *__CmdLineBootText();
 extern U0i Exit3Days();
 extern I64i __IsCmdLine();
 extern U8i __FExists(U8i *);
-extern I64i mp_cnt();
 extern CCPU *Gs();
 extern U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
 extern U8i *__MPSpawn(I64i,CTask *,U8i *,U8i *,U8i *);
@@ -261,7 +261,7 @@ extern U0i __AwaitThread(U8i *thr);
 extern U0i __KillThread(U8i *thr);
 extern U0i SetMSCallback(U8i *fp);
 extern U8i ChDrv(U8i);
-public extern U0i Sleep(I64i mS);
+public extern U0i __Sleep(I64i mS);
 extern U0i SndFreq(I64i freq);
 public extern Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public extern Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
@@ -3543,14 +3543,7 @@ public class CTask //The Fs segment reg points to current CTask.
   CWinScroll horz_scroll,vert_scroll;
 
   I64	user_data;
-  U0 *_3days_spawn_ptr;
 };
-
-#ifdef IMPORT_BUILTINS
-import CTask *Fs();
-#else
-extern CTask *Fs();
-#endif
 class CTSS
 {
   U32	res1;
@@ -4693,7 +4686,6 @@ extern U0 ACDFillin(I64 n);
 extern U0 ACFillIn(I64 n);
 extern U0 ACDDef(I64 n,CTask *parent=NULL);
 extern U0 ACMan(I64 n,CTask *parent_task=NULL);
-extern U0 Kill(CTask *t);
 extern CHashDefineStr *DefineLstLoad(U8 *dname,U8 *lst);
 extern CHashDefineStr *DefineLoad(U8 *dname,U8 *st);
 extern U0 UndefinedDefine(U8 *dname);
@@ -5050,7 +5042,7 @@ extern U0 InFile(U8 *filename);
 extern U0 In(U8 *fmt,...);
 extern U0 XTalkStr(CTask *task,U8 *fmt,...);
 extern U0 XTalkStrWait(CTask *task,U8 *fmt,...);
-extern U0 Kill(CTask *t);
+public extern Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE);
 extern I64 Char2ScanCode(I64 ch,I64 sc_flags=0);
 extern U8 ScanCode2Char(I64 sc);
 extern U0 InputFilterTask();
@@ -5915,3 +5907,16 @@ extern Bool PutSrcLink(U8 *addr,I64 cnt=1,U8 *buf=NULL);
 extern U8 *U(U8 *rip,I64 cnt=20,I64 seg_size=64);
 public U0 Uf(U8 *st);
 public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL);
+#define RSAC_REPLACE	0
+#define RSAC_SKIP	1
+#define RSAC_ALL	2
+public extern U0 ClassRepD(U8 *_d,U8 *class_name=lastclass,
+	I64 max_depth=2,Bool fun=FALSE,I64 offset=0);
+public extern U0 ClassRep(U8 *_d,U8 *class_name=lastclass,
+	I64 max_depth=2,Bool fun=FALSE,I64 offset=0);
+extern Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
+	I64 depth,I64 max_depth,Bool dynamic,I64 types=HTT_CLASS,I64 offset=0);
+extern Bool Copy(U8 *src_files_find_mask,U8 *dst_files_find_mask=".");
+extern CTask *Fs();
+extern I64 mp_cnt();
+extern U0 Sleep(I64 ms);

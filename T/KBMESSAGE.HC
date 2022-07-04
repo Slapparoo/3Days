@@ -350,7 +350,7 @@ Bool ScanKey(I64 *_ch=NULL,I64 *_scan_code=NULL,Bool echo=FALSE)
     return TRUE;
   } else {
     if (_ch) *_ch=0;
-    if (_scan_code) *_scan_code=0;
+    if (_scan_code) *_scan_code=0;
     return FALSE;
   }
 }

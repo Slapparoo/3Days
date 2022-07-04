@@ -233,7 +233,7 @@ void FualtCB() {
             }
         }
     }
-    __Yield();
+    exit(1);
 }
 void *Load(char *fn,int64_t ld_flags) {
     FILE *f;

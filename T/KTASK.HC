@@ -152,7 +152,12 @@ U0 Exit() {
 		if(Fs->parent_task)
 			WinFocus(Fs->parent_task);
     }
-    __Exit;
+    LBts(&(Fs->task_flags),TASKf_KILL_TASK);
+    while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
+		PAUSE;
+	QueIns(Fs,Gs->last_dying);
+    LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);
+    Yield();
 }
 U0 SrvTaskCont()
 {//Act as server task in a loop handling commands.
@@ -299,6 +304,7 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
   //Could be alloced off of data heap.
   if(!parent) parent=adam_task;
   CTask *task=MAlloc(sizeof(CTask));
+  U8 **stack;
   if (!task_name) task_name="Unnamed Task";
   task->parent_task=parent;
   task->gs=parent->gs;
@@ -312,10 +318,11 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
     TaskQueInsChild(task);
     TaskQueIns(task);
   }
-  if(target_cpu==-1)
-	task->_3days_spawn_ptr=__Spawn(task,fp_start_addr,data,task_name);
-  else
-    task->_3days_spawn_ptr=__MPSpawn(target_cpu,task,fp_start_addr,data,task_name);
+  stack=MAlloc(0x200000,task)+0x200000;
+  stack[-1]=data;
+  stack[-2]=&Exit;
+  task->rsp=stack-2;
+  task->rip=fp_start_addr;
   return task;
 }
 U0 UserTaskCont()
@@ -401,4 +408,16 @@ U0 DeathWait(CTask **_task,Bool send_exit=FALSE)
 }
 U0 KillAdam() {
 	Kill(adam_task);
+}
+U0 TaskKillDying() {
+	while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
+      PAUSE;
+    CTaskDying *task=Gs->next_dying,*task1;
+    while (task!=&(Gs->next_dying)) {
+      task1=task->next;
+      QueRem(task);
+      FreeTaskMem(task);
+      task=task1;
+    }
+    LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);
 }
