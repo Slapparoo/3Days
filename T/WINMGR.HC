@@ -14,7 +14,6 @@ public U0 Refresh(I64 cnt=1,Bool force=FALSE)
   while (Bt(&sys_semas[SEMA_REFRESH_IN_PROGRESS],0)) {
     if (force && sys_winmgr_task)
       sys_winmgr_task->wake_jiffy=__GetTicks;
-    __SleepUntilValue(&sys_semas[SEMA_REFRESH_IN_PROGRESS],,0);
     PAUSE;
     Sleep(10);
   }
