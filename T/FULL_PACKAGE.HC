@@ -20,7 +20,7 @@ static U0 BootstrapImportSymbol(U8 *name,U8 *ptr,I64 type) {
 		HashAdd(find,Fs->hash_table);
     }
 }
-static U0 __BootstrapForeachSymbol__(U0 *cptr) {
+static U0 __BootstrapForeachSymbol__(U0 *cptr) {
     __BootstrapForeachSymbol(cptr);
 }
 U0 LoadImps() {
@@ -45,13 +45,23 @@ U0 StartUpTasks()
   DeathWait(Spawn(&ACInit,"/KERNEL*.HH",,mp_cnt-1));
   AutoComplete(ON);
 }
+U0 SethTask(I64) {
+	QueInit(&(Gs->next_dying));
+	Gs->num=__CoreNum;
+	Gs->seth_task=Fs;
+	TOSPrint("INITED:%d\n",Gs->num);
+	mp_cores[Gs->num]=Gs;
+	while(TRUE) {
+		TaskKillDying;
+		Yield;
+	}
+}
 U0 Adam(U8 *) {
 	I64 idx;
 	LoadImps;
 	Gs->num=__CoreNum;//It should be 0
 	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
-		__SpawnCore;
-		DeathWait(Spawn(&SetGsNum,,,idx));
+		__SpawnCore(idx,&SethTask);
 	}
     if(FileFind("HCRT.DBG.Z"))
 		DbgInfoRead("HCRT.DBG.Z");
@@ -66,12 +76,6 @@ U0 Adam(U8 *) {
 	StartUpTasks;
 	//We are "adam" task
 	SrvTaskCont;
-}
-U0 SethTask(I64) {
-	for(;TRUE;) {
-		TaskKillDying;
-		Yield;
-	}
 }
 Gs->seth_task=Spawn(&SethTask,NULL,"Seth");
 //Our entering thread doesnt have a cur_thrd,so spawn one

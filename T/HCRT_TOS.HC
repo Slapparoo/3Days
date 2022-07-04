@@ -1,20 +1,16 @@
 #define FPTRS 1
 #include "KERNELA.HH"
 U32 SYS_CTRL_ALT_FLAGS=0;
-CTask *__Fs=MAlloc(sizeof(CTask));
-CCPU __gs;
-__gs.seth_task=__Fs;
-QueInit(&__gs.next_dying);
+CCPU *mp_cores[64];
+CCPU *Gs() {
+	return GetGs;
+}
+mp_cores[0]=Gs;
+QueInit(&(Gs->next_dying));
 CTask *Fs() {
-	return __Fs;
+	return GetFs;
 }
 TaskInit(Fs,0);
-I64 mp_cnt() {
-	return 1;
-}
-CCPU *Gs() {
-	return &__gs;
-}
 #include "MAlloc2.HC"
 #include "KGLBLS.HC"
 U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {

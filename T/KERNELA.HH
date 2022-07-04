@@ -142,6 +142,10 @@ extern class CFile;
 #define OCF_ALIAS	1
 extern class CCPU;
 #ifdef IMPORT_BUILTINS
+import I64i mp_cnt();
+import U0i SetFs(CTask*);
+import CTask* GetFs();
+import CCPU *GetGs();
 import U0i FreeTaskMem(CTask*);
 import U0i Exit3Days();
 import I64i __IsCmdLine();
@@ -150,7 +154,7 @@ import CCPU *Gs();
 import U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
 import U8i *__MPSpawn(I64i,CTask *,U8i *,U8i *,U8i *);
 import I64i __CoreNum();
-import U0i __SpawnCore();
+import U0i __SpawnCore(I64i core,U0i(*fp_ptr)());
 import U0i __MAlloc32(I64i sz,CTask *t);
 import U0i __MAlloc(I64i sz,CTask *t);
 import U0i __Free(U8i *);
@@ -203,6 +207,10 @@ import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 #else
+extern I64i mp_cnt();
+extern U0i SetFs(CTask*);
+extern CTask* GetFs();
+extern CCPU *GetGs();
 extern U0i FreeTaskMem(CTask*);
 extern U8i *__CmdLineBootText();
 extern U0i Exit3Days();
@@ -212,7 +220,7 @@ extern CCPU *Gs();
 extern U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
 extern U8i *__MPSpawn(I64i,CTask *,U8i *,U8i *,U8i *);
 extern I64i __CoreNum();
-extern U0i __SpawnCore();
+extern U0i __SpawnCore(I64i core,U0i(*fp_ptr)());
 extern I64i __InBounds(U8i *,I64i sz);
 extern U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
 extern U0i __MAlloc32(I64i sz,CTask *t);
@@ -5914,6 +5922,5 @@ extern Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
 	I64 depth,I64 max_depth,Bool dynamic,I64 types=HTT_CLASS,I64 offset=0);
 extern Bool Copy(U8 *src_files_find_mask,U8 *dst_files_find_mask=".");
 extern CTask *Fs();
-extern I64 mp_cnt();
 extern U0 Sleep(I64 ms);
 extern U0 Yield();;

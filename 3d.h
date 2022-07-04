@@ -178,3 +178,4 @@ __attribute__((force_align_arg_pointer)) int64_t __SpawnFFI(struct CPair *p);
 #ifdef TARGET_WIN32
 int _main(int argc,char **argv);
 #endif
+void CreateCore(int core,void *fp);

@@ -387,7 +387,8 @@ int64_t mp_cnt(int64_t *stk) {
 	return info.dwNumberOfProcessors;
 	#endif
 } 
-void SpawnCore() {
+void SpawnCore(int64_t *stk) {
+	CreateCore(stk[0],stk[1]);
 }
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
@@ -403,8 +404,8 @@ void TOS_RegisterFuncPtrs() {
 	STK_RegisterFunctionPtr(&ffi_blob,"__IsCmdLine",IsCmdLine,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"__FExists",STK___FExists,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"mp_cnt",mp_cnt,0);
-	STK_RegisterFunctionPtr(&ffi_blob,"Gs",GetGs,0);
-	STK_RegisterFunctionPtr(&ffi_blob,"__SpawnCore",SpawnCore,0);
+	STK_RegisterFunctionPtr(&ffi_blob,"GetGs",GetGs,0);
+	STK_RegisterFunctionPtr(&ffi_blob,"__SpawnCore",SpawnCore,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CoreNum",CoreNum,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"__InBounds",STK_InBounds,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"SetPtrCallers",STK_SetPtrCallers,2+5);
