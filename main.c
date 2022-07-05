@@ -86,6 +86,7 @@ void SignalHandler(int sig) {
 }
 static char *hcrt_bin_loc=NULL;
 static void Core0() {
+	VFsThrdInit();
 	#ifndef TARGET_WIN32
 	signal(SIGUSR1,&Core0Exit);
 	#endif
@@ -184,20 +185,20 @@ int main(int argc,char **argv)
 	} else {
 		InitSound();
 	}
-	PreInitCores();
 	if(1) {
 		//Create the Window,there is 1 screen God willing.
 		if(!is_cmd_line)
 			NewDrawWindow();
         int flags=0;
     #ifndef TARGET_WIN32
+		pthread_t core0;
         if(0==access("HCRT.BIN",F_OK)) {
 			puts("Using ./HCRT.BIN as the default binary.");
 			hcrt_bin_loc="HCRT.BIN";
-            __MPSpawn(0,PoopMAlloc(2048),Core0,NULL,"core0","T:/");
+			pthread_create(&core0,NULL,Core0,NULL);
         } else if(0==access( HCRT_INSTALLTED_DIR,F_OK)) {
 			hcrt_bin_loc=HCRT_INSTALLTED_DIR;
-			__MPSpawn(0,PoopMAlloc(2048),Core0,NULL,"core0","T:/");
+			pthread_create(&core0,NULL,Core0,NULL);
         }
     #else
       char buffer[MAX_PATH];

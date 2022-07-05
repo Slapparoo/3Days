@@ -3,10 +3,14 @@ public U0 SndTaskEndCB()
   Snd;
   Exit;
 }
-public U0 SleepUntil(I64 wake) {
-    I64 s=wake-__GetTicks;
-    if(s>0)
-        Sleep(s);
+public U0 SleepUntil(I64 wake_jiffy) {
+  Bool old_idle=LBts(&(Fs->task_flags),TASKf_IDLE);
+  Fs->wake_jiffy=wake_jiffy;
+  Yield;
+  LBEqu(&(Fs->task_flags),TASKf_IDLE,old_idle);
+}
+public U0 Sleep(I64 ms) {
+	SleepUntil(__GetTicks+ms);
 }
 #help_index "Snd/Math;Math"
 public U0 Beep(I8 ona=62,Bool busy=FALSE)

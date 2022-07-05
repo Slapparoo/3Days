@@ -5,7 +5,7 @@ U0 TaskQueIns(CTask *task,CTask *pred=NULL)
   CTask *last;
   if (!pred) pred=Fs;
   while(LBts(&tq_lock,0)) {
-    __SleepUntilValue(&tq_lock,,0);
+    PAUSE;
   }
   last=pred->last_task;
   last->next_task=pred->last_task=task;
@@ -19,7 +19,7 @@ U0 TaskQueRem(CTask *task)
 //Use \dLK,"Suspend",A="MN:Suspend"\d().
   CTask *next,*last;
   while(LBts(&tq_lock,0)) {
-    __SleepUntilValue(&tq_lock,,0);
+    PAUSE;
   }
   next=task->next_task;
   last=task->last_task;
@@ -32,7 +32,7 @@ U0 TaskQueInsChild(CTask *task)
 {
   CTask *last,*pred;
   while(LBts(&tq_lock,0)) {
-    __SleepUntilValue(&tq_lock,,0);
+    PAUSE;
   }
   pred=task->parent_task->last_child_task;
   //I reworked this 
@@ -83,10 +83,10 @@ I64 TaskEnd()
     LBts(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0);
 
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)){
-    __SleepUntilValue(&task->task_flags,1<<TASKf_TASK_LOCK,0);
+    PAUSE;
   }
   while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
-    __SleepUntilValue(&task->srv_ctrl.flags,1<<JOBCf_LOCKED,0);
+    PAUSE;
   }
 
   JobQueDel(&task->srv_ctrl.next_waiting);
@@ -122,8 +122,8 @@ I64 TaskEnd()
   task->wake_jiffy=__GetTicks+DYING_JIFFIES;
   return tmpt;
 }*/
-U0 Exit() {
-	CTask *child,*last,*next;
+CTask *TaskEnd() {
+	CTask *child,*last,*next,*tmpt;
     U8 *cb;
     if(Fs->task_end_cb) {
         cb=Fs->task_end_cb;
@@ -135,16 +135,18 @@ U0 Exit() {
     last=Fs->last_sibling_task;
     next->last_sibling_task=last;
     last->next_sibling_task=next;
-    Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=next;
-    if(Fs->parent_task->last_child_task==Fs)
-  	  Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=NULL;
-    
+    if(Fs->parent_task) {
+		Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=next;
+		if(Fs->parent_task->last_child_task==Fs)
+			Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=NULL;
+    }
     for(;child=Fs->last_child_task;) {
 		Kill(child);
 		DeathWait(child);
 	}
     LBts(&(Fs->task_flags),TASKf_KILL_TASK);
     Fs->task_signature=0;
+    tmpt=Fs->next_task;
     TaskQueRem(Fs);
     WinZBufUpdate;
     if(sys_focus_task==Fs) {
@@ -152,7 +154,16 @@ U0 Exit() {
 		if(Fs->parent_task)
 			WinFocus(Fs->parent_task);
     }
-    __Exit;
+    LBts(&(Fs->task_flags),TASKf_KILL_TASK);
+    while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
+		PAUSE;
+	QueIns(Fs,Gs->last_dying);
+    LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);
+    return tmpt;
+}
+U0 Exit() {
+	LBts(&(Fs->task_flags),TASKf_KILL_TASK);
+	Yield();
 }
 U0 SrvTaskCont()
 {//Act as server task in a loop handling commands.
@@ -298,7 +309,10 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
 //Alloc \dLK,"CTask",A="MN:CTask"\d structure from code heap so addr will be short.
   //Could be alloced off of data heap.
   if(!parent) parent=adam_task;
+  if(target_cpu==-1)
+	target_cpu=Gs->num;
   CTask *task=MAlloc(sizeof(CTask));
+  U8 **stack;
   if (!task_name) task_name="Unnamed Task";
   task->parent_task=parent;
   task->gs=parent->gs;
@@ -308,14 +322,15 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
   StrCpy(task->task_title,task->task_name);
   task->title_src=TTS_TASK_NAME;
   //Insert the task into the QUE to avoid having despawn after it is spawned.
+  stack=MAlloc(0x200000,task)+0x200000;
+  stack[-1]=data;
+  stack[-2]=&Exit;
+  task->rsp=stack-2;
+  task->rip=fp_start_addr;
   if (Bt(&flags,JOBf_ADD_TO_QUE)) {
     TaskQueInsChild(task);
-    TaskQueIns(task);
+    TaskQueIns(task,mp_cores[target_cpu]->seth_task);
   }
-  if(target_cpu==-1)
-	task->_3days_spawn_ptr=__Spawn(task,fp_start_addr,data,task_name);
-  else
-    task->_3days_spawn_ptr=__MPSpawn(target_cpu,task,fp_start_addr,data,task_name);
   return task;
 }
 U0 UserTaskCont()
@@ -374,7 +389,7 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (!task) task=Fs;
   PUSHFD
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
-    __SleepUntilValue(&task->task_flags,1<<TASKf_TASK_LOCK,0);
+    PAUSE;
   }
   WinDerivedValsUpdate(task);
   if (fp_update_ctrls) {
@@ -401,4 +416,16 @@ U0 DeathWait(CTask **_task,Bool send_exit=FALSE)
 }
 U0 KillAdam() {
 	Kill(adam_task);
+}
+U0 TaskKillDying() {
+	while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
+      PAUSE;
+    CTaskDying *task=Gs->next_dying,*task1;
+    while (task!=&(Gs->next_dying)) {
+      task1=task->next;
+      QueRem(task);
+      FreeTaskMem(task);
+      task=task1;
+    }
+    LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);
 }

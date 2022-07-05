@@ -59,7 +59,7 @@ U0 CtrlAltDel(I64)
 U0 CtrlAltC(I64)
 {
     if(TaskValidate(sys_focus_task))
-		__SetThreadPtr(sys_focus_task->_3days_spawn_ptr,&Break);
+		sys_focus_task->rip=&Break;
 }
 
 U0 CtrlAltF(I64)
@@ -88,6 +88,10 @@ U0 CtrlAltX(I64)
 {
   if(TaskValidate(sys_focus_task))
 	Kill(sys_focus_task);
+}
+U0 CtrlAltN(I64) {
+	if(TaskValidate(sys_focus_task))
+		TaskFocusNext;
 }
 
 U0 CtrlAltCBSet(U8 ch,U0 (*fp_hndlr)(I64 sc),
@@ -124,6 +128,7 @@ U0 KeyDevInit()
   //KeyDevAdd(&KDInputFilterPutKey,&KDInputFilterPutS,0x40000000,FALSE); TODO RESTORE(?)
   CtrlAltCBSet('C',&CtrlAltC,"Cmd /Break Execution",,TRUE);
   //CtrlAltCBSet('D',&CtrlAltD,"Cmd /Enter Debugger",,TRUE);
+  CtrlAltCBSet('N',&CtrlAltN,"Cmd /Next Window",,TRUE);
   CtrlAltCBSet('F',&CtrlAltF,"Cmd /Toggle Aux Font");
   //CtrlAltCBSet('M',&CtrlAltM,"Cmd /Toggle Mute");
   CtrlAltCBSet('N',&CtrlAltN,"Cmd /Next Focus Task",,TRUE);

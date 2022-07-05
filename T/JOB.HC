@@ -58,7 +58,7 @@ CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
 
   PUSHFD
   while (LBts(&srv->srv_ctrl.flags,JOBCf_LOCKED)) {
-    __SleepUntilValue(&srv->srv_ctrl.flags,1<<JOBCf_LOCKED,0);
+    PAUSE;
   }
   if (!TaskValidate(srv)) {
     LBtr(&srv->srv_ctrl.flags,JOBCf_LOCKED);
@@ -107,7 +107,7 @@ CJob *TaskText(CTask *srv,CTask *master,U8 *data,I64 flags)
   }
   res->ctrl=&task->srv_ctrl;
   while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
-    __SleepUntilValue(&srv->srv_ctrl.flags,1<<JOBCf_LOCKED,0);
+	PAUSE;
   }
   if (!TaskValidate(task)) {
     JobDel(res);
@@ -151,7 +151,7 @@ CJob *TaskMsg(CTask *_srv,CTask *master,
     srv=srv->next_input_filter_task;
   tmpc->ctrl=&srv->srv_ctrl;
   while (LBts(&srv->srv_ctrl.flags,JOBCf_LOCKED)){
-    __SleepUntilValue(&srv->srv_ctrl.flags,1<<JOBCf_LOCKED,0);
+    PAUSE;
   }
   if (!TaskValidate(srv)) {
     JobDel(tmpc);
@@ -179,7 +179,7 @@ Bool JobResScan(CJob *rqst=NULL,I64 *_res=NULL)
       ctrl=rqst->ctrl;
     PUSHFD
     while (LBts(&ctrl->flags,JOBCf_LOCKED)) {
-        __SleepUntilValue(&ctrl->flags,1<<JOBCf_LOCKED,0);
+		PAUSE;
     }
     tmpc1=&ctrl->next_done;
     tmpc=tmpc1->next;
@@ -216,7 +216,7 @@ I64 JobResGet(CJob *rqst=NULL)
   } else {
     while (!Bt(&rqst->flags,JOBf_DONE)) {
       LBts(&(Fs->task_flags),TASKf_IDLE);
-      __SleepUntilValue(&rqst->flags,1<<JOBf_DONE,1<<JOBf_DONE);
+      PAUSE;
     }
   }
   LBtr(&(Fs->task_flags),TASKf_IDLE);
@@ -271,13 +271,13 @@ U0 Msg(I64 msg_code,I64 arg1,I64 arg2,I64 flags=0)
 #define JOB_DONE	0
 #define JOB_CONT	1
 #define JOB_EXIT	2
-Bool Suspend(CTask *t=NULL,Bool state=TRUE) {
-    if(!t) t=Fs;
-    if(state)
-        __Suspend(t->_3days_spawn_ptr);
+Bool Suspend(CTask *task=NULL,Bool state=TRUE) {
+    I64 res;
+    if(!task) task=Fs;
+    if (TaskValidate(task))
+      res=LBEqu(&task->task_flags,TASKf_SUSPENDED,state);
     else
-        __AwakeThread(t->_3days_spawn_ptr);
-    //TODO
+      res=FALSE;//TODO
     return !state;
 }
 I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
@@ -332,7 +332,7 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
     if (master=tmpc->master_task) {
       if (!Bt(&flags,JOBf_FREE_ON_COMPLETE)) {
 	while (LBts(&master->srv_ctrl.flags,JOBCf_LOCKED)) {
-      __SleepUntilValue(&master->srv_ctrl.flags,1<<JOBCf_LOCKED,0);
+      PAUSE;
     }
 	QueIns(tmpc,master->srv_ctrl.last_done);
 	LBts(&tmpc->flags,JOBf_DONE);
@@ -349,8 +349,8 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
       JobDel(tmpc);
     else if (!master) {
       while (LBts(&ctrl->flags,JOBCf_LOCKED)) {
-        __SleepUntilValue(&ctrl->flags,1<<JOBCf_LOCKED,0);
-    }
+        PAUSE;
+      }
       QueIns(tmpc,ctrl->last_done);
       LBts(&tmpc->flags,JOBf_DONE);
       LBtr(&ctrl->flags,JOBCf_LOCKED);
@@ -365,8 +365,9 @@ I64 JobsHndlr(I64 run_flags,CTask *task=NULL)
   I64 cnt=0,old_flags=GetRFlags;
   if (!task) task=Fs;
   while (TRUE) {
-    while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED))
-      __SleepUntilValue(&task->srv_ctrl.flags,1<<JOBCf_LOCKED,0);
+    while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
+		PAUSE;
+    }
     if (task->srv_ctrl.next_waiting!=&task->srv_ctrl) {
       switch (JobRunOne(run_flags,&task->srv_ctrl)) {
 	case JOB_CONT:
@@ -473,6 +474,121 @@ U0 XTalkStrWait(CTask *task,U8 *fmt,...)
   Free(buf);
   TaskWait(task);
 }
-U0 Kill(CTask *t) {
-    __KillThread(t->_3days_spawn_ptr);
+
+Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE)
+{//Terminate other task.
+  I64 i;
+  if (TaskValidate(task)) {
+    if (just_break) {
+      if (task!=Fs)
+	Break;
+      else {//TODO wait
+	sys_focus_task=task;
+	LBts(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_C);
+	return TRUE;
+      }
+    } else {
+      if (task!=sys_winmgr_task) {
+	//TODOurgent restore
+	//for (i=0;i<mp_cnt;i++)
+	//   if (task==cpu_structs[i].seth_task)
+	//    return FALSE;
+	LBts(&task->task_flags,TASKf_KILL_TASK);
+	if (wait) {
+	  do Yield;
+	  while (TaskValidate(task) && Bt(&task->task_flags,TASKf_KILL_TASK));
+	}
+	return TRUE;
+      }
+    }
+  }
+  return FALSE;
+}
+
+
+U0 CoreAPSethTask()
+{
+  QueInit(&(Gs->next_dying));
+  Gs->num=__CoreNum;
+  Gs->seth_task=Fs;
+  mp_cores[Gs->num]=Gs;
+  CJobCtrl *ctrl=&(Fs->srv_ctrl);
+  CTask *task,*task1=Fs;
+  I64 ms,t;
+  while (TRUE) {
+    do {
+      TaskKillDying;
+      do PAUSE
+      while (LBts(&ctrl->flags,JOBCf_LOCKED));
+    } while (ctrl->next_waiting!=ctrl && JobRunOne(GetRFlags,ctrl));
+    //LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
+    LBtr(&ctrl->flags,JOBCf_LOCKED);
+    LBts(&(Fs->task_flags),TASKf_IDLE);
+    ms=10,t=__GetTicks;
+    for(task=Fs->next_task;task!=task1;task=task->next_task) {
+		if(Bt(&task->task_flags,TASKf_SUSPENDED)||Bt(&task->task_flags,TASKf_AWAITING_MSG))
+			goto next;
+		if(task->wake_jiffy&&task->wake_jiffy-t<ms)
+			ms=task->wake_jiffy-t;
+		next:
+    }
+    if(ms>=0)
+		__Sleep(ms);
+    Yield;
+    LBtr(&(Fs->task_flags),TASKf_IDLE);
+  }
+}
+
+CJob *JobQue(I64 (*fp_addr)(U8 *data),U8 *data=NULL,
+       I64 target_cpu=1,I64 flags=1<<JOBf_FREE_ON_COMPLETE,
+       I64 job_code=JOBT_CALL,U8 *aux_str=NULL,I64 aux1=0,I64 aux2=0)
+{//Queue multicore jobs, handled by Seth tasks.
+//Set flags to zero if you wish to get the res.
+  //See $LK,"::/Demo/MultiCore/Lock.HC"$
+  CJobCtrl *ctrl;
+  CJob *tmpc;
+  CTask *seth;
+  if (!(0<=target_cpu<mp_cnt))
+    throw('MultCore');
+  tmpc=CAlloc(sizeof(CJob),adam_task);
+  if (aux_str)
+    tmpc->aux_str=StrNew(aux_str,adam_task);
+  tmpc->job_code=job_code;
+  tmpc->addr=fp_addr;
+  tmpc->fun_arg=data;
+  tmpc->flags=flags;
+  tmpc->aux1=aux1;
+  tmpc->aux2=aux2;
+  seth=mp_cores[target_cpu]->seth_task;
+  tmpc->ctrl=ctrl=&seth->srv_ctrl;
+  while (LBts(&ctrl->flags,JOBCf_LOCKED))
+    Yield;
+  QueIns(tmpc,ctrl->last_waiting);
+  LBtr(&ctrl->flags,JOBCf_LOCKED);
+  return tmpc;
+}
+
+CTask *SpawnQue(U0 (*fp_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
+	I64 target_cpu, CTask *parent=NULL, //NULL means adam
+	I64 stk_size=0,I64 flags=1<<JOBf_ADD_TO_QUE)
+{
+  CTask *res;
+  CJob *tmpc=JobQue(fp_addr,data,target_cpu,
+	flags,JOBT_SPAWN_TASK,task_name,parent,stk_size);
+  CJobCtrl *ctrl;
+
+  while (!Bt(&tmpc->flags,JOBf_DONE)) {
+    LBts(&(Fs->task_flags),TASKf_IDLE);
+    Yield;
+  }
+  LBtr(&(Fs->task_flags),TASKf_IDLE);
+
+  res=tmpc->spawned_task;
+  ctrl=tmpc->ctrl;
+  while (LBts(&ctrl->flags,JOBCf_LOCKED))
+    Yield;
+  QueRem(tmpc);
+  LBtr(&ctrl->flags,JOBCf_LOCKED);
+  JobDel(tmpc);
+  return res;
 }

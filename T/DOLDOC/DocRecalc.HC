@@ -281,7 +281,7 @@ public Bool DocRecalc(CDoc *doc,I64 recalc_flags=RECALCt_NORMAL)
     i_jif=__GetTicks+JIFFY_FREQ/250; //4 ms
     while (Bt(&doc->locked_flags,DOClf_LOCKED)) {
       if (__GetTicks>=i_jif)
-	return FALSE; //Bail-out if doc locked.
+	  	return FALSE; //Bail-out if doc locked.
 	  Yield;
     }
   }
