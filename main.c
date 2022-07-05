@@ -208,7 +208,7 @@ int main(int argc,char **argv)
       hcrt_bin_loc=strdup(buffer);
       puts(buffer);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
-		__MPSpawn(0,PoopMAlloc(2048),Core0,NULL,"core0","T:/");
+		CreateThread(NULL,0,Core0,NULL,0,NULL);
       }
     #endif
     }

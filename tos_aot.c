@@ -216,7 +216,7 @@ struct CBinFile {
 } ;
 typedef struct CBinFile CBinFile ;
 void FualtCB() {
-	#ifndef TARGET_WIN32
+    #ifndef TARGET_WIN32
     sigset_t set;
     sigfillset(&set);
     sigprocmask(SIG_UNBLOCK,&set,NULL);
@@ -227,7 +227,9 @@ void FualtCB() {
 	exit(1);
 }
 void *Load(char *fn,int64_t ld_flags) {
+    #ifndef TARGET_WIN32
     signal(SIGBUS,FualtCB);
+    #endif
     signal(SIGSEGV,FualtCB);
     FILE *f;
     char *mod_base,*absname;

@@ -66,8 +66,10 @@ static void LaunchCore(void *c) {
 	CHash init=map_get(&TOSLoader,"TaskInit")->data[0];
 	FFI_CALL_TOS_2(init.val,GetFs(),0);
 	__core_num=c;
+	#ifndef TARGET_WIN32
 	signal(SIGBUS,FualtCB);
-    signal(SIGSEGV,FualtCB);
+	#endif
+        signal(SIGSEGV,FualtCB);
 	(*cores[__core_num].fp)();
 }
 void CreateCore(int core,void *fp) {
