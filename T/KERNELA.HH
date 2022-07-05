@@ -5924,3 +5924,12 @@ extern Bool Copy(U8 *src_files_find_mask,U8 *dst_files_find_mask=".");
 extern CTask *Fs();
 extern U0 Sleep(I64 ms);
 extern U0 Yield();;
+extern CTask *SpawnQue(U0 (*fp_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
+	I64 target_cpu, CTask *parent=NULL, //NULL means adam
+	I64 stk_size=0,I64 flags=1<<JOBf_ADD_TO_QUE);
+extern CJob *JobQue(I64 (*fp_addr)(U8 *data),U8 *data=NULL,
+       I64 target_cpu=1,I64 flags=1<<JOBf_FREE_ON_COMPLETE,
+       I64 job_code=JOBT_CALL,U8 *aux_str=NULL,I64 aux1=0,I64 aux2=0);
+extern U0 CoreAPSethTask();
+extern U0 TaskKillDying();
+extern U0 TaskFocusNext();

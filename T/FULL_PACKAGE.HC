@@ -20,7 +20,7 @@ static U0 BootstrapImportSymbol(U8 *name,U8 *ptr,I64 type) {
 		HashAdd(find,Fs->hash_table);
     }
 }
-static U0 __BootstrapForeachSymbol__(U0 *cptr) {
+static U0 __BootstrapForeachSymbol__(U0 *cptr) {
     __BootstrapForeachSymbol(cptr);
 }
 U0 LoadImps() {
@@ -45,23 +45,12 @@ U0 StartUpTasks()
   DeathWait(Spawn(&ACInit,"/KERNEL*.HH",,mp_cnt-1));
   AutoComplete(ON);
 }
-U0 SethTask(I64) {
-	QueInit(&(Gs->next_dying));
-	Gs->num=__CoreNum;
-	Gs->seth_task=Fs;
-	TOSPrint("INITED:%d\n",Gs->num);
-	mp_cores[Gs->num]=Gs;
-	while(TRUE) {
-		TaskKillDying;
-		Yield;
-	}
-}
 U0 Adam(U8 *) {
 	I64 idx;
 	LoadImps;
 	Gs->num=__CoreNum;//It should be 0
 	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
-		__SpawnCore(idx,&SethTask);
+		__SpawnCore(idx,&CoreAPSethTask);
 	}
     if(FileFind("HCRT.DBG.Z"))
 		DbgInfoRead("HCRT.DBG.Z");
@@ -77,8 +66,31 @@ U0 Adam(U8 *) {
 	//We are "adam" task
 	SrvTaskCont;
 }
-Gs->seth_task=Spawn(&SethTask,NULL,"Seth");
+Gs->seth_task=Spawn(&CoreAPSethTask,NULL,"Seth");
 //Our entering thread doesnt have a cur_thrd,so spawn one
 adam_task=Spawn(&Adam,NULL,"Adam",,);
 //Dont Exit
 DeathWait(adam_task);
+U0 FualtRoutine(U8 *ptr,U8 *got) {
+	U8 **p=ptr,*link,*par,*fstr;
+	I64 len=15;
+	CHashFun *f;
+	I64 i=0;
+	for(i=0;i!=len;i++) {
+		par=Caller(i+2);
+		if(!par) goto en;
+		link=SrcEdLink(par); //+1 for self,+1 for fault routine
+		f=FunSegFind(par,NULL);
+		if(f)
+			fstr=f->str;
+		else
+			fstr="???";
+		if(link) {
+			TOSPrint("%s(%s)\n",link,fstr);
+			Free(link);
+		} else 
+			TOSPrint("???\n");
+	}
+	en:
+	Exit;
+}

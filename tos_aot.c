@@ -221,21 +221,14 @@ void FualtCB() {
     sigfillset(&set);
     sigprocmask(SIG_UNBLOCK,&set,NULL);
     #endif
-    void *arr[1];
-    arr[0]=*(void**)(__builtin_frame_address(0)+8);
-    int64_t i;
-    vec_CHash_t *vec;
-    CHash h;
-    if(vec=map_get(&TOSLoader,"FaultCB")) {
-        vec_foreach(vec,h,i) {
-            if(h.type==HTT_EXPORT_SYS_SYM) {
-                FFI_CALL_TOS_2(h.val,__builtin_frame_address(1),arr[0]);
-            }
-        }
-    }
-    exit(1);
+    vec_CHash_t *f=map_get(&TOSLoader,"FualtRoutine");
+    if(f)
+			FFI_CALL_TOS_0(f->data[0].val);
+	exit(1);
 }
 void *Load(char *fn,int64_t ld_flags) {
+    signal(SIGBUS,FualtCB);
+    signal(SIGSEGV,FualtCB);
     FILE *f;
     char *mod_base,*absname;
     int64_t size,mod_align,misalign;
@@ -261,5 +254,4 @@ void *Load(char *fn,int64_t ld_flags) {
     LoadPass2((char*)bfh_addr+bfh_addr->patch_table_offset,mod_base,ld_flags);    
     //Stuff may still be using data once we exit
     //PoopFree(bfh_addr);
-    signal(SIGSEGV,FualtCB);
 }

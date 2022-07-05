@@ -89,6 +89,10 @@ U0 CtrlAltX(I64)
   if(TaskValidate(sys_focus_task))
 	Kill(sys_focus_task);
 }
+U0 CtrlAltN(I64) {
+	if(TaskValidate(sys_focus_task))
+		TaskFocusNext;
+}
 
 U0 CtrlAltCBSet(U8 ch,U0 (*fp_hndlr)(I64 sc),
 	U8 *no_shift_desc=NULL,U8 *shift_desc=NULL,Bool in_irq=FALSE)
@@ -124,6 +128,7 @@ U0 KeyDevInit()
   //KeyDevAdd(&KDInputFilterPutKey,&KDInputFilterPutS,0x40000000,FALSE); TODO RESTORE(?)
   CtrlAltCBSet('C',&CtrlAltC,"Cmd /Break Execution",,TRUE);
   //CtrlAltCBSet('D',&CtrlAltD,"Cmd /Enter Debugger",,TRUE);
+  CtrlAltCBSet('N',&CtrlAltN,"Cmd /Next Window",,TRUE);
   CtrlAltCBSet('F',&CtrlAltF,"Cmd /Toggle Aux Font");
   //CtrlAltCBSet('M',&CtrlAltM,"Cmd /Toggle Mute");
   CtrlAltCBSet('N',&CtrlAltN,"Cmd /Next Focus Task",,TRUE);
