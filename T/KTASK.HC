@@ -220,8 +220,10 @@ I64 ExeCmdLine(CCmpCtrl *cc)
     machine_code=LexStmt2Bin(cc,&type,CMPF_PRS_SEMICOLON);
     if (machine_code!=INVALID_PTR) {
       if (!(cc->flags&CCF_JUST_LOAD)) {
+    t0=tS;
 	res=Call(machine_code);
 	Fs->answer=res;
+	Fs->answer_time=tS-t0;
 	Fs->answer_type=type;
 	Fs->new_answer=TRUE;
 	cc->pmt_line=0;

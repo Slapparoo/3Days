@@ -113,9 +113,10 @@ int _main(int argc,char **argv)
 int main(int argc,char **argv)
 #endif
 {
-	AddVectoredExceptionHandler(1,&VectorHandler);
 	#ifndef TARGET_WIN32
 	assert(XInitThreads());
+	#else
+	AddVectoredExceptionHandler(1,&VectorHandler);
 	#endif 
 	BoundsCheckTests();
     char *header=NULL,*t_drive=NULL,*tmp;
