@@ -20,7 +20,6 @@ U0 TaskQueRem(CTask *task)
   CTask *next,*last;
   while(LBts(&tq_lock,0)) {
     PAUSE;
-    Yield;
   }
   next=task->next_task;
   last=task->last_task;
@@ -34,7 +33,6 @@ U0 TaskQueInsChild(CTask *task)
   CTask *last,*pred;
   while(LBts(&tq_lock,0)) {
     PAUSE;
-    Yield;
   }
   pred=task->parent_task->last_child_task;
   //I reworked this 
@@ -85,10 +83,10 @@ I64 TaskEnd()
     LBts(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0);
 
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)){
-    Yield;
+    PAUSE;
   }
   while (LBts(&task->srv_ctrl.flags,JOBCf_LOCKED)) {
-    Yield;
+    PAUSE;
   }
 
   JobQueDel(&task->srv_ctrl.next_waiting);
@@ -137,10 +135,11 @@ CTask *TaskEnd() {
     last=Fs->last_sibling_task;
     next->last_sibling_task=last;
     last->next_sibling_task=next;
-    Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=next;
-    if(Fs->parent_task->last_child_task==Fs)
-  	  Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=NULL;
-    
+    if(Fs->parent_task) {
+		Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=next;
+		if(Fs->parent_task->last_child_task==Fs)
+			Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=NULL;
+    }
     for(;child=Fs->last_child_task;) {
 		Kill(child);
 		DeathWait(child);
@@ -157,7 +156,7 @@ CTask *TaskEnd() {
     }
     LBts(&(Fs->task_flags),TASKf_KILL_TASK);
     while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
-		Yield;
+		PAUSE;
 	QueIns(Fs,Gs->last_dying);
     LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);
     return tmpt;
@@ -390,7 +389,7 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (!task) task=Fs;
   PUSHFD
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
-    Yield;
+    PAUSE;
   }
   WinDerivedValsUpdate(task);
   if (fp_update_ctrls) {
@@ -420,7 +419,7 @@ U0 KillAdam() {
 }
 U0 TaskKillDying() {
 	while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
-      Yield;
+      PAUSE;
     CTaskDying *task=Gs->next_dying,*task1;
     while (task!=&(Gs->next_dying)) {
       task1=task->next;

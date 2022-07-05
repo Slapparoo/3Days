@@ -65,7 +65,7 @@ U0 DrawCtrls(CTask *task)
 	if (!Bt(&task->display_flags,DISPLAYf_NO_BORDER)) {
 	  PUSHFD
 	  while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
-        Yield;;
+        Yield;
       }
 
 	  task->win_left--; //Allow drawing on border
@@ -82,7 +82,7 @@ U0 DrawCtrls(CTask *task)
 
 	  PUSHFD
 	  while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
-        Yield;;
+        Yield;
       }
 
 	  task->win_left++;

@@ -187,7 +187,7 @@ U0 WinCalcIdles()
   I64 i,k,total_jiffies,total_jiffies_delta,idle_pt_hits[MP_PROCESSORS_NUM];
   CCPU *c;
   CWinMgrTimingGlbls *t=winmgr.t;
-  winmgr.ideal_refresh_tS=tS+WINMGR_PERIOD;
+  winmgr.ideal_refresh_tS=tS;
   if ((t->calc_idle_delta_time=
 	(calc_idle_time=tS)-t->last_calc_idle_time)>.25) {
     PUSHFD
@@ -218,7 +218,6 @@ I64 WinMgrSleep(Bool flush_msgs=FALSE)
     winmgr.fps=Max(1.0/t_delta,1);
   else
     winmgr.fps=99;
-  TOSPrint("FPS:%n\n",winmgr.fps);
   winmgr.last_refresh_tS=t;
   WinCalcIdles;
 
@@ -292,7 +291,6 @@ I64 WinMgrSleep(Bool flush_msgs=FALSE)
       music.cur_song_task=NULL;
     }
     winmgr.updates++;
-    TOSPrint("%d\n",timeout_val);
     SleepUntil(timeout_val);
   }
   return msg_code;

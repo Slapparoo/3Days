@@ -3,6 +3,7 @@ I64 boundscheck_enable=0;
 U8 *MAlloc(I64 sz,CTask *t=NULL) {
 	U8 *ret;
 	ret=__MAlloc(sz,t);
+	if(boundscheck_enable&&0)
 	SetPtrCallers(
 		ret,
 		5,
@@ -17,6 +18,7 @@ U8 *MAlloc(I64 sz,CTask *t=NULL) {
 U8 *MAlloc32(I64 sz,CTask *t=NULL) {
 	U8 *ret;
 	ret=__MAlloc32(sz,t);
+	if(boundscheck_enable&&0)
 	SetPtrCallers(
 		ret,
 		5,

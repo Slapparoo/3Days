@@ -82,10 +82,3 @@ Gs->seth_task=Spawn(&SethTask,NULL,"Seth");
 adam_task=Spawn(&Adam,NULL,"Adam",,);
 //Dont Exit
 DeathWait(adam_task);
-U0 Sleep(I64 ms) {
-	I64 target=__GetTicks+ms;
-	while(__GetTicks<target) {
-		Yield;
-		__Sleep(1);
-	}
-}
