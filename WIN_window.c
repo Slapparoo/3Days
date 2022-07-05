@@ -6,12 +6,23 @@
 #include <windowsx.h>
 #include <winbase.h>
 #include <shellscalingapi.h>
+HANDLE *mutex;
 LPSTR* WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int* numargs);
 typedef struct CDrawWindow {
     int64_t sz_x,sz_y;
     int64_t scroll_x,scroll_y;
     HWND win;
 } CDrawWindow;
+static void CenterWindow(HWND win,int64_t *x,int64_t *y) {
+	RECT rct;
+	GetClientRect(win,&rct);
+	int64_t _x,_y;
+	_x=(rct.right-640)/2,_y=(rct.bottom-480)/2;
+	if(_y<0) _y=0;
+	if(_x<0) _x=0;
+	if(x) *x=_x;
+	if(y) *y=_y;
+}
 static int32_t gr_palette_std[]={
 0x000000,0x0000AA,0x000AA00,0x00AAAA,
 0xAA0000,0xAA00AA,0xAA5500,0xAAAAAA,
@@ -329,46 +340,41 @@ void SetKBCallback(void *fptr,void *data) {
 //x,y,z,(l<<1)|r
 static void(*ms_cb)();
 static int MSCallback(HWND hwnd,void *d,UINT msg,WPARAM w,LPARAM e) {
-    static int64_t x,y;
+    static int64_t x,y,cx,cy;
+    CenterWindow(hwnd,&cx,&cy);
     static int state;
     static int z;
     RECT rect;
     if(ms_cb) {
-		GetClientRect(hwnd,&rect);
 		switch(msg) {
 			case WM_MOUSEWHEEL:
 			z+=GET_WHEEL_DELTA_WPARAM(w);
 			goto ent;
             case WM_LBUTTONDOWN:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
-            x=((double)x*640./rect.right);
-            y=((double)y*480./rect.bottom);
             state|=2;
             goto ent;
             case WM_RBUTTONDOWN:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
-            x=((double)x*640./rect.right);
-            y=((double)y*480./rect.bottom);
             state|=1;
             goto ent;
             case WM_RBUTTONUP:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
-            x=((double)x*640./rect.right);
-            y=((double)y*480./rect.bottom);
             state&=~1;
             goto ent;
             case WM_LBUTTONUP:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
-            x=(double)x*640./rect.right;
-            y=(double)y*480./rect.bottom;
             state&=~2;
             goto ent;
             case WM_MOUSEMOVE:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
-            x=(double)x*640./rect.right;
-            y=(double)y*480./rect.bottom;
-            ent:
-            FFI_CALL_TOS_4(ms_cb,x,y,z,state);
+            ent:;
+            int x2=x-cx,y2=y-cy;
+            if(x2>=640) x2=640;
+            if(x2>=480) y2=480;
+            if(y2<0) y2=0;
+            if(x2<0) x2=0;
+            FFI_CALL_TOS_4(ms_cb,x2,y2,z,state);
         }
     }
     return 0;
@@ -385,6 +391,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 	char **argv;
     float dpi;
     WNDCLASS wc = {0};
+    mutex=CreateMutexA(NULL,0,NULL);
     wc.lpfnWndProc=WndProc;
     wc.lpszClassName="Holy Drawer";
 	wc.hInstance=hInstance;
@@ -424,6 +431,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 }
 void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h) {
 	int64_t x,y,b,b2,mul=4;
+	WaitForSingleObject(mutex,INFINITE);
 	for(y=0;y!=480;y++)
 		for(x=0;x!=640;x++) {
 			if(colors[b=x+y*internal_width]>=16) {
@@ -436,6 +444,7 @@ void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_wi
 			buf[b2*mul+3]=0;
 			//img->data[b*4+3]=0;
 		}
+	ReleaseMutex(mutex);
 	RedrawWindow(
 		win->win,
 		NULL,
@@ -475,6 +484,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 	HBRUSH brush,obrush;
 	HDC dc,dc2;
 	RECT rct;
+	int64_t cx,cy;
 	switch(msg) {
 		case WM_KILLFOCUS:
 			if(persist_mod&SCF_ALT)
@@ -500,7 +510,14 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 				MSCallback(hwnd,NULL,msg,wParam,lParam);
 			break;
 		case WM_PAINT:
+			WaitForSingleObject(mutex,INFINITE);
+			GetClientRect(hwnd,&rct);
+			CenterWindow(hwnd,&cx,&cy);
 			dc=BeginPaint(hwnd,&ps);
+			dc2=CreateCompatibleDC(dc2);
+			bmp=CreateCompatibleBitmap(dc,rct.right,rct.bottom);
+			obrush=SelectObject(dc2,GetStockObject(BLACK_BRUSH));
+			SelectObject(dc2,bmp);
 			BITMAPINFO  binfo;
 			memset(&binfo,0,sizeof(binfo));
 			binfo.bmiHeader.biSize=sizeof(binfo);
@@ -509,12 +526,14 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 			binfo.bmiHeader.biPlanes=1;
 			binfo.bmiHeader.biBitCount=32;
 			binfo.bmiHeader.biCompression=BI_RGB;
-			GetClientRect(hwnd,&rct);
-			StretchDIBits(dc,0,0,rct.right,rct.bottom,0,0,640,480,buf,&binfo,DIB_RGB_COLORS,SRCCOPY);
-			SelectObject(dc,obrush); 
+			Rectangle(dc2,0,0,rct.right,rct.bottom);
+			SetDIBitsToDevice(dc2,cx,cy,640,480,0,0,0,480,buf,&binfo,DIB_RGB_COLORS);
+			BitBlt(dc,0,0,rct.right,rct.bottom,dc2,0,0,SRCCOPY);
+			SelectObject(dc2,obrush);
 			EndPaint(hwnd,&ps);
+			ReleaseMutex(mutex);
 			DeleteDC(dc2);
-			DeleteObject(brush),DeleteObject(bmp);
+			DeleteObject(bmp);
 			break;
 		case WM_DESTROY:
 			PostQuitMessage(0);

@@ -56,7 +56,11 @@ void *GetGs() {
 	return __gs;
 }
 typedef struct {
+	#ifndef TARGET_WIN32
 	pthread_t thread;
+	#else
+	HANDLE thread;
+	#endif
 	int core_num;
 	void (*fp)();
 } CCore;
@@ -69,11 +73,15 @@ static void LaunchCore(void *c) {
 	#ifndef TARGET_WIN32
 	signal(SIGBUS,FualtCB);
 	#endif
-        signal(SIGSEGV,FualtCB);
+    signal(SIGSEGV,FualtCB);
 	(*cores[__core_num].fp)();
 }
 void CreateCore(int core,void *fp) {
 	cores[core].core_num=core;
 	cores[core].fp=fp;
+	#ifndef TARGET_WIN32
 	pthread_create(&cores[core].thread,NULL,LaunchCore,core);
+	#else
+	cores[core].thread=CreateThread(NULL,0,LaunchCore,core,0,NULL);
+	#endif
 }

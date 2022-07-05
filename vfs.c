@@ -261,6 +261,7 @@ int VFsCd(char *to,int flags) {
 		else
 			sprintf(buffer,"%s:%s",drv_buf,path.data+root_len);
 		cur_dir=PoopAllocSetTask(strdup(buffer),GetFs());
+		VFsInplaceConvertDelims(cur_dir);
 	} else
 		vec_deinit(&path);
     return !failed;

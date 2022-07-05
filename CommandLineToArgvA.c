@@ -32,6 +32,11 @@ char strArgc[256]={0};
  */
 LPSTR* WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int* numargs)
 {
+  char bCmdLineWithMod[2048];
+  GetModuleFileNameA(NULL,bCmdLineWithMod,1024);
+  strcat(bCmdLineWithMod," ");
+  strcat(bCmdLineWithMod,lpCmdline);
+  lpCmdline=bCmdLineWithMod;
   DWORD argc;
   LPSTR  *argv;
   LPSTR s;
