@@ -141,7 +141,15 @@ extern class CFile;
 #define ARGT_XMM0	55 // Not implemented
 #define OCF_ALIAS	1
 extern class CCPU;
+extern class CSocket;
 #ifdef IMPORT_BUILTINS
+/*
+import CSocket *SockServer(I64i port);
+import U0i SockClose(CSocket *);
+import U0i SockRead(CSocket *,I64i);
+import U0i SockWrite(CSocket *,U8i *,I64i);
+import CSocket *SockAccept(CSocket *);
+*/
 import I64i mp_cnt();
 import U0i SetFs(CTask*);
 import CTask* GetFs();
@@ -207,6 +215,13 @@ import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 #else
+/*
+extern CSocket *SockServer(I64i port);
+extern U0i SockClose(CSocket *);
+extern U0i SockRead(CSocket *,I64i);
+extern U0i SockWrite(CSocket *,U8i *,I64i);
+extern CSocket *SockAccept(CSocket *);
+*/
 extern I64i mp_cnt();
 extern U0i SetFs(CTask*);
 extern CTask* GetFs();
@@ -2756,7 +2771,7 @@ class CISOPriDesc
 #define MT_DVD		2
 
 //CDirEntry flags (Used by \dLK,"FileMgr",A="MN:FileMgr"\d())
-#define CDIR_FILENAME_LEN	38 //Must include terminator zero
+#define CDIR_FILENAME_LEN	2048 //Must include terminator zero
 public class CDirEntry
 {
   CDirEntry *next,*parent,*sub;
