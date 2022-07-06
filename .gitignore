@@ -1,3 +1,5 @@
+winbuild/
+*.zip
 # Prerequisites
 *.d
 

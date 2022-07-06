@@ -97,7 +97,7 @@ public U0 SettingsPop(CTask *task=NULL,I64 flags=0)
     task->task_end_cb=tmpse->task_end_cb;
 
     if (task->animate_task)
-      ;//Kill(task->animate_task); //TODO RESTORE
+      Kill(task->animate_task);
     if (task->animate_task=tmpse->animate_task)
       Suspend(task->animate_task,FALSE);
 

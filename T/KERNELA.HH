@@ -142,21 +142,24 @@ extern class CFile;
 #define OCF_ALIAS	1
 extern class CCPU;
 #ifdef IMPORT_BUILTINS
+import I64i mp_cnt();
+import U0i SetFs(CTask*);
+import CTask* GetFs();
+import CCPU *GetGs();
+import U0i FreeTaskMem(CTask*);
 import U0i Exit3Days();
 import I64i __IsCmdLine();
 import U8i __FExists(U8i *);
-import I64i mp_cnt();
 import CCPU *Gs();
 import U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
 import U8i *__MPSpawn(I64i,CTask *,U8i *,U8i *,U8i *);
 import I64i __CoreNum();
-import U0i __SpawnCore();
+import U0i __SpawnCore(I64i core,U0i(*fp_ptr)());
 import U0i __MAlloc32(I64i sz,CTask *t);
 import U0i __MAlloc(I64i sz,CTask *t);
 import U0i __Free(U8i *);
 import I64i FSize(U8i *);
 import I64i FUnixTime(U8i *);
-import U0 __SleepUntilValue(I64i *ptr,U64i mask=~0,U64i);
 import U8i *GetClipboardText();
 import U8i *SetClipboardText(U8i *);
 public import Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
@@ -194,27 +197,30 @@ import U0i SetKBCallback(U0i *,U0i *);
 import U0i __Suspend(U8i *spawn);
 import U0i __AwakeThread(U8i *spawn);
 import U0i __FreeThread(U8i *spawn);
-import U0i Yield();
 import U0i __Exit();
 import U0i __AwaitThread(U8i *thr);
 import U0i __KillThread(U8i *thr);
 import U0i SetMSCallback(U8i *fp);
-public import U0i Sleep(I64i mS);
+public import U0i __Sleep(I64i mS);
 import U0 __Del(U8 *);
 import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 #else
+extern I64i mp_cnt();
+extern U0i SetFs(CTask*);
+extern CTask* GetFs();
+extern CCPU *GetGs();
+extern U0i FreeTaskMem(CTask*);
 extern U8i *__CmdLineBootText();
 extern U0i Exit3Days();
 extern I64i __IsCmdLine();
 extern U8i __FExists(U8i *);
-extern I64i mp_cnt();
 extern CCPU *Gs();
 extern U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
 extern U8i *__MPSpawn(I64i,CTask *,U8i *,U8i *,U8i *);
 extern I64i __CoreNum();
-extern U0i __SpawnCore();
+extern U0i __SpawnCore(I64i core,U0i(*fp_ptr)());
 extern I64i __InBounds(U8i *,I64i sz);
 extern U0i SetPtrCallers(U8i *,I64i cnt=5,U8i *,U8i *,U8i *,U8i *,U8i *);
 extern U0i __MAlloc32(I64i sz,CTask *t);
@@ -255,19 +261,17 @@ extern U0i SetKBCallback(U0i *,U0i *);;
 extern U0i __Suspend(U8i *spawn);
 extern U0i __AwakeThread(U8i *spawn);
 extern U0i __FreeThread(U8i *spawn);
-extern U0i Yield();
 extern U0i __Exit();
 extern U0i __AwaitThread(U8i *thr);
 extern U0i __KillThread(U8i *thr);
 extern U0i SetMSCallback(U8i *fp);
 extern U8i ChDrv(U8i);
-public extern U0i Sleep(I64i mS);
+public extern U0i __Sleep(I64i mS);
 extern U0i SndFreq(I64i freq);
 public extern Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public extern Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public extern U0 FClose(CFile *f);
 public extern CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
-extern U0 __SleepUntilValue(I64i *ptr,U64i mask=~0,U64i expected);
 #endif
 extern U0i Exit();
 extern class CAOT;
@@ -314,7 +318,7 @@ extern class CJobCtrl;
 #define F64_MIN (0xFFEFFFFFFFFFFFFF(F64))
 #define inf	(0x7FF0000000000000(F64))
 #define pi	(0x400921FB54442D18(F64))
-#define ã pi
+#define ã pi
 #define exp_1	(0x4005BF0A8B145769(F64)) //The number "e"
 #define log2_10 (0x400A934F0979A371(F64))
 #define log2_e	(0x3FF71547652B82FE(F64))
@@ -1031,7 +1035,7 @@ public class CArrayDim
 };
 
 #define MLMF_IS_STR	1
-public class CMemberLstMeta
+public class CMemberLstMeta
 {
   CMemberLstMeta *next;
   U8	*str;
@@ -3543,14 +3547,7 @@ public class CTask //The Fs segment reg points to current CTask.
   CWinScroll horz_scroll,vert_scroll;
 
   I64	user_data;
-  U0 *_3days_spawn_ptr;
 };
-
-#ifdef IMPORT_BUILTINS
-import CTask *Fs();
-#else
-extern CTask *Fs();
-#endif
 class CTSS
 {
   U32	res1;
@@ -4693,7 +4690,6 @@ extern U0 ACDFillin(I64 n);
 extern U0 ACFillIn(I64 n);
 extern U0 ACDDef(I64 n,CTask *parent=NULL);
 extern U0 ACMan(I64 n,CTask *parent_task=NULL);
-extern U0 Kill(CTask *t);
 extern CHashDefineStr *DefineLstLoad(U8 *dname,U8 *lst);
 extern CHashDefineStr *DefineLoad(U8 *dname,U8 *st);
 extern U0 UndefinedDefine(U8 *dname);
@@ -5050,7 +5046,7 @@ extern U0 InFile(U8 *filename);
 extern U0 In(U8 *fmt,...);
 extern U0 XTalkStr(CTask *task,U8 *fmt,...);
 extern U0 XTalkStrWait(CTask *task,U8 *fmt,...);
-extern U0 Kill(CTask *t);
+public extern Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE);
 extern I64 Char2ScanCode(I64 ch,I64 sc_flags=0);
 extern U8 ScanCode2Char(I64 sc);
 extern U0 InputFilterTask();
@@ -5897,4 +5893,43 @@ public extern U8 *StrPrintJoin(U8 *dst,U8 *fmt,I64 argc,I64 *argv);
 public extern U8 *StrUtil(U8 *_src,I64 flags);
 public extern U8 *Tabs2Spaces(U8 *src);
 public extern Bool WildMatch(U8 *test_str,U8 *wild_str);
-
+#define	GR_SCALE	(1<<32)
+#define RIGHT_INCLUDE	0
+#define RIGHT_AINCLUDE	1
+#define RIGHT_COPY	2
+#define RIGHT_MOVE	3
+#define RIGHT_DELETE	4
+#define RIGHT_TYPE	5
+#define RIGHT_ED	6
+#define RIGHT_MOUNT	7
+#define RIGHT_PLAIN	8
+#define RIGHT_INFILE	9
+public CTask *Noise(I64 mS,F64 min_ona,F64 max_ona);
+extern Bool Man(U8 *st,I64 edf_dof_flags=0);
+extern Bool E(U8 *addr,I64 cnt=512,I64 edf_dof_flags=0);
+extern Bool PutSrcLink(U8 *addr,I64 cnt=1,U8 *buf=NULL);
+extern U8 *U(U8 *rip,I64 cnt=20,I64 seg_size=64);
+public U0 Uf(U8 *st);
+public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL);
+#define RSAC_REPLACE	0
+#define RSAC_SKIP	1
+#define RSAC_ALL	2
+public extern U0 ClassRepD(U8 *_d,U8 *class_name=lastclass,
+	I64 max_depth=2,Bool fun=FALSE,I64 offset=0);
+public extern U0 ClassRep(U8 *_d,U8 *class_name=lastclass,
+	I64 max_depth=2,Bool fun=FALSE,I64 offset=0);
+extern Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
+	I64 depth,I64 max_depth,Bool dynamic,I64 types=HTT_CLASS,I64 offset=0);
+extern Bool Copy(U8 *src_files_find_mask,U8 *dst_files_find_mask=".");
+extern CTask *Fs();
+extern U0 Sleep(I64 ms);
+extern U0 Yield();;
+extern CTask *SpawnQue(U0 (*fp_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
+	I64 target_cpu, CTask *parent=NULL, //NULL means adam
+	I64 stk_size=0,I64 flags=1<<JOBf_ADD_TO_QUE);
+extern CJob *JobQue(I64 (*fp_addr)(U8 *data),U8 *data=NULL,
+       I64 target_cpu=1,I64 flags=1<<JOBf_FREE_ON_COMPLETE,
+       I64 job_code=JOBT_CALL,U8 *aux_str=NULL,I64 aux1=0,I64 aux2=0);
+extern U0 CoreAPSethTask();
+extern U0 TaskKillDying();
+extern U0 TaskFocusNext();

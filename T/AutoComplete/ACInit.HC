@@ -113,7 +113,7 @@ public U0 ACInit(U8 *mask=NULL)
   Bool start_flag;
   AutoComplete;
   while (LBts(&ac.flags,ACf_INIT_IN_PROGRESS)) {
-    __SleepUntilValue(&ac.flags,1<<ACf_INIT_IN_PROGRESS,0);
+    Yield;
   }
   if (FileFind(ACD_DEF_FILENAME_Z) &&
 	!FileFind(ACD_DEF_FILENAME)) {
@@ -130,6 +130,8 @@ public U0 ACInit(U8 *mask=NULL)
     ACMainFileLstTraverse(mask);
   ACDWordsLoad;
   LBtr(&ac.flags,ACf_INIT_IN_PROGRESS);
-  AutoComplete(ON);
+  //On boot we want to spawn AutoComplete on core 0
+  if(Gs->num==0)
+	AutoComplete(ON);
 }
-
+

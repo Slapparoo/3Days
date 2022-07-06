@@ -1,7 +1,5 @@
 //Uses $LK,"fixed-point",A="FI:::/Demo/Lectures/FixedPoint.HC"$.
 
-#define mp_cnt 1
-
 RegDft("TempleOS/Talons","F64 best_score=9999;\n");
 RegExe("TempleOS/Talons");
 //Keep these power of two so shift is used instead of multiply
@@ -274,8 +272,8 @@ U0 MPDoPanels(CTask *task)
   Panel *tmpp,*start_ptr=NULL,*end_ptr=NULL;
   CD3I32 *poly;
   Obj *tmpo;
-  lo=0*(MAP_HEIGHT-1)/mp_cnt;
-  hi=(0+1)*(MAP_HEIGHT-1)/mp_cnt;
+  lo=Gs->num*(MAP_HEIGHT-1)/mp_cnt;
+  hi=(Gs->num+1)*(MAP_HEIGHT-1)/mp_cnt;
   for (threshold=8;threshold>=1;threshold--)
     for (j=lo;j<hi;j++) {
       for (i=0;i<MAP_WIDTH-1;i++) {
@@ -394,7 +392,7 @@ U0 MPDoPanels(CTask *task)
     panel_head=start_ptr;
     LBtr(&critical_section_flag,0);
   }
-  LBtr(&mp.init_not_done_flags,0);
+  LBtr(&mp.init_not_done_flags,Gs->num);
 }
 
 U0 InitElevations()
@@ -638,7 +636,7 @@ U0 MPDrawIt(CTask *task,CDC *dc)
     yy+=y3;
   }
 
-  if (0&1) {//alt left-right,right-left
+  if (Gs->num&1) {//alt left-right,right-left
     yh2=-yh;
     xh2=-xh;
   } else {
@@ -647,8 +645,8 @@ U0 MPDrawIt(CTask *task,CDC *dc)
   }
 
   //Calc starting point.
-  x1wa=xx<<8+xh*strip_height>>1/1.3*(0+1.15);
-  y1wa=yy<<8+yh*strip_height>>1/1.3*(0+1.15);
+  x1wa=xx<<8+xh*strip_height>>1/1.3*(Gs->num+1.15);
+  y1wa=yy<<8+yh*strip_height>>1/1.3*(Gs->num+1.15);
   x1wb=0;
   y1wb=0;
 
@@ -669,11 +667,11 @@ U0 MPDrawIt(CTask *task,CDC *dc)
       if (0<=x1<MAP_WIDTH && 0<=y1<MAP_HEIGHT) {
 	if ((tmpp=panels[y1][x1]) && tmpp->update!=update) {
 	  tmpp->update=update;
-	  //if (tmpp->cnt>8*(1.1-100)) {
+	  if (tmpp->cnt>8*(1.1-Gs->idle_factor)) {
 	    dc->color=tmpp->color;
 	    tmpp->cnt=GrFillPoly3(dc,tmpp->num_sides,tmpp->pts);
-	  //} else
-	  //  tmpp->cnt++;
+	  } else
+	    tmpp->cnt++;
 	  tmpo=tmpp->next_obj;
 	  while (tmpo!=&tmpp->next_obj) {
 	    Sprite3(dc,tmpo->p.x,tmpo->p.y,tmpo->p.z,tmpo->img);
@@ -709,8 +707,8 @@ U0 MPDrawIt(CTask *task,CDC *dc)
     }
   }
 
-  tmpb=b_head[0].next;
-  while (tmpb!=&b_head[0]) {
+  tmpb=b_head[Gs->num].next;
+  while (tmpb!=&b_head[Gs->num]) {
     elems1=SpriteInterpolate(Tri(tS,0.2),$IB,"<2>",BI=2$,$IB,"<3>",BI=3$);
 
     Mat4x4IdentEqu(r);
@@ -725,15 +723,15 @@ U0 MPDrawIt(CTask *task,CDC *dc)
   }
 
   Free(s2w);
-  mp.strip_width[0]=strip_width;
-  LBtr(&mp.update_not_done_flags,0);
+  mp.strip_width[Gs->num]=strip_width;
+  LBtr(&mp.update_not_done_flags,Gs->num);
 }
 
 U0 CoreAPTalonsTask(CTask *master_task)
 {
   CDC *dc=DCAlias(main_dc,master_task);
   while (!mp.app_done) {
-    while (!Bt(&mp.update_not_done_flags,0) && !mp.app_done)
+    while (!Bt(&mp.update_not_done_flags,Gs->num) && !mp.app_done)
       Sleep(1);
     if (!mp.app_done)
       MPDrawIt(master_task,dc);
@@ -743,7 +741,7 @@ U0 CoreAPTalonsTask(CTask *master_task)
   dc->depth_buf=NULL;
 
   DCDel(dc);
-  LBtr(&mp.app_not_done_flags,0);
+  LBtr(&mp.app_not_done_flags,Gs->num);
 }
 
 U0 DrawHorizon(CDC *dc)
@@ -929,7 +927,7 @@ U0 Core0Talons()
 	fish_left,tt,best_score);
 
   //We made an alias of this we don't want freed.
-  dc->depth_buf=NULL;
+  dc->depth_buf=NULL;
   DCDel(dc);
   Refresh;
 }
@@ -1035,7 +1033,7 @@ U0 AnimateTask(I64)
 	  tmpb->p.x+=10*ms/1000*MAP_SCALE*Cos(tmpb->é);
 	  tmpb->p.y+=10*ms/1000*MAP_SCALE*Sin(tmpb->é);
 
-	  tmpb->p.z=BIRD_ELEVATION*MAP_SCALE+
+	  tmpb->p.z=BIRD_ELEVATION*MAP_SCALE+
 		elevations[tmpb->p.y/MAP_SCALE%MAP_HEIGHT][tmpb->p.x/MAP_SCALE%MAP_WIDTH];
 	  tmpb->é+=2*ã*ms/1000/10;
 	  tmpb=tmpb->next;
@@ -1193,26 +1191,23 @@ U0 Talons()
 	switch (ch) {
 	  case 0:
 	    switch (sc.u8[0]) {
+	      start:
 		case SC_CURSOR_DOWN:
 		  è-=CTRLS_SCALE*Cos(roll);
 		  heading-=CTRLS_SCALE*Sin(roll)*Sin(è);
-		  WrapAngles;
 		  break;
 		case SC_CURSOR_UP:
 		  è+=CTRLS_SCALE*Cos(roll);
 		  heading+=CTRLS_SCALE*Sin(roll)*Sin(è);
-		  WrapAngles;
 		  break;
 		case SC_CURSOR_RIGHT:
 		  roll+=CTRLS_SCALE;
-		  WrapAngles; 
 		  break;
 		case SC_CURSOR_LEFT:
 		  roll-=CTRLS_SCALE;
-		  WrapAngles;
 		  break;
-		default:
-		  goto c0;
+	      end:
+		WrapAngles;
 	    }
 	    break;
 	  case '\n':
@@ -1222,13 +1217,9 @@ U0 Talons()
 	    Init;
 	    Fs->draw_it=&DrawIt;
 	    break;
-          default:
-            goto c0;
 	}
-      } else{
-	c0:
+      } else
 	Core0Talons;
-      }
     } while (ch!=CH_SHIFT_ESC && ch!=CH_ESC);
   catch
     PutExcept;

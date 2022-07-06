@@ -3,13 +3,10 @@
 public Bool DocLock(CDoc *doc)
 {//Make this task have exclusive access to this doc.
   if (!Bt(&doc->locked_flags,DOClf_LOCKED) || doc->owning_task!=Fs) {
-    while (LBts(&doc->locked_flags,DOClf_LOCKED)) {
-      __SleepUntilValue(&doc->locked_flags,1<<DOClf_LOCKED,0);
-    }
-    if (doc->owning_task!=Fs) {
+    while (LBts(&doc->locked_flags,DOClf_LOCKED))
+      Yield;
+    if (doc->owning_task!=Fs)
       LBEqu(&doc->flags,DOCf_BREAK_UNLOCKED,BreakLock(Fs));
-      
-    }
     doc->owning_task=Fs;
     return TRUE;
   } else
@@ -367,7 +364,7 @@ I64 EdLeftClickLink0(CDoc *doc,CDocEntry *doc_e) {
     return EdLeftClickLink(doc,doc_e);
 }
 public CDoc *DocNew(U8 *filename=NULL,CTask *task=NULL)
-{//MAlloc new \dLK,"DolDoc",A="FI:::/Doc/DolDocOverview.DD"\d. (Begin a new doc.)
+{//MAlloc new \dLK,"DolDoc",A="FI:::/Doc/DolDocOverview.DD"\d. (Begin a new doc.)
   CDoc *doc;
   if (!task) task=Fs;
   doc=CAlloc(sizeof(CDoc),task);

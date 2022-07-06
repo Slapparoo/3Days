@@ -1,9 +1,18 @@
 #include "poopalloc.h"
+#include <stdio.h>
+#include <assert.h>
+#include <stdint.h>
+#include <string.h>
+#include <setjmp.h>
+#include <stdlib.h>
+#include <signal.h>
 #ifndef TARGET_WIN32
+#include <stddef.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdatomic.h>
 #include <assert.h>
+#include <errno.h>
 #ifdef __linux__
 //https://man7.org/linux/man-pages/man2/futex.2.html
 #include <sys/syscall.h>
@@ -11,17 +20,36 @@
 struct CMemBlk;
 static uint32_t fmtx=1;
 static void LockHeap() {
+		sigset_t user2;
+		sigemptyset(&user2);
+		sigaddset(&user2,SIGUSR2);
+		pthread_sigmask(SIG_BLOCK,&user2,NULL);
 		uint32_t one=1;
 		for(;;) {
+			one=1;
 			if(atomic_compare_exchange_strong(&fmtx,&one,0)) 
 				break;
-			syscall(SYS_futex,&fmtx,FUTEX_WAIT,0,NULL,NULL,0);
+			if(-1==syscall(SYS_futex,&fmtx,FUTEX_WAIT,one,NULL,NULL,0)) {
+					if(errno==EAGAIN)
+						continue;
+					printf("%d,%s\n",errno,strerror(errno));
+					assert(0);
+			}
 		}
 }
 static void UnlockHeap() {
+		sigset_t user2;
+		sigemptyset(&user2);
+		sigaddset(&user2,SIGUSR2);
+		pthread_sigmask(SIG_UNBLOCK,&user2,NULL);
 		uint32_t zero=0;
 		if(atomic_compare_exchange_strong(&fmtx,&zero,1))  {
-			syscall(SYS_futex,&fmtx,FUTEX_WAKE,1,NULL,NULL,0);
+			while(-1==syscall(SYS_futex,&fmtx,FUTEX_WAKE,1,NULL,NULL,0)) {
+				if(errno==EAGAIN)
+					continue;
+				printf("%d,%s\n",errno,strerror(errno));
+				assert(0);
+			}
 		}
 }
 #elif defined __FreeBSD__
@@ -29,14 +57,23 @@ static void UnlockHeap() {
 #include <sys/umtx.h>
 static long fmtx=1;
 static void LockHeap() {
+	sigset_t user2;
+	sigemptyset(&user2);
+	sigaddset(&user2,SIGUSR2);
+	pthread_sigmask(SIG_BLOCK,&user2,NULL);
     long one=1;
     for(;;) {
+		one=1;
         if(atomic_compare_exchange_strong(&fmtx,&one,0)) 
             break;
         assert(-1!=_umtx_op(&fmtx,UMTX_OP_WAIT_UINT_PRIVATE,0,NULL,NULL));
     }
 }
 static void UnlockHeap() {
+	sigset_t user2;
+	sigemptyset(&user2);
+	sigaddset(&user2,SIGUSR2);
+	pthread_sigmask(SIG_UNBLOCK,&user2,NULL);
     long zero=0;
     if(atomic_compare_exchange_strong(&fmtx,&zero,1))  {
         assert(-1!=_umtx_op(&fmtx,UMTX_OP_WAKE_PRIVATE,1,NULL,NULL));
@@ -104,13 +141,6 @@ void FreeVirtualChunk(void *ptr,size_t s) {
 	munmap(ptr,s);
 	#endif
 }
-#include <stdio.h>
-#include <assert.h>
-#include <stdint.h>
-#include <string.h>
-#include <setjmp.h>
-#include <stdlib.h>
-#include <stddef.h>
 //https://www.techiedelight.com/round-next-highest-power-2/
 static int64_t SizeUp(int64_t n) {
     int64_t k=1;
@@ -131,6 +161,7 @@ typedef struct CMemUnused {
     struct CMemUnused *next;
     CMemBlk *parent;
     int32_t sz;
+    int16_t ok; //Is 'OK' if it is occupied
     int8_t occupied;
     void *task;
     void *caller[5];
@@ -205,6 +236,7 @@ static void *__PoopMAlloc(int64_t sz,int64_t low32,void *task) {
         unused->sz=sz;
         unused->task=task;
         unused->occupied=1;
+        unused->ok=0x4B4F;
         return memset(unused+1,0,sz);
     }
     loop:
@@ -222,6 +254,7 @@ static void *__PoopMAlloc(int64_t sz,int64_t low32,void *task) {
         UnlockHeap();
         unused->sz=sz;
         unused->occupied=1;
+        unused->ok=0x4B4F;
         unused->task=task;
         assert(unused!=unused->next);
         return memset(unused+1,0,SizeUp(sz));
@@ -257,6 +290,9 @@ void PoopFree(void *ptr) {
     CMemBlk *next,*last;
     un--;
     if(!un->occupied) return;
+    if(un->ok!=0x4B4F)
+		return;
+    un->ok=0;
     un->occupied=0;
     int64_t l=Log2I(un->parent->item_sz);
     if(un->parent->is_self_contained) {
@@ -290,7 +326,8 @@ void *PoopMAlloc32(int64_t sz) {
 void *PoopReAlloc(void *ptr,int64_t sz) {
     void *ret=PoopMAlloc(sz);
     int64_t copy=(sz>MSize(ptr))?MSize(ptr):sz;
-    memcpy(ret,ptr,copy);
+    if(ptr&&ret)
+		memcpy(ret,ptr,copy);
     PoopFree(ptr);
     return ret;
 } 

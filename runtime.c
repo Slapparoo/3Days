@@ -10,23 +10,9 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/types.h>
+#include <time.h>
 extern int64_t HCSetJmp(void *ptr);
 extern void HCLongJmp(void *ptr);
-#ifndef MACOS
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_video.h>
-#include <SDL2/SDL_render.h>
-#include <SDL2/SDL_rect.h>
-#include <SDL2/SDL_clipboard.h>
-#include <SDL2/SDL_events.h>
-#else
-#include <SDL.h>
-#include <SDL_video.h>
-#include <SDL_render.h>
-#include <SDL_rect.h>
-#include <SDL_clipboard.h>
-#include <SDL_events.h>
-#endif
 #include <stddef.h>
 #include <stdalign.h>
 #ifdef TARGET_WIN32
@@ -34,6 +20,7 @@ extern void HCLongJmp(void *ptr);
 #include <fileapi.h>
 #include <shlwapi.h>
 #include <memoryapi.h>
+#include "ext/wineditline-2.206/include/editline/readline.h"
 #else
 #include <sys/mman.h>
 #endif
@@ -114,9 +101,6 @@ static char **__Dir(char *fn) {
     ret=memcpy(PoopMAlloc(sz),items.data,sz);
     vec_deinit(&items);
     return ret;
-}
-static char *hc_SDL_GetWindowTitle(SDL_Window *win) {
-    return POOP_STRDUP(SDL_GetWindowTitle(win));
 }
 static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
   map_iter_t iter;
@@ -268,9 +252,6 @@ int64_t STK_PoopFree(int64_t *stk) {
 int64_t STK___Move(int64_t *stk) {
 	return __Move(stk[0],stk[1]);
 }
-int64_t STK_Kill(int64_t *stk) {
-    __KillThread(stk[0]);
-}
 int64_t STK_Cd(int64_t *stk) {
     return VFsCd(stk[0],0);
 }
@@ -312,69 +293,60 @@ int64_t STK_DrawWindowDel(int64_t *stk) {
     DrawWindowDel(stk[0]);
 }
 int64_t STK___GetTicks() {
-    return SDL_GetTicks();
-}
-int64_t STK___Spawn(int64_t *stk) {
-    __Spawn(stk[0],stk[1],stk[2],stk[3]);
-}
-int64_t STK___AwakeThread(int64_t *stk) {
-    __AwakeThread(stk[0]);
-}
-int64_t STK___FreeThread(int64_t *stk) {
-    __FreeThread(stk[0]);
+	//https://stackoverflow.com/questions/2958291/equivalent-to-gettickcount-on-linux
+    struct timespec ts;
+    int64_t theTick = 0U;
+    clock_gettime( CLOCK_REALTIME, &ts );
+    theTick  = ts.tv_nsec / 1000000;
+    theTick += ts.tv_sec * 1000;
+    return theTick;
 }
 int64_t STK_SetKBCallback(int64_t *stk) {
     SetKBCallback(stk[0],stk[1]);
-}
-int64_t STK___Suspend(int64_t *stk) {
-    __Suspend(stk[0]);
-}
-int64_t STK___AwaitThread(int64_t *stk) {
-    __AwaitThread(stk[0]);
-}
-int64_t STK___KillThread(int64_t *stk) {
-    __KillThread(stk[0]);
 }
 int64_t STK_SetMSCallback(int64_t *stk) {
     SetMSCallback(stk[0]);    
 }
 int64_t STK_Sleep(int64_t *stk) {
-    __Sleep(stk[0]);
+	usleep(1000*stk[0]);
 }
 int64_t STK_GetFs(int64_t *stk) {
     return GetFs();
 }
-int64_t STK_Yield(int64_t *stk) {
-    __Yield();
+int64_t STK_SetFs(int64_t *stk) {
+    SetFs(stk[0]);
+}
+int64_t STK_FreeTaskMem(int64_t *stk) {
+	PoopAllocFreeTaskMem(stk[0]);
 }
 int64_t STK_SndFreq(int64_t *stk) {
     SndFreq(stk[0]);
 }
 int64_t STK_SetClipboardText(int64_t *stk) {
-    SDL_SetClipboardText(stk[0]);
+    //SDL_SetClipboardText(stk[0]);
+    SetClipboard(stk[0]);
 }
 int64_t STK___GetStr(int64_t *stk) {
+	#ifndef TARGET_WIN32
 	char *s=linenoise(stk[0]);
 	if(!s) return s;
 	linenoiseHistoryAdd(s);
 	char *r=strdup(s);
 	free(s);
 	return r;
+	#else
+	char *s=readline(stk[0]),*r;
+	if(!s) return s;
+	r=strdup(s);
+	add_history(r);
+	rl_free(s);
+	#endif
+	return r;
 }
 int64_t STK_GetClipboardText(int64_t *stk) {
-    char *find,*ret;
-    if(!SDL_HasClipboardText())
-        return NULL;
-    find=SDL_GetClipboardText();
-    ret=POOP_STRDUP(find);
-    SDL_free(find);
-    return ret;
-}
-int64_t STK___SetThreadPtr(int64_t *stk) {
-    __SetThreadPtr(stk[0],stk[1]);
+    return ClipboardText();
 }
 int64_t STK___SleepUntilValue(int64_t *stk) {
-    __SleepUntilValue(stk[0],stk[1],stk[2]);
 }
 int64_t STK_FSize(int64_t *stk) {
 	return VFsFSize(stk[0]);
@@ -406,18 +378,25 @@ int64_t STK_InBounds(int64_t *stk) {
 	if(!near_alloc) return 0x7FFFFFFFFFFFFFFFll;
 	return near_alloc;
 }
-int64_t STK___MPSpawn(int64_t *stk) {
-	return __MPSpawn(stk[0],stk[1],stk[2],stk[3],stk[4]);
-}
 int64_t mp_cnt(int64_t *stk) {
+	#ifndef TARGET_WIN32
 	return sysconf(_SC_NPROCESSORS_ONLN);
+	#else
+	SYSTEM_INFO info;
+	GetSystemInfo(&info);
+	return info.dwNumberOfProcessors;
+	#endif
 } 
+void SpawnCore(int64_t *stk) {
+	CreateCore(stk[0],stk[1]);
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+	STK_RegisterFunctionPtr(&ffi_blob,"FreeTaskMem",STK_FreeTaskMem,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CmdLineBootText",CmdLineBootText,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"Exit3Days",__Shutdown,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"ChDrv",STK_ChDrv,1);
@@ -425,9 +404,8 @@ void TOS_RegisterFuncPtrs() {
 	STK_RegisterFunctionPtr(&ffi_blob,"__IsCmdLine",IsCmdLine,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"__FExists",STK___FExists,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"mp_cnt",mp_cnt,0);
-	STK_RegisterFunctionPtr(&ffi_blob,"Gs",GetGs,0);
-	STK_RegisterFunctionPtr(&ffi_blob,"__MPSpawn",STK___MPSpawn,5);
-	STK_RegisterFunctionPtr(&ffi_blob,"__SpawnCore",SpawnCore,0);
+	STK_RegisterFunctionPtr(&ffi_blob,"GetGs",GetGs,0);
+	STK_RegisterFunctionPtr(&ffi_blob,"__SpawnCore",SpawnCore,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CoreNum",CoreNum,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"__InBounds",STK_InBounds,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"SetPtrCallers",STK_SetPtrCallers,2+5);
@@ -437,7 +415,6 @@ void TOS_RegisterFuncPtrs() {
 	STK_RegisterFunctionPtr(&ffi_blob,"FUnixTime",STK_FUnixTime,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"FSize",STK_FSize,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__SleepUntilValue",STK___SleepUntilValue,3);
-    STK_RegisterFunctionPtr(&ffi_blob,"__SetThreadPtr",STK___SetThreadPtr,2);
     STK_RegisterFunctionPtr(&ffi_blob,"SetClipboardText",STK_SetClipboardText,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetClipboardText",STK_GetClipboardText,0);
     STK_RegisterFunctionPtr(&ffi_blob,"FOpen",STK_FOpen,3);
@@ -445,19 +422,12 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"FBlkRead",STK_FBlkRead,4);
     STK_RegisterFunctionPtr(&ffi_blob,"FBlkWrite",STK_FBlkWrite,4);
     STK_RegisterFunctionPtr(&ffi_blob,"SndFreq",STK_SndFreq,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"Sleep",&STK_Sleep,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"Fs",STK_GetFs,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"__Sleep",&STK_Sleep,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"GetFs",STK_GetFs,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"SetFs",STK_SetFs,1);
     STK_RegisterFunctionPtr(&ffi_blob,"SetKBCallback",STK_SetKBCallback,2);
     STK_RegisterFunctionPtr(&ffi_blob,"SetMSCallback",STK_SetMSCallback,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__GetTicks",STK___GetTicks,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"__Exit",__Exit,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"__KillThread",STK___KillThread,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__AwaitThread",STK___AwaitThread,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__AwakeThread",STK___AwakeThread,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__FreeThread",STK___FreeThread,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__Spawn",STK___Spawn,4);
-    STK_RegisterFunctionPtr(&ffi_blob,"__Suspend",STK___Suspend,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"Yield",STK_Yield,0);
     STK_RegisterFunctionPtr(&ffi_blob,"__BootstrapForeachSymbol",STK_ForeachFunc,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__FileRead",STK_FileRead,3);
     STK_RegisterFunctionPtr(&ffi_blob,"__FileWrite",STK_FileWrite,3);

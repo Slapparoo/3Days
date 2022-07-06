@@ -1,30 +1,35 @@
 #include "3d.h"
 #include <math.h>
-static SDL_AudioSpec audio_spec;
-static int64_t freq=0;
-static int64_t sample;
-static void AudioCB(void *ud,float *data,int len) {
-    len/=sizeof(float);
-    int olen=len;
-    for(;len>0;) {
-        double t=(double)++sample/(double)audio_spec.freq;
-        if(!freq)
-            data[--len]=0;
-        else
-            data[--len]=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
-    }
-    sample%=audio_spec.samples;
-} 
+#include <portaudio.h>
+#define SAMPLE_RATE (24000)
+static PaStream *pa_stream;
+static int64_t freq=0,sample=0;
+static int paCallback(const void *inp,void *_out,unsigned long fpb,const PaStreamCallbackTimeInfo* timeInfo,
+                           PaStreamCallbackFlags statusFlags,
+                           void *userData ) {
+	char *out = (char*)_out;
+    unsigned int i;
+    for( i=0; i<fpb; i++ ) {
+		double t=(double)++sample/SAMPLE_RATE;
+		double amp=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
+		char maxed=(amp>0)?127:-127;
+		if(!freq) maxed=0;
+		out[2*i]=maxed;
+		out[2*i+1]=maxed;
+	}
+	return 0;
+}
 void InitSound() {
-    SDL_AudioSpec want;
-    SDL_memset(&want, 0, sizeof(want));
-    want.freq=48000;
-    want.format=AUDIO_F32;
-    want.channels=1;
-    want.samples=8192;
-    want.callback=AudioCB;
-    SDL_PauseAudioDevice(SDL_OpenAudioDevice(NULL,0,&want, &audio_spec,SDL_AUDIO_ALLOW_ANY_CHANGE),0);
+	int err=Pa_Initialize();
+	err=Pa_OpenDefaultStream(&pa_stream,0,2,paInt8,SAMPLE_RATE,256,&paCallback,&freq);
+	Pa_StartStream(pa_stream);
 }
 void SndFreq(int64_t f) {
-    freq=f;
+	freq=f;
+	/*
+	if(freq)
+		Pa_StartStream(pa_stream);
+	else
+		Pa_StopStream(pa_stream);
+	*/
 }

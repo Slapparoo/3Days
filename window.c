@@ -1,62 +1,109 @@
 #include "3d.h"
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/Xresource.h>
+#include <X11/keysymdef.h>
 typedef struct CDrawWindow {
-    SDL_Window *window;
-    SDL_Surface *surf;
+    Window window;
+    Display *disp;
+    GC gc;
+    Atom clip3days;
     int64_t sz_x,sz_y;
-    int64_t scroll_x,scroll_y;
 } CDrawWindow;
 static int32_t gr_palette_std[]={
 0x000000,0x0000AA,0x000AA00,0x00AAAA,
 0xAA0000,0xAA00AA,0xAA5500,0xAAAAAA,
 0x555555,0x5555FF,0x55FF55,0x55ffff,
 0xFF5555,0xFF55FF,0xFFFF55,0xFFFFFF};
+static XColor palette[16];
 static void StartInputScanner();
-
+static CDrawWindow *dw=NULL;
+static char *clip_text=NULL;
+static void
+utf8_prop(Display *dpy, XEvent ev);
 CDrawWindow *NewDrawWindow() {
-	if(!SDL_WasInit(SDL_INIT_EVERYTHING))
-		return NULL;
-	//1 Screen on main thread
-	static CDrawWindow *win;
-	if(!win) { 
-		CDrawWindow *ret=TD_MALLOC(sizeof(CDrawWindow));
-		ret->window=SDL_CreateWindow("HolyC Drawer",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,640,480,SDL_WINDOW_RESIZABLE);
-		ret->surf=SDL_CreateRGBSurfaceWithFormat(0,640,480,32,SDL_PIXELFORMAT_BGRA32);
-		SDL_SetWindowMaximumSize(ret->window,640,480);
-		//Let 3Days draw the mouse from HolyC
-		SDL_ShowCursor(SDL_DISABLE);
-		win=ret;
+	if(!dw) {
+		XInitThreads();
+		dw=PoopMAlloc(sizeof(*dw));
+		dw->disp=XOpenDisplay(NULL);
+		long screen=DefaultScreen(dw->disp);
+		Colormap cmap;
+		XColor c;
+		int64_t i,black,white;
+		for(i=0;i!=16;i++) {
+			c.pixel=i;
+			c.blue=(gr_palette_std[i]&0xff);
+			c.green=((gr_palette_std[i]>>8)&0xff);
+			c.red=((gr_palette_std[i]>>16)&0xff);
+			c.flags=DoRed|DoGreen|DoBlue;
+			palette[i]=c;
+		}
+		black=BlackPixel(dw->disp,screen);
+		dw->window=XCreateSimpleWindow(
+			dw->disp,
+			RootWindow(dw->disp,screen),
+			0,0,640,480,0,1,black
+		);
+		XSelectInput(dw->disp,dw->window,
+			KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask|StructureNotifyMask);
+		dw->gc=XCreateGC(dw->disp,dw->window,0,0);
+		dw->sz_x=640,dw->sz_y=480;
+		white=WhitePixel(dw->disp,screen);
+		XSetBackground(dw->disp,dw->gc,white);
+		XSetForeground(dw->disp,dw->gc,black);
+		XMapWindow(dw->disp,dw->window);
+		XEvent e;
+		while(XNextEvent(dw->disp,&e))
+			if(e.type==Expose)
+				break;
 	}
-    return win;
+	return dw;
 }
-void DrawWindowUpdate(CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h) {
-	if(!SDL_WasInit(SDL_INIT_EVERYTHING))
-		return NULL;
-    SDL_Surface *s=win->surf;
-    int64_t x,y,c,i,i2;
-    SDL_LockSurface(s);
-    for(y=0;y!=h;y++) {
-        for(x=0;x!=internal_width;x++) {
-            i=x+y*internal_width;
-            if(16<=colors[i]) {
-                //Transparent?
-                c=0;
-            } else 
-                c=colors[i];
-            i2=x+y*s->pitch/4;
-            ((char*)s->pixels)[i2*4]=gr_palette_std[c]&0xff;
-            ((char*)s->pixels)[i2*4+1]=(gr_palette_std[c]>>8)&0xff;
-            ((char*)s->pixels)[i2*4+2]=(gr_palette_std[c]>>16)&0xff;
-            ((char*)s->pixels)[i2*4+3]=0xff;
-        }
-    }
-    SDL_UnlockSurface(s);
-    SDL_BlitSurface(s,NULL,SDL_GetWindowSurface(win->window),NULL);
-    SDL_UpdateWindowSurface(win->window);
+static void CenterImage(CDrawWindow *win,int64_t *x_off,int64_t *y_off) {
+	if(win->sz_x>640) {
+		*x_off=(win->sz_x-640)/2;
+	} else 
+		*x_off=0;
+	if(win->sz_y>480) {
+		*y_off=(win->sz_y-480)/2;
+	} else 
+		*y_off=0;
+}
+char buf[640*480*4];
+void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,int64_t h) {
+	uint8_t *colors=_colors;
+	int64_t x,y,cx,cy,mul=4,b,black,white,wx,wy,b2;
+	XLockDisplay(dw->disp);
+	long screen=DefaultScreen(dw->disp);
+	Visual *vis=XDefaultVisual(dw->disp,screen);
+	int dplanes=DisplayPlanes(dw->disp,screen);
+	wx=win->sz_x>480?win->sz_x:480;
+	wy=win->sz_y>640?win->sz_y:640;
+	char *scrn=calloc(1,4*wx*wy);
+	XImage *img=XCreateImage(dw->disp,vis,dplanes,ZPixmap,0,scrn,wx,wy,8,0);
+	CenterImage(dw,&cx,&cy);
+	for(y=cy;y!=cy+h;y++)
+		for(x=cx;x!=cx+internal_width;x++) {
+			if(colors[b=(x-cx)+(y-cy)*internal_width]>=16) {
+				colors[b]=0;
+			}
+			b2=x+y*wx;
+			img->data[b2*mul]=palette[colors[b]].blue;
+			img->data[b2*mul+1]=palette[colors[b]].green;
+			img->data[b2*mul+2]=palette[colors[b]].red;
+			img->data[b2*mul+3]=0;
+		}
+	XPutImage(dw->disp,dw->window,dw->gc,img,0,0,0,0,wx,wy);
+	XFlush(dw->disp);
+	XFree(img);
+	free(scrn);
+	XUnlockDisplay(dw->disp);
 }
 void DrawWindowDel(CDrawWindow *win) {
-    SDL_FreeSurface(win->surf);
-    SDL_DestroyWindow(win->window);
-    TD_FREE(win);
+	XLockDisplay(dw->disp);
+	XFreeGC(dw->disp,win->gc);
+	XDestroyWindow(dw->disp,win->window);
+	XCloseDisplay(dw->disp);
 }
 #define CH_CTRLA	0x01
 #define CH_CTRLB	0x02
@@ -180,227 +227,230 @@ static int64_t K2SC(char ch) {
         if(keys[i]==ch) return i;
     }
 }
-static int32_t __ScanKey(int64_t *ch,int64_t *sc,SDL_Event *_e) {
-    SDL_Event e=*_e;
-    int64_t mod=0,cond,dummy;
+static int64_t persist_mod=0;
+static int32_t __ScanKey(int64_t *ch,int64_t *sc,XEvent *_e) {
+    XEvent e=*_e;
+    #define PERSIST_KEY(flag) \ 
+    if(e.type==KeyRelease) { \
+		persist_mod&=~(flag); \
+		mod&=~(flag); \
+    } else \
+		mod|=(persist_mod|=(flag));
+    int64_t mod=persist_mod,cond,dummy;
+    static int64_t prev_key_press=-1;
     if(!ch) ch=&dummy;
     if(!sc) sc=&dummy;    
     cond=1;
     if(cond) {
-        if(e.type==SDL_KEYDOWN) {
+		if(e.type==KeyPress) {
+			if(prev_key_press==XLookupKeysym(&e,0))
+				return -1;
+			prev_key_press=XLookupKeysym(&e,0);
             ent:
             *ch=*sc=0;
-            if(e.key.keysym.mod&(KMOD_LSHIFT|KMOD_RSHIFT))
+            if(e.xkey.state&ShiftMask)
                 mod|=SCF_SHIFT;
             else
                 mod|=SCF_NO_SHIFT;
-            if(e.key.keysym.mod&(KMOD_LCTRL|KMOD_RCTRL))
+            if(e.xkey.state&(ControlMask))
                 mod|=SCF_CTRL;
-            if(e.key.keysym.mod&(KMOD_LALT|KMOD_RALT))
-                mod|=SCF_ALT;
-            if(e.key.keysym.mod&(KMOD_CAPS))
+            /*if(e.key.keysym.mod&(KMOD_CAPS))
                 mod|=SCF_CAPS;
             if(e.key.keysym.mod&(KMOD_NUM))
-                mod|=SCF_NUM;
-            if(e.key.keysym.mod&KMOD_LGUI)
+                mod|=SCF_NUM;*/
+            /*if(e.key.keysym.mod&KMOD_LGUI)
                 mod|=SCF_MS_L_DOWN;
             if(e.key.keysym.mod&KMOD_RGUI)
-                mod|=SCF_MS_R_DOWN;
-            *sc=e.key.keysym.scancode;
-            switch(e.key.keysym.scancode) {
-            case SDL_SCANCODE_SPACE:
+                mod|=SCF_MS_R_DOWN;*/
+            *sc=XLookupKeysym(&e,0);
+            switch(*sc) {
+            case XK_space:
             return *sc=K2SC(' ')|mod;
-            case SDL_SCANCODE_APOSTROPHE:
+            case XK_apostrophe:
             return *sc=K2SC('\'')|mod;
-            case SDL_SCANCODE_COMMA:
+            case XK_comma:
             return *sc=K2SC(',')|mod;
-            case SDL_SCANCODE_MINUS:
+            case XK_minus:
             return *sc=K2SC('-')|mod;
-            case SDL_SCANCODE_PERIOD:
+            case XK_period:
             return *sc=K2SC('.')|mod;
-            case SDL_SCANCODE_GRAVE:
+            case XK_grave:
             return *sc=K2SC('`')|mod;
-            case SDL_SCANCODE_SLASH:
+            case XK_slash:
             return *sc=K2SC('/')|mod;
-            case SDL_SCANCODE_0:
+            case XK_0:
             return *sc=K2SC('0')|mod; 
-            case SDL_SCANCODE_1:
+            case XK_1:
             return *sc=K2SC('1')|mod; 
-            case SDL_SCANCODE_2:
+            case XK_2:
             return *sc=K2SC('2')|mod; 
-            case SDL_SCANCODE_3:
+            case XK_3:
             return *sc=K2SC('3')|mod; 
-            case SDL_SCANCODE_4:
+            case XK_4:
             return *sc=K2SC('4')|mod; 
-            case SDL_SCANCODE_5:
+            case XK_5:
             return *sc=K2SC('5')|mod; 
-            case SDL_SCANCODE_6:
+            case XK_6:
             return *sc=K2SC('6')|mod; 
-            case SDL_SCANCODE_7:
+            case XK_7:
             return *sc=K2SC('7')|mod; 
-            case SDL_SCANCODE_8:
+            case XK_8:
             return *sc=K2SC('8')|mod; 
-            case SDL_SCANCODE_9:
+            case XK_9:
             return *sc=K2SC('9')|mod; 
-            case SDL_SCANCODE_SEMICOLON:
+            case XK_semicolon:
             return *sc=K2SC(';')|mod; 
-            case SDL_SCANCODE_EQUALS:
+            case XK_equal:
             return *sc=K2SC('=')|mod; 
-            case SDL_SCANCODE_LEFTBRACKET:
+            case XK_bracketleft:
             return *sc=K2SC('[')|mod; 
-            case SDL_SCANCODE_RIGHTBRACKET:
+            case XK_bracketright:
             return *sc=K2SC(']')|mod; 
-            case SDL_SCANCODE_BACKSLASH:
+            case XK_backslash:
             return *sc=K2SC('\\')|mod; 
-            case SDL_SCANCODE_Q:
+            case XK_q:
             return *sc=K2SC('q')|mod; 
-            case SDL_SCANCODE_W:
+            case XK_w:
             return *sc=K2SC('w')|mod;
-            case SDL_SCANCODE_E:
+            case XK_e:
             return *sc=K2SC('e')|mod; 
-            case SDL_SCANCODE_R:
+            case XK_r:
             return *sc=K2SC('r')|mod;
-            case SDL_SCANCODE_T:
+            case XK_t:
             return *sc=K2SC('t')|mod;
-            case SDL_SCANCODE_Y:
+            case XK_y:
             return *sc=K2SC('y')|mod;
-            case SDL_SCANCODE_U:
+            case XK_u:
             return *sc=K2SC('u')|mod;
-            case SDL_SCANCODE_I:
+            case XK_i:
             return *sc=K2SC('i')|mod;
-            case SDL_SCANCODE_O:
+            case XK_o:
             return *sc=K2SC('o')|mod;
-            case SDL_SCANCODE_P:
+            case XK_p:
             return *sc=K2SC('p')|mod;
-            case SDL_SCANCODE_A:
+            case XK_a:
             return *sc=K2SC('a')|mod;
-            case SDL_SCANCODE_S:
+            case XK_s:
             return *sc=K2SC('s')|mod;
-            case SDL_SCANCODE_D:
+            case XK_d:
             return *sc=K2SC('d')|mod;
-            case SDL_SCANCODE_F:
+            case XK_f:
             return *sc=K2SC('f')|mod;
-            case SDL_SCANCODE_G:
+            case XK_g:
             return *sc=K2SC('g')|mod;
-            case SDL_SCANCODE_H:
+            case XK_h:
             return *sc=K2SC('h')|mod;
-            case SDL_SCANCODE_J:
+            case XK_j:
             return *sc=K2SC('j')|mod;
-            case SDL_SCANCODE_K:
+            case XK_k:
             return *sc=K2SC('k')|mod;
-            case SDL_SCANCODE_L:
+            case XK_l:
             return *sc=K2SC('l')|mod;
-            case SDL_SCANCODE_Z:
+            case XK_z:
             return *sc=K2SC('z')|mod;
-            case SDL_SCANCODE_X:
+            case XK_x:
             return *sc=K2SC('x')|mod;
-            case SDL_SCANCODE_C:
+            case XK_c:
             return *sc=K2SC('c')|mod;
-            case SDL_SCANCODE_V:
+            case XK_v:
             return *sc=K2SC('v')|mod;
-            case SDL_SCANCODE_B:
+            case XK_b:
             return *sc=K2SC('b')|mod;
-            case SDL_SCANCODE_N:
+            case XK_n:
             return *sc=K2SC('n')|mod;
-            case SDL_SCANCODE_M:
+            case XK_m:
             return *sc=K2SC('m')|mod;
-            case SDL_SCANCODE_ESCAPE:
+            case XK_Escape:
             *sc=mod|SC_ESC;
             return 1;
-            case SDL_SCANCODE_BACKSPACE:
+            case XK_BackSpace:
             *sc=mod|SC_BACKSPACE;
             return 1;
-            case SDL_SCANCODE_TAB:
+            case XK_Tab:
             *sc=mod|SC_TAB;
             return 1;
-            case SDL_SCANCODE_RETURN:
+            case XK_Return:
             *sc=mod|SC_ENTER;
             return 1;
-            case SDL_SCANCODE_LSHIFT:
-            case SDL_SCANCODE_RSHIFT:
+            case XK_Shift_L:
+            case XK_Shift_R:
+            PERSIST_KEY(SCF_SHIFT);
             *sc=mod|SC_SHIFT;
             return 1;
-            case SDL_SCANCODE_LALT:
+            case XK_Alt_L:
+            case XK_Alt_R:
+            PERSIST_KEY(SCF_ALT);
             *sc=mod|SC_ALT;
             return 1;
-            case SDL_SCANCODE_RALT:
-            *sc=mod|SC_ALT;
-            return 1;
-            case SDL_SCANCODE_LCTRL:
+            case XK_Control_L:
+            case XK_Control_R:
+            PERSIST_KEY(SCF_CTRL);
             *sc=mod|SC_CTRL;
             return 1;
-            case SDL_SCANCODE_RCTRL:
-            *sc=mod|SC_CTRL;
-            return 1;
-            case SDL_SCANCODE_CAPSLOCK:
+            case XK_Caps_Lock:
+            PERSIST_KEY(SCF_CAPS);
             *sc=mod|SC_CAPS;
             return 1;
+            /*
             case SDL_SCANCODE_NUMLOCKCLEAR:
             *sc=mod|SC_NUM;
             return 1;
-            case SDL_SCANCODE_SCROLLLOCK:
+            */
+            case XK_Scroll_Lock:
             *sc=mod|SC_SCROLL;
             return 1;
-            case SDL_SCANCODE_DOWN:
+            case XK_Down:
             *sc=mod|SC_CURSOR_DOWN;
             return 1;
-            case SDL_SCANCODE_UP:
+            case XK_Up:
             *sc=mod|SC_CURSOR_UP;
             return 1;
-            case SDL_SCANCODE_RIGHT:
+            case XK_Right:
             *sc=mod|SC_CURSOR_RIGHT;
             return 1;
-            case SDL_SCANCODE_LEFT:
+            case XK_Left:
             *sc=mod|SC_CURSOR_LEFT;
             return 1;
-            case SDL_SCANCODE_PAGEDOWN:
+            case XK_Page_Down:
             *sc=mod|SC_PAGE_DOWN;
             return 1;
-            case SDL_SCANCODE_PAGEUP:
+            case XK_Page_Up:
             *sc=mod|SC_PAGE_UP;
             return 1;
-            case SDL_SCANCODE_HOME:
+            case XK_Home:
             *sc=mod|SC_HOME;
             return 1;
-            case SDL_SCANCODE_END:
+            case XK_End:
             *sc=mod|SC_END;
             return 1;
-            case SDL_SCANCODE_INSERT:
+            case XK_Insert:
             *sc=mod|SC_INS;
             return 1;
-            case SDL_SCANCODE_DELETE:
+            case XK_Delete:
             *sc=mod|SC_DELETE;
             return 1;
-            case SC_GUI:
-            *sc=mod|SDL_SCANCODE_APPLICATION;
+            case XK_Super_L:
+            case XK_Super_R:
+            *sc=mod|SC_GUI;
             return 1;
-            case SDL_SCANCODE_PRINTSCREEN:
-            *sc=mod|SC_PRTSCRN1;
-            return 1;
-            case SDL_SCANCODE_PAUSE:
+            case XK_Pause:
             *sc=mod|SC_PAUSE;
             return 1;
-            case SDL_SCANCODE_F1...SDL_SCANCODE_F12:
-            *sc=mod|(SC_F1+e.key.keysym.scancode-SDL_SCANCODE_F1);
+            case XK_F1...XK_F12:
+            *sc=mod|(SC_F1+*sc-XK_F1);
             return 1;
             }
-        } else if(e.type==SDL_KEYUP) {
+        } else if(e.type==KeyRelease) {
+			prev_key_press=0;
             mod|=SCF_KEY_UP;
             goto ent;
         }
     }
     return -1;
 }
-static int32_t TimerCb(int32_t interval,void *data) {
-    FFI_CALL_TOS_1(data,interval);
-    return interval;
-}
-void __AddTimer(int64_t interval,void (*tos_fptr)()) {
-    SDL_AddTimer(interval,&TimerCb,tos_fptr);
-}
 static void (*kb_cb)();
 static void *kb_cb_data;
-static int SDLCALL KBCallback(void *d,SDL_Event *e) {
+static int KBCallback(void *d,XEvent *e) {
     int64_t c,s;
     if(kb_cb&&(-1!=__ScanKey(&c,&s,e)))
         FFI_CALL_TOS_2(kb_cb,c,s);
@@ -409,61 +459,167 @@ static int SDLCALL KBCallback(void *d,SDL_Event *e) {
 void SetKBCallback(void *fptr,void *data) {
     kb_cb=fptr;
     kb_cb_data=data;
-    static init;
-    if(!init) { 
-        init=1;
-        SDL_AddEventWatch(KBCallback,data);
-    }
 }
 //x,y,z,(l<<1)|r
 static void(*ms_cb)();
-static int SDLCALL MSCallback(void *d,SDL_Event *e) {
-    int64_t x,y;
+static int MSCallback(void *d,XEvent *e) {
+    static int64_t x,y,cx,cy;
     static int state;
     static int z;
     if(ms_cb)
         switch(e->type) {
-            case SDL_MOUSEBUTTONDOWN:
-            x=e->button.x,y=e->button.y;
-            if(e->button.button==SDL_BUTTON_LEFT)
+            case ButtonPress:
+            x=e->xbutton.x,y=e->xbutton.y;
+            if(e->xbutton.button==1)
                 state|=2;
-            else
+            else if(e->xbutton.button==4)
+				z--;
+			else if(e->xbutton.button==5)
+				z++;
+			else if(e->xbutton.button==3)
                 state|=1;
             goto ent;
-            case SDL_MOUSEBUTTONUP:
-            x=e->button.x,y=e->button.y;
-            if(e->button.button==SDL_BUTTON_LEFT)
+            case ButtonRelease:
+            x=e->xbutton.x,y=e->xbutton.y;
+            if(e->xbutton.button==1)
                 state&=~2;
-            else
+            else if(e->xbutton.button==3)
                 state&=~1;
             goto ent;
-            case SDL_MOUSEWHEEL:
-            z+=e->wheel.y;
-            goto ent;
-            case SDL_MOUSEMOTION:
-            x=e->motion.x,y=e->motion.y;
+            case MotionNotify:
+            x=e->xmotion.x,y=e->xmotion.y;
             ent:
-            FFI_CALL_TOS_4(ms_cb,x,y,z,state);
+            CenterImage(dw,&cx,&cy);
+            cx=x-cx;
+            cy=y-cy;
+            if(cx<0) cx=0;
+            if(cy<0) cy=0;
+            if(cx>640) cx=640;
+            if(cy>480) cy=480;
+            FFI_CALL_TOS_4(ms_cb,cx,cy,z,state);
         }
     return 0;
 }
 
 void SetMSCallback(void *fptr) {
     ms_cb=fptr;
-    static init;
-    if(!init){
-        init=1;
-        SDL_AddEventWatch(MSCallback,NULL);
-    }
+}
+static void utf8_send(char *text,XEvent ev) {
+	Display *dpy=dw->disp;
+    XLockDisplay(dpy);
+	Atom utf8 = XInternAtom(dpy, "UTF8_STRING", False);
+    XSelectionRequestEvent *sev;
+	loop:;
+	sev=&ev.xselectionrequest;
+	XSelectionEvent ssev;
+	if(!text)
+		text="";
+    XChangeProperty(dpy, sev->requestor, sev->property, utf8, 8, PropModeReplace,
+                    (unsigned char *)text, strlen(text));
+    ssev.type = SelectionNotify;
+    ssev.requestor = sev->requestor;
+    ssev.selection = sev->selection;
+    ssev.target = sev->target;
+    ssev.property = sev->property;
+    ssev.time = sev->time;
+    XSendEvent(dpy, sev->requestor, True, NoEventMask, (XEvent *)&ssev);
+    end:
+    XUnlockDisplay(dpy);
+}
+void SetClipboard(char *text) {
+	PoopFree(clip_text);
+	XLockDisplay(dw->disp);
+	Atom sel = XInternAtom(dw->disp, "CLIPBOARD", False);
+    XSetSelectionOwner(dw->disp, sel, dw->window, CurrentTime);
+	XUnlockDisplay(dw->disp);
+	clip_text=strdup(text);
+}
+static void __InputLoop(void *ul,int64_t clip_only) {
+    XEvent e;
+    XSelectionEvent *sev;
+    for(;!*(int64_t*)ul;) {
+		XNextEvent(dw->disp,&e);
+		if(e.type==DestroyNotify){
+			DrawWindowDel(dw);
+			break;
+		} else if(e.type==ConfigureNotify&&dw) {
+			dw->sz_x=e.xconfigure.width;
+			dw->sz_y=e.xconfigure.height;
+		} else if(e.type==SelectionRequest) {
+			utf8_send(clip_text,e);
+		} else if(e.type==SelectionNotify)
+			utf8_prop(dw->disp,e);
+		else if(e.type==FocusOut) {
+			if((persist_mod|SCF_ALT)&&kb_cb)
+				FFI_CALL_TOS_2(kb_cb,0,SC_ALT|SCF_ALT|SCF_KEY_UP|SCF_NO_SHIFT);
+			if((persist_mod|SCF_CTRL)&&kb_cb)
+				FFI_CALL_TOS_2(kb_cb,0,SC_CTRL|SCF_CTRL|SCF_KEY_UP|SCF_NO_SHIFT);
+			if((persist_mod|SCF_SHIFT)&&kb_cb)
+				FFI_CALL_TOS_2(kb_cb,0,SC_SHIFT|SCF_SHIFT|SCF_KEY_UP);
+			if((persist_mod|SCF_CAPS)&&kb_cb)
+				FFI_CALL_TOS_2(kb_cb,0,SC_CAPS|SCF_NO_SHIFT|SCF_KEY_UP);
+			persist_mod&=~(SCF_CAPS|SCF_SHIFT|SCF_CTRL|SCF_ALT);
+			continue;
+		}
+		if(kb_cb)
+			KBCallback(kb_cb_data,&e);
+		if(ms_cb)
+			MSCallback(NULL,&e);
+	}
+}
+char *ClipboardText() {
+	XLockDisplay(dw->disp);
+	char *ret;
+	Atom sel = XInternAtom(dw->disp, "CLIPBOARD", False);
+	Window owner = XGetSelectionOwner(dw->disp, sel);
+	XEvent ev;
+	if(owner==dw->window) {
+		ret=strdup(clip_text);
+		XUnlockDisplay(dw->disp);
+		return ret;
+	}
+	Atom utf8=XInternAtom(dw->disp, "UTF8_STRING", False);
+	Atom target=XInternAtom(dw->disp, "3DaysCLIP", False);
+	XConvertSelection(dw->disp, sel, utf8, target, dw->window,
+						  CurrentTime);
+	PoopFree(clip_text);
+	clip_text=NULL;
+	for(;XNextEvent(dw->disp,&ev);) {
+		if(ev.type==SelectionNotify)
+			utf8_prop(dw->disp,ev);
+	}
+	XUnlockDisplay(dw->disp);
+	if(!clip_text)
+		clip_text=strdup("");
+	return strdup(clip_text);
 }
 void InputLoop(void *ul) {
-    SDL_Event e;
-    for(;!*(int64_t*)ul;) {
-		if(SDL_WaitEvent(&e)) {
-			if(e.type==SDL_QUIT) {
-				__Shutdown();
-				exit(0);
-			}
-		}
-	}
+	__InputLoop(ul,0);
+}
+//https://www.google.com/search?q=xlib+clipboard&client=firefox-b-1-e&sxsrf=ALiCzsb9A6kPI8rhFAVztJKwMeVH6WiTJQ%3A1655908750653&ei=jimzYuS0J_6fptQP6pStoAs&ved=0ahUKEwjks_PmpMH4AhX-j4kEHWpKC7QQ4dUDCA0&uact=5&oq=xlib+clipboard&gs_lcp=Cgdnd3Mtd2l6EAMyBggAEB4QFjIGCAAQHhAWMgUIABCGAzIFCAAQhgMyBQgAEIYDMgUIABCGAzoHCAAQRxCwAzoHCAAQsAMQQzoKCAAQ5AIQsAMYAToSCC4QxwEQowIQyAMQsAMQQxgCOgwILhDIAxCwAxBDGAI6BAgjECc6BAgAEEM6CwgAEIAEELEDEIMBOgUIABCABDoICAAQgAQQsQM6CwguEIAEEMcBENEDOgoIABCABBCHAhAUSgQIQRgASgQIRhgBULkCWKMXYIkaaAFwAXgAgAGYA4gB1B2SAQcyLTQuNy4xmAEAoAEByAERwAEB2gEGCAEQARgJ2gEGCAIQARgI&sclient=gws-wiz
+static void
+utf8_prop(Display *dpy, XEvent ev)
+{
+	Window w=dw->window;
+	XLockDisplay(dpy);
+	Atom sel = XInternAtom(dw->disp, "CLIPBOARD", False);
+	Atom utf8 = XInternAtom(dw->disp, "UTF8_STRING", False);
+	Atom target=XInternAtom(dw->disp, "3DaysCLIP", False);
+	Atom da, incr, type;
+    int di;
+    unsigned long size, dul;
+	unsigned char *prop_ret = NULL;
+	XGetWindowProperty(dpy, w, target, 0, 0, False, AnyPropertyType,
+                       &type, &di, &dul, &size, &prop_ret);
+    XFree(prop_ret);
+    XGetWindowProperty(dpy, w, target, 0, size, False, AnyPropertyType,
+                       &da, &di, &dul, &dul, &prop_ret);
+    PoopFree(clip_text);
+    if(!size)
+		clip_text=strdup("");
+	else
+		clip_text=strdup(prop_ret);
+    XFree(prop_ret);
+    XDeleteProperty(dpy, w, target);
+    XUnlockDisplay(dpy);
 }

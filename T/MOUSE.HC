@@ -55,8 +55,7 @@ U0 MsSet(I64 x=I64_MAX,I64 y=I64_MAX,I64 z=I64_MAX,I64 l=I64_MAX,I64 r=I64_MAX)
   y=(y-ms.offset.y)/ms.scale.y;
   z=(z-ms.offset.z)/ms.scale.z;
   MsUpdate(x,y,z,l,r);
-  //TODO RESTORE???
-  //MsHardSet(x,y,z,l,r);
+  MsHardSet(x,y,z,l,r);
 }
 U0 MsInit()
 {
@@ -65,7 +64,7 @@ U0 MsInit()
   ms.offset.x=ms.offset.y=ms.offset.z=0;
   ms.scale.x=ms.scale.y=ms.scale.z=1.0;
   ms.pos_text.x=ms.pos_text.y=ms.pos_text.z=0;
-  ms.has_wheel=FALSE;
+  ms.has_wheel=TRUE;
   ms.show=TRUE;
   ms.speed=0;
   ms.timestamp=__GetTicks;
@@ -73,6 +72,7 @@ U0 MsInit()
   GridInit;
   MemSet(&ms_hard,0,sizeof(CMsHardStateGlbls));
   ms_hard.installed=1;
+  ms_hard.has_wheel=TRUE;
   ms_hard.fifo=FifoU8New(8);
   ms_hard.fifo2=FifoU8New(0x1000);
   ms_hard.scale.x=0.5;
@@ -92,6 +92,16 @@ U0 MsHardSetPre()
   I64 old_timestamp=ms_hard_last.timestamp;
   MemCpy(&ms_hard_last,&ms_hard,sizeof(CMsHardStateGlbls));
   ms_hard_last.timestamp=old_timestamp;
+}
+
+U0 MsHardSpeedSet()
+{
+  I64 dd,tmp;
+  if ((dd=SqrI64(ms_hard_last.pos.x-ms_hard.pos.x)
+	+SqrI64(ms_hard_last.pos.y-ms_hard.pos.y)) &&
+	(tmp=ms_hard.timestamp-ms_hard_last.timestamp))
+    ms_hard.speed=Sqrt(dd)*cnts.time_stamp_freq/tmp;
+  ms_hard_last.timestamp=ms_hard.timestamp;
 }
 
 U0 MsHardSetPost()
@@ -116,7 +126,7 @@ U0 MsHardSetPost()
   if (ms_hard.pos.x!=ms_hard_last.pos.x || ms_hard.pos.y!=ms_hard_last.pos.y ||
 	ms_hard.pos.z!=ms_hard_last.pos.z) {
     ms_hard.evt=TRUE;
-    //MsHardSpeedSet; TODO RESTORE
+    MsHardSpeedSet;
   } else
     for (i=0;i<5;i++)
       if (ms_hard.bttns[i]!=ms_hard_last.bttns[i]) {

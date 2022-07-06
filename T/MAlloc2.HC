@@ -3,6 +3,7 @@ I64 boundscheck_enable=0;
 U8 *MAlloc(I64 sz,CTask *t=NULL) {
 	U8 *ret;
 	ret=__MAlloc(sz,t);
+	if(boundscheck_enable&&0)
 	SetPtrCallers(
 		ret,
 		5,
@@ -17,6 +18,7 @@ U8 *MAlloc(I64 sz,CTask *t=NULL) {
 U8 *MAlloc32(I64 sz,CTask *t=NULL) {
 	U8 *ret;
 	ret=__MAlloc32(sz,t);
+	if(boundscheck_enable&&0)
 	SetPtrCallers(
 		ret,
 		5,
@@ -46,7 +48,7 @@ U8 *CAlloc(I64 sz,CTask *t=NULL) {
 }
 U0 OOBBacktrace(U8 *ptr,I64 len=5,U8 *got) {
 	//In poopalloc.c callers are stored before ptr
-	I64 old=boundscheck_enable;
+	I64 old=boundscheck_enable;
 	boundscheck_enable=0;
 	TOSPrint("Out of bounds at:\n");
 	U8 **p=ptr,*link,*par,*fstr;

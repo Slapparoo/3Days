@@ -4,22 +4,9 @@
 #include <assert.h>
 #include <stdio.h>
 #include <signal.h>
-#ifdef TARGET_WIN32
-//https://stackoverflow.com/questions/17048072/sdl-2-undefined-reference-to-winmain16-and-several-sdl-functions
-#define SDL_MAIN_HANDLED
-#endif
-#include <SDL.h>
-#include <SDL_video.h>
-#include <SDL_render.h>
-#include <SDL_rect.h>
-#include <SDL_clipboard.h>
-#include <SDL_events.h>
-#include <SDL_thread.h>
-#include <SDL_mutex.h>
-#include <SDL_audio.h>
 #include "ext/map/src/map.h"
 #include "ext/vec/src/vec.h"
-#include "ext/linenoise/linenoise.h"
+#include "ext/ln/linenoise.h"
 #define AOT_NO_IMPORT_SYMS (1<<0)
 #define AOT_MALLOCED_SYM (1<<1)
 extern char CompilerPath[1024];
@@ -89,6 +76,7 @@ void DrawWindowDel(struct CDrawWindow *win);
 void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h);
 struct CDrawWindow *NewDrawWindow();
 void *GetFs();
+void SetFs(void *f);
 void __WaitForSpawn(void *sp);
 struct CThread;
 struct CThread *__Spawn(void *fs,void *fp,void *data,char *name);
@@ -182,3 +170,12 @@ int VFsMountDrive(char let,char *path);
 int64_t IsCmdLine();
 char VFsChDrv(char to);
 char *CmdLineBootText();
+char *ClipboardText();
+void SetClipboard(char *text);
+void PreInitCores();
+struct CPair;
+__attribute__((force_align_arg_pointer)) int64_t __SpawnFFI(struct CPair *p);
+#ifdef TARGET_WIN32
+int _main(int argc,char **argv);
+#endif
+void CreateCore(int core,void *fp);

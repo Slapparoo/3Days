@@ -1,21 +1,16 @@
 #include "3d.h"
 #include "ext/argtable3/argtable3.h"
 #include <signal.h>
-#include <pthread.h>
 #ifndef TARGET_WIN32
+#include <pthread.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <X11/Xlib.h>
 #define HCRT_INSTALLTED_DIR "/usr/local/include/3Days/HCRT.BIN"
 #include <libgen.h>
 #include "ext/C_Unescaper/escaper.h"
 #define DFT_T_DRIVE ".3DAYS_BOOT"
 #define DFT_TEMPLATE "/usr/local/include/3Days/T/"
-static void Core0Exit(int sig) {
-	/*CHash **ka=map_get(&TOSLoader,"KillAdam");
-	if(ka)
-		FFI_CALL_TOS_0(ka[0]->val);*/
-	pthread_exit(0);
-} 
 #else
 #include <windows.h>
 #include <libloaderapi.h>
@@ -29,7 +24,16 @@ static void Core0Exit(int sig) {
 //Is relative to install dir on windows
 #define DFT_TEMPLATE ".\\T\\"
 #endif
-
+static void Core0Exit(int sig) {
+	/*CHash **ka=map_get(&TOSLoader,"KillAdam");
+	if(ka)
+		FFI_CALL_TOS_0(ka[0]->val);*/
+	#ifndef TARGET_WIN32
+	pthread_exit(0);
+	#else
+	ExitThread(0);
+	#endif
+} 
 static struct arg_lit *helpArg;
 static struct arg_file *TDriveArg;
 static struct arg_file *cmdLineFiles;
@@ -41,10 +45,8 @@ char CompilerPath[1024];
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
 #define ENABLE_VIRTUAL_TERMINAL_INPUT 0x200
 static LONG WINAPI VectorHandler (struct _EXCEPTION_POINTERS *info) {
-  #ifdef BOOTSTRAPED
-  #endif
   switch(info->ExceptionRecord->ExceptionCode) {
-    #define FERR(code) case code: printf("Caught %s.\nType 'Exit(0);' to exit.\n",#code); exit(0);
+    #define FERR(code) case code: printf("Caught %s.\nType 'Exit(0);' to exit.\n",#code); goto exit;
     FERR(EXCEPTION_ACCESS_VIOLATION);
     FERR(EXCEPTION_ARRAY_BOUNDS_EXCEEDED);
     FERR(EXCEPTION_DATATYPE_MISALIGNMENT);
@@ -64,7 +66,9 @@ static LONG WINAPI VectorHandler (struct _EXCEPTION_POINTERS *info) {
   }
   //SignalHandler(0);
   return EXCEPTION_CONTINUE_EXECUTION;
-}\
+  exit:
+  FualtCB();
+}
 BOOL WINAPI CtrlCHandlerRoutine(DWORD c) {
   printf("User Abort.\n");
   return FALSE;
@@ -80,12 +84,13 @@ void SignalHandler(int sig) {
     }
     exit(0);
 }
-static void Core0(char *name) {
-	InitThreadsForCore();
+static char *hcrt_bin_loc=NULL;
+static void Core0() {
+	VFsThrdInit();
 	#ifndef TARGET_WIN32
 	signal(SIGUSR1,&Core0Exit);
 	#endif
-	Load(name,0);
+	Load(hcrt_bin_loc,0);
 } 
 #ifndef TARGET_WIN32
 static pthread_t core0;
@@ -93,7 +98,7 @@ static pthread_t core0;
 static HANDLE core0;
 #endif
 static int is_cmd_line=0;
-static int64_t shutdown=0;
+static int64_t _shutdown=0;
 int64_t IsCmdLine() {
 	return is_cmd_line;
 }
@@ -102,25 +107,20 @@ char *CmdLineBootText() {
 	if(!cmd_ln_boot_txt) return NULL;
 	return strdup(cmd_ln_boot_txt);
 }
-int main(int argc,char **argv) {
+#ifdef TARGET_WIN32
+int _main(int argc,char **argv)
+#else
+int main(int argc,char **argv)
+#endif
+{
+	#ifndef TARGET_WIN32
+	assert(XInitThreads());
+	#else
+	AddVectoredExceptionHandler(1,&VectorHandler);
+	#endif 
 	BoundsCheckTests();
     char *header=NULL,*t_drive=NULL,*tmp;
     VFsGlobalInit();
-    #ifndef TARGET_WIN32
-    char *rp=realpath(argv[0],NULL);
-    if(rp==NULL)
-      rp=strcpy(calloc(strlen(argv[0])+1,1),argv[0]);
-    strcpy(CompilerPath,rp);
-    free(rp);
-    #else
-    SetConsoleCtrlHandler(CtrlCHandlerRoutine,TRUE);
-    GetFullPathNameA(argv[0],sizeof(CompilerPath),CompilerPath,NULL);
-    DWORD omode, origOmode;
-    GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &omode);
-    origOmode = omode;
-    omode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), omode);
-    #endif
     void *argtable[]= {
         helpArg=arg_lit0("h", "help", "Display this help message."),
         commandLineArg=arg_lit0("c", "com", "Start in command line mode,mount drive '/' at /."),
@@ -169,7 +169,11 @@ int main(int argc,char **argv) {
 		vec_init(&boot_str);
 		strcpy(buf,"ChDrv('R');\nCd(\"");
 		vec_pusharr(&boot_str,buf,strlen(buf));
+		#ifndef TARGET_WIN32
 		getcwd(buf,sizeof(buf));
+		#else
+		_getcwd(buf,sizeof(buf));
+		#endif
 		vec_pusharr(&boot_str,buf,strlen(buf));
 		strcpy(buf,"\");\n");
 		vec_pusharr(&boot_str,buf,strlen(buf));
@@ -181,48 +185,58 @@ int main(int argc,char **argv) {
 		vec_push(&boot_str,0);
 		cmd_ln_boot_txt=boot_str.data;
 	} else {
-		SDL_Init(SDL_INIT_EVERYTHING);
 		InitSound();
 	}
-    if(1) {
+	if(1) {
 		//Create the Window,there is 1 screen God willing.
 		if(!is_cmd_line)
 			NewDrawWindow();
         int flags=0;
     #ifndef TARGET_WIN32
+		pthread_t core0;
         if(0==access("HCRT.BIN",F_OK)) {
 			puts("Using ./HCRT.BIN as the default binary.");
-            pthread_create(&core0,NULL,Core0,"HCRT.BIN");
+			hcrt_bin_loc="HCRT.BIN";
+			pthread_create(&core0,NULL,Core0,NULL);
         } else if(0==access( HCRT_INSTALLTED_DIR,F_OK)) {
-			pthread_create(&core0,NULL,Core0,HCRT_INSTALLTED_DIR);
+			hcrt_bin_loc=HCRT_INSTALLTED_DIR;
+			pthread_create(&core0,NULL,Core0,NULL);
         }
     #else
       char buffer[MAX_PATH];
       GetModuleFileNameA(NULL,buffer,sizeof(buffer));
       dirname(buffer);
       strcat(buffer,"\\HCRT.BIN");
+      hcrt_bin_loc=strdup(buffer);
       puts(buffer);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
-		core0=CreateThread(NULL,0,&Core0,buffer,0,NULL);
+		CreateThread(NULL,0,Core0,NULL,0,NULL);
       }
     #endif
     }
-    if(SDL_WasInit(SDL_INIT_EVERYTHING)) {
-		InputLoop(&shutdown);
-		SDL_Quit();
-	} else 
+    #ifndef TARGET_WIN32
+    if(!commandLineArg->count) {
+		InputLoop(&_shutdown);
+		exit(0);
+	} else {
+		#ifndef TARGET_WIN32
 		pthread_join(core0,NULL);
+		#else
+		WaitForSingleObject(core0,INFINITE);
+		#endif
+	}
     exit(0);
+    #endif
     return 0;
 }
 CLoader Loader;
 void __Shutdown() {
-	shutdown=1;
+	_shutdown=1;
 	#ifndef TARGET_WIN32
 	pthread_kill(core0,SIGUSR1);
 	pthread_join(core0,NULL);
 	#else
 	TerminateThread(core0,0);
-	WaitForMultipleObjects(1,&core0,TRUE,INFINITE),
+	WaitForMultipleObjects(1,&core0,TRUE,INFINITE);
 	#endif
 }

@@ -6,16 +6,28 @@ static  int RootPathLen();
 #include <dirent.h>
 #include <unistd.h>
 #include <time.h>
+#ifndef TARGET_WIN32
 #include <pthread.h>
+#else
+#include <windows.h>
+#include <synchapi.h>
+#include <processthreadsapi.h>
+#endif
 #define VFS_T_FILE 1 
 #define VFS_T_DIR 2 
 #define VFS_T_DRIVE 3 
-__thread char* cur_dir;
-__thread char cur_drv;
 static __thread map_str_t drive_dirs;
-pthread_mutex_t mp_mtx=PTHREAD_MUTEX_INITIALIZER;
+#ifndef TARGET_WIN32
+	pthread_mutex_t mp_mtx=PTHREAD_MUTEX_INITIALIZER;
+#else
+	HANDLE mp_mtx=NULL;
+#endif
 static map_str_t mount_points;
+#define cur_dir (*(char**)((char*)GetFs()+112))
 void VFsGlobalInit() {
+	#ifdef TARGET_WIN32
+	mp_mtx=CreateMutex(NULL,0,NULL);
+	#endif
 	map_init(&mount_points);
 }
 #define TOS_delim '/'
@@ -41,13 +53,7 @@ static char *VFsInplaceHostDelims(char *p) {
 	return p;
 }
 char * VFsDirCur() {
-	vec_char_t ret;
-	vec_init(&ret);
-	vec_push(&ret,cur_drv);
-	vec_push(&ret,':');
-	vec_pusharr(&ret,cur_dir+RootPathLen(),strlen(cur_dir+RootPathLen()));
-	vec_push(&ret,0);
-	return VFsInplaceConvertDelims(ret.data);
+	return strdup(cur_dir);
 }
 #ifdef TARGET_WIN32
 static int __FExists(char *path) {
@@ -86,10 +92,18 @@ static int __FIsDir(char *path) {
 }
 #endif
 static  int RootPathLen() {
-	char buffer[2]={cur_drv,0},**base;
+	char buffer[2]={*cur_dir,0},**base;
+	#ifndef TARGET_WIN32
 	pthread_mutex_lock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
 	assert(base=map_get(&mount_points,buffer));
+	#ifndef TARGET_WIN32
 	pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
 	int64_t r=strlen(*base);
 	if(base[0][r-1]==delim)
 		r--;
@@ -97,9 +111,17 @@ static  int RootPathLen() {
 }
 static char *GetHomeDirForDrive(char drv) {
 	char drv_buf[2]={drv,0};
+	#ifndef TARGET_WIN32
 	pthread_mutex_lock(&mp_mtx);
-    char *root=*map_get(&mount_points,drv_buf);
-    pthread_mutex_unlock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
+	char *root=*map_get(&mount_points,drv_buf);
+        #ifndef TARGET_WIN32
+	pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
     if(root) {
 		if(*root=='/') { //TODO check for windows
 			return HostHomeDir();
@@ -119,7 +141,8 @@ int VFsCd(char *to,int flags) {
     //int only_dirs=flags&VFS_ONLY_DIRS;
     int failed=0;
     int folder_depth=0;
-    char *d,*top,*top2,*root,drv=cur_drv,*start;
+    char *d,*top,*top2,*root,drv=*cur_dir,*start;
+    int root_len;
     vec_char_t path;
     vec_init(&path);
     if(strrchr(to,':')) {
@@ -134,12 +157,21 @@ int VFsCd(char *to,int flags) {
         to=strrchr(to,':')+1;
     }
     char drv_buf[2]={drv,0};
-    pthread_mutex_lock(&mp_mtx);
-    root=*map_get(&mount_points,drv_buf);
-    pthread_mutex_unlock(&mp_mtx);
-    vec_pusharr(&path,root,strlen(root)+1);
+    #ifndef TARGET_WIN32
+	pthread_mutex_lock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
+    root_len=strlen(root=*map_get(&mount_points,drv_buf));
+    #ifndef TARGET_WIN32
+	pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
+    vec_pusharr(&path,root,strlen(root));
     if(to[0]==TOS_delim) {
 		//Is an absolute path
+		vec_push(&path,0);
     } else if(to[0]=='~') {
 		to++;
 		vec_pop(&path);
@@ -147,9 +179,7 @@ int VFsCd(char *to,int flags) {
 		vec_pusharr(&path,root,strlen(root)+1);
 		PoopFree(root);
 	} else {
-        vec_deinit(&path);
-        vec_init(&path);
-        vec_pusharr(&path,cur_dir,strlen(cur_dir)+1);
+        vec_pusharr(&path,cur_dir+2,strlen(cur_dir+2)+1); // +2 for 'drv-letter' and ':'
     }
     VFsInplaceHostDelims(path.data);
     if(!__FExists(path.data)&&!make) {
@@ -201,7 +231,10 @@ int VFsCd(char *to,int flags) {
     if(path.data[path.length-1]!=delim)
         vec_push(&path,delim);
     vec_push(&path,0);
-    if(!__FExists(path.data)&&!make) {
+    if(!__FIsDir(path.data)) {
+		if(!allow_fail)
+			failed=1;
+    } else if(!__FExists(path.data)&&!make) {
 		if(!allow_fail)
 			failed=1;
     } else if(!__FExists(path.data)&&make) {
@@ -222,8 +255,13 @@ int VFsCd(char *to,int flags) {
     vec_push(&path,0);
     if(!failed) {
 		TD_FREE(cur_dir);
-		cur_dir=path.data;
-		cur_drv=drv;
+		char buffer[4048];
+		if(path.data[root_len]!='/')
+			sprintf(buffer,"%s:/%s",drv_buf,path.data+root_len);
+		else
+			sprintf(buffer,"%s:%s",drv_buf,path.data+root_len);
+		cur_dir=PoopAllocSetTask(strdup(buffer),GetFs());
+		VFsInplaceConvertDelims(cur_dir);
 	} else
 		vec_deinit(&path);
     return !failed;
@@ -244,8 +282,8 @@ int64_t VFsDel(char *p) {
 }
 //Returns Host OS location of file
 char *__VFsFileNameAbs(char *name) {
-    int failed=0;
-    char *file,*old_dir=VFsDirCur(),drv=cur_drv;
+    int failed=0,root_len;
+    char *file,*old_dir=VFsDirCur(),drv=*cur_dir,*root;
     if(strrchr(name,':')) {
         switch(toupper(*name)) {
             case 'A'...'Z':
@@ -257,6 +295,7 @@ char *__VFsFileNameAbs(char *name) {
         }
         name=strrchr(name,':')+1;
     }
+    char dbuf[2]={drv,0};
     vec_char_t path,head;
     vec_init(&path);
     vec_init(&head);
@@ -273,17 +312,29 @@ char *__VFsFileNameAbs(char *name) {
     VFsInplaceHostDelims(path.data);
     vec_pusharr(&head,path.data,path.length);
     VFsInplaceConvertDelims(head.data);
-    file=strrchr(head.data,TOS_delim)+1;
-    file[-1]=0;
+    file=strdup(1+strrchr(head.data,TOS_delim));
+    strrchr(head.data,TOS_delim)[1]=0;
     failed=!VFsCd(head.data,VFS_CDF_FILENAME_ABS);
     vec_deinit(&path);
     vec_init(&path);
-    vec_pusharr(&path,cur_dir,strlen(cur_dir));
+    #ifndef TARGET_WIN32
+	pthread_mutex_lock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
+    vec_pusharr(&path,*map_get(&mount_points,dbuf),strlen(*map_get(&mount_points,dbuf)));
+    #ifndef TARGET_WIN32
+	pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
+    vec_pusharr(&path,cur_dir+2,strlen(cur_dir+2));
     vec_pusharr(&path,file,strlen(file));
     vec_push(&path,0);
     VFsCd(old_dir,0);
     end:
     vec_deinit(&head);
+    PoopFree(file);
     if(!failed)
         return path.data;
     vec_deinit(&path);
@@ -336,7 +387,7 @@ char *VFsFileNameAbs(char *name) {
         if(tmp[0]==TOS_delim)
             offset=2;
         strcpy(buf+offset,tmp+RootPathLen());
-        buf[0]=cur_drv;
+        buf[0]=*cur_dir;
         buf[1]=':';
         if(offset==3)
             buf[2]=TOS_delim;
@@ -344,18 +395,18 @@ char *VFsFileNameAbs(char *name) {
     }
     return NULL;
 }
-char VFsChDrv(char to) {
-    char old=cur_drv,buf[2]={toupper(cur_drv),0};
+char VFsChDrv(char to) {	
+    char old=*cur_dir,buf[2]={toupper(*cur_dir),0},drv;
     switch(toupper(to)) {
         case 'A'...'Z':
-        cur_drv=toupper(to);
+        drv=toupper(to);
         goto end;
         break;
         end:
         if(map_get(&drive_dirs,buf))
 			PoopFree(*map_get(&drive_dirs,buf));
 		map_set(&drive_dirs,buf,strdup(cur_dir));
-		buf[0]=cur_drv;
+		buf[0]=drv;
 		PoopFree(cur_dir);
 		if(map_get(&drive_dirs,buf)) {
 			cur_dir=strdup(*map_get(&drive_dirs,buf));
@@ -399,12 +450,18 @@ int64_t VFsFileRead(char *name,int64_t *len) {
     return data;
 }
 void VFsThrdInit() {
+	#ifndef TARGET_WIN32
 	pthread_mutex_lock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
 	map_init(&drive_dirs);
-	cur_drv='T';
-	char buf[]={cur_drv,0};
-	cur_dir=strdup(map_get(&mount_points,buf)[0]);
+	cur_dir=strdup("T:/");
+	#ifndef TARGET_WIN32
     pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
 }
 #ifdef TARGET_WIN32
 #include <shlobj.h> 
@@ -496,8 +553,16 @@ int VFsFileExists(char *path) {
 	return e;
 }
 int VFsMountDrive(char let,char *path) {
-	char buf[]={let,0};
+	char buf[2]={let,0};
+	#ifndef TARGET_WIN32
 	pthread_mutex_lock(&mp_mtx);
+	#else
+	WaitForSingleObject(mp_mtx,INFINITE);
+	#endif
 	map_set(&mount_points,buf,strdup(path));
+	#ifndef TARGET_WIN32
 	pthread_mutex_unlock(&mp_mtx);
+	#else
+	ReleaseMutex(mp_mtx);
+	#endif
 }
