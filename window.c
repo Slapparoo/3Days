@@ -572,6 +572,7 @@ char *ClipboardText() {
 	char *ret;
 	Atom sel = XInternAtom(dw->disp, "CLIPBOARD", False);
 	Window owner = XGetSelectionOwner(dw->disp, sel);
+	XEvent ev;
 	if(owner==dw->window) {
 		ret=strdup(clip_text);
 		XUnlockDisplay(dw->disp);
@@ -583,9 +584,13 @@ char *ClipboardText() {
 						  CurrentTime);
 	PoopFree(clip_text);
 	clip_text=NULL;
+	for(;XNextEvent(dw->disp,&ev);) {
+		if(ev.type==SelectionNotify)
+			utf8_prop(dw->disp,ev);
+	}
 	XUnlockDisplay(dw->disp);
 	if(!clip_text)
-		clip_text="";
+		clip_text=strdup("");
 	return strdup(clip_text);
 }
 void InputLoop(void *ul) {
