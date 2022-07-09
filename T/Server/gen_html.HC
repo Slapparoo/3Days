@@ -40,7 +40,7 @@ Bool IsImage(U8 *name) {
   if(dot++) {
     if(!StrICmp(dot,"GIF")) return TRUE;
     if(!StrICmp(dot,"JPEG")) return TRUE;
-    if(!StrICmp(dot,"JPG")) return TRUE;
+    if(!StrICmp(dot,"JPG")) return TRUE;
     if(!StrICmp(dot,"PNG")) return TRUE;
     if(!StrICmp(dot,"BMP")) return TRUE;
   }
@@ -105,7 +105,6 @@ U0 FileGet(CServer *srv,CDyadStream*stream,CURL *url,CHTTPRequest *req) {
     WriteLn(stream,,"HTTP/1.1 200 OK");
     WriteLn(stream,,"Server: Bungis");
     WriteLn(stream,,"Content-Type: %s",mime);
-    WriteLn(stream,,"Content-Length: %d",len);
     WriteLn(stream,,"");
     DyadWrite(stream,f,len);
     Free(f);
@@ -115,7 +114,6 @@ U0 FileGet(CServer *srv,CDyadStream*stream,CURL *url,CHTTPRequest *req) {
     WriteLn(stream,,"HTTP/1.1 404 OK");
     WriteLn(stream,,"Server: Bungis");
     WriteLn(stream,,"Content-Type: text/html");
-    WriteLn(stream,,"Content-Length: %d",len);
     WriteLn(stream,,"");
     R404(stream,NULL,url->abs_path);
   }
@@ -145,22 +143,65 @@ CHTMLPair *ClosePair(CHTMLPair *last,CDyadStream *s,I64 *len,I64 cnt=1) {
 	if(--cnt) goto loop;
 	return r;
 }
+class CHeaderItem:CQue {
+	U8 *text;
+	I64 depth;
+	I64 ident;
+};
+U8 *MakeIndex(CDyadStream *stream,I64 *len_ptr,CHeaderItem *index) {
+	CHeaderItem *cur;
+	CHTMLPair *pairs=MAlloc(sizeof(CHTMLPair)),*cpair=pairs;
+	QueInit(pairs);
+	cpair=pairs;
+	WriteLn(stream,len_ptr,"<DIV CLASS=\"paper\"><H3>Table of contents</H3>");
+	I64 last_idx=0;
+	for(cur=index->next;TRUE;) {
+		if(cur->depth>last_idx){
+			while(last_idx++<cur->depth)
+				cpair=EnterPair(cpair,stream,len_ptr,'OL');
+		}
+		if(cur->depth<last_idx){
+			while(last_idx-- <cur->depth)
+				cpair=ClosePair(cpair,stream,len_ptr);
+		}
+		WriteLn(stream,len_ptr,"<LI><A HREF=\"#%d\">%s</A></LI>",cur->ident,cur->text);
+		cur=cur->next;
+		if(cur==index) goto en;
+	}
+	en:
+	while(cpair!=pairs)
+		cpair=ClosePair(cpair,stream,len_ptr);
+	QueDel(pairs);
+	WriteLn(stream,len_ptr,"</DIV>");
+}
 U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   U8 *path=MStrPrint(WIKI_ROOT"/%s",url->abs_path),*ftxt,*fptr,
         *ln,*oln,*ln2,*t1,*t2,*t3;
-  I64 len=0,*len_ptr,flags,i,depth;
+  I64 len=0,*len_ptr,flags,i,depth,ident=0;
   I64 list_depths[0x100],list_depths_i;
   CHTMLPair *markup=MAlloc(sizeof(CHTMLPair)),*last;
+  CHeaderItem *headers=MAlloc(sizeof(CHeaderItem)),*cheader,*theader;
   QueInit(markup);
+  QueInit(headers);
+  cheader=headers;
   last=markup;
+  if(!StrLen(url->abs_path)||!StrCmp(url->abs_path,"/"))
+	path=StrNew(WIKI_ROOT"/WikiHome");
   if(FileFind(path)) {
     flags=0;
     ftxt=FileRead(path);
     len_ptr=&len;
 loop:
+    ident=0;
     list_depths_i=0;
     fptr=ftxt;
     WikiHeader(stream,len_ptr,url->abs_path);
+    if(!len_ptr) { //On second run len_ptr is NULL,but header is already populated
+	MakeIndex(stream,len_ptr,headers);
+	for(cheader=headers->next;cheader!=headers;cheader=cheader->next)
+		Free(cheader->text);
+	QueDel(headers);
+    }
     while(oln=ln=ReadLine(fptr,&fptr)) {
 //Is code if starts with whitespace
       if(StrOcc("\t ",*ln)) {
@@ -178,8 +219,17 @@ loop:
       if(*ln=='=') {
         last=ClosePair(last,stream,len_ptr);
         for(i=0;ln[i]=='=';i++);
-        WriteLn(stream,len_ptr,"<H%d>%s</H%d>",i,t1=HTMLify(ln+i),i);
-        Free(t1);
+        WriteLn(stream,len_ptr,"<H%d ID=\"%d\">%s</H%d>",i,++ident,t1=HTMLify(ln+i),i);
+	if(len_ptr){
+        	theader=MAlloc(sizeof(CHeaderItem));
+		QueInit(theader);
+		theader->text=t1;
+		theader->depth=i;
+		theader->ident=ident;
+		QueIns(theader,cheader);
+		cheader=theader;
+	} else
+		Free(t1);
         goto next;
       }
       if(*ln=='-') {
@@ -211,7 +261,7 @@ loop:
         LBts(&flags,WGf_LIST);
         goto fmt_line;
       } else if(list_depths_i) {
-        last=ClosePair(last,stream,len_ptr,list_depths_i);
+        last=ClosePair(last,stream,len_ptr,list_depths_i);
         list_depths_i=0;
       }
       if(!Bts(&flags,WGf_PARA))
@@ -310,10 +360,11 @@ finish:
     while(markup!=(last=ClosePair(last,stream,len_ptr)));
     WikiFooter(stream,len_ptr,url->abs_path);
     if(len_ptr) {
+	//dummy write an index to compute its length
+	MakeIndex(stream,len_ptr,headers);
       WriteLn(stream,,"HTTP/1.1 200 OK");
       WriteLn(stream,,"Server: Bungis");
       WriteLn(stream,,"Content-Type: text/html");
-      WriteLn(stream,,"Content-Length: %d",len);
       WriteLn(stream,,"");
       len_ptr=NULL;
       goto loop;
@@ -328,6 +379,10 @@ U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
 	U8 *dot=FileExtDot(url->abs_path);
 	if(!StrICmp(url->abs_path,WIKI_SEARCH)) {
 		FindGet(srv,stream,url,req);
+		return;
+	}
+	if(!dot) {
+		WikiGet(srv,stream,url,req);
 		return;
 	}
 	if(dot&&!StrICmp(dot,".WIKI")) {

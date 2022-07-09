@@ -18,5 +18,5 @@ U8 *WikiHeader(CDyadStream *s,I64 *len_ptr,U8 *points_to) {
 	WriteLn(s,len_ptr,"<DIV CLASS=\"sm-12 md-12 col\"><DIV CLASS=\"paper\">");
 }
 U8 *WikiFooter(CDyadStream *s,I64 *len_ptr,CURL *url) {
-	WriteLn(s,len_ptr,"</DIV></DIV></BODY></HML>");
+	WriteLn(s,len_ptr,"</DIV></DIV></BODY></HTML>");
 }

@@ -10,15 +10,33 @@ class CHTTPRequest {
 	#define HTTP_POST 2
 	
 	I64 method;
-	U8 content_type[STR_LEN];
-	I64 content_length;
-	U8 *data;
 };
 class CServer {
 	CDyadStream *s_sock;
 	U0(*get)(CServer*,CDyadStream*,CURL*,CHTTPRequest*);
-	U0(*post)(CServer*,CDyadStream*,CURL*,CHTTPRequest*);
+	U0(*post)(CServer*,CDyadStream*,CURL*,CHTTPRequest*,CHashTable *);
 };
+class CConnection:CQue {
+	//These occupy .u8[0]
+	#define CON_S_METHOD 1
+	#define CON_S_FIELDS 2
+	#define CON_S_BLANK_LINE 3
+	//These are flags
+	#define CONf_AWAIT_BOUNDARY 8
+	#define CONf_POST_DATA 9
+	I64 state,method;
+	I64 b_ptr;
+	CServer *server;
+	CDyadStream *stream;
+	CHashTable *post_data;
+	I64 field_len;
+	CURL *url;
+	U8 boundary[STR_LEN];
+	U8 field[STR_LEN];
+	U8 fbuffer[0x20000];
+	U8 buffer[0x10000];
+};
+
 CURL *ParseURL(U8 *url) {
 	CURL *ret=CAlloc(sizeof(CURL));
 	U8 *r,*q,*p,chr;
@@ -73,48 +91,24 @@ U8 *Trim(U8 *buf) {
 			*StrFirstOcc(buf," \t\n")=0;
 	return SkipWhitespace(buf);
 }
-U0 ParseRequest(CServer *s,CDyadStream *stream,U8 *http) {
-	U8 *http2,*t1,buf[STR_LEN],buf2[STR_LEN],*t2;
+U0 ParseRequest(CDyadStream *stream,CConnection *con) {
+	U8 *http2,*t1,buf[STR_LEN],buf2[STR_LEN],*t2,*ptr,*optr;
+	CHashGeneric *hash;
 	CHTTPRequest req;
+	I64 len;
 	MemSet(&req,0,sizeof(CHTTPRequest));
-	CURL *url=NULL;
-	if(!StrNCmp(http,"GET",3)) {
-		req.method=HTTP_GET;
-		get_like:
-		http=SkipWhitespace(http+3);
-		http2=StrFind("HTTP",http);
-		MemCpy(buf,http,http2-http);
-		buf[http2-http]=0;
-		t2=Trim(buf);
-		t1=MStrPrint("http://bungis.com:123/%s",t2);
-		http2=StrFirstOcc(http2,"\n");
-		url=ParseURL(t1);
-		Free(t1);
-		http=http2+1;
-	}
-	while(http&&http(U16*)[0]!='\x0d\n') {
-		t1=buf,t2=buf2;
-		http=StrScan(http,"%s:%s\x0d\n",&t1,&t2);
-		if(!StrICmp(Trim(buf),"Content-Type")) {
-			StrCpy(req.content_type,Trim(buf2));
-		}
-		if(!StrICmp(Trim(buf),"Content-Length")) {
-			req.content_length=Str2I64(buf2);
-		}
-	}
-	if(http) {
-		http+=2;
-		req.data=CAlloc(req.content_length+1);
-		MemCpy(req.data,http,req.content_length);
-	}
-	switch(req.method) {
+	req.method=con->method;
+	CURL *url=con->url;
+	switch(con->method) {
 		case HTTP_GET:
-		(*s->get)(s,stream,url,&req);
+		(*con->server->get)(con->server,stream,url,&req);
+		DyadEnd(stream);
 		break;
 		case HTTP_POST:
+		(*con->server->post)(con->server,stream,url,&req,con->post_data);
+		DyadEnd(stream);
 		break;
 	}
-	Free(url);
 }
 U0 WriteLn(CDyadStream *s,I64 *len=NULL,U8 *fmt,...) {
 	U8 *str=StrPrintJoin(NULL,fmt,argc,argv);
@@ -187,23 +181,12 @@ U0 GenericGet(CServer *serv,CDyadStream *s,CURL *url,CHTTPRequest *req) {
 		WriteLn(s,,"");
 		R404(s,NULL,url->abs_path);
 	}
-	DyadEnd(s);
 }
 CServer *CreateServer(I64 port) {
 	CServer *srv=CAlloc(sizeof(CServer));
 	srv->s_sock=DyadNewStream;
 	return srv;
 }
-class CConnection:CQue {
-	#define CON_S_METHOD 1
-	#define CON_S_FIELDS 2
-	#define CON_S_BLANK_LINE 3
-	I64 state;
-	I64 b_ptr;
-	CServer *server;
-	CDyadStream *stream;
-	U8 buffer[0x20000];
-};
 CConnection *connects=MAlloc(sizeof(CQue));
 QueInit(connects);
 I64 con_locked;
@@ -211,28 +194,79 @@ U0 ReadLine(CDyadStream *s,U8 *data,I64 len,CServer *serv) {
 	while(Bts(&con_locked,0))
 		PAUSE;
 	CConnection *first,*con;
+	CHashGeneric *hash;
+	U8 buf[STR_LEN],buf2[STR_LEN];
+	U8 *fb,*http2,*t1,*t2;
 	first=connects;
 	for(con=first->next;con!=first;con=con->next) {
 		if(con->stream==s)
 			goto found;
 	}
-	con=MAlloc(sizeof(CConnection));
+	con=CAlloc(sizeof(CConnection));
 	QueInit(con);
 	QueIns(con,connects->last);
 	con->state=CON_S_METHOD;
 	con->server=serv;
 	con->stream=s;
+	con->post_data=HashTableNew(0x10);
 	found:
 	//Pray that header is smaller than 128kb.
-	if(len==0) {
-		con->state=CON_S_BLANK_LINE;
-		goto read;
+	if(con->state==CON_S_METHOD&&!StrNCmp(data,"GET",3)) {
+		con->method.u8[0]=HTTP_GET;
+		TOSPrint("GET\n");
+		t1=MStrPrint("http://potato.com/%s",Trim(SkipWhitespace(data+3)));
+		con->url=ParseURL(t1);
+		Free(t1);
+	} else if(con->state==CON_S_METHOD&&!StrNCmp(data,"POST",4)) {
+		con->method.u8[0]=HTTP_POST;
+		t1=MStrPrint("http://potato.com/%s",Trim(SkipWhitespace(data+4)));
+		con->url=ParseURL(t1);
+		Free(t1);
 	}
-	if(con->state==CON_S_METHOD) {
-		con->state=CON_S_FIELDS;
-		goto read;
-	} else if(con->state==CON_S_FIELDS) {
-		goto read;
+	if(con->method==HTTP_POST) {
+		t1=buf,t2=buf2;
+		data=StrScan(data,"%s:%s",&t1,&t2);
+		if(!StrICmp(Trim(buf),"Content-Type")) {
+			if(StrIMatch("multipart/form-data",buf2)) {
+				t2=con->boundary;
+				StrScan(StrFirstOcc(buf2,";")+1,"%sboundary=\"%s\"",&t1,&t2);
+				LBts(&con->boundary,CONf_AWAIT_BOUNDARY);
+			}
+		}
+	}
+	if(Bt(&con->boundary,CONf_AWAIT_BOUNDARY)) {
+		t1=buf;
+		if(*StrScan("--%s--",&t1)==0) {
+			if(!StrCmp(buf,con->boundary)) {
+				LBtr(&con_locked,0);
+				goto process;
+			}
+		}
+		if(!StrNCmp(data,"--",2)&&!StrCmp(Trim(data+2),con->boundary)) {
+			con->field[0]=0;
+			con->field_len=0;
+		} else if(!len&&StrLen(con->field)) {
+			hash=CAlloc(con->field_len+sizeof(CHashGeneric));
+			hash->str=StrNew(con->field);
+			hash->user_data0=con->field_len;
+			hash->user_data1=hash+1;
+			HashAdd(hash,con->post_data);
+		}else if(!StrNCmp(data,"Content-Disposition",StrLen("Content-Disposition"))) {
+			data=SkipWhitespace(StrFirstOcc(data,":")+1);
+			if(!StrNCmp(data,"form-data",StrLen("form-data"))) {
+				loop:
+				data=SkipWhitespace(StrFirstOcc(data,";"));
+				if(data) {
+					data=SkipWhitespace(data+1);
+					if(StrScan(data,"name")!=data) {
+						t2=con->fbuffer;
+						data=StrScan(StrFirstOcc(data,"\"")+1,"\"%s\"",&t2);
+						TOSPrint("DISPOSITION:%s\n",t2);
+					}
+					if(data) goto loop;
+				}
+			}
+		}	
 	}
 	read:
 	TOSPrint("%p:%s\n",s,data);
@@ -240,14 +274,19 @@ U0 ReadLine(CDyadStream *s,U8 *data,I64 len,CServer *serv) {
 	con->b_ptr+=StrLen(data);
 	StrCpy(con->buffer+con->b_ptr,"\x0d\n");
 	con->b_ptr+=2;
-	if(!len) {
-		con->buffer[con->b_ptr]=0;
-		TOSPrint("%s\n",con->buffer);
-		ParseRequest(con->server,s,con->buffer);
-		QueRem(con);
-		Free(con);
-	}
 	LBtr(&con_locked,0);
+	if(!len&&!Bt(&con->boundary,CONf_AWAIT_BOUNDARY))
+		goto process;
+	return;
+	process:
+	con->buffer[con->b_ptr]=0;
+	TOSPrint("%s\n",con->buffer);
+	ParseRequest(s,con);
+	if(con->post_data)
+		HashTableDel(con->post_data);
+	QueRem(con);
+	Free(con->url);
+	Free(con);
 }
 U0 ListenCallback(CDyadStream *s,CServer *srv) {
 	DyadSetReadCallback(s,&ReadLine,srv);
@@ -257,7 +296,7 @@ U0 Serve(CServer *srv) {
 	DyadSetOnListenCallback(srv->s_sock,&ListenCallback,srv);
 	"Press a button to quit serving\n";
 	while(!ScanKey) {
-		Sleep(1);
+		Sleep(10);
 		DyadUpdate;
 	}
 	DyadShutdown;
@@ -296,3 +335,4 @@ U8 *GetQueryValue(U8 *q,U8 *f) {
 	}
 	return NULL;
 }
+
