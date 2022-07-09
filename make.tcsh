@@ -3,7 +3,7 @@ set gFindLoc = `which find`
 set binary = 3d_loader
 set cc = gcc
 source filelist.tcsh
-set CFlags = "-Ofast  -g3 `pkg-config --cflags portaudio-2.0`  -lm -fno-omit-frame-pointer -lpthread"
+set CFlags = "-Ofast  -g3 `pkg-config --cflags portaudio-2.0`  -lm -fno-omit-frame-pointer -lpthread -DUSE_NETWORKING"
 enter:
 if ! -e $binary then
   foreach f ( $CFiles )

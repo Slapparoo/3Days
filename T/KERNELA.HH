@@ -141,15 +141,19 @@ extern class CFile;
 #define ARGT_XMM0	55 // Not implemented
 #define OCF_ALIAS	1
 extern class CCPU;
-extern class CSocket;
+extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
-/*
-import CSocket *SockServer(I64i port);
-import U0i SockClose(CSocket *);
-import U0i SockRead(CSocket *,I64i);
-import U0i SockWrite(CSocket *,U8i *,I64i);
-import CSocket *SockAccept(CSocket *);
-*/
+import U0i DyadInit();
+import U0i DyadUpdate();
+import U0i DyadShutdown();
+import CDyadStream *DyadNewStream();
+import I64i DyadListen(CDyadStream *,I64i port);
+import I64i DyadConnect(CDyadStream *,U8i*,I64i port);
+import U0i DyadWrite(CDyadStream *,U8i*,I64i);
+import U0i DyadEnd(CDyadStream *);
+import U0i DyadClose(CDyadStream *);
+import U8i *DyadGetAddress(CDyadStream *);
+import U0i DyadSetReadCallback(U0i(*fptr)(CDyadStream *,U8i *,I64i,U8i *),U8i *);
 import I64i mp_cnt();
 import U0i SetFs(CTask*);
 import CTask* GetFs();
@@ -215,13 +219,18 @@ import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 #else
-/*
-extern CSocket *SockServer(I64i port);
-extern U0i SockClose(CSocket *);
-extern U0i SockRead(CSocket *,I64i);
-extern U0i SockWrite(CSocket *,U8i *,I64i);
-extern CSocket *SockAccept(CSocket *);
-*/
+extern U0i DyadInit();
+extern U0i DyadUpdate();
+extern U0i DyadShutdown();
+extern CDyadStream *DyadNewStream();
+extern I64i DyadListen(CDyadStream *,I64i port);
+extern I64i DyadConnect(CDyadStream *,U8i*,I64i port);
+extern U0i DyadWrite(CDyadStream *,U8i*,I64i);
+extern U0i DyadEnd(CDyadStream *);
+extern U0i DyadClose(CDyadStream *);
+extern U8i *DyadGetAddress(CDyadStream *);
+extern U0i DyadSetReadCallback(CDyadStream *,U0i(*fptr)(CDyadStream *,U8i *,I64i,U8i *),U8i *);
+extern U0i DyadSetOnListenCallback(CDyadStream *,U0i(*fptr)(CDyadStream *,U8i *,I64i,U8i *),U8i *);
 extern I64i mp_cnt();
 extern U0i SetFs(CTask*);
 extern CTask* GetFs();
@@ -257,7 +266,7 @@ public extern I64i __FileWrite(U8i *filename,
 public extern U8 *DirNameAbs(U8i *dirname);
 public extern U8 *FileNameAbs(U8i *dirname);
 public extern Bool Cd(U8i *dirname=0);
-public extern Bool IsDir(U8i *dir_name); //TODO
+public extern Bool IsDir(U8i *dir_name); //TODO
 public extern Bool DirMk(U8i *filename); //TODO
 public extern U8 **__Dir(U8i *); //TODO
 public extern U0 Exit();
@@ -1050,7 +1059,7 @@ public class CArrayDim
 };
 
 #define MLMF_IS_STR	1
-public class CMemberLstMeta
+public class CMemberLstMeta
 {
   CMemberLstMeta *next;
   U8	*str;

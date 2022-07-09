@@ -23,6 +23,57 @@ extern void HCLongJmp(void *ptr);
 #include "ext/wineditline-2.206/include/editline/readline.h"
 #else
 #include <sys/mman.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <sys/types.h>
+#include <errno.h>
+#endif
+#ifdef USE_NETWORKING
+#include "ext/dyad/src/dyad.h"
+static void STK_DyadInit() {
+		dyad_init();
+}
+static void STK_DyadUpdate() {
+	dyad_update();
+}
+static void STK_DyadShutdown() {
+	dyad_shutdown();
+}
+static void *STK_DyadNewStream() {
+	return dyad_newStream();
+}
+static void *STK_DyadListen(int64_t *stk) {
+	return dyad_listen(stk[0],stk[1]);
+}
+static void *STK_DyadConnect(int64_t *stk) {
+	return dyad_connect(stk[0],stk[1],stk[2]);
+}
+static void STK_DyadWrite(int64_t *stk) {
+	dyad_write(stk[0],stk[1],stk[2]);
+}
+static void STK_DyadEnd(int64_t *stk) {
+	dyad_end(stk[0]);
+}
+static void STK_DyadClose(int64_t *stk) {
+	dyad_close(stk[0]);
+}
+static char *STK_DyadGetAddress(int64_t *stk) {
+	char *ret=strdup(dyad_getAddress(stk[0]));
+	PoopAllocSetTask(ret,GetFs());
+	return ret;
+}
+static void DyadReadCB(dyad_Event *e) {
+	FFI_CALL_TOS_4(e->udata,e->stream,e->data,e->size,e->udata2);
+}
+static void STK_DyadSetReadCallback(int64_t *stk) {
+	dyad_addListener(stk[0],DYAD_EVENT_LINE,&DyadReadCB,stk[1],stk[2]);
+}
+static void DyadListenCB(dyad_Event *e) {
+	FFI_CALL_TOS_2(e->udata,e->remote,e->udata2);
+}
+static STK_DyadSetOnListenCallback(int64_t *stk) {
+	dyad_addListener(stk[0],DYAD_EVENT_ACCEPT,&DyadListenCB,stk[1],stk[2]);
+}
 #endif
 typedef struct CType CType;
 static int64_t BFFS(int64_t v) {
@@ -446,6 +497,20 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"DirCur",STK_DirCur,0);
     STK_RegisterFunctionPtr(&ffi_blob,"DirMk",STK_DirMk,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__Del",STK_Del,1);
+    #ifdef USE_NETWORKING
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadInit",&STK_DyadInit,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadUpdate",&STK_DyadUpdate,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadShutdown",&STK_DyadShutdown,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadNewStream",&STK_DyadNewStream,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadListen",&STK_DyadListen,2);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadConnect",&STK_DyadConnect,3);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadWrite",&STK_DyadWrite,3);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadEnd",&STK_DyadEnd,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadClose",&STK_DyadClose,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadGetAddress",STK_DyadGetAddress,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadSetReadCallback",STK_DyadSetReadCallback,3);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadSetOnListenCallback",STK_DyadSetOnListenCallback,3);
+    #endif
     char *blob=PoopMAlloc32(ffi_blob.length);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);

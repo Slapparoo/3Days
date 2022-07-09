@@ -1,0 +1,26 @@
+= H1
+I like *onions*.
+I am *Bold*.
+I am italic /italic/.
+I am _underline_.
+I am -strikethrough-.
+[test.WIKI Self]
+[onion.jpg]
+== H2
+* one
+* two
+** A
+** B
+* three
+=== H3
+
+|Food|Is Yummmy
+|Onion|Yes
+|Poop|Yes
+|Prentzels|Yes
+|Cats|No
+
+ if(IsYummy(onions))
+      return TRUE;
+ else
+	"<BR>";
