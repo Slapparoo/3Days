@@ -1,9 +1,11 @@
 #include "http.HC"
+#define WIKI_EDIT"/EDIT"
 #define WIKI_ROOT "/Wiki/"
 #define WIKI_NAME "TempleOS Tiki"
 #define WIKI_HOME "/"
 #define WIKI_INDEX "/INDEX"
 #define WIKI_SEARCH "/FIND"
+#define WIKI_PREVIEW "/Wiki/Preview"
 #include "header_footer.HC";
 U8 *ReadLine(U8 *t,U8 **en) {
   U8 *r,*e;
@@ -11,7 +13,7 @@ U8 *ReadLine(U8 *t,U8 **en) {
     if(en) *en=NULL;
 	return NULL;
   }
-  if(e=StrFirstOcc(t,"\n")) {
+  if(e=StrFirstOcc(t,"\n")) {
 chug:
     r=MAlloc(e-t+1);
     MemCpy(r,t,e-t);
@@ -26,7 +28,6 @@ chug:
     else
       *en=e;
   }
-  TOSPrint("RL:%s\n",r);
   return r;
 }
 U8 *StrSlice(U8 *ptr,U8 *en) {
@@ -40,7 +41,7 @@ Bool IsImage(U8 *name) {
   if(dot++) {
     if(!StrICmp(dot,"GIF")) return TRUE;
     if(!StrICmp(dot,"JPEG")) return TRUE;
-    if(!StrICmp(dot,"JPG")) return TRUE;
+    if(!StrICmp(dot,"JPG")) return TRUE;
     if(!StrICmp(dot,"PNG")) return TRUE;
     if(!StrICmp(dot,"BMP")) return TRUE;
   }
@@ -157,12 +158,14 @@ U8 *MakeIndex(CDyadStream *stream,I64 *len_ptr,CHeaderItem *index) {
 	I64 last_idx=0;
 	for(cur=index->next;TRUE;) {
 		if(cur->depth>last_idx){
-			while(last_idx++<cur->depth)
+			do
 				cpair=EnterPair(cpair,stream,len_ptr,'OL');
+			while(++last_idx<cur->depth);
 		}
 		if(cur->depth<last_idx){
-			while(last_idx-- <cur->depth)
+			do
 				cpair=ClosePair(cpair,stream,len_ptr);
+			while(--last_idx>cur->depth);
 		}
 		WriteLn(stream,len_ptr,"<LI><A HREF=\"#%d\">%s</A></LI>",cur->ident,cur->text);
 		cur=cur->next;
@@ -173,6 +176,194 @@ U8 *MakeIndex(CDyadStream *stream,I64 *len_ptr,CHeaderItem *index) {
 		cpair=ClosePair(cpair,stream,len_ptr);
 	QueDel(pairs);
 	WriteLn(stream,len_ptr,"</DIV>");
+}
+I64 FmtText(U8 *ftxt,CDyadStream *stream,CURL *url) {
+  U8 *fptr,
+        *ln,*oln,*ln2,*t1,*t2,*t3;
+  I64 len=0,*len_ptr,flags,i,depth,ident=0;
+  I64 list_depths[0x100],list_depths_i;
+  CHTMLPair *markup=MAlloc(sizeof(CHTMLPair)),*last;
+  CHeaderItem *headers=MAlloc(sizeof(CHeaderItem)),*cheader,*theader; 
+  flags=0;
+  len_ptr=&len;
+  QueInit(markup);
+  QueInit(headers);
+loop:
+  cheader=headers;
+  last=markup;
+  ident=0;
+  list_depths_i=0;
+  fptr=ftxt;
+  if(!len_ptr) { //On second run len_ptr is NULL,but header is already populated
+    MakeIndex(stream,len_ptr,headers);
+    for(cheader=headers->next;cheader!=headers;cheader=cheader->next)
+      Free(cheader->text);
+    QueDel(headers);
+  }
+  while(oln=ln=ReadLine(fptr,&fptr)) {
+//Is code if starts with whitespace
+    if(StrOcc("\t ",*ln)) {
+      if(!LBts(&flags,WGf_CODE)) {
+        last=EnterPair(last,stream,len_ptr,'PRE');
+        last=EnterPair(last,stream,len_ptr,'CODE');
+      }
+      WriteLn(stream,len_ptr,"%s",t1=HTMLify(ln));
+      Free(t1);
+      goto next;
+    } else if(LBtr(&flags,WGf_CODE)) {
+      last=ClosePair(last,stream,len_ptr);
+      last=ClosePair(last,stream,len_ptr);
+    }
+    if(*ln=='=') {
+      last=ClosePair(last,stream,len_ptr);
+      for(i=0;ln[i]=='=';i++);
+      WriteLn(stream,len_ptr,"<H%d ID=\"%d\">%s</H%d>",i,++ident,t1=HTMLify(ln+i),i);
+      if(len_ptr){
+        theader=MAlloc(sizeof(CHeaderItem));
+        QueInit(theader);
+        theader->text=t1;
+        theader->depth=i;
+        theader->ident=ident;
+        QueIns(theader,cheader);
+        cheader=theader;
+      } else
+        Free(t1);
+      goto next;
+    }
+    if(*ln=='-') {
+      for(i=0;ln[i]=='-';i++);
+      if(i>=4) {
+        last=ClosePair(last,stream,len_ptr);
+        WriteLn(stream,len_ptr,"<HR>");
+        goto next;
+      }
+    }
+    if(*ln=='*') {
+      for(i=0;ln[i]=='*';i++);
+      ln+=i;
+      depth=list_depths[list_depths_i];
+      if(!list_depths_i) {
+        last=EnterPair(last,stream,len_ptr,'UL');
+        list_depths[list_depths_i++]=i;
+      } else if(depth==i) {
+//Do nothing
+      } else if(depth>i) {
+        last=ClosePair(last,stream,len_ptr,depth-i);
+        list_depths_i--;
+      } else if(depth<i) {
+        last=EnterPair(last,stream,len_ptr,'UL');
+        list_depths[list_depths_i++]=i;
+      } else
+        ;
+      last=EnterPair(last,stream,len_ptr,'LI');
+      LBts(&flags,WGf_LIST);
+      goto fmt_line;
+    } else if(list_depths_i) {
+      last=ClosePair(last,stream,len_ptr,list_depths_i);
+      list_depths_i=0;
+    }
+    if(!Bts(&flags,WGf_PARA))
+      last=EnterPair(last,stream,len_ptr,'P');
+    if(*ln=='|') {
+      if(LBts(&flags,WGf_TABLE)) {
+row_start:
+        last=EnterPair(last,stream,len_ptr,'TR');
+        last=EnterPair(last,stream,len_ptr,'TD');
+      } else {
+        last=EnterPair(last,stream,len_ptr,'TABLE');
+        goto row_start;
+      }
+    } else if(LBtr(&flags,WGf_TABLE)) {
+      last=ClosePair(last,stream,len_ptr);
+    }
+fmt_line:
+    for(;*ln;) {
+      switch(*ln) {
+        start:
+	  t1=t2=NULL;
+	  case '|':
+	    ln2=ln;
+	    last=ClosePair(last,stream,len_ptr);
+	    last=EnterPair(last,stream,len_ptr,'TD');
+	    break;
+	  case '[':
+	    ln2=StrFirstOcc(ln+1,"]");
+	    if(!ln2) ln2=ln+StrLen(ln);
+	    t1=StrSlice(ln+1,ln2);
+	    t3=StrNew(t1);//Trimming mutates t1
+	    if(IsImage(Trim(t1))) {
+	      Write(stream,len_ptr,"<IMG SRC=\"%s\">",Trim(t1));
+	    } else if(!StrFirstOcc(t3," "))
+	      Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),Trim(t1));
+	    else {
+	      t2=StrFirstOcc(t3," ");
+	      *t2++=0;
+	      t2=HTMLify(t2);
+	      Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),Trim(t2));
+	    }
+	    Free(t3);
+	    break;
+	  case '*':
+	    ln2=StrFirstOcc(ln+1,"*");
+	    if(!ln2) ln2=ln+StrLen(ln);
+	    Write(stream,len_ptr,"<B>%s</B>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	    break;
+	  case '/':
+	    ln2=StrFirstOcc(ln+1,"/");
+	    if(!ln2) ln2=ln+StrLen(ln);
+	    Write(stream,len_ptr,"<I>%s</I>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	    break;
+	  case '_':
+	    ln2=StrFirstOcc(ln+1,"_");
+	    if(!ln2) ln2=ln+StrLen(ln);
+	    Write(stream,len_ptr,"<U>%s</U>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	    break;
+	  case '-':
+	    ln2=StrFirstOcc(ln+1,"-");
+	    if(!ln2) ln2=ln+StrLen(ln);
+	    Write(stream,len_ptr,"<S>%s</S>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	    break;
+	  case '+':
+	    ln2=StrFirstOcc(ln+1,"+");
+	    if(!ln2) ln2=ln+StrLen(ln);
+	    Write(stream,len_ptr,"<MARK>%s</MARK>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	    break;
+        end:
+	  if(*ln2)
+	    ln=ln2+1;
+	  else
+	    ln=ln2;
+	  Free(t2),Free(t1);
+	  break;
+        default:
+	  ln2=StrFirstOcc(ln,"-_/*[|");
+	  if(!ln2) ln2=ln+StrLen(ln);
+	  Write(stream,len_ptr,"%s",t2=HTMLify(t1=StrSlice(ln,ln2)));
+	  Free(t1),Free(t2);
+	  ln=ln2;
+      }
+    }
+    if(LBtr(&flags,WGf_LIST))
+      last=ClosePair(last,stream,len_ptr); //Close list item
+    else if(Bt(&flags,WGf_TABLE)) {
+      last=ClosePair(last,stream,len_ptr); //Close data
+      last=ClosePair(last,stream,len_ptr); //Close row
+    }
+    else if(Bt(&flags,WGf_PARA))
+      Write(stream,len_ptr,"<BR>");
+next:
+    Free(oln);
+  }
+finish:
+  while(markup!=(last=ClosePair(last,stream,len_ptr)));
+  if(len_ptr) {
+    len_ptr=NULL;
+    goto loop;
+  }
+  QueDel(markup);
+  for(theader=headers->next;theader!=headers;theader=theader->next)
+    Free(theader->text);
+  QueDel(headers);
 }
 U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   U8 *path=MStrPrint(WIKI_ROOT"/%s",url->abs_path),*ftxt,*fptr,
@@ -186,197 +377,37 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   cheader=headers;
   last=markup;
   if(!StrLen(url->abs_path)||!StrCmp(url->abs_path,"/"))
-	path=StrNew(WIKI_ROOT"/WikiHome");
+    path=StrNew(WIKI_ROOT"/WikiHome");
   if(FileFind(path)) {
-    flags=0;
-    ftxt=FileRead(path);
-    len_ptr=&len;
-loop:
-    ident=0;
-    list_depths_i=0;
-    fptr=ftxt;
+//dummy write an index to compute its length
+    WriteLn(stream,,"HTTP/1.1 200 OK");
+    WriteLn(stream,,"Server: Bungis");
+    WriteLn(stream,,"Content-Type: text/html");
+    WriteLn(stream,,"");
     WikiHeader(stream,len_ptr,url->abs_path);
-    if(!len_ptr) { //On second run len_ptr is NULL,but header is already populated
-	MakeIndex(stream,len_ptr,headers);
-	for(cheader=headers->next;cheader!=headers;cheader=cheader->next)
-		Free(cheader->text);
-	QueDel(headers);
-    }
-    while(oln=ln=ReadLine(fptr,&fptr)) {
-//Is code if starts with whitespace
-      if(StrOcc("\t ",*ln)) {
-        if(!LBts(&flags,WGf_CODE)) {
-	  last=EnterPair(last,stream,len_ptr,'PRE');
-	  last=EnterPair(last,stream,len_ptr,'CODE');
-        }
-        WriteLn(stream,len_ptr,"%s",t1=HTMLify(ln));
-        Free(t1);
-        goto next;
-      } else if(LBtr(&flags,WGf_CODE)) {
-        last=ClosePair(last,stream,len_ptr);
-        last=ClosePair(last,stream,len_ptr);
-      }
-      if(*ln=='=') {
-        last=ClosePair(last,stream,len_ptr);
-        for(i=0;ln[i]=='=';i++);
-        WriteLn(stream,len_ptr,"<H%d ID=\"%d\">%s</H%d>",i,++ident,t1=HTMLify(ln+i),i);
-	if(len_ptr){
-        	theader=MAlloc(sizeof(CHeaderItem));
-		QueInit(theader);
-		theader->text=t1;
-		theader->depth=i;
-		theader->ident=ident;
-		QueIns(theader,cheader);
-		cheader=theader;
-	} else
-		Free(t1);
-        goto next;
-      }
-      if(*ln=='-') {
-        for(i=0;ln[i]=='-';i++);
-        if(i>=4) {
-	  last=ClosePair(last,stream,len_ptr);
-	  WriteLn(stream,len_ptr,"<HR>");
-	  goto next;
-        }
-      }
-      if(*ln=='*') {
-        for(i=0;ln[i]=='*';i++);
-        ln+=i;
-        depth=list_depths[list_depths_i];
-        if(!list_depths_i) {
-	  last=EnterPair(last,stream,len_ptr,'UL');
-	  list_depths[list_depths_i++]=i;
-        } else if(depth==i) {
-//Do nothing
-        } else if(depth>i) {
-	  last=ClosePair(last,stream,len_ptr,depth-i);
-	  list_depths_i--;
-        } else if(depth<i) {
-	  last=EnterPair(last,stream,len_ptr,'UL');
-	  list_depths[list_depths_i++]=i;
-        } else
-	  ;
-        last=EnterPair(last,stream,len_ptr,'LI');
-        LBts(&flags,WGf_LIST);
-        goto fmt_line;
-      } else if(list_depths_i) {
-        last=ClosePair(last,stream,len_ptr,list_depths_i);
-        list_depths_i=0;
-      }
-      if(!Bts(&flags,WGf_PARA))
-        last=EnterPair(last,stream,len_ptr,'P');
-      if(*ln=='|') {
-        if(LBts(&flags,WGf_TABLE)) {
-row_start:
-	  last=EnterPair(last,stream,len_ptr,'TR');
-	  last=EnterPair(last,stream,len_ptr,'TD');
-        } else {
-	  last=EnterPair(last,stream,len_ptr,'TABLE');
-	  goto row_start;
-        }
-      } else if(LBtr(&flags,WGf_TABLE)) {
-        last=ClosePair(last,stream,len_ptr);
-      }
-fmt_line:
-      for(;*ln;) {
-        switch(*ln) {
-	  start:
-	    t1=t2=NULL;
-	    case '|':
-	      ln2=ln;
-	      last=ClosePair(last,stream,len_ptr);
-	      last=EnterPair(last,stream,len_ptr,'TD');
-	      break;
-	    case '[':
-	      ln2=StrFirstOcc(ln+1,"]");
-	      if(!ln2) ln2=ln+StrLen(ln);
-	      t1=StrSlice(ln+1,ln2);
-	      t3=StrNew(t1);//Trimming mutates t1
-	      if(IsImage(Trim(t1))) {
-	        Write(stream,len_ptr,"<IMG SRC=\"%s\">",Trim(t1));
-	      } else if(!StrFirstOcc(t3," "))
-	        Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),Trim(t1));
-	      else {
-	        t2=StrFirstOcc(t3," ");
-	        *t2++=0;
-	        t2=HTMLify(t2);
-	        Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),Trim(t2));
-	      }
-	      Free(t3);
-	      break;
-	    case '*':
-	      ln2=StrFirstOcc(ln+1,"*");
-	      if(!ln2) ln2=ln+StrLen(ln);
-	      Write(stream,len_ptr,"<B>%s</B>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
-	      break;
-	    case '/':
-	      ln2=StrFirstOcc(ln+1,"/");
-	      if(!ln2) ln2=ln+StrLen(ln);
-	      Write(stream,len_ptr,"<I>%s</I>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
-	      break;
-	    case '_':
-	      ln2=StrFirstOcc(ln+1,"_");
-	      if(!ln2) ln2=ln+StrLen(ln);
-	      Write(stream,len_ptr,"<U>%s</U>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
-	      break;
-	    case '-':
-	      ln2=StrFirstOcc(ln+1,"-");
-	      if(!ln2) ln2=ln+StrLen(ln);
-	      Write(stream,len_ptr,"<S>%s</S>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
-	      break;
-	    case '+':
-	      ln2=StrFirstOcc(ln+1,"+");
-	      if(!ln2) ln2=ln+StrLen(ln);
-	      Write(stream,len_ptr,"<MARK>%s</MARK>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
-	      break;
-	  end:
-	    if(*ln2)
-	      ln=ln2+1;
-	    else
-	      ln=ln2;
-	    Free(t2),Free(t1);
-	    break;
-	  default:
-	    ln2=StrFirstOcc(ln,"-_/*[|");
-	    if(!ln2) ln2=ln+StrLen(ln);
-	    Write(stream,len_ptr,"%s",t2=HTMLify(t1=StrSlice(ln,ln2)));
-	    Free(t1),Free(t2);
-	    ln=ln2;
-        }
-      }
-      if(LBtr(&flags,WGf_LIST))
-        last=ClosePair(last,stream,len_ptr); //Close list item
-      else if(Bt(&flags,WGf_TABLE)) {
-        last=ClosePair(last,stream,len_ptr); //Close data
-        last=ClosePair(last,stream,len_ptr); //Close row
-      }
-      else if(Bt(&flags,WGf_PARA))
-        Write(stream,len_ptr,"<BR>");
-next:
-      Free(oln);
-    }
-finish:
-    while(markup!=(last=ClosePair(last,stream,len_ptr)));
-    WikiFooter(stream,len_ptr,url->abs_path);
-    if(len_ptr) {
-	//dummy write an index to compute its length
-	MakeIndex(stream,len_ptr,headers);
-      WriteLn(stream,,"HTTP/1.1 200 OK");
-      WriteLn(stream,,"Server: Bungis");
-      WriteLn(stream,,"Content-Type: text/html");
-      WriteLn(stream,,"");
-      len_ptr=NULL;
-      goto loop;
-    }
+    ftxt=FileRead(path);
+    FmtText(ftxt,stream,url);
     Free(ftxt);
+    WikiFooter(stream,len_ptr,url->abs_path);
   }
   Free(path);
-  DyadEnd(stream);
 }
 #include "find.HC"
+#include "edit.HC"
+U0 Post(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTable *tab) {
+	U8 *dot=FileExtDot(url->abs_path);
+	if(!StrICmp(url->abs_path,WIKI_EDIT)) {
+		EditPost(srv,stream,url,req,tab);
+		return;
+	}
+	FileGet(srv,stream,url,req);
+}
 U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
 	U8 *dot=FileExtDot(url->abs_path);
+	if(!StrICmp(url->abs_path,WIKI_EDIT)) {
+		EditGet(srv,stream,url,req);
+		return;
+	}
 	if(!StrICmp(url->abs_path,WIKI_SEARCH)) {
 		FindGet(srv,stream,url,req);
 		return;
@@ -393,4 +424,5 @@ U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
 }
 CServer *srv=CreateServer(8080);
 srv->get=&Get;
+srv->post=&Post;
 Serve(srv);

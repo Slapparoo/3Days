@@ -524,6 +524,14 @@ static void stream_handleReceivedData(dyad_Stream *stream) {
     char data[8192];
     int size = recv(stream->sockfd, data, sizeof(data) - 1, 0);
     if (size <= 0) {
+	  if(stream->lineBuffer.length) {
+		  e=createEvent(DYAD_EVENT_LINE);
+		  e.msg = "received line";
+		  vec_push(&stream->lineBuffer,0);
+		  e.data = stream->lineBuffer.data;
+		  e.size = stream->lineBuffer.length-1;
+		  stream_emitEvent(stream, &e);
+      }
       if (size == 0 || errno != EWOULDBLOCK) {
         /* Handle disconnect */
         dyad_close(stream);

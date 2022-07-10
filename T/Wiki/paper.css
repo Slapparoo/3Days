@@ -3,7 +3,7 @@
 /**
   Global PaperCSS Config
 */
-/*@import url("https://fonts.googleapis.com/css?family=Neucha|Patrick+Hand+SC");*/
+@import url("https://fonts.googleapis.com/css?family=Neucha|Patrick+Hand+SC");
 html {
   --primary: #41403e;
   --secondary: #0071de;

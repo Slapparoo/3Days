@@ -32,6 +32,7 @@ extern void HCLongJmp(void *ptr);
 #include "ext/dyad/src/dyad.h"
 static void STK_DyadInit() {
 		dyad_init();
+		dyad_setUpdateTimeout(0.);
 }
 static void STK_DyadUpdate() {
 	dyad_update();

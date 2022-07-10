@@ -1,5 +1,5 @@
 
-U8 *WikiHeader(CDyadStream *s,I64 *len_ptr,U8 *points_to) {
+U8 *WikiHeader(CDyadStream *s,I64 *len_ptr,U8 *points_to,Bool edit=TRUE) {
 	WriteLn(s,len_ptr,"<!DOCTYPE html>");
 	WriteLn(s,len_ptr,"<HTML>");
 	WriteLn(s,len_ptr,"<HEAD>");
@@ -11,7 +11,8 @@ U8 *WikiHeader(CDyadStream *s,I64 *len_ptr,U8 *points_to) {
 		WriteLn(s,len_ptr,"<DIV class=\"nav-brand\"><H3><A HREF=\"WIKI_HOME\">" WIKI_NAME "</A></H3></DIV>");
 		WriteLn(s,len_ptr,"<DIV><UL CLASS=\"inline\">");
 			WriteLn(s,len_ptr,"<LI><A HREF=\""WIKI_INDEX"\">INDEX</A></LI>");
-			WriteLn(s,len_ptr,"<LI><A HREF=\"%s.EDIT\">EDIT</A></LI>",points_to);
+			if(edit)
+				WriteLn(s,len_ptr,"<LI><A HREF=\""WIKI_EDIT"?PAGENAME=%s\">EDIT</A></LI>",points_to);
 			WriteLn(s,len_ptr,"<LI><A HREF=\""WIKI_SEARCH"\">SEARCH</A></LI>",points_to);
 		WriteLn(s,len_ptr,"</UL></DIV>");
 	WriteLn(s,len_ptr,"</NAV>");
