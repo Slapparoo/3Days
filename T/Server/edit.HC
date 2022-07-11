@@ -1,7 +1,7 @@
 U0 __EditGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,U8 *file) {
 	TOSPrint("b\n");
   U8 *page=GetQueryValue(url->query,"PAGENAME"),*ptr,*ftxt,*t1,*ln;
-  TOSPrint("");
+  U8 *profan;
   if(!page||!file) {
 new_page:
     WriteLn(stream,,"HTTP/1.1 200 OK");
@@ -36,6 +36,7 @@ new_page:
     WriteLn(stream,NULL,"<TEXTAREA NAME=\"PAGETEXT\" COLS=\"70\" ROWS=\"100\" TYPE=\"textarea\">");
     if(FileFind(file)) {
       ptr=ftxt=FileRead(file);
+      profan=HasProfanity(ftxt);
       while(ln=ReadLine(ptr,&ptr)) {
         if(StrFirstOcc(ln,"\x0d\n"))
 	  *StrFirstOcc(ln,"\x0d\n")=0;
@@ -46,6 +47,10 @@ new_page:
       Free(ftxt);
     }
     WriteLn(stream,NULL,"</TEXTAREA>");
+    if(profan) {
+      WriteLn(stream,NULL,"<DIV CLASS=\"alert alert-danger\">Use of profranity \"%s\"</DIV>",profan);
+    }
+    Free(profan);
     WriteLn(stream,NULL,"<FIELDSET CLASS=\"form-group\">");
     WriteLn(stream,NULL,"<LEGEND>Preview or Publish?</LEGEND>");
     WriteLn(stream,NULL,"<LABEL CLASS=\"paper-radio\" FOR=\"PREVIEW\">");
@@ -74,7 +79,7 @@ U0 EditGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 }
 U0 EditPost(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTable *tab) {
   CHashGeneric *hash=HashFind("PAGENAME",tab,-1),*hash2=HashFind("PAGETEXT",tab,-1),*hash3=HashFind("PREVIEW",tab,-1);
-  U8 *link,*ftxt,*ptr,*t1,*ln,*plink;
+  U8 *link,*ftxt,*ptr,*t1,*ln,*plink,*t2,*profan;
   Bool first_run=TRUE;
   if(!hash&&!(t1=GetQueryValue(url->query,"PAGENAME"))) return;
   if(hash) {
@@ -100,27 +105,29 @@ loop:
       t1+=StrLen(ln);
       Free(ln);
     }
+    profan=HasProfanity(ftxt);
     if(hash3&&!StrICmp(hash3->user_data1,"PREVIEW")) {
 //Is preview
       if(StrLastOcc(plink,"/")) {
-        t1=StrNew(plink);
-        *StrLastOcc(t1,"/")=0;
-        DirMk(t1);
-        Free(t1);
+        t2=StrNew(plink);
+        *StrLastOcc(t2,"/")=0;
+        DirMk(t2);
+        Free(t2);
       }
       FileWrite(plink,ftxt,t1-ftxt);
     } else {
       if(StrLastOcc(link,"/")) {
-        t1=StrNew(link);
-        *StrLastOcc(t1,"/")=0;
-        DirMk(t1);
-        Free(t1);
+        t2=StrNew(link);
+        *StrLastOcc(t2,"/")=0;
+        DirMk(t2);
+        Free(t2);
       }
 //TODO profanity check.
-      FileWrite(link,ftxt,t1-ftxt);
+      if(!profan)
+        FileWrite(link,ftxt,t1-ftxt);
     }
+    Free(profan);
     Free(ftxt);
-    TOSPrint("eg\n");
     if(hash3&&!StrICmp(hash3->user_data1,"PREVIEW"))
       __EditGet(srv,stream,url,req,plink);
     else
@@ -143,7 +150,7 @@ loop:
       if(StrFirstOcc(ln,"\x0d\n"))
         *StrFirstOcc(ln,"\x0d\n")=0;
       t1=HTMLify(ln);
-      WriteLn(stream,NULL,t1);
+      WriteLn(stream,NULL,"%s",t1);
       Free(ln);Free(t1);
     }
 

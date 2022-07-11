@@ -92,7 +92,7 @@ U8 *HTMLify(U8 *str) {
 		break;
       end:
         Free(r);
-        ptr++;
+        if(*ptr) ptr++;
         r=t;
     }
     str=ptr;
@@ -151,7 +151,7 @@ loop:;
   if(last->next==last->last)
     return r;
   QueRem(last);
-  WriteLn(s,len,"</%c>",last->tag);
+  WriteLn(s,len,"</%c>",last->tag);
   Free(last);
   last=r;
   if(--cnt) goto loop;
@@ -163,32 +163,39 @@ class CHeaderItem:CQue {
 	I64 ident;
 };
 U8 *MakeIndex(CDyadStream *stream,I64 *len_ptr,CHeaderItem *index) {
-	CHeaderItem *cur;
-	CHTMLPair *pairs=MAlloc(sizeof(CHTMLPair)),*cpair=pairs;
-	QueInit(pairs);
-	cpair=pairs;
-	WriteLn(stream,len_ptr,"<DIV CLASS=\"paper\"><H3>Table of contents</H3>");
-	I64 last_idx=0;
-	for(cur=index->next;TRUE;) {
-		if(cur->depth>last_idx){
-			do
-				cpair=EnterPair(cpair,stream,len_ptr,'OL');
-			while(++last_idx<cur->depth);
-		}
-		if(cur->depth<last_idx){
-			do
-				cpair=ClosePair(cpair,stream,len_ptr);
-			while(--last_idx>cur->depth);
-		}
-		WriteLn(stream,len_ptr,"<LI><A HREF=\"#%d\">%s</A></LI>",cur->ident,cur->text);
-		cur=cur->next;
-		if(cur==index) goto en;
-	}
-	en:
-	while(cpair!=pairs)
-		cpair=ClosePair(cpair,stream,len_ptr);
-	QueDel(pairs);
-	WriteLn(stream,len_ptr,"</DIV>");
+  CHeaderItem *cur;
+  CHTMLPair *pairs=MAlloc(sizeof(CHTMLPair)),*cpair=pairs;
+  QueInit(pairs);
+  cpair=pairs;
+  WriteLn(stream,len_ptr,"<DIV CLASS=\"paper\"><H3>Table of contents</H3>");
+  I64 last_idx=0;
+  for(cur=index->next;TRUE;) {
+    if(cur->depth>last_idx){
+      do
+        cpair=EnterPair(cpair,stream,len_ptr,'OL');
+      while(++last_idx<cur->depth);
+    }
+    if(cur->depth<last_idx){
+      do
+        cpair=ClosePair(cpair,stream,len_ptr);
+      while(--last_idx>cur->depth);
+    }
+    WriteLn(stream,len_ptr,"<LI><A HREF=\"#%d\">%s</A></LI>",cur->ident,cur->text);
+    cur=cur->next;
+    if(cur==index) goto en;
+  }
+en:
+  while(cpair!=pairs)
+    cpair=ClosePair(cpair,stream,len_ptr);
+  QueDel(pairs);
+  WriteLn(stream,len_ptr,"</DIV>");
+}
+Bool IsAbsLink(U8 *link) {
+//http://
+  if(StrFirstOcc(link,":"))
+    return  TRUE;
+  return FALSE;
+
 }
 I64 FmtText(U8 *ftxt,CDyadStream *stream,CURL *url) {
   U8 *fptr,
@@ -219,7 +226,7 @@ loop:
       if(!LBts(&flags,WGf_CODE)) {
         last=EnterPair(last,stream,len_ptr,'PRE');
         last=EnterPair(last,stream,len_ptr,'CODE');
-      }
+      }
       WriteLn(stream,len_ptr,"%s",t1=HTMLify(ln));
       Free(t1);
       goto next;
@@ -309,13 +316,19 @@ fmt_line:
 	      t3=StrNew(t1);//Trimming mutates t1
 	      if(IsImage(Trim(t1))) {
 	        Write(stream,len_ptr,"<IMG SRC=\"%s\">",Trim(t1));
-	      } else if(!StrFirstOcc(t3," "))
-	        Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),Trim(t1));
-	      else {
+	      } else if(!StrFirstOcc(t3," ")) {
+	        if(IsAbsLink(Trim(t1)))
+		  Write(stream,len_ptr,"<A HREF=\"""%s\">%s</A>",Trim(t1),Trim(t1));
+	        else
+		  Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),Trim(t1));
+	      }else {
 	        t2=StrFirstOcc(t3," ");
 	        *t2++=0;
 	        t2=HTMLify(t2);
-	        Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),t2);
+	        if(IsAbsLink(Trim(t1)))
+		  Write(stream,len_ptr,"<A HREF=\"""%s\">%s</A>",Trim(t1),t2);
+	        else
+		  Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),t2);
 	      }
 	      Free(t3);
 	    }
@@ -408,8 +421,11 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   QueInit(headers);
   cheader=headers;
   last=markup;
-  if(!StrLen(url->abs_path)||!StrCmp(url->abs_path,"/"))
+  if(!StrLen(url->abs_path)||!StrCmp(url->abs_path,"/")) {
     path=StrNew(WIKI_ROOT"/WikiHome");
+    //Copy into URL to "redirect"
+    StrCpy(url->abs_path,"/WikiHome");
+  }
   if(FileFind(path)&&!IsDir(path)) {
 //dummy write an index to compute its length
     WriteLn(stream,,"HTTP/1.1 200 OK");
@@ -432,6 +448,7 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   Free(path);
 }
 #include "find.HC"
+#include"filter.HC"
 #include "edit.HC"
 #include "index.HC"
 U0 Post(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTable *tab) {
