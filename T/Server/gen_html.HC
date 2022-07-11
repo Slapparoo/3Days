@@ -6,6 +6,7 @@
 #define WIKI_INDEX "/INDEX"
 #define WIKI_SEARCH "/FIND"
 #define WIKI_PREVIEW "/Wiki/Preview"
+#define WIKI_UPLOAD "/UPLOAD"
 #include "header_footer.HC";
 U8 *ReadLine(U8 *t,U8 **en) {
   U8 *r,*e;
@@ -13,7 +14,7 @@ U8 *ReadLine(U8 *t,U8 **en) {
     if(en) *en=NULL;
 	return NULL;
   }
-  if(e=StrFirstOcc(t,"\n")) {
+  if(e=StrFirstOcc(t,"\n")) {
 chug:
     r=MAlloc(e-t+1);
     MemCpy(r,t,e-t);
@@ -29,6 +30,19 @@ chug:
       *en=e;
   }
   return r;
+}
+U8 *ChrootFile(U8 *fn,U8 *prefix=WIKI_ROOT) {
+	U8 *virt=MStrPrint("%s/%s",prefix,fn);
+	U8 *abs=FileNameAbs(virt),*abs2=FileNameAbs(prefix);
+	if(!StrNCmp(abs,abs2,StrLen(abs2))) {
+		Free(abs),Free(abs2);
+		return virt;
+	}
+	Free(abs),Free(abs2),Free(virt);
+	if(StrLastOcc(fn,"/")) {
+		return MStrPrint("%s/%s",prefix,StrLastOcc(fn,"/")+1);
+	}
+	return MStrPrint("%s/%s",prefix,fn);
 }
 U8 *StrSlice(U8 *ptr,U8 *en) {
   U8 *r=MAlloc(en-ptr+1);
@@ -90,7 +104,7 @@ U8 *HTMLify(U8 *str) {
 #define WGf_LIST 3
 #define WGf_TABLE 4
 U0 FileGet(CServer *srv,CDyadStream*stream,CURL *url,CHTTPRequest *req) {
-  U8 *link=MStrPrint(WIKI_ROOT"/%s",url->abs_path);
+  U8 *link=ChrootFile(url->abs_path);
   U8 *f,*mime,*dot=FileExtDot(link);
   I64 len;
   if(dot&&FileFind(link)){
@@ -109,10 +123,9 @@ U0 FileGet(CServer *srv,CDyadStream*stream,CURL *url,CHTTPRequest *req) {
     WriteLn(stream,,"");
     DyadWrite(stream,f,len);
     Free(f);
-    DyadEnd(stream);
   } else {
     R404(stream,&len,url->abs_path);
-    WriteLn(stream,,"HTTP/1.1 404 OK");
+    WriteLn(stream,,"HTTP/1.1 404 Not Found");
     WriteLn(stream,,"Server: Bungis");
     WriteLn(stream,,"Content-Type: text/html");
     WriteLn(stream,,"");
@@ -133,16 +146,16 @@ CHTMLPair *EnterPair(CHTMLPair *last,CDyadStream *s,I64 *len,U64 tag) {
 	return r;
 }
 CHTMLPair *ClosePair(CHTMLPair *last,CDyadStream *s,I64 *len,I64 cnt=1) {
-	loop:;
-	CHTMLPair *r=last->last;
-	if(last->next==last->last)
-		return r;
-	QueRem(last);
-	WriteLn(s,len,"</%c>",last->tag);
-	Free(last);
-	last=r;
-	if(--cnt) goto loop;
-	return r;
+loop:;
+  CHTMLPair *r=last->last;
+  if(last->next==last->last)
+    return r;
+  QueRem(last);
+  WriteLn(s,len,"</%c>",last->tag);
+  Free(last);
+  last=r;
+  if(--cnt) goto loop;
+  return r;
 }
 class CHeaderItem:CQue {
 	U8 *text;
@@ -288,45 +301,64 @@ fmt_line:
 	    break;
 	  case '[':
 	    ln2=StrFirstOcc(ln+1,"]");
-	    if(!ln2) ln2=ln+StrLen(ln);
-	    t1=StrSlice(ln+1,ln2);
-	    t3=StrNew(t1);//Trimming mutates t1
-	    if(IsImage(Trim(t1))) {
-	      Write(stream,len_ptr,"<IMG SRC=\"%s\">",Trim(t1));
-	    } else if(!StrFirstOcc(t3," "))
-	      Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),Trim(t1));
-	    else {
-	      t2=StrFirstOcc(t3," ");
-	      *t2++=0;
-	      t2=HTMLify(t2);
-	      Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),Trim(t2));
+	    if(!ln2) {
+	      ln2=ln;
+	      Write(stream,len_ptr,"[");
+	    } else {
+	      t1=StrSlice(ln+1,ln2);
+	      t3=StrNew(t1);//Trimming mutates t1
+	      if(IsImage(Trim(t1))) {
+	        Write(stream,len_ptr,"<IMG SRC=\"%s\">",Trim(t1));
+	      } else if(!StrFirstOcc(t3," "))
+	        Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),Trim(t1));
+	      else {
+	        t2=StrFirstOcc(t3," ");
+	        *t2++=0;
+	        t2=HTMLify(t2);
+	        Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),t2);
+	      }
+	      Free(t3);
 	    }
-	    Free(t3);
 	    break;
 	  case '*':
 	    ln2=StrFirstOcc(ln+1,"*");
-	    if(!ln2) ln2=ln+StrLen(ln);
-	    Write(stream,len_ptr,"<B>%s</B>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	    if(!ln2) {
+	      ln2=ln;
+	      Write(stream,len_ptr,"*");
+	    } else
+	      Write(stream,len_ptr,"<B>%s</B>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
 	    break;
 	  case '/':
 	    ln2=StrFirstOcc(ln+1,"/");
-	    if(!ln2) ln2=ln+StrLen(ln);
-	    Write(stream,len_ptr,"<I>%s</I>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	    if(!ln2) {
+	      ln2=ln;
+	      Write(stream,len_ptr,"/");
+	    } else
+	      Write(stream,len_ptr,"<I>%s</I>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
 	    break;
 	  case '_':
 	    ln2=StrFirstOcc(ln+1,"_");
-	    if(!ln2) ln2=ln+StrLen(ln);
-	    Write(stream,len_ptr,"<U>%s</U>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	    if(!ln2) {
+	      ln2=ln;
+	      Write(stream,len_ptr,"_");
+	    } else
+	      Write(stream,len_ptr,"<U>%s</U>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
 	    break;
 	  case '-':
 	    ln2=StrFirstOcc(ln+1,"-");
-	    if(!ln2) ln2=ln+StrLen(ln);
-	    Write(stream,len_ptr,"<S>%s</S>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	    if(!ln2) {
+	      ln2=ln;
+	      Write(stream,len_ptr,"-");
+	    } else
+	      Write(stream,len_ptr,"<S>%s</S>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
 	    break;
 	  case '+':
 	    ln2=StrFirstOcc(ln+1,"+");
-	    if(!ln2) ln2=ln+StrLen(ln);
-	    Write(stream,len_ptr,"<MARK>%s</MARK>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	    if(!ln2) {
+	      ln2=ln;
+	      Write(stream,len_ptr,"+");
+	    } else
+	      Write(stream,len_ptr,"<MARK>%s</MARK>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
 	    break;
         end:
 	  if(*ln2)
@@ -366,9 +398,9 @@ finish:
   QueDel(headers);
 }
 U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
-  U8 *path=MStrPrint(WIKI_ROOT"/%s",url->abs_path),*ftxt,*fptr,
+  U8 *path=ChrootFile(url->abs_path),*ftxt,*fptr,
         *ln,*oln,*ln2,*t1,*t2,*t3;
-  I64 len=0,*len_ptr,flags,i,depth,ident=0;
+  I64 len=0,*len_ptr=NULL,flags,i,depth,ident=0;
   I64 list_depths[0x100],list_depths_i;
   CHTMLPair *markup=MAlloc(sizeof(CHTMLPair)),*last;
   CHeaderItem *headers=MAlloc(sizeof(CHeaderItem)),*cheader,*theader;
@@ -378,7 +410,7 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   last=markup;
   if(!StrLen(url->abs_path)||!StrCmp(url->abs_path,"/"))
     path=StrNew(WIKI_ROOT"/WikiHome");
-  if(FileFind(path)) {
+  if(FileFind(path)&&!IsDir(path)) {
 //dummy write an index to compute its length
     WriteLn(stream,,"HTTP/1.1 200 OK");
     WriteLn(stream,,"Server: Bungis");
@@ -388,22 +420,41 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
     ftxt=FileRead(path);
     FmtText(ftxt,stream,url);
     Free(ftxt);
-    WikiFooter(stream,len_ptr,url->abs_path);
+    WikiFooter(stream,len_ptr,url);
+  } else {
+    WriteLn(stream,,"HTTP/1.1 200 OK");
+    WriteLn(stream,,"Server: Bungis");
+    WriteLn(stream,,"Content-Type: text/html");
+    WriteLn(stream,,"");
+    WikiHeader(stream,NULL,"Not found");
+    WikiFooter(stream,NULL,url);
   }
   Free(path);
 }
 #include "find.HC"
 #include "edit.HC"
+#include "index.HC"
 U0 Post(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTable *tab) {
 	U8 *dot=FileExtDot(url->abs_path);
 	if(!StrICmp(url->abs_path,WIKI_EDIT)) {
 		EditPost(srv,stream,url,req,tab);
+		return;
+	} else if(!StrICmp(url->abs_path,WIKI_UPLOAD)) {
+		UploadPost(srv,stream,url,req,tab);
 		return;
 	}
 	FileGet(srv,stream,url,req);
 }
 U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
 	U8 *dot=FileExtDot(url->abs_path);
+	if(!StrNCmp(url->abs_path,WIKI_INDEX,StrLen(WIKI_INDEX))) {
+		IndexGet(srv,stream,url,req);
+		return;
+	}
+	if(!StrICmp(url->abs_path,WIKI_UPLOAD)) {
+		UploadGet(srv,stream,url,req);
+		return;
+	}
 	if(!StrICmp(url->abs_path,WIKI_EDIT)) {
 		EditGet(srv,stream,url,req);
 		return;

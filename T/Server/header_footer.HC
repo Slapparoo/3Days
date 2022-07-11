@@ -3,7 +3,7 @@ U8 *WikiHeader(CDyadStream *s,I64 *len_ptr,U8 *points_to,Bool edit=TRUE) {
 	WriteLn(s,len_ptr,"<!DOCTYPE html>");
 	WriteLn(s,len_ptr,"<HTML>");
 	WriteLn(s,len_ptr,"<HEAD>");
-		WriteLn(s,len_ptr,"<LINK REL=\"stylesheet\" HREF=\"paper.css\">");
+		WriteLn(s,len_ptr,"<LINK REL=\"stylesheet\" HREF=\"/paper.css\">");
 		WriteLn(s,len_ptr,"<TITLE>%s</TITLE>",points_to);
 	WriteLn(s,len_ptr,"</HEAD>");
 	WriteLn(s,len_ptr,"<BODY>");

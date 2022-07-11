@@ -524,7 +524,7 @@ U0 CoreAPSethTask()
     //LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
     LBtr(&ctrl->flags,JOBCf_LOCKED);
     LBts(&(Fs->task_flags),TASKf_IDLE);
-    ms=10,t=__GetTicks;
+    ms=100,t=__GetTicks;
     for(task=Fs->next_task;task!=task1;task=task->next_task) {
 		if(Bt(&task->task_flags,TASKf_SUSPENDED)||Bt(&task->task_flags,TASKf_AWAITING_MSG))
 			goto next;
@@ -552,7 +552,7 @@ CJob *JobQue(I64 (*fp_addr)(U8 *data),U8 *data=NULL,
     throw('MultCore');
   tmpc=CAlloc(sizeof(CJob),adam_task);
   if (aux_str)
-    tmpc->aux_str=StrNew(aux_str,adam_task);
+    tmpc->aux_str=StrNew(aux_str,adam_task);
   tmpc->job_code=job_code;
   tmpc->addr=fp_addr;
   tmpc->fun_arg=data;

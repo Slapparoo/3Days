@@ -219,7 +219,7 @@ to avoid this.
   U64 m;
   F64 d,d1;
   CDoc *doc;
-  U8 *ptr,**_buf,*buf,**_dst,tmp_buf[TMP_BUF_LEN],tmp_buf2[TMP_BUF_LEN*2];
+  U8 *t1,*ptr,**_buf,*buf,**_dst,tmp_buf[TMP_BUF_LEN],tmp_buf2[TMP_BUF_LEN*2];
 
   if (!fmt)
     throw('StrPrint');
@@ -412,24 +412,14 @@ to avoid this.
 	  while (aux_fmt_num-->0)
 	    OutStr(tmp_buf,_buf,_dst,len,flags);
 	  break;
-
 	case 'p':
-	  if (cur_arg>=argc)
-	    throw('StrPrint');
-	  StrPrintFunSeg(tmp_buf,argv[cur_arg++],len,flags);
-	  OutStr(tmp_buf,_buf,_dst,len,flags);
-	  break;
-	  break;
 	case 'P':
 	  if (cur_arg>=argc)
 	    throw('StrPrint');
-	  StrPrintFunSeg(tmp_buf,argv[cur_arg],len,flags);
-	  if (!_buf) {
-	    StrPrint(tmp_buf2,"\dLK,\"%s\",A=\"AD:0x%X\"\d",
-		  tmp_buf,argv[cur_arg]);
-	    OutStr(tmp_buf2,_buf,_dst,len,flags);
-	  }
-	  cur_arg++;
+          t1=SrcEdLink(argv[cur_arg++]);
+      if(t1)
+		OutStr(t1,_buf,_dst,StrLen(t1),flags);
+	  Free(t1);
 	  break;
 	case 'd':
 	  if (cur_arg>=argc)
@@ -916,7 +906,7 @@ U0 PrintErr(U8 *fmt,...)
 {//Print "Err:" and msg in blinking red.
   U8 *buf=StrPrintJoin(NULL,fmt,argc,argv);
   GetOutOfDollar;
-  "%,p %,p %,p %,p " ST_ERR_ST "%s",Caller,Caller(2),Caller(3),Caller(4),buf;
+  ST_ERR_ST "%s",buf;
   Free(buf);
 }
 
@@ -924,6 +914,6 @@ U0 PrintWarn(U8 *fmt,...)
 {//Print "Warn:" and msg in blinking red.
   U8 *buf=StrPrintJoin(NULL,fmt,argc,argv);
   GetOutOfDollar;
-  "%,p %,p %,p %,p " ST_WARN_ST "%s",Caller,Caller(2),Caller(3),Caller(4),buf;
+  ST_WARN_ST "%s",buf;
   Free(buf);
 }

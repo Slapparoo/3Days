@@ -352,7 +352,7 @@ U0 UserTaskCont()
     } catch {
       if ((doc=Fs->put_doc) && doc->doc_signature==DOC_SIGNATURE_VAL)
 	DocUnlock(doc);
-      "Caught a %c\n",Fs->except_ch;
+      PutExcept;
       Fs->catch_except=TRUE;
     }
   } while (cont);

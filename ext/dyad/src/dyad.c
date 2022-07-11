@@ -532,14 +532,7 @@ static void stream_handleReceivedData(dyad_Stream *stream) {
 		  e.size = stream->lineBuffer.length-1;
 		  stream_emitEvent(stream, &e);
       }
-      if (size == 0 || errno != EWOULDBLOCK) {
-        /* Handle disconnect */
-        dyad_close(stream);
-        return;
-      } else {
-        /* No more data */
-        return;
-      }
+      return;
     }
     data[size] = 0;
     /* Update status */
@@ -565,25 +558,25 @@ static void stream_handleReceivedData(dyad_Stream *stream) {
         vec_push(&stream->lineBuffer, data[i]);
       }
       start = 0;
+      vec_push(&stream->lineBuffer,0);
       buf = stream->lineBuffer.data;
-      for (i = 0; i < stream->lineBuffer.length; i++) {
+      for (i = 0; i < stream->lineBuffer.length-1; i++) {
         if (buf[i] == '\n') {
           dyad_Event e;
-          buf[i] = '\0';
           e = createEvent(DYAD_EVENT_LINE);
           e.msg = "received line";
           e.data = &buf[start];
-          e.size = i - start;
-          /* Check and strip carriage return */
-          if (e.size > 0 && e.data[e.size - 1] == '\r') {
-            e.data[--e.size] = '\0';
-          }
+          e.size = i - start+1;
+          char next=buf[i+1];
+          buf[i+1]=0;
           stream_emitEvent(stream, &e);
+          buf[i+1]=next;
           start = i + 1;
           /* Check stream state in case it was closed during one of the line
            * event handlers. */
           if (stream->state != DYAD_STATE_CONNECTED) {
-            return;
+			stream->lineBuffer.length--;
+			return;
           }
         }
       }
@@ -592,6 +585,7 @@ static void stream_handleReceivedData(dyad_Stream *stream) {
       } else {
         vec_splice(&stream->lineBuffer, 0, start);
       }
+      stream->lineBuffer.length--;
     }
   }
 }

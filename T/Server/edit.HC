@@ -1,6 +1,8 @@
-U0 EditGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
-  U8 *page=GetQueryValue(url->query,"PAGENAME"),*link,*ptr,*ftxt,*t1,*ln;
-  if(!page) {
+U0 __EditGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,U8 *file) {
+	TOSPrint("b\n");
+  U8 *page=GetQueryValue(url->query,"PAGENAME"),*ptr,*ftxt,*t1,*ln;
+  TOSPrint("");
+  if(!page||!file) {
 new_page:
     WriteLn(stream,,"HTTP/1.1 200 OK");
     WriteLn(stream,,"Server: Bungis");
@@ -13,29 +15,36 @@ new_page:
     WriteLn(stream,NULL,"<INPUT TYPE=\"submit\" VALUE=\"submit\">");
     WriteLn(stream,NULL,"</FORM>");
     WikiFooter(stream,NULL,url);
+	return;
   } else {
+    if(FileFind(file)&&IsDir(file)) {
+		WriteLn(stream,,"HTTP/1.1 404 OK");
+		WriteLn(stream,,"Server: Bungis");
+		WriteLn(stream,,"Content-Type: text/html");
+		WriteLn(stream,,"");    
+		WikiHeader(stream,NULL,"Attempted Directory Edit.",FALSE);
+		WriteLn(stream,NULL,"<H1>You attemped to edit a directory!!!</H1>");
+		WikiFooter(stream,NULL,url);
+		return;
+    }
     WriteLn(stream,,"HTTP/1.1 200 OK");
     WriteLn(stream,,"Server: Bungis");
     WriteLn(stream,,"Content-Type: text/html");
     WriteLn(stream,,"");
-    if(page) {
-      link=MStrPrint(WIKI_ROOT"/%s",page);
-    }
-    WikiHeader(stream,NULL,link,FALSE);
+    WikiHeader(stream,NULL,page,FALSE);
     WriteLn(stream,NULL,"<FORM ACTION=\""WIKI_EDIT"?PAGENAME=%s\"CLASS=\"form-group\" METHOD=\"POST\">",page);
     WriteLn(stream,NULL,"<TEXTAREA NAME=\"PAGETEXT\" COLS=\"70\" ROWS=\"100\" TYPE=\"textarea\">");
-    if(FileFind(link)) {
-      ptr=ftxt=FileRead(link);
+    if(FileFind(file)) {
+      ptr=ftxt=FileRead(file);
       while(ln=ReadLine(ptr,&ptr)) {
         if(StrFirstOcc(ln,"\x0d\n"))
 	  *StrFirstOcc(ln,"\x0d\n")=0;
         t1=HTMLify(ln);
-        WriteLn(stream,NULL,t1);
+        WriteLn(stream,NULL,"%s",t1);
         Free(ln);Free(t1);
       }
       Free(ftxt);
     }
-    Free(link);
     WriteLn(stream,NULL,"</TEXTAREA>");
     WriteLn(stream,NULL,"<FIELDSET CLASS=\"form-group\">");
     WriteLn(stream,NULL,"<LEGEND>Preview or Publish?</LEGEND>");
@@ -48,29 +57,32 @@ new_page:
     WriteLn(stream,NULL,"</FIELDSET>");
     WriteLn(stream,NULL,"<INPUT TYPE=\"submit\" VALUE=\"submit\">");
     WriteLn(stream,NULL,"</FORM>");
-    if(FileFind(link)) {
-      ftxt=FileRead(link);
+    if(FileFind(file)) {
+      ftxt=FileRead(file);
       FmtText(ftxt,stream,url);
       Free(ftxt);
     }
     WikiFooter(stream,NULL,url);
   }
 }
+U0 EditGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
+	U8 *page=GetQueryValue(url->query,"PAGENAME"),*link=NULL;
+	if(page)
+		link=ChrootFile(page);
+	__EditGet(srv,stream,url,req,link);
+	Free(page),Free(link);
+}
 U0 EditPost(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTable *tab) {
-  WriteLn(stream,,"HTTP/1.1 200 OK");
-  WriteLn(stream,,"Server: Bungis");
-  WriteLn(stream,,"Content-Type: text/html");
-  WriteLn(stream,,"");
   CHashGeneric *hash=HashFind("PAGENAME",tab,-1),*hash2=HashFind("PAGETEXT",tab,-1),*hash3=HashFind("PREVIEW",tab,-1);
   U8 *link,*ftxt,*ptr,*t1,*ln,*plink;
   Bool first_run=TRUE;
   if(!hash&&!(t1=GetQueryValue(url->query,"PAGENAME"))) return;
   if(hash) {
-    link=MStrPrint(WIKI_ROOT"/%s",hash->user_data1);
-    plink=MStrPrint(WIKI_PREVIEW"/%s",hash->user_data1);
+    link=ChrootFile(hash->user_data1);
+    plink=ChrootFile(hash->user_data1,WIKI_PREVIEW);
   } else {
-    link=MStrPrint(WIKI_ROOT"/%s",t1);
-    plink=MStrPrint(WIKI_PREVIEW"/%s",t1);
+    link=ChrootFile(t1);
+    plink=ChrootFile(t1,WIKI_PREVIEW);
     Free(t1);
   }
 loop:
@@ -89,17 +101,38 @@ loop:
       Free(ln);
     }
     if(hash3&&!StrICmp(hash3->user_data1,"PREVIEW")) {
-		//Is preview
-		FileWrite(plink,ftxt,t1-ftxt);
-	} else {
-		//TODO profanity check.
-		FileWrite(link,ftxt,t1-ftxt);
-	}
+//Is preview
+      if(StrLastOcc(plink,"/")) {
+        t1=StrNew(plink);
+        *StrLastOcc(t1,"/")=0;
+        DirMk(t1);
+        Free(t1);
+      }
+      FileWrite(plink,ftxt,t1-ftxt);
+    } else {
+      if(StrLastOcc(link,"/")) {
+        t1=StrNew(link);
+        *StrLastOcc(t1,"/")=0;
+        DirMk(t1);
+        Free(t1);
+      }
+//TODO profanity check.
+      FileWrite(link,ftxt,t1-ftxt);
+    }
     Free(ftxt);
-    EditGet(srv,stream,url,req);
+    TOSPrint("eg\n");
+    if(hash3&&!StrICmp(hash3->user_data1,"PREVIEW"))
+      __EditGet(srv,stream,url,req,plink);
+    else
+      __EditGet(srv,stream,url,req,link);
     goto en;
   }
   if(FileFind(link)) {
+    WriteLn(stream,,"HTTP/1.1 200 OK");
+    WriteLn(stream,,"Server: Bungis");
+    WriteLn(stream,,"Content-Type: text/html");
+    WriteLn(stream,,"");
+
     WikiHeader(stream,NULL,link,FALSE);
     WriteLn(stream,NULL,"<FORM ACTION=\""WIKI_EDIT"?PAGENAME=%s\"CLASS=\"form-group\" METHOD=\"POST\">",hash->user_data1);
     WriteLn(stream,NULL,"<LABEL FOR=\"PAGENAME\">%s</LABEL>",hash->user_data1);
@@ -113,7 +146,7 @@ loop:
       WriteLn(stream,NULL,t1);
       Free(ln);Free(t1);
     }
-    
+
     Free(ftxt);
     WriteLn(stream,NULL,"</TEXTAREA>");
     WriteLn(stream,NULL,"<FIELDSET CLASS=\"form-group\">");
@@ -128,9 +161,9 @@ loop:
     WriteLn(stream,NULL,"<INPUT TYPE=\"submit\" VALUE=\"submit\">");
     WriteLn(stream,NULL,"</FORM>");
     if(FileFind(link)) {
-        ftxt=FileRead(link);
-	FmtText(ftxt,stream,url);
-	Free(ftxt);
+      ftxt=FileRead(link);
+      FmtText(ftxt,stream,url);
+      Free(ftxt);
     }
     WikiFooter(stream,NULL,url);
   } else {

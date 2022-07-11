@@ -8,7 +8,7 @@ U0 FindGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 	I64 len=0,*len_ptr=&len,mat,fcnt,f;
 	CFifoI64 *matches=FifoI64New(0x80);
 	ents=FilesFind(WIKI_ROOT"/*",FUF_RECURSE);
-	loop:
+	loop:
 	WikiHeader(stream,len_ptr,title);
 	WriteLn(stream,len_ptr,"<FORM CLASS=\"form-group\" ACTION=\""WIKI_SEARCH"\">");
 	WriteLn(stream,len_ptr,"<LABEL FOR=\"s\">SEARCH:</LABEL>");
@@ -57,6 +57,7 @@ U0 FindGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 				h=HTMLify(ln_txt);
 				WriteLn(stream,len_ptr,"%s<BR>",h);
 				Free(h);
+				mat++;
 			}
 			Free(ln_txt);
 		}
@@ -79,4 +80,3 @@ U0 FindGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 	DirTreeDel(ents);
 	FifoI64Del(matches);
 }
-
