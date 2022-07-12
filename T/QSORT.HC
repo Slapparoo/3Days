@@ -1,4 +1,4 @@
-U0 QSortI64(I64 *base,I64 num, I64 (*fp_compare)(I64 e1,I64 e2))
+U0 QSortI64(I64 *base,I64 num, I64 (*fp_compare)(I64 e1,I64 e2))
 {/*Quick Sort for width==8.
 fp_compare() passes by value instead of ref.
 

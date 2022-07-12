@@ -257,7 +257,9 @@ Bool TaskValidate(CTask *task)
 
 I64 TaskInit(CTask *task,I64 stk_size)
 {//Returns Fs of task
-  
+  if(!task->data_heap) task->data_heap=&ahc;
+  if(!task->code_heap) task->code_heap=&ahc;
+  task->task_signature=TASK_SIGNATURE_VAL;
   task->addr=task->next_task=task->last_task=
 	task->next_input_filter_task=task->last_input_filter_task=
 	task;
@@ -289,7 +291,6 @@ I64 TaskInit(CTask *task,I64 stk_size)
   task->win_right	=text.cols-2;
   task->win_top		=13;
   task->win_bottom	=text.rows-2;
-  task->task_signature=TASK_SIGNATURE_VAL;
 
     /*
   if (blkdev.home_dir) {//Beware Adam \dLK,"TaskInit",A="FF:::/Kernel/KStart64.HC,TaskInit"\d. I guess ok until \dLK,"DskChg",A="FF:::/Kernel/KMain.HC,DskChg"\d().
@@ -318,6 +319,8 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
   if (!task_name) task_name="Unnamed Task";
   task->parent_task=parent;
   task->gs=parent->gs;
+  task->code_heap=HeapCtrlInit(,task,NULL);
+  task->data_heap=HeapCtrlInit(,task,1);
   TaskInit(task,0);
   task->hash_table->next=parent->hash_table;
   MemCpy(task->task_name,task_name,TASK_NAME_LEN);
@@ -426,7 +429,8 @@ U0 TaskKillDying() {
     while (task!=&(Gs->next_dying)) {
       task1=task->next;
       QueRem(task);
-      FreeTaskMem(task);
+      HeapCtrlDel(task(CTask*)->data_heap);
+      HeapCtrlDel(task(CTask*)->code_heap);
       task=task1;
     }
     LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);

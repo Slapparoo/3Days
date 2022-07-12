@@ -135,7 +135,7 @@ _extern _STRNICMP I64 StrNICmp(
 	U8 *st1,U8 *st2,I64 n); //Compare N bytes in two strings, ignoring case.
 _extern _STRMATCH U8 *StrMatch(
 	U8 *needle,U8 *haystack_str); //Scan for string in string.
-_extern _STRIMATCH U8 *StrIMatch(
+_extern _STRIMATCH U8 *StrIMatch(
 	U8 *needle,U8 *haystack_str);//Scan for string in string, ignoring case.
 _extern _STRCPY U0 StrCpy(
 	U8 *dst,U8 *src); //Copy string.

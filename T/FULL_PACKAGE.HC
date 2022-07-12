@@ -54,8 +54,7 @@ U0 Adam(U8 *) {
 	}
     if(FileFind("HCRT.DBG.Z"))
 		DbgInfoRead("HCRT.DBG.Z");
-	boundscheck_enable=1;
-	if(!__IsCmdLine) {
+	if(!__IsCmdLine) {
 		sys_winmgr_task=Spawn(&WinMgrTask);
 	} else {
 		DeathWait(User);
@@ -79,7 +78,7 @@ U0 FualtRoutine(U8 *ptr,U8 *got) {
 	for(i=0;i!=len;i++) {
 		par=Caller(i+2);
 		if(!par) goto en;
-		link=SrcEdLink(par); //+1 for self,+1 for fault routine
+		link=SrcEdLink(par); //+1 for self,+1 for fault routine
 		f=FunSegFind(par,NULL);
 		if(f)
 			fstr=f->str;

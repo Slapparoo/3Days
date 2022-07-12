@@ -143,6 +143,8 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U8i *NewVirtualChunk(I64i,I64i low32);
+import U8i *FreeVirtualChunk(U8i *,I64i sz);
 import U0i DyadInit();
 import U0i DyadUpdate();
 import U0i DyadShutdown();
@@ -178,8 +180,8 @@ public import Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public import Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public import U0 FClose(CFile *f);
 public import CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
-public import I64i MSize(U8i *src);   //size of heap object
-public import I64i MSize2(U8i *src); //Internal size
+//public import I64i MSize(U8i *src);   //size of heap object
+//public import I64i MSize2(U8i *src); //Internal size
 public import U8i *CAlloc(I64i size,CTask *t=0);
 public import U0i TOSPrint(U8i *,...);
 public import U8i *__FileRead(U8i *filename,I64i *_size=0,CTask *t=0);
@@ -219,6 +221,8 @@ import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 #else
+extern U8i *NewVirtualChunk(I64i,I64i low32);
+extern U8i *FreeVirtualChunk(U8i *,I64i sz);
 extern U0i DyadInit();
 extern U0i DyadUpdate();
 extern U0i DyadShutdown();
@@ -256,8 +260,6 @@ extern U8i *GetClipboardText();
 extern U8i *SetClipboardText(U8i *);
 extern U0 __Del(U8 *);
 public extern U8 *DirCur();
-public extern I64i MSize(U8i *src);   //size of heap object
-public extern I64i MSize2(U8i *src); //Internal size
 public extern U8i *CAlloc(I64i size,CTask *t=0);
 public extern U0i TOSPrint(U8i *,...);
 public extern U8i *__FileRead(U8i *filename,I64i *_size=0,CTask *t=0);
@@ -266,7 +268,7 @@ public extern I64i __FileWrite(U8i *filename,
 public extern U8 *DirNameAbs(U8i *dirname);
 public extern U8 *FileNameAbs(U8i *dirname);
 public extern Bool Cd(U8i *dirname=0);
-public extern Bool IsDir(U8i *dir_name); //TODO
+public extern Bool IsDir(U8i *dir_name); //TODO
 public extern Bool DirMk(U8i *filename); //TODO
 public extern U8 **__Dir(U8i *); //TODO
 public extern U0 Exit();
@@ -297,6 +299,8 @@ public extern Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1)
 public extern U0 FClose(CFile *f);
 public extern CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
 #endif
+public extern I64i MSize(U8i *src);   //size of heap object
+public extern I64i MSize2(U8i *src); //Internal size
 extern U0i Exit();
 extern class CAOT;
 extern class CAOTHeapGlbl;
@@ -5935,7 +5939,7 @@ extern Bool PutSrcLink(U8 *addr,I64 cnt=1,U8 *buf=NULL);
 extern U8 *U(U8 *rip,I64 cnt=20,I64 seg_size=64);
 public U0 Uf(U8 *st);
 public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL);
-#define RSAC_REPLACE	0
+#define RSAC_REPLACE	0
 #define RSAC_SKIP	1
 #define RSAC_ALL	2
 public extern U0 ClassRepD(U8 *_d,U8 *class_name=lastclass,
@@ -5957,3 +5961,5 @@ extern CJob *JobQue(I64 (*fp_addr)(U8 *data),U8 *data=NULL,
 extern U0 CoreAPSethTask();
 extern U0 TaskKillDying();
 extern U0 TaskFocusNext();
+extern CHeapCtrl *HeapCtrlInit(CHeapCtrl *hc=NULL,CTask *task=NULL,CBlkPool *bp);
+extern U0 HeapCtrlDel(CHeapCtrl *hc);

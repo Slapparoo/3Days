@@ -278,7 +278,7 @@ Bool FifoI64Rem(CFifoI64 *f,I64 *_q)
   }
 }
 
-Bool FifoI64Peek(CFifoI64 *f,I64 *_q)
+Bool FifoI64Peek(CFifoI64 *f,I64 *_q)
 {//Peek at front of fifo and don't remove.
   PUSHFD
   if (f->in_ptr==f->out_ptr) {

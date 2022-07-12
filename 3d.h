@@ -179,3 +179,5 @@ __attribute__((force_align_arg_pointer)) int64_t __SpawnFFI(struct CPair *p);
 int _main(int argc,char **argv);
 #endif
 void CreateCore(int core,void *fp);
+void *NewVirtualChunk(int64_t sz,int64_t low32);
+void FreeVirtualChunk(void *ptr,size_t s);

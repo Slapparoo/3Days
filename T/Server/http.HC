@@ -146,7 +146,7 @@ U0 ParseRequest(CDyadStream *stream,CConnection *con) {
 		break;
 		case HTTP_POST:
 		(*con->server->post)(con->server,stream,url,&req,con->post_data);
-		DyadWrite(stream,"\x0d\n",2);
+		DyadWrite(stream,"\x0d\n",2);
 		DyadEnd(stream);
 		break;
 	}
@@ -326,7 +326,7 @@ qloop:
         MemCpy(hash->user_data1,con->fbuffer,con->field_ptr);
         hash->type=HTT_DICT_WORD;
         HashAdd(hash,con->post_data);
-      }
+      }
       con->field[0]=0;
       con->field_ptr=0;
       con->field_length=-1;

@@ -28,6 +28,16 @@ extern void HCLongJmp(void *ptr);
 #include <sys/types.h>
 #include <errno.h>
 #endif
+static void *HolyMAlloc(int64_t sz) {
+	static void *fptr;
+	if(!fptr) {
+		fptr=map_get(&TOSLoader,"CAlloc")->data->val;
+	}
+	return FFI_CALL_TOS_2(fptr,sz,NULL);
+}
+static void *HolyStrDup(char *str) {
+	return strcpy(HolyMAlloc(strlen(str)+1),str);
+}
 #ifdef USE_NETWORKING
 #include "ext/dyad/src/dyad.h"
 static void STK_DyadInit() {
@@ -59,9 +69,8 @@ static void STK_DyadClose(int64_t *stk) {
 	dyad_close(stk[0]);
 }
 static char *STK_DyadGetAddress(int64_t *stk) {
-	char *ret=strdup(dyad_getAddress(stk[0]));
-	PoopAllocSetTask(ret,GetFs());
-	return ret;
+	char *ret=dyad_getAddress(stk[0]);
+	return HolyStrDup(ret);
 }
 static void DyadReadCB(dyad_Event *e) {
 	FFI_CALL_TOS_4(e->udata,e->stream,e->data,e->size,e->udata2);
@@ -98,12 +107,6 @@ static int64_t __Move(char *old,char *new) {
 	TD_FREE(new);
     return ret;
 }
-static int64_t STK_StrNew(int64_t *stk) {
-    return PoopAllocSetTask(strdup(stk[0]),stk[1]);
-}
-static int64_t STK_MAllocIdent(int64_t *stk) {
-    return PoopAllocSetTask(memcpy(PoopMAlloc(MSize(*stk)),*stk,MSize(*stk)),stk[1]);
-}
 static int64_t IsDir(char *fn) {
     fn=__VFsFileNameAbs(fn);
     if(!fn) return 0;
@@ -126,7 +129,7 @@ void* FileRead(char *fn,int64_t *sz) {
     size_t len=ftell(f);
     fseek(f,0, SEEK_SET);
     len-=ftell(f);
-    void *data=TD_MALLOC(len+1);
+    void *data=HolyMAlloc(len+1);
     fread(data, 1, len, f);
     fclose(f);
     if(sz) *sz=len;
@@ -146,11 +149,11 @@ static char **__Dir(char *fn) {
     vec_str_t items;
     vec_init(&items);
     while(ent=readdir(dir))
-        vec_push(&items,POOP_STRDUP(ent->d_name));
+        vec_push(&items,HolyStrDup(ent->d_name));
     vec_push(&items,NULL);
     TD_FREE(fn);
     sz=items.length*sizeof(char*);
-    ret=memcpy(PoopMAlloc(sz),items.data,sz);
+    ret=memcpy(HolyMAlloc(sz),items.data,sz);
     vec_deinit(&items);
     return ret;
 }
@@ -256,7 +259,9 @@ int64_t STK_FileRead(int64_t *stk) {
 	int64_t sz;
     char *r=VFsFileRead(stk[0],&sz),*r2=NULL;
     if(stk[1]) ((int64_t*)stk[1])[0]=sz;
-    return r;
+	r2=memcpy(HolyMAlloc(sz+1),r,sz);
+    PoopFree(r);
+    return r2;
 }
 int64_t STK_FileWrite(int64_t *stk) {
     return VFsFileWrite(stk[0],stk[1],stk[2]);
@@ -309,7 +314,7 @@ int64_t STK_Cd(int64_t *stk) {
 }
 int64_t STK_DirCur(int64_t *stk) {
     char *d=VFsDirCur(),*r;
-    r=POOP_STRDUP(d);
+    r=HolyStrDup(d);
     TD_FREE(d);
     return r;
 }
@@ -322,7 +327,7 @@ int64_t STK_DirMk(int64_t *stk) {
 }
 int64_t STK_FileNameAbs(int64_t *stk) {
     char *a=VFsFileNameAbs(stk[0]),*r;
-    r=POOP_STRDUP(a);
+    r=HolyStrDup(a);
     TD_FREE(a);
     return r;
 }
@@ -383,20 +388,23 @@ int64_t STK___GetStr(int64_t *stk) {
 	char *s=linenoise(stk[0]);
 	if(!s) return s;
 	linenoiseHistoryAdd(s);
-	char *r=strdup(s);
+	char *r=HolyStrDup(s);
 	free(s);
 	return r;
 	#else
 	char *s=readline(stk[0]),*r;
 	if(!s) return s;
-	r=strdup(s);
+	r=HolyStrDup(s);
 	add_history(r);
 	rl_free(s);
 	#endif
 	return r;
 }
 int64_t STK_GetClipboardText(int64_t *stk) {
-    return ClipboardText();
+    char *r=ClipboardText();
+    char *r2=HolyStrDup(r);
+    PoopFree(r);
+    return r2;
 }
 int64_t STK___SleepUntilValue(int64_t *stk) {
 }
@@ -442,12 +450,20 @@ int64_t mp_cnt(int64_t *stk) {
 void SpawnCore(int64_t *stk) {
 	CreateCore(stk[0],stk[1]);
 }
+int64_t STK_NewVirtualChunk(int64_t *stk) {
+	return NewVirtualChunk(stk[0],stk[1]);
+}
+int64_t STK_FreeVirtualChunk(int64_t *stk) {
+	FreeVirtualChunk(stk[0],stk[1]);
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+	STK_RegisterFunctionPtr(&ffi_blob,"NewVirtualChunk",STK_NewVirtualChunk,2);
+	STK_RegisterFunctionPtr(&ffi_blob,"FreeVirtualChunk",STK_FreeVirtualChunk,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"FreeTaskMem",STK_FreeTaskMem,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CmdLineBootText",CmdLineBootText,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"Exit3Days",__Shutdown,0);
