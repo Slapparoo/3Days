@@ -24,7 +24,7 @@ utf8_prop(Display *dpy, XEvent ev);
 CDrawWindow *NewDrawWindow() {
 	if(!dw) {
 		XInitThreads();
-		dw=PoopMAlloc(sizeof(*dw));
+		dw=TD_MALLOC(sizeof(*dw));
 		dw->disp=XOpenDisplay(NULL);
 		long screen=DefaultScreen(dw->disp);
 		Colormap cmap;
@@ -527,7 +527,7 @@ static void utf8_send(char *text,XEvent ev) {
     XUnlockDisplay(dpy);
 }
 void SetClipboard(char *text) {
-	PoopFree(clip_text);
+	TD_FREE(clip_text);
 	XLockDisplay(dw->disp);
 	Atom sel = XInternAtom(dw->disp, "CLIPBOARD", False);
     XSetSelectionOwner(dw->disp, sel, dw->window, CurrentTime);
@@ -582,7 +582,7 @@ char *ClipboardText() {
 	Atom target=XInternAtom(dw->disp, "3DaysCLIP", False);
 	XConvertSelection(dw->disp, sel, utf8, target, dw->window,
 						  CurrentTime);
-	PoopFree(clip_text);
+	TD_FREE(clip_text);
 	clip_text=NULL;
 	for(;XNextEvent(dw->disp,&ev);) {
 		if(ev.type==SelectionNotify)
@@ -614,7 +614,7 @@ utf8_prop(Display *dpy, XEvent ev)
     XFree(prop_ret);
     XGetWindowProperty(dpy, w, target, 0, size, False, AnyPropertyType,
                        &da, &di, &dul, &dul, &prop_ret);
-    PoopFree(clip_text);
+    TD_FREE(clip_text);
     if(!size)
 		clip_text=strdup("");
 	else

@@ -118,7 +118,6 @@ int main(int argc,char **argv)
 	#else
 	AddVectoredExceptionHandler(1,&VectorHandler);
 	#endif 
-	BoundsCheckTests();
     char *header=NULL,*t_drive=NULL,*tmp;
     VFsGlobalInit();
     void *argtable[]= {

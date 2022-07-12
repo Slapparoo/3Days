@@ -40,6 +40,7 @@ void VFsGlobalInit() {
 #include <sys/types.h>
 #include <sys/stat.h>
 #endif
+static const char *static_root="T:/";
 static char *VFsInplaceConvertDelims(char *p) {
 	if(TOS_delim!=delim)
 		for(;strchr(p,delim);)
@@ -177,7 +178,7 @@ int VFsCd(char *to,int flags) {
 		vec_pop(&path);
 		root=GetHomeDirForDrive(drv);
 		vec_pusharr(&path,root,strlen(root)+1);
-		PoopFree(root);
+		TD_FREE(root);
 	} else {
         vec_pusharr(&path,cur_dir+2,strlen(cur_dir+2)+1); // +2 for 'drv-letter' and ':'
     }
@@ -254,13 +255,14 @@ int VFsCd(char *to,int flags) {
         vec_push(&path,delim);
     vec_push(&path,0);
     if(!failed) {
-		TD_FREE(cur_dir);
+		if(static_root!=cur_dir)
+			HolyFree(cur_dir);
 		char buffer[4048];
 		if(path.data[root_len]!='/')
 			sprintf(buffer,"%s:/%s",drv_buf,path.data+root_len);
 		else
 			sprintf(buffer,"%s:%s",drv_buf,path.data+root_len);
-		cur_dir=PoopAllocSetTask(strdup(buffer),GetFs());
+		cur_dir=HolyStrDup(buffer);
 		VFsInplaceConvertDelims(cur_dir);
 	} else
 		vec_deinit(&path);
@@ -334,7 +336,7 @@ char *__VFsFileNameAbs(char *name) {
     VFsCd(old_dir,0);
     end:
     vec_deinit(&head);
-    PoopFree(file);
+    TD_FREE(file);
     if(!failed)
         return path.data;
     vec_deinit(&path);
@@ -363,7 +365,7 @@ int64_t VFsUnixTime(char *name) {
 	FILETIME t;
 	GetFileTime(fn,NULL,NULL,&t);
 	t64=t.dwLowDateTime|(t.dwHighDateTime<<32);
-	PoopFree(fn);
+	TD_FREE(fn);
 	return t64;
 }
 int64_t VFsFSize(char *name) {
@@ -372,7 +374,7 @@ int64_t VFsFSize(char *name) {
 	int32_t h32;
 	s64=GetFileSize(fn,&h32);
 	s64|=h32<<32;
-	PoopFree(fn);
+	TD_FREE(fn);
 	return fn;
 }
 #endif
@@ -404,14 +406,15 @@ char VFsChDrv(char to) {
         break;
         end:
         if(map_get(&drive_dirs,buf))
-			PoopFree(*map_get(&drive_dirs,buf));
+			TD_FREE(*map_get(&drive_dirs,buf));
 		map_set(&drive_dirs,buf,strdup(cur_dir));
 		buf[0]=drv;
-		PoopFree(cur_dir);
+		if(static_root!=cur_dir)
+			HolyFree(cur_dir);
 		if(map_get(&drive_dirs,buf)) {
-			cur_dir=strdup(*map_get(&drive_dirs,buf));
+			cur_dir=HolyStrDup(*map_get(&drive_dirs,buf));
 		} else
-			cur_dir=strdup("/");
+			cur_dir=HolyStrDup("/");
     }
     return old;
 }
@@ -456,7 +459,7 @@ void VFsThrdInit() {
 	WaitForSingleObject(mp_mtx,INFINITE);
 	#endif
 	map_init(&drive_dirs);
-	cur_dir=strdup("T:/");
+	cur_dir=static_root;
 	#ifndef TARGET_WIN32
     pthread_mutex_unlock(&mp_mtx);
 	#else
@@ -549,7 +552,7 @@ void CreateTemplateBootDrv(char *to,char *template,int overwrite) {
 int VFsFileExists(char *path) {
 	path=__VFsFileNameAbs(path);
 	int e=__FExists(path);
-	PoopFree(path);
+	TD_FREE(path);
 	return e;
 }
 int VFsMountDrive(char let,char *path) {

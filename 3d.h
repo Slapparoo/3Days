@@ -144,9 +144,6 @@ typedef struct {
 } ctx_t;
 void GetContext(ctx_t *);
 void SetContext(ctx_t *);
-void PoopAllocFreeTaskMem(void *task);
-//Returns ptr
-void *PoopAllocSetTask(void *p,void *task);
 void __SetThreadPtr(struct CThread *t,void *ptr);
 void InputLoop(void *ul);
 void __SleepUntilChange(int64_t *ptr,int64_t mask);
@@ -154,11 +151,8 @@ int64_t VFsUnixTime(char *name);
 int64_t VFsFSize(char *name) ;
 void __Shutdown();
 void BoundsCheckTests();
-void PoopAllocSetCallers(void *ptr,int64_t c,void **callers);
 struct CMemBlk;
 int64_t InBounds(void *ptr,int64_t sz,void **target);
-void *PoopMallocTask(int64_t sz,void *t);
-void *PoopMalloc32Task(int64_t sz,void *t);
 int InitThreadsForCore();
 int CoreNum();
 void *GetGs();
@@ -181,3 +175,6 @@ int _main(int argc,char **argv);
 void CreateCore(int core,void *fp);
 void *NewVirtualChunk(int64_t sz,int64_t low32);
 void FreeVirtualChunk(void *ptr,size_t s);
+void HolyFree(void *ptr);
+void *HolyMAlloc(int64_t sz);
+char *HolyStrDup(char *str);

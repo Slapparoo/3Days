@@ -28,14 +28,21 @@ extern void HCLongJmp(void *ptr);
 #include <sys/types.h>
 #include <errno.h>
 #endif
-static void *HolyMAlloc(int64_t sz) {
+void HolyFree(void *ptr) {
+	static void *fptr;
+	if(!fptr) {
+		fptr=map_get(&TOSLoader,"_FREE")->data->val;
+	}
+	FFI_CALL_TOS_1(fptr,ptr);
+}
+void *HolyMAlloc(int64_t sz) {
 	static void *fptr;
 	if(!fptr) {
 		fptr=map_get(&TOSLoader,"CAlloc")->data->val;
 	}
 	return FFI_CALL_TOS_2(fptr,sz,NULL);
 }
-static void *HolyStrDup(char *str) {
+char *HolyStrDup(char *str) {
 	return strcpy(HolyMAlloc(strlen(str)+1),str);
 }
 #ifdef USE_NETWORKING
@@ -135,7 +142,6 @@ void* FileRead(char *fn,int64_t *sz) {
     if(sz) *sz=len;
     return data;
 }
-#define POOP_STRDUP(s) strcpy(PoopMAlloc(strlen(s)+1),s) 
 static char **__Dir(char *fn) {
 	int64_t sz;
 	char **ret;
@@ -260,7 +266,7 @@ int64_t STK_FileRead(int64_t *stk) {
     char *r=VFsFileRead(stk[0],&sz),*r2=NULL;
     if(stk[1]) ((int64_t*)stk[1])[0]=sz;
 	r2=memcpy(HolyMAlloc(sz+1),r,sz);
-    PoopFree(r);
+    TD_FREE(r);
     return r2;
 }
 int64_t STK_FileWrite(int64_t *stk) {
@@ -274,15 +280,6 @@ int64_t STK_TOSPrint(int64_t *stk) {
 }
  int64_t STK_Del(int64_t *stk) {
 	return VFsDel(stk[0]);
-}
-int64_t STK_MSize(int64_t *stk) {
-    return MSize(stk[0]);
-}
-void *STK_PoopMAlloc(int64_t *stk) {
-    return PoopMallocTask(stk[0],stk[1]);
-}
-void *STK_PoopMAlloc32(int64_t *stk) {
-    return PoopMalloc32Task(stk[0],stk[1]);
 }
 int64_t STK_FOpen(int64_t *stk) {
     return fopen(stk[1],stk[2]);
@@ -303,9 +300,6 @@ int64_t STK_FBlkWrite(int64_t *stk) {
     }
     return fwrite(stk[1],1<<9,stk[3],stk[0]);
 }
-int64_t STK_PoopFree(int64_t *stk) {
-    PoopFree(stk[0]);
-}
 int64_t STK___Move(int64_t *stk) {
 	return __Move(stk[0],stk[1]);
 }
@@ -322,7 +316,7 @@ int64_t STK_DirMk(int64_t *stk) {
 	char *d=VFsDirCur();
     int r=VFsCd(stk[0],VFS_CDF_MAKE);
     VFsCd(d,0);
-    PoopFree(d);
+    TD_FREE(d);
     return r;
 }
 int64_t STK_FileNameAbs(int64_t *stk) {
@@ -373,9 +367,6 @@ int64_t STK_GetFs(int64_t *stk) {
 int64_t STK_SetFs(int64_t *stk) {
     SetFs(stk[0]);
 }
-int64_t STK_FreeTaskMem(int64_t *stk) {
-	PoopAllocFreeTaskMem(stk[0]);
-}
 int64_t STK_SndFreq(int64_t *stk) {
     SndFreq(stk[0]);
 }
@@ -403,7 +394,7 @@ int64_t STK___GetStr(int64_t *stk) {
 int64_t STK_GetClipboardText(int64_t *stk) {
     char *r=ClipboardText();
     char *r2=HolyStrDup(r);
-    PoopFree(r);
+    TD_FREE(r);
     return r2;
 }
 int64_t STK___SleepUntilValue(int64_t *stk) {
@@ -414,29 +405,11 @@ int64_t STK_FSize(int64_t *stk) {
 int64_t STK_FUnixTime(int64_t *stk) {
 	return VFsUnixTime(stk[0]);
 }
-int64_t STK_SetPtrCallers(int64_t *stk) {
-	assert(stk[1]==5);
-	PoopAllocSetCallers(stk[0],stk[1],stk+2);
-}
 int64_t STK___FExists(int64_t *stk) {
 	return VFsFileExists(stk[0]);
 }
 int64_t STK_ChDrv(int64_t *stk) {
 	return VFsChDrv(stk[0]);
-}
-/*
- * TODO give a better name
- * Returns NULL if in bounds
- * Retusn ptr to nearest item if slightly out of bounds
- * Returns 0x7FFFFFFFFFFFFFFFll if really out of bounds
- */
-int64_t STK_InBounds(int64_t *stk) {
-	void *near_alloc=NULL;
-	if(InBounds(stk[0],0&stk[1],&near_alloc)) {
-		return NULL;
-	}
-	if(!near_alloc) return 0x7FFFFFFFFFFFFFFFll;
-	return near_alloc;
 }
 int64_t mp_cnt(int64_t *stk) {
 	#ifndef TARGET_WIN32
@@ -464,7 +437,6 @@ void TOS_RegisterFuncPtrs() {
 	vec_init(&ffi_blob);
 	STK_RegisterFunctionPtr(&ffi_blob,"NewVirtualChunk",STK_NewVirtualChunk,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"FreeVirtualChunk",STK_FreeVirtualChunk,2);
-	STK_RegisterFunctionPtr(&ffi_blob,"FreeTaskMem",STK_FreeTaskMem,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CmdLineBootText",CmdLineBootText,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"Exit3Days",__Shutdown,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"ChDrv",STK_ChDrv,1);
@@ -475,11 +447,6 @@ void TOS_RegisterFuncPtrs() {
 	STK_RegisterFunctionPtr(&ffi_blob,"GetGs",GetGs,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"__SpawnCore",SpawnCore,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CoreNum",CoreNum,0);
-	STK_RegisterFunctionPtr(&ffi_blob,"__InBounds",STK_InBounds,2);
-	STK_RegisterFunctionPtr(&ffi_blob,"SetPtrCallers",STK_SetPtrCallers,2+5);
-	STK_RegisterFunctionPtr(&ffi_blob,"__MAlloc32",STK_PoopMAlloc32,2);
-	STK_RegisterFunctionPtr(&ffi_blob,"__MAlloc",STK_PoopMAlloc,2);
-	STK_RegisterFunctionPtr(&ffi_blob,"__Free",STK_PoopFree,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"FUnixTime",STK_FUnixTime,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"FSize",STK_FSize,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__SleepUntilValue",STK___SleepUntilValue,3);
@@ -505,8 +472,6 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"DrawWindowNew",STK_NewDrawWindow,0);
     //SPECIAL
     STK_RegisterFunctionPtr(&ffi_blob,"TOSPrint",STK_TOSPrint,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"MSize",STK_MSize,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"MSize2",STK_MSize,1);
     STK_RegisterFunctionPtr(&ffi_blob,"FileNameAbs",STK_FileNameAbs,1);
     STK_RegisterFunctionPtr(&ffi_blob,"DirNameAbs",STK_FileNameAbs,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__Dir",STK___Dir,1);
@@ -528,7 +493,7 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"DyadSetReadCallback",STK_DyadSetReadCallback,3);
     STK_RegisterFunctionPtr(&ffi_blob,"DyadSetOnListenCallback",STK_DyadSetOnListenCallback,3);
     #endif
-    char *blob=PoopMAlloc32(ffi_blob.length);
+    char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);
     miter=map_iter(&Loader.symbols);

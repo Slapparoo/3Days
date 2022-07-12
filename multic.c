@@ -41,7 +41,7 @@ void SleepABit() {
 	sleep(1);
 }
 void *GetFs() {
-	if(!__fs) __fs=PoopMAlloc(2048);
+	if(!__fs) __fs=TD_MALLOC(2048);
 	return __fs;
 }
 void SetFs(void *f) {
@@ -52,7 +52,7 @@ int CoreNum() {
 }
 void *GetGs() {
 	if(!__gs)
-		__gs=PoopMAlloc(1024);
+		__gs=TD_MALLOC(1024);
 	return __gs;
 }
 typedef struct {

@@ -40,7 +40,7 @@ static CDrawWindow *dw=NULL;
 static char *clip_text=NULL;
 CDrawWindow *NewDrawWindow() {
 	if(!dw) {
-		dw=PoopMAlloc(sizeof(*dw));
+		dw=TD_MALLOC(sizeof(*dw));
 		int64_t i;
 		XColor c;
 		for(i=0;i!=16;i++) {

@@ -146,7 +146,8 @@ static void LoadPass1(char *src,char *mod_base,int64_t ld_flags) {
             break;
             case IET_ZEROED_CODE_HEAP:
             case IET_CODE_HEAP:
-            ptr3=PoopMAlloc32(*(int32_t*)src);
+            abort();
+            //ptr3=PoopMAlloc32(*(int32_t*)src);
             src+=4;
             fill_data:            
             if(*st_ptr) {
@@ -163,7 +164,8 @@ static void LoadPass1(char *src,char *mod_base,int64_t ld_flags) {
             break;
             case IET_DATA_HEAP:
             case IET_ZEROED_DATA_HEAP:
-            ptr3=PoopMAlloc32(*(int32_t*)src);
+            abort();
+            //ptr3=PoopMAlloc32(*(int32_t*)src);
             src+=4;
             goto fill_data;
         }
@@ -243,7 +245,7 @@ void *Load(char *fn,int64_t ld_flags) {
     fseek(f,0,SEEK_END);
     size=ftell(f)-size;
     fseek(f,0,SEEK_SET);
-    fread(bfh_addr=bfh=PoopMAlloc32(size),1,size,f);
+    fread(bfh_addr=bfh=NewVirtualChunk(size,1),1,size,f);
     fclose(f);
 
     assert(bfh->bin_signature[0]=='T');
