@@ -139,4 +139,9 @@ _extern _STRIMATCH U8 *StrIMatch(
 	U8 *needle,U8 *haystack_str);//Scan for string in string, ignoring case.
 _extern _STRCPY U0 StrCpy(
 	U8 *dst,U8 *src); //Copy string.
+_extern _FREE U0 Free(U8 *addr); //Free $LK,"MAlloc",A="MN:MAlloc"$()ed memory chunk.
+_extern _MSIZE I64 MSize(U8 *src); //Size of heap object.
+_extern _MSIZE2 I64 MSize2(U8 *src); //Internal size of heap object.
+_extern _MHEAP_CTRL CHeapCtrl *MHeapCtrl(U8 *src); //$LK,"CHeapCtrl",A="MN:CHeapCtrl"$ of object.
+_extern _MALLOC U8 *MAlloc(I64 size,CTask *mem_task=NULL); //Alloc memory chunk.
 #endif

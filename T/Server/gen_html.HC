@@ -219,6 +219,8 @@ loop:
     for(cheader=headers->next;cheader!=headers;cheader=cheader->next)
       Free(cheader->text);
     QueDel(headers);
+    headers=MAlloc(sizeof(CHTMLPair));
+    QueInit(headers);
   }
   while(oln=ln=ReadLine(fptr,&fptr)) {
 //Is code if starts with whitespace
@@ -226,7 +228,7 @@ loop:
       if(!LBts(&flags,WGf_CODE)) {
         last=EnterPair(last,stream,len_ptr,'PRE');
         last=EnterPair(last,stream,len_ptr,'CODE');
-      }
+      }
       WriteLn(stream,len_ptr,"%s",t1=HTMLify(ln));
       Free(t1);
       goto next;
@@ -408,6 +410,7 @@ finish:
   QueDel(markup);
   for(theader=headers->next;theader!=headers;theader=theader->next)
     Free(theader->text);
+  TOSPrint("theaders");
   QueDel(headers);
 }
 U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {

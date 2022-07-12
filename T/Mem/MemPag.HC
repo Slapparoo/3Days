@@ -1,11 +1,22 @@
+CQue valid_blks;
+CQue recycle32;
+I64 mem_blks_lock;
+U0 InitHeaps() {
+	mem_blks_lock=0;
+	QueInit(&valid_blks);
+	QueInit(&recycle32);
+}
+Bool IsValidPtr(U8 *ptr) {
+	return TRUE;
+}
 U0 SysBadFree(I64 *ptr)
 {
-  throw('BadFree');
+   "AT:%p\n",ptr;
+   throw('BadFree');
 }
 
 U0 SysBadMAlloc(I64 *ptr)
 {
-	TOSPrint("BAD MALLOC\n");
   throw('BadMallo');
 }
 
@@ -19,8 +30,27 @@ Return: NULL if out of memory.
   CMemBlk *res=NULL,*m;
   I64 i;
   PUSHFD
+  if(!bp) {
+	//Look for recylceable 32bit pages
+	while(LBts(&mem_blks_lock,0))
+	  PAUSE;
+	for(m=recycle32.next;m!=&recycle32;m=m->next)
+	  if(m->pags>=pags) {
+	     res=m;
+	     QueRem(res);
+	     LBtr(&mem_blks_lock,0);
+	     goto ins;
+	  }
+	LBtr(&mem_blks_lock,0);
+  }
   res=NewVirtualChunk(pags<<MEM_PAG_BITS,!bp);
+  ins:
   QueInit(res);
+  QueInit(&res->next2);
+  while(LBts(&mem_blks_lock,0))
+	  PAUSE;
+  QueIns(&res->next2,valid_blks.last);
+  LBtr(&mem_blks_lock,0);
   res->pags=pags;
   res->mb_signature=MBS_UNUSED_SIGNATURE_VAL;
 at_done:
@@ -88,10 +118,22 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
       SysBadFree(m);
     else {
       QueRem(m);
+      while(LBts(&mem_blks_lock,0))
+        PAUSE;
+      QueRem(&m->next2);
+      LBtr(&mem_blks_lock,0);
       hc->alloced_u8s-=m->pags<<MEM_PAG_BITS;
-      MemPagFree(m,hc->bp);
+      if(!(0<=m<=U32_MAX))
+		MemPagFree(m,NULL);
+      else {
+        while(LBts(&mem_blks_lock,0))
+          PAUSE;
+        QueInit(m);
+        QueIns(m,recycle32.last);
+        LBtr(&mem_blks_lock,0);
+      }
     }
     POPFD
   }
 }
-
+

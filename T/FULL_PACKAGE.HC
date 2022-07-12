@@ -42,7 +42,7 @@ U0 StartUpTasks()
   WinToTop(user1);
   WinTileVert;
   WallPaperInit;
-  DeathWait(Spawn(&ACInit,"/KERNEL*.HH",,mp_cnt-1));
+  ACInit("/KERNEL*.HH");
   AutoComplete(ON);
 }
 U0 Adam(U8 *) {

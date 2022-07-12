@@ -3071,8 +3071,9 @@ class CMemUsed
 #define MBS_UNUSED_SIGNATURE_VAL	'MBUn'
 class CMemBlk
 {
-  CMemBlk *next,*last;
+  CMemBlk *next,*last;
   U32	mb_signature,pags;
+  CMemBlk *next2,*last2;
 };
 
 #define MRT_UNUSED	0
@@ -5939,7 +5940,7 @@ extern Bool PutSrcLink(U8 *addr,I64 cnt=1,U8 *buf=NULL);
 extern U8 *U(U8 *rip,I64 cnt=20,I64 seg_size=64);
 public U0 Uf(U8 *st);
 public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL);
-#define RSAC_REPLACE	0
+#define RSAC_REPLACE	0
 #define RSAC_SKIP	1
 #define RSAC_ALL	2
 public extern U0 ClassRepD(U8 *_d,U8 *class_name=lastclass,
@@ -5963,3 +5964,17 @@ extern U0 TaskKillDying();
 extern U0 TaskFocusNext();
 extern CHeapCtrl *HeapCtrlInit(CHeapCtrl *hc=NULL,CTask *task=NULL,CBlkPool *bp);
 extern U0 HeapCtrlDel(CHeapCtrl *hc);
+extern U8 *StrNew(U8 *buf,CTask *mem_task=NULL)
+extern U8 *AStrNew(U8 *buf)
+extern U8 *CAllocAligned(I64 size,I64 alignment,
+	CTask *mem_task=NULL,I64 misalignment=0);
+extern U8 *MAllocAligned(I64 size,I64 alignment,
+	CTask *mem_task=NULL,I64 misalignment=0);
+extern U8 *AMAllocIdent(U8 *src);
+extern U8 *MAllocIdent(U8 *src,CTask *mem_task=NULL);
+extern U8 *ACAlloc(I64 size);
+extern U8 *MAlloc32(I64 size,CTask *task=NULL);
+extern U8 *CAlloc(I64 size,CTask *mem_task=NULL);
+extern U8 *AMAlloc(I64 size);
+extern Bool IsValidPtr(U8 *ptr);
+extern U0 EdCharIns(I64 ch,I64 sc,CDoc *doc);

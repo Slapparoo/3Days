@@ -30,6 +30,7 @@ _MALLOC::
 	JMP	I32 _SYS_HLT
 
 @@15:	MOV	RAX,U64 SF_ARG1[RBP]
+	ADD RAX,16
 	PUSHFD
 	ADD	RAX,CMemUsed.start+7	//round-up to I64
 	AND	AL,0xF8
@@ -104,22 +105,12 @@ _MALLOC::
 	MOV	EAX,U32 CMemBlk.pags[RSI]
 	SHL	RAX,MEM_PAG_BITS
 
-//Can it be combined with last chunk? (Never Free these chunks.)
+//I removed this feature
+///Can it be combined with last chunk? (Never Free these chunks.)
 	MOV	RDI,U64 CHeapCtrl.last_mergable[RDX]
 	LEA	RBX,U64 [RSI+RAX]
 	CMP	RDI,RBX
 	JNE	@@55
-
-	PUSH	RAX
-	MOV	EAX,U32 CMemBlk.pags[RDI]
-	ADD	U32 CMemBlk.pags[RSI],EAX
-//QueRem
-	MOV	RAX,U64 CMemBlk.next[RDI]
-	MOV	RBX,U64 CMemBlk.last[RDI]
-	MOV	U64 CMemBlk.last[RAX],RBX
-	MOV	U64 CMemBlk.next[RBX],RAX
-	POP	RAX
-
 @@55:	MOV	U64 CHeapCtrl.last_mergable[RDX],RSI
 	LEA	RSI,U64 sizeof(CMemBlk)[RSI]
 	SUB	RAX,sizeof(CMemBlk)
@@ -256,9 +247,14 @@ _FREE::
 	MOV	RDX,U64 CMemUsed.hc[RSI]
 	CMP	U32 CHeapCtrl.hc_signature[RDX],HEAP_CTRL_SIGNATURE_VAL
 	JE	@@25
+	POPFD
 	ADD	RSI,CMemUsed.start
 	PUSH	RSI
 	CALL	&SysBadFree
+	POP RDI
+	POP RSI
+	POP RBP
+	RET1 8
 	JMP	I32 _SYS_HLT
 
 @@25:	MOV	RAX,U64 CMemUsed.size[RSI]

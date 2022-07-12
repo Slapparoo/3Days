@@ -1,9 +1,13 @@
 #define FPTRS 1
 #include "KERNELA.HH"
+extern U0 InitHeaps();
+InitHeaps;
 CHeapCtrl ahc;
 HeapCtrlInit(&ahc,Fs,0);
+SetFs(MAlloc(sizeof(CTask),&ahc));
 Fs->data_heap=&ahc;
 Fs->code_heap=&ahc;
+Fs->cur_dir=StrNew("T:/",&ahc);
 U32 SYS_CTRL_ALT_FLAGS=0;
 CCPU *mp_cores[64];
 CCPU *Gs() {
@@ -15,10 +19,6 @@ CTask *Fs() {
 	return GetFs;
 }
 TaskInit(Fs,0);
-U8 *a=MAlloc(100,Fs);
-TOSPrint("MALLOC\n");
-Free(a);
-TOSPrint("FREE\n");
 #include "KGLBLS.HC"
 U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
 	I64 len2;

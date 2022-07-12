@@ -110,7 +110,7 @@ U0 ACPutChoices(CDoc *focus_l,CDocEntry *doc_e,CTask *focus_task,
       for (i=0;i<=ac.hash_table->mask && tS<timeout_time;i++) {
 	tmpw=ac.hash_table->body[i];
 	while (tmpw) {
-	  if (!MemCmp(ac.cur_word,tmpw->str,StrLen(ac.cur_word)))
+	  if (tmpw->str&&!MemCmp(ac.cur_word,tmpw->str,StrLen(ac.cur_word)))
 	    ACFillInAdd(tmpw);
 	  tmpw=tmpw->next;
 	}
@@ -223,7 +223,6 @@ U0 ACTask(I64)
   WinHorz(51,Fs->win_right);
   LBts(&(Fs->display_flags),DISPLAYf_WIN_ON_TOP);
   Fs->win_inhibit=WIG_NO_FOCUS_TASK_DFT;
-  Free(ac.cur_word);
   ac.cur_word=NULL;
   while (TRUE) {
     if (scan_code&(SCF_CTRL|SCF_ALT)) {

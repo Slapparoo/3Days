@@ -247,9 +247,9 @@ I64 ExeCmdLine(CCmpCtrl *cc)
 }
 Bool TaskValidate(CTask *task)
 {//return TRUE if task looks valid.
-  if (!task)
-    return FALSE;
-  else if(task->task_signature!=TASK_SIGNATURE_VAL)
+  if(!task)
+	return FALSE;
+  if(task->task_signature!=TASK_SIGNATURE_VAL)
     return FALSE;
   else
     return ToBool(task);
@@ -314,7 +314,7 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
   if(!parent) parent=adam_task;
   if(target_cpu==-1)
 	target_cpu=Gs->num;
-  CTask *task=MAlloc(sizeof(CTask));
+  CTask *task=MAlloc32(sizeof(CTask));
   U8 **stack;
   if (!task_name) task_name="Unnamed Task";
   task->parent_task=parent;
@@ -430,7 +430,8 @@ U0 TaskKillDying() {
       task1=task->next;
       QueRem(task);
       HeapCtrlDel(task(CTask*)->data_heap);
-      HeapCtrlDel(task(CTask*)->code_heap);
+      HeapCtrlDel(task(CTask*)->code_heap);
+      Free(task);
       task=task1;
     }
     LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);

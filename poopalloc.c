@@ -16,10 +16,18 @@
 #endif
 void *NewVirtualChunk(int64_t sz,int64_t low32) {
 	#ifndef TARGET_WIN32
+	static int64_t ps;
+	if(!ps) {
+			ps=sysconf(_SC_PAGE_SIZE);
+	}
+	int64_t pad=ps;
+	pad=sz%ps;
+	if(pad)
+		pad=ps;
     if(low32)
-        return mmap(NULL,sz,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_32BIT,-1,0);
+        return mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_32BIT,-1,0);
     else
-        return mmap(NULL,sz,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+        return mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
 	#else
     if(low32) {
         //https://stackoverflow.com/questions/54729401/allocating-memory-within-a-2gb-range
@@ -51,6 +59,14 @@ void FreeVirtualChunk(void *ptr,size_t s) {
 	#ifdef TARGET_WIN32
 	VirtualFree(ptr,0,MEM_RELEASE);
 	#else
-	munmap(ptr,s);
+	static int64_t ps;
+	if(!ps) {
+			ps=sysconf(_SC_PAGE_SIZE);
+	}
+	int64_t pad;
+	pad=s%ps;
+	if(pad)
+		pad=ps;
+	munmap(ptr,s/ps*ps+pad);
 	#endif
 }
