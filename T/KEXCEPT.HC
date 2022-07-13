@@ -145,7 +145,6 @@ Bool BreakUnlock(CTask *task=NULL)
   if (!task) task=Fs;
   res=LBtr(&task->task_flags,TASKf_BREAK_LOCKED);
   if (LBtr(&task->task_flags,TASKf_PENDING_BREAK)) {
-    TOSPrint("Pending\n");
     if (task==Fs)
       Break;
     else

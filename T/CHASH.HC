@@ -137,10 +137,9 @@ I64 HashTablePurge(CHashTable *table)
 {   //Eliminate ExportSysSyms that have been usurped.
     I64 i,res=0;
     CHashSrcSym *tmph,*tmph1,*tmph2;
+    Bool old;
     if (!table) return 0;
-    asm {
-        PUSHFD
-    }
+    old=BreakLock;
     for (i=0; i<=table->mask; i++) {
         tmph=table->body[i];
         while (tmph) {
@@ -163,7 +162,8 @@ I64 HashTablePurge(CHashTable *table)
             tmph=tmph1;
         }
     }
-    asm {POPFD;};
+    if(old)
+		BreakUnlock;
     return res;
 }
 

@@ -1,7 +1,7 @@
 U8 *GetFs2() {
 	return Fs;
 }
-asm {
+asm {
 //************************************
 //See $LK,"::/Doc/Credits.DD"$.
 _MALLOC::
@@ -13,16 +13,20 @@ _MALLOC::
 
 	XOR	RBX,RBX
 	MOV	RDX,U64 SF_ARG2[RBP]
+	MOV R8,RDX
 	TEST	RDX,RDX
 	JNZ	@@05
 	CALL &GetFs2
 	MOV	RDX,RAX
+	MOV	R8,RAX
 @@05:	CMP	U32 CTask.task_signature[RDX],TASK_SIGNATURE_VAL
 
 #assert CTask.task_signature==CHeapCtrl.hc_signature //location signature same
 
 	JNE	@@10
 	MOV	RDX,U64 CTask.data_heap[RDX]
+	LOCK
+	BTS	I64 CTask.task_flags[R8],TASKf_BREAK_LOCKED
 @@10:	CMP	U32 CHeapCtrl.hc_signature[RDX],HEAP_CTRL_SIGNATURE_VAL
 	JE	@@15
 	PUSH	RDX
@@ -57,11 +61,13 @@ _MALLOC::
 @@30:	ADD	RAX,sizeof(CMemBlk)+MEM_PAG_SIZE-1
 	SHR	RAX,MEM_PAG_BITS
 
+	PUSH	R8
 	PUSH	RDX //preserve HeapCtrl
 	PUSH	RDX
 	PUSH	RAX
 	CALL	&MemPagTaskAlloc
 	POP	RDX
+	POP	R8
 	TEST	RAX,RAX
 	JZ	@@45	//Out of memory
 	MOV	RSI,RAX
@@ -83,17 +89,20 @@ _MALLOC::
 	ADD	RAX,16*MEM_PAG_SIZE-1
 	SHR	RAX,MEM_PAG_BITS
 
+	PUSH	R8
 	PUSH	RDX //preserve HeapCtrl
 	PUSH	RDX
 	PUSH	RAX
 	CALL	&MemPagTaskAlloc
 	POP	RDX
+	POP	R8
 	TEST	RAX,RAX
 	JNZ	@@50
 
 //Out of memory
 @@45:	LOCK
 	BTR	U32 CHeapCtrl.locked_flags[RDX],HClf_LOCKED
+
 	POPFD
 	PUSH	TRUE
 	MOV	RAX,'OutMem'
@@ -202,6 +211,13 @@ MALLOC_ALMOST_DONE:
 	POP	RAX
 
 MALLOC_FINAL_EXIT:
+    CMP	U32 CTask.task_signature[R8],TASK_SIGNATURE_VAL
+    JNE @@01
+    PUSH RAX
+	PUSH	R8
+	CALL	&BreakUnlock
+	POP RAX
+	@@01:
 	POP	RDI
 	POP	RSI
 	POP	RBP
@@ -213,7 +229,11 @@ _FREE::
 	MOV	RBP,RSP
 	PUSH	RSI
 	PUSH	RDI
-
+	CALL	&Fs
+	MOV	R8,RAX
+	LOCK
+	BTS	I64 CTask.task_flags[R8],TASKf_BREAK_LOCKED
+	
 	//TEST	U8 [SYS_SEMAS+SEMA_HEAPLOG_ACTIVE*DFT_CACHE_LINE_WIDTH],1
 	JMP	@@15
 	MOV	RBX,U64 SF_ARG1[RBP]
@@ -248,6 +268,8 @@ _FREE::
 	CMP	U32 CHeapCtrl.hc_signature[RDX],HEAP_CTRL_SIGNATURE_VAL
 	JE	@@25
 	POPFD
+	PUSH	R8
+	CALL	&BreakUnlock
 	ADD	RSI,CMemUsed.start
 	PUSH	RSI
 	CALL	&SysBadFree
@@ -304,16 +326,19 @@ _FREE::
 	JMP	@@55
 
 @@50:	SUB	RSI,sizeof(CMemBlk)
+	PUSH	R8
 	PUSH	RDX
 	PUSH	RDX
 	PUSH	RSI
 	CALL	&MemPagTaskFree
 	POP	RDX
-
+	POP	R8
 @@55:	LOCK
 	BTR	U32 CHeapCtrl.locked_flags[RDX],HClf_LOCKED
 	POPFD
 FREE_DONE:
+	PUSH	R8
+	CALL	&BreakUnlock
 	POP	RDI
 	POP	RSI
 	POP	RBP

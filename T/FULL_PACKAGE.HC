@@ -54,7 +54,7 @@ U0 Adam(U8 *) {
 	}
     if(FileFind("HCRT.DBG.Z"))
 		DbgInfoRead("HCRT.DBG.Z");
-	if(!__IsCmdLine) {
+	if(!__IsCmdLine) {
 		sys_winmgr_task=Spawn(&WinMgrTask);
 	} else {
 		DeathWait(User);

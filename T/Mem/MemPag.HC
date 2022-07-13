@@ -29,7 +29,9 @@ Return: NULL if out of memory.
 */
   CMemBlk *res=NULL,*m;
   I64 i;
+  Bool old;
   PUSHFD
+  old=BreakLock;
   if(!bp) {
 	//Look for recylceable 32bit pages
 	while(LBts(&mem_blks_lock,0))
@@ -55,6 +57,8 @@ Return: NULL if out of memory.
   res->mb_signature=MBS_UNUSED_SIGNATURE_VAL;
 at_done:
 at_done2:
+  if(old)
+	BreakUnlock;
   POPFD
   return res;
 }
@@ -62,11 +66,15 @@ at_done2:
 U0 MemPagFree(CMemBlk *m,CBlkPool *bp=NULL)
 {//Return non-task pags to BlkPool.
   I64 i,pags;
+  Bool old;
   if (m) {
     PUSHFD
+    BreakLock;
     pags=m->pags;
     m->mb_signature=MBS_UNUSED_SIGNATURE_VAL;
     FreeVirtualChunk(m,pags<<MEM_PAG_BITS);
+    if(old)
+	  BreakUnlock;
     POPFD
   }
 }
@@ -112,8 +120,10 @@ Return: NULL if out of memory.
 
 U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
 {//hc must be locked
+  Bool old;
   if (m) {
     PUSHFD
+    old=BreakLock;
     if (m->mb_signature!=MBS_USED_SIGNATURE_VAL)
       SysBadFree(m);
     else {
@@ -133,6 +143,8 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
         LBtr(&mem_blks_lock,0);
       }
     }
+    if(old)
+	  BreakUnlock;
     POPFD
   }
 }

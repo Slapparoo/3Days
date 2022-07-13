@@ -392,7 +392,9 @@ CTask *User(U8 *fmt=NULL,...)
 U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
 {//Those things calculated from other variables.
   if (!task) task=Fs;
+  Bool old;
   PUSHFD
+  old=BreakLock;
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
     PAUSE;
   }
@@ -403,6 +405,8 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (update_z_buf && Bt(&task->display_flags,DISPLAYf_SHOW))
     LBts(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0);
   LBtr(&task->task_flags,TASKf_TASK_LOCK);
+  if(old)
+    BreakUnlock;
   POPFD
 }
 U0 BirthWait(CTask **_task) {

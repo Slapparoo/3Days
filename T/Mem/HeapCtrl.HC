@@ -18,8 +18,10 @@ CHeapCtrl *HeapCtrlInit(CHeapCtrl *hc=NULL,CTask *task=NULL,CBlkPool*bp)
 U0 HeapCtrlDel(CHeapCtrl *hc)
 {//Free all blks alloced to a HeapCtrl.
   CMemBlk *m,*m1;
+  Bool old;
   if (hc&&hc!=&ahc) {
     PUSHFD
+    old=BreakLock;
     while (LBts(&hc->locked_flags,HClf_LOCKED))
       PAUSE
     m=hc->next_mem_blk;
@@ -28,7 +30,9 @@ U0 HeapCtrlDel(CHeapCtrl *hc)
       MemPagTaskFree(m,hc);
       m=m1;
     }
-    LBtr(&hc->locked_flags,HClf_LOCKED);
+    LBtr(&hc->locked_flags,HClf_LOCKED);
+    if(old)
+		BreakUnlock;
     POPFD
     if(hc!=&ahc)
       Free(hc);

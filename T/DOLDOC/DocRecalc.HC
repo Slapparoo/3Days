@@ -264,7 +264,7 @@ public Bool DocRecalc(CDoc *doc,I64 recalc_flags=RECALCt_NORMAL)
   CDocBin *tmpb;
   CDocSettings *s;
   Bool del_doc_e,skipped_update,tree_collapsed,same_win,more=FALSE,
-	find_cursor=FALSE,blink_flag,full_refresh=TRUE,unlock,clear_holds;
+	find_cursor=FALSE,blink_flag,full_refresh=TRUE,unlock,clear_holds,old;
   CTask *win_task,*mem_task;
   CDC *dc;
   U8 *bptr,*ptr,buf[STR_LEN],ch;
@@ -313,7 +313,7 @@ public Bool DocRecalc(CDoc *doc,I64 recalc_flags=RECALCt_NORMAL)
   }
 
   PUSHFD
-  //;CLI TODO RESTORE
+  old=BreakLock;
   left	=win_task->win_left;
   right =win_task->win_right;
   width =win_task->win_width;
@@ -326,6 +326,8 @@ public Bool DocRecalc(CDoc *doc,I64 recalc_flags=RECALCt_NORMAL)
   pix_top   =win_task->pix_top;
   left_margin=left;
   right_margin=right;
+  if(old)
+	BreakUnlock;
   POPFD
   if (doc->flags&DOCF_BORDER_DOC) {
     scroll_x=0;

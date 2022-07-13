@@ -261,11 +261,15 @@ I64 WinOnTopWindows()
 {
   CTask *task,*task1,*first_moved_fwd=NULL;
   I64 res=0;
+  Bool old;
   PUSHFD
+  old=BreakLock;
   task=sys_winmgr_task->next_task;
   while (task!=sys_winmgr_task && task!=first_moved_fwd) {
         task1=task->next_task;
     if (!TaskValidate(task)) {
+	  if(old)
+	    BreakUnlock;
       POPFD
       return res;
     }
@@ -279,6 +283,8 @@ I64 WinOnTopWindows()
     }
     task=task1;
   }
+  if(old)
+	BreakUnlock;
   POPFD
   return res;
 }
@@ -287,6 +293,7 @@ public I64 WinToTop(CTask *task=NULL,Bool update_z_buf=TRUE)
 {//Put task's win on top of window stack.
   CTask *task1;
   I64 res=0;
+  Bool old;
   if (!task) task=Fs;
   if (!TaskValidate(task))
     return 0;
@@ -294,7 +301,10 @@ public I64 WinToTop(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (!sys_winmgr_task || task==sys_winmgr_task)
     return 0;
   PUSHFD
+  old=BreakLock;
   if (!TaskValidate(task)) {
+    if(old)
+	  BreakUnlock;
     POPFD
     return 0;
   }
@@ -320,6 +330,8 @@ public I64 WinToTop(CTask *task=NULL,Bool update_z_buf=TRUE)
 	  task->popup_task->parent_task==task)
       res+=WinToTop(task->popup_task,FALSE);
   }
+  if(old)
+	BreakUnlock;
   POPFD
   res+=WinOnTopWindows;
   if (res && update_z_buf)
