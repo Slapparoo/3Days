@@ -44,6 +44,7 @@ CDrawWindow *NewDrawWindow() {
 			RootWindow(dw->disp,screen),
 			0,0,640,480,0,1,black
 		);
+		XSetStandardProperties(dw->disp,dw->window,"3Days",NULL,None,NULL,0,NULL);
 		XSelectInput(dw->disp,dw->window,
 			KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask|StructureNotifyMask);
 		dw->gc=XCreateGC(dw->disp,dw->window,0,0);
