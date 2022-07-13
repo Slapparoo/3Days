@@ -585,9 +585,12 @@ char *ClipboardText() {
 						  CurrentTime);
 	TD_FREE(clip_text);
 	clip_text=NULL;
-	for(;XNextEvent(dw->disp,&ev);) {
-		if(ev.type==SelectionNotify)
+	for(;;) {
+		XNextEvent(dw->disp,&ev);
+		if(ev.type==SelectionNotify) {
 			utf8_prop(dw->disp,ev);
+			break;
+		}
 	}
 	XUnlockDisplay(dw->disp);
 	if(!clip_text)
