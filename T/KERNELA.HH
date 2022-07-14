@@ -143,6 +143,7 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U0i InteruptCore(I64i);
 import U8i *NewVirtualChunk(I64i,I64i low32);
 import U8i *FreeVirtualChunk(U8i *,I64i sz);
 import U0i DyadInit();
@@ -221,6 +222,7 @@ import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 #else
+extern U0i InteruptCore(I64i);
 extern U8i *NewVirtualChunk(I64i,I64i low32);
 extern U8i *FreeVirtualChunk(U8i *,I64i sz);
 extern U0i DyadInit();
@@ -3071,7 +3073,7 @@ class CMemUsed
 #define MBS_UNUSED_SIGNATURE_VAL	'MBUn'
 class CMemBlk
 {
-  CMemBlk *next,*last;
+  CMemBlk *next,*last;
   U32	mb_signature,pags;
   CMemBlk *next2,*last2;
 };
@@ -5978,3 +5980,4 @@ extern U8 *CAlloc(I64 size,CTask *mem_task=NULL);
 extern U8 *AMAlloc(I64 size);
 extern Bool IsValidPtr(U8 *ptr);
 extern U0 EdCharIns(I64 ch,I64 sc,CDoc *doc);
+extern CTask *adam_task;

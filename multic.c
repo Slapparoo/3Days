@@ -72,9 +72,18 @@ static void LaunchCore(void *c) {
 	__core_num=c;
 	#ifndef TARGET_WIN32
 	signal(SIGBUS,FualtCB);
+	CHash yield=map_get(&TOSLoader,"Yield")->data[0];
+	signal(SIGUSR2,yield.val);
 	#endif
     signal(SIGSEGV,FualtCB);
 	(*cores[__core_num].fp)();
+}
+void InteruptCore(int core) {
+	#ifndef TARGET_WIN32
+	pthread_kill(cores[core].thread,SIGUSR2);
+	#else
+	
+	#endif
 }
 void CreateCore(int core,void *fp) {
 	cores[core].core_num=core;

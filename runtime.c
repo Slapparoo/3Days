@@ -163,6 +163,9 @@ static char **__Dir(char *fn) {
     vec_deinit(&items);
     return ret;
 }
+static void STK_InteruptCore(int64_t *stk) {
+	InteruptCore(stk[0]);
+}
 static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
   map_iter_t iter;
   const char *key;
@@ -435,6 +438,7 @@ void TOS_RegisterFuncPtrs() {
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+	STK_RegisterFunctionPtr(&ffi_blob,"InteruptCore",STK_InteruptCore,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"NewVirtualChunk",STK_NewVirtualChunk,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"FreeVirtualChunk",STK_FreeVirtualChunk,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CmdLineBootText",CmdLineBootText,0);

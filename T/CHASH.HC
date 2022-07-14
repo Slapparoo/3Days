@@ -110,8 +110,8 @@ I64 HashVal(CHash *tmph)
 CHashTable *HashTableNew(I64 size,CTask *t=NULL)
 {   //New hash table, power-of-two in size.
     CHashTable *table;
-    table=MAlloc(sizeof(CHashTable));
-    table->body=MAlloc(size<<3);
+    table=MAlloc(sizeof(CHashTable),t);
+    table->body=MAlloc(size<<3,t);
     table->mask=size-1;
     return table;
 }
@@ -171,12 +171,12 @@ CHashGeneric *HashGenericAdd(U8 *name,I64 type,
                              I64 u0=0,I64 u1=0,I64 u2=0,CTask *task=NULL)
 {   //Add any type to task hash_table, 3 user_data values.
     if (!task) task=Fs;
-    CHashGeneric *res=MAlloc(sizeof(CHashGeneric));
+    CHashGeneric *res=MAlloc(sizeof(CHashGeneric),task);
     res->type=type;
     res->user_data0=u0;
     res->user_data1=u1;
     res->user_data2=u2;
-    res->str=StrNew(name);
+    res->str=StrNew(name,task);
     HashAdd(res,Fs->hash_table);
     return res;
 }
@@ -254,14 +254,15 @@ I64 FramePtr(U8 *name,CTask *task=NULL)
 
 CHashGeneric *FramePtrAdd(U8 *name,I64 val=0,CTask *task=NULL)
 {   //Add named value to task->hash_table.
-    return HashGenericAdd(name,HTT_FRAME_PTR,val,0,0);
+    return HashGenericAdd(name,HTT_FRAME_PTR,val,0,0,task);
 }
 
 I64 FramePtrSet(U8 *name,I64 val,CTask *t=NULL)
 {   //Find hash entry in task->hash_table. Change user_data0.
     CHashGeneric *tmph;
     I64 ret;
-    if (tmph=HashFind(name,Fs->hash_table,HTT_FRAME_PTR)) {
+    if(!t) t=Fs;
+    if (tmph=HashFind(name,t->hash_table,HTT_FRAME_PTR)) {
         ret=val,SwapI64(&tmph->user_data0,&ret);
         return ret;
     } else
@@ -272,9 +273,10 @@ I64 FramePtrDel(U8 *name,CTask *t=NULL)
 {   //Remove entry and delete.
     CHashGeneric *tmph;
     I64 res=0;
-    if (tmph=HashFind(name,Fs->hash_table,HTT_FRAME_PTR)) {
+    if(!t) t=Fs;
+    if (tmph=HashFind(name,t->hash_table,HTT_FRAME_PTR)) {
         res=tmph->user_data0;
-        HashRemDel(tmph,Fs->hash_table);
+        HashRemDel(tmph,t->hash_table);
     }
     return res;
 }

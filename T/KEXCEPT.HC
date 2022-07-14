@@ -130,6 +130,7 @@ U0 Break()
     */
     throw('Break');
   }
+  try ; catch ;
 }
 
 Bool BreakLock(CTask *task=NULL)

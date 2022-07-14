@@ -178,3 +178,4 @@ void FreeVirtualChunk(void *ptr,size_t s);
 void HolyFree(void *ptr);
 void *HolyMAlloc(int64_t sz);
 char *HolyStrDup(char *str);
+void InteruptCore(int core);

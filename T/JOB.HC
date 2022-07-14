@@ -235,7 +235,7 @@ I64 JobResGet(CJob *rqst=NULL)
   } else {
     while (!Bt(&rqst->flags,JOBf_DONE)) {
       LBts(&(Fs->task_flags),TASKf_IDLE);
-      PAUSE;
+      Yield;
     }
   }
   LBtr(&(Fs->task_flags),TASKf_IDLE);

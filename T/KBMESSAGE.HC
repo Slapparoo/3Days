@@ -350,7 +350,7 @@ Bool ScanKey(I64 *_ch=NULL,I64 *_scan_code=NULL,Bool echo=FALSE)
     return TRUE;
   } else {
     if (_ch) *_ch=0;
-    if (_scan_code) *_scan_code=0;
+    if (_scan_code) *_scan_code=0;
     return FALSE;
   }
 }
@@ -502,6 +502,9 @@ I64 KbdMsgsQue()
   return msg_code;
 }
 static I64 kb_mtx=0;
+static U0 _Exit() {
+	Exit;
+}
 static U0 KBCb(I64 c,I64 s) {
 	while(LBts(&kb_mtx,0))
 		PAUSE;
@@ -510,6 +513,14 @@ static U0 KBCb(I64 c,I64 s) {
     BEqu(&kbd.down_bitmap,s&0x7f,!(s&SCF_KEY_UP));
     FifoI64Ins(kbd.scan_code_fifo,s);
     kbd.timestamp=__GetTicks;
+    c=ScanCode2Char(s&0x7f);
+    if(s&SCF_ALT&&s&SCF_CTRL&&(c=='c'||c=='x')&&TaskValidate(sys_focus_task)) {
+		if(c=='c')
+			sys_focus_task->rip=&Break;
+		else if(c=='x')
+			sys_focus_task->rip=&_Exit;
+		InteruptCore(0);
+	}
     LBtr(&kb_mtx,0);
 }
 SetKBCallback(&KBCb,sys_focus_task);

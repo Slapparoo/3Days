@@ -281,7 +281,7 @@ I64 TaskInit(CTask *task,I64 stk_size)
   QueInit(&task->next_ctrl);
   QueInit(&task->next_ode);
   
-  task->hash_table=HashTableNew(TASK_HASH_TABLE_SIZE);
+  task->hash_table=HashTableNew(TASK_HASH_TABLE_SIZE,task);
   task->text_attr	=WHITE<<4+BLUE;
   task->border_src	=BDS_CONST;
   //task->border_attr	=DrvTextAttrGet(':'); RESTORE
@@ -300,7 +300,7 @@ I64 TaskInit(CTask *task,I64 stk_size)
     task->cur_dir=StrNew("/Home",task);
     */
     //TODO Restore
-    task->cur_dir=DirCur;
+    task->cur_dir=StrNew(Fs->cur_dir,task);
   return task;
 }
 CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
@@ -314,7 +314,7 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
   if(!parent) parent=adam_task;
   if(target_cpu==-1)
 	target_cpu=Gs->num;
-  CTask *task=MAlloc32(sizeof(CTask));
+  CTask *task=MAlloc32(sizeof(CTask),adam_task);
   U8 **stack;
   if (!task_name) task_name="Unnamed Task";
   task->parent_task=parent;
