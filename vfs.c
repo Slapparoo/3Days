@@ -413,8 +413,11 @@ char VFsChDrv(char to) {
 			HolyFree(cur_dir);
 		if(map_get(&drive_dirs,buf)) {
 			cur_dir=HolyStrDup(*map_get(&drive_dirs,buf));
-		} else
-			cur_dir=HolyStrDup("/");
+		} else {
+			char buf2[1024];
+			snprintf(buf2,"%s:/",buf);
+			cur_dir=HolyStrDup(buf2);
+		}
     }
     return old;
 }

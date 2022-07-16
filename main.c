@@ -192,7 +192,6 @@ int main(int argc,char **argv)
 			NewDrawWindow();
         int flags=0;
     #ifndef TARGET_WIN32
-		pthread_t core0;
         if(0==access("HCRT.BIN",F_OK)) {
 			puts("Using ./HCRT.BIN as the default binary.");
 			hcrt_bin_loc="HCRT.BIN";

@@ -56,6 +56,8 @@ U0 Adam(U8 *) {
 		DbgInfoRead("HCRT.DBG.Z");
 	if(!__IsCmdLine) {
 		sys_winmgr_task=Spawn(&WinMgrTask);
+		//Grab pointer
+		ExePrint2("#include \"AMOUSE.HC.Z\";;");
 	} else {
 		DeathWait(User);
 		Exit3Days;
