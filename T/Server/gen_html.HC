@@ -11,6 +11,9 @@
 #define WIKI_CHANGES "/CHANGES"
 #define WIKI_CHANGES_FOR_FILE "/FCHANGE"
 #define WIKI_RESTORE "/RESTORE" //Takes FILE and REVISION 
+DirMk(WIKI_ROOT);
+DirMk(WIKI_PREVIEW);
+DirMk(WIKI_BACKUP);
 #include "header_footer.HC";
 U8 *ReadLine(U8 *t,U8 **en) {
   U8 *r,*e;
@@ -18,7 +21,7 @@ U8 *ReadLine(U8 *t,U8 **en) {
     if(en) *en=NULL;
 	return NULL;
   }
-  if(e=StrFirstOcc(t,"\n")) {
+  if(e=StrFirstOcc(t,"\n")) {
 chug:
     r=MAlloc(e-t+1);
     MemCpy(r,t,e-t);
@@ -202,6 +205,7 @@ Bool IsAbsLink(U8 *link) {
 
 }
 I64 FmtText(U8 *ftxt,CDyadStream *stream,CURL *url) {
+  Bool toc_enable=TRUE;
   U8 *fptr,
         *ln,*oln,*ln2,*t1,*t2,*t3;
   I64 len=0,*len_ptr,flags,i,depth,ident=0;
@@ -219,7 +223,8 @@ loop:
   list_depths_i=0;
   fptr=ftxt;
   if(!len_ptr) { //On second run len_ptr is NULL,but header is already populated
-    MakeIndex(stream,len_ptr,headers);
+    if(toc_enable)
+      MakeIndex(stream,len_ptr,headers);
     for(cheader=headers->next;cheader!=headers;cheader=cheader->next)
       Free(cheader->text);
     QueDel(headers);
@@ -307,10 +312,19 @@ fmt_line:
       switch(*ln) {
         start:
 	  t1=t2=NULL;
+          case '{':
+            ln2=StrFirstOcc(ln+1,"}");
+	    if(ln2){
+              t1=StrSlice(ln+1,ln2);
+              if(!StrCmp(t1,"no-toc")) {
+	  	toc_enable=FALSE;
+              }
+            }
+	    break;
 	  case '|':
 	    ln2=ln;
 	    last=ClosePair(last,stream,len_ptr);
-	    last=EnterPair(last,stream,len_ptr,'TD');
+	    last=EnterPair(last,stream,len_ptr,'TD');
 	    break;
 	  case '[':
 	    ln2=StrFirstOcc(ln+1,"]");
@@ -321,7 +335,7 @@ fmt_line:
 	      t1=StrSlice(ln+1,ln2);
 	      t3=StrNew(t1);//Trimming mutates t1
 	      if(IsImage(Trim(t1))) {
-	        Write(stream,len_ptr,"<IMG SRC=\"%s\">",Trim(t1));
+	        Write(stream,len_ptr,"<IMG SRC=\"images/%s\">",Trim(t1));
 	      } else if(!StrFirstOcc(t3," ")) {
 	        if(IsAbsLink(Trim(t1)))
 		  Write(stream,len_ptr,"<A HREF=\"""%s\">%s</A>",Trim(t1),Trim(t1));
@@ -387,7 +401,7 @@ fmt_line:
 	  Free(t2),Free(t1);
 	  break;
         default:
-	  ln2=StrFirstOcc(ln,"-_/*[|");
+	  ln2=StrFirstOcc(ln,"-_/*[{|");
 	  if(!ln2) ln2=ln+StrLen(ln);
 	  Write(stream,len_ptr,"%s",t2=HTMLify(t1=StrSlice(ln,ln2)));
 	  Free(t1),Free(t2);
@@ -470,7 +484,7 @@ U0 Post(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTable 
 	FileGet(srv,stream,url,req);
 }
 U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
-	U8 *dot=FileExtDot(url->abs_path);
+	U8 *dot=FileExtDot(url->abs_path),*np;
 	if(!StrNCmp(url->abs_path,WIKI_RESTORE,StrLen(WIKI_RESTORE))) {
 		RestoreGet(srv,stream,url,req);
 		return;
@@ -502,7 +516,7 @@ U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
 	if(!dot) {
 		WikiGet(srv,stream,url,req);
 		return;
-	}
+	}        
 	if(dot&&!StrICmp(dot,".WIKI")) {
 		WikiGet(srv,stream,url,req);
 		return;

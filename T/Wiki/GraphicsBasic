@@ -1,8 +1,6 @@
 == HolyC graphics - basic
 Here we will learn about basic graphics.
 
-{{collapse=Table of contents}}{{toc}}{{-collapse}}
-
 Graphics are typicaly done via *Fs->draw_it*
 == Simple graphics demo
  U0 DrawIt(CTask *,CDC *dc) {

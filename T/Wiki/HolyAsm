@@ -2,7 +2,6 @@
 Assembler language is what makes your computer do,it is the literal 1/0s of the computer
 So  lets get started. This will focus on TempleOS assembler and will not work with systemV ABI(dont try running the code outside of 3Days/TempleOS)
 
-{{collapse=Table of contents}}{{toc}}{{-collapse}}
 == What does a computer do
 A computer has 2 (main) types of memory. RAM and registers.
 * RAM,is an array of bytes

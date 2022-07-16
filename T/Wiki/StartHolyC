@@ -1,8 +1,6 @@
 ==Getting started with HolyC development
 HolyC is currently available on all machines that could emulate an IA64 generic machine, or through a binary translation layer for IA64 FreeBSD/Linux/Windows, and a !PowerPC port is being considered. Alternatively you may run TempleOS on bare metal using !TinkerOS.
 
-{{collapse=Table of contents}}{{toc}}{{-collapse}}
-
 ==Running a HolyC environment
 ===Virtual machine
 The TempleOS ISO is available on [https://templeos.org/Downloads/TempleOS.ISO TemplsOS.ORG], but we are also mirroring the ISO file [files/TempleOS.ISO here].

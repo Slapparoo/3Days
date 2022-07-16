@@ -10,8 +10,6 @@ HolyC is a programming language and a dialect of C. The most notable features of
 * Typecastable lvalues
 * C89-style for statements
 
-{{collapse=Table of contents}}{{toc}}{{-collapse}}
-
 ==Features
 ===Classes instead of structs
 In C you would define a struct like
