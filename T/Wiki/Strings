@@ -1,0 +1,35 @@
+= Strings
+Strings in programming mean text(think strings of text). Strings are a pointer to U8 in HolyC(each character is a byte).
+You print a string to the screen but just typing it in.
+ "I am a string\n"; // \n is a newline
+== Escape Sequences Basics
+You can use special escape characters to represent special symbols you can't normally type. We precede an *escape sequence* with a backslash.
+It looks like this:
+ "A new-line is ahead \n";
+Sometimes we need escape sequences to represent a *"* inside a string. To do this we use *\"*
+ "I am \"quoted\"\n";
+We can represent tabs with *\t*.
+ "\tI am 1 tab over\n";
+== Escape Sequences List
+|Sequence|Meaning
+|\'| Single quote
+|\"| Double quote
+|\\| Backslash
+|\d| Dollar sign
+|\x12| Hexadecimal 0x12(you can use any hex digit)
+== Basic String Operations
+The most basic string operation compares strings,it is called /StrICmp/. It will compare buy the alphabetical(or by ascii) values of the strings. *It's like dictionary order compare*. It "subtracts" the alphabetical index of A with the alphabetical index of B to compare them,take a look at these examples
+ StrICmp("abc","def"); //Returns over lesser than 1 as "abc" comes before "def"
+ StrICmp("def","abc"); //Returns over greater than 1 as "def" comes before "abc"
+ StrICmp("abc","abc"); //Returns 0 as the alphabetical index of ""abc" and "abc" are the same
+/StrICmp/ has some friends too.
+|Function| Meaning
+|StrCmp(a,b)|Same as StrICmp,but is case-sensitive
+|StrNCmp(a,b,n)|Compares first n characters of a and b
+|StrNICmp(a,b,n)|  Like StrNCmp but isn't case-sensitive
+|StrMatch(needle,haystack)|Look for needle in haystack
+|StrIMatch(needle,haystack)|Look for needle in haystack(not case-sensitive)
+|StrCpy(dest,src)|Copy src into dest
+== Other String Operations
+|Function|Meaning
+|StrOcc(str,ch)|  Counts the occurrence of ch in str

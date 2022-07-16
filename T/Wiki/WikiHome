@@ -1,0 +1,28 @@
+==Welcome to the unofficial yet informative TempleOS wiki.
+Here you will find topics as they are added. This project's purpose is to create a wiki dedicated to TempleOS and HolyC that is juicy, epic, informative and can help TempleOS users of all kinds of knowledge levels. It is currently in a very premature state, so please keep in mind that many parts of this wiki may not have been finished yet.
+
+* [WikiHome Home]
+* Topics
+** [StartHolyC Getting started]
+** HolyC
+*** !Graphics
+**** [GraphicsBasic Basic graphics]
+*** [Sound]
+*** [HolyAsm HolyC Assembly]
+*** [MetaData Class meta-data]
+*** [DolDoc DolDoc and fun]
+*** [Input User Input from Keyboard and Mouse]
+*** [Multic Multithreading]
+*** [Strings]
+** C
+*** Differences between HolyC and C
+**** [CLinking Linking]
+*** [CHolyCGuide A combined guide of HolyC and C]
+** TempleOS
+*** [TempleKernel TempleOS internals - Kernel]
+** How computers work
+*** [HowCPU How CPUs work]
+*** [Bitwise More on bitwise operators]
+*** [Yasm Assembly guide(yasm)]
+* [About]
+* [TODO]
