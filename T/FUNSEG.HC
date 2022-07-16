@@ -275,6 +275,12 @@ Bool Man(U8 *st,I64 edf_dof_flags=0)
   Bool res=FALSE;
   U8 **st2;
   CHashSrcSym *tmph;
+  if(IsRaw&&tmph=HashFind(st,Fs->hash_table,-1)) {
+	"%s\n",tmph->src_link;
+	return;
+  }
+  if(IsRaw)
+	return;
   st2=MStrPrint("MN:%s",st);
   res=Ed(st2,edf_dof_flags);
   Free(st2);

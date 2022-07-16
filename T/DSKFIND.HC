@@ -273,7 +273,12 @@ U0 PutFileLink(U8 *filename,U8 *full_name=NULL,I64 line=0,Bool plain_text=FALSE)
 {//Put \dLK,"DolDoc",A="FI:::/Doc/DolDocOverview.DD"\d file,line link to StdOut, \dLK,"DocPut",A="MN:DocPut"\d.
   U8 *st;
   if (!filename) return;
-   {
+  if (IsRaw) {
+    if (line)
+      "%s,%04d",filename,line;
+    else
+      "%s",filename;
+  } else {
 //LK_DOC,LK_DOC_ANCHOR,LK_DOC_FIND,LK_DOC_LINE
     if (filename[0]=='A'&&filename[2]==':') {
       if (line) //See \dLK,"SpriteEdText",A="MN:SpriteEdText"\d()
@@ -305,7 +310,9 @@ U0 PutDirLink(U8 *dirname,U8 *full_name=NULL)
 {//Put \dLK,"DolDoc",A="FI:::/Doc/DolDocOverview.DD"\d dir macro to StdOut, \dLK,"DocPut",A="MN:DocPut"\d.
   U8 *st;
   if (!dirname) return;
-   {
+  if(IsRaw) {
+	"%s",dirname;
+  } else {
     if (!full_name)
       full_name=st=DirNameAbs(dirname);
     else

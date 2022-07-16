@@ -66,7 +66,6 @@ U0 FindGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 		WriteLn(stream,len_ptr,"</ARITCLE>");
 			
 	}
-	Free(matches);
 	WikiFooter(stream,len_ptr,url);
 	if(len_ptr) {
 		WriteLn(stream,,"HTTP/1.1 200 OK");

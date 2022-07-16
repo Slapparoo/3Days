@@ -1,5 +1,9 @@
 #define FPTRS 1
 #include "KERNELA.HH"
+Bool dol_doc_inited=FALSE;
+Bool IsRaw() {
+	return __IsCmdLine;
+}
 extern U0 InitHeaps();
 InitHeaps;
 CHeapCtrl ahc;
@@ -33,7 +37,7 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
         throw('FILE');
     }
 	if(!t) t=Fs;
-	Yield;
+	Yield;
 	data=__FileRead(fn,&len2,t);
 	if(IsDotZ(fn2)) {
 		exp=ExpandBuf(data,t);

@@ -1,5 +1,4 @@
 U0 __EditGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,U8 *file) {
-	TOSPrint("b\n");
   U8 *page=GetQueryValue(url->query,"PAGENAME"),*ptr,*ftxt,*t1,*ln;
   U8 *profan;
   if(!page||!file) {
@@ -21,7 +20,7 @@ new_page:
 		WriteLn(stream,,"HTTP/1.1 404 OK");
 		WriteLn(stream,,"Server: Bungis");
 		WriteLn(stream,,"Content-Type: text/html");
-		WriteLn(stream,,"");    
+		WriteLn(stream,,"");    
 		WikiHeader(stream,NULL,"Attempted Directory Edit.",FALSE);
 		WriteLn(stream,NULL,"<H1>You attemped to edit a directory!!!</H1>");
 		WikiFooter(stream,NULL,url);
@@ -122,9 +121,10 @@ loop:
         DirMk(t2);
         Free(t2);
       }
-//TODO profanity check.
-      if(!profan)
+      if(!profan) {
+	BackupFile(link+StrLen(WIKI_ROOT),ftxt);
         FileWrite(link,ftxt,t1-ftxt);
+     }
     }
     Free(profan);
     Free(ftxt);

@@ -63,7 +63,7 @@ U0 IndexGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 	WriteLn(stream,,"HTTP/1.1 200 OK");
 	WriteLn(stream,,"Server: Bungis");
 	WriteLn(stream,,"Content-Type: text/html");
-	WriteLn(stream,,"");
+	WriteLn(stream,,"");
 	WikiHeader(stream,NULL,index_link,FALSE);
 	ents=FilesFind(dir);
 	for(cent=ents;cent;cent=cent->next)
@@ -74,6 +74,11 @@ U0 IndexGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 	QSortI64(sorted,ent_cnt,&IndexSort);
 	WriteLn(stream,NULL,"<H1>Upload a new file to %s</H1>",rel_dir);
 	WIKI_FILE_UPLOAD_HTML(stream,url,"/");
+	WriteLn(stream,NULL,"<H1>Make a new page</H1>");
+        WriteLn(stream,NULL,"<FORM ACTION=\""WIKI_EDIT"\" CLASS=\"form-group>\">");
+	WriteLn(stream,NULL,"<LABELFOR=\"PAGENAME\">New Page:</LABEL>");
+	WriteLn(stream,NULL,"<INPUT TYPE=\"TEXT\" NAME=\"PAGENAME\" ID=\"PAGENAME\">");
+	WriteLn(stream,NULL,"</FORM>");
 	WriteLn(stream,NULL,"<H1>Contents of %s</H1>",rel_dir);
 	WriteLn(stream,NULL,"<UL>");
 	for(i=0;i!=ent_cnt;i++) {

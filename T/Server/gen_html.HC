@@ -7,6 +7,10 @@
 #define WIKI_SEARCH "/FIND"
 #define WIKI_PREVIEW "/Wiki/Preview"
 #define WIKI_UPLOAD "/UPLOAD"
+#define WIKI_BACKUP "/WikiBackups/"
+#define WIKI_CHANGES "/CHANGES"
+#define WIKI_CHANGES_FOR_FILE "/FCHANGE"
+#define WIKI_RESTORE "/RESTORE" //Takes FILE and REVISION 
 #include "header_footer.HC";
 U8 *ReadLine(U8 *t,U8 **en) {
   U8 *r,*e;
@@ -14,7 +18,7 @@ U8 *ReadLine(U8 *t,U8 **en) {
     if(en) *en=NULL;
 	return NULL;
   }
-  if(e=StrFirstOcc(t,"\n")) {
+  if(e=StrFirstOcc(t,"\n")) {
 chug:
     r=MAlloc(e-t+1);
     MemCpy(r,t,e-t);
@@ -220,7 +224,7 @@ loop:
       Free(cheader->text);
     QueDel(headers);
     headers=MAlloc(sizeof(CHTMLPair));
-    QueInit(headers);
+    QueInit(headers);
   }
   while(oln=ln=ReadLine(fptr,&fptr)) {
 //Is code if starts with whitespace
@@ -410,7 +414,6 @@ finish:
   QueDel(markup);
   for(theader=headers->next;theader!=headers;theader=theader->next)
     Free(theader->text);
-  TOSPrint("theaders");
   QueDel(headers);
 }
 U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
@@ -452,6 +455,7 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 }
 #include "find.HC"
 #include"filter.HC"
+#include "backup.HC"
 #include "edit.HC"
 #include "index.HC"
 U0 Post(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTable *tab) {
@@ -467,6 +471,18 @@ U0 Post(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTable 
 }
 U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
 	U8 *dot=FileExtDot(url->abs_path);
+	if(!StrNCmp(url->abs_path,WIKI_RESTORE,StrLen(WIKI_RESTORE))) {
+		RestoreGet(srv,stream,url,req);
+		return;
+        }
+        if(!StrNCmp(url->abs_path,WIKI_CHANGES,StrLen(WIKI_CHANGES))) {
+		ChangeLogGet(srv,stream,url,req);
+		return;
+	}
+        if(!StrNCmp(url->abs_path,WIKI_CHANGES_FOR_FILE,StrLen(WIKI_CHANGES_FOR_FILE))) {
+		ChangeForFileGet(srv,stream,url,req);
+		return;
+	}
 	if(!StrNCmp(url->abs_path,WIKI_INDEX,StrLen(WIKI_INDEX))) {
 		IndexGet(srv,stream,url,req);
 		return;
@@ -493,7 +509,7 @@ U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
 	}
 	FileGet(srv,stream,url,req);
 }
-CServer *srv=CreateServer(8080);
+CServer *srv=CreateServer(8000);
 srv->get=&Get;
 srv->post=&Post;
 Serve(srv);

@@ -906,7 +906,10 @@ U0 PrintErr(U8 *fmt,...)
 {//Print "Err:" and msg in blinking red.
   U8 *buf=StrPrintJoin(NULL,fmt,argc,argv);
   GetOutOfDollar;
-  ST_ERR_ST "%s",buf;
+  if(IsRaw)
+	"ERROR: ""%s",buf;
+  else
+	ST_ERR_ST "%s",buf;
   Free(buf);
 }
 
@@ -914,6 +917,9 @@ U0 PrintWarn(U8 *fmt,...)
 {//Print "Warn:" and msg in blinking red.
   U8 *buf=StrPrintJoin(NULL,fmt,argc,argv);
   GetOutOfDollar;
-  ST_WARN_ST "%s",buf;
+  if(IsRaw)
+	"WARN: ""%s",buf;
+  else
+	ST_WARN_ST "%s",buf;
   Free(buf);
 }

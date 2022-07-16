@@ -68,7 +68,7 @@ U0 LexWarn(CCmpCtrl *cc,U8 *str=NULL)
   if (str) PrintWarn(str);
   if (cc->htc.fun) {
     "in fun '%s'.\n",cc->htc.fun->str;
-    if (__IsCmdLine)
+    if (IsRaw)
       "%s\n",cc->htc.fun->src_link;
     else {
       "$$LK,\"%s\"$$\n",cc->htc.fun->src_link;
