@@ -114,7 +114,6 @@ int main(int argc,char **argv)
 #endif
 {
 	#ifndef TARGET_WIN32
-	assert(XInitThreads());
 	#else
 	AddVectoredExceptionHandler(1,&VectorHandler);
 	#endif 
@@ -188,8 +187,10 @@ int main(int argc,char **argv)
 	}
 	if(1) {
 		//Create the Window,there is 1 screen God willing.
-		if(!is_cmd_line)
+		if(!is_cmd_line) {
+			assert(XInitThreads());
 			NewDrawWindow();
+		}
         int flags=0;
     #ifndef TARGET_WIN32
         if(0==access("HCRT.BIN",F_OK)) {

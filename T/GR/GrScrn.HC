@@ -366,7 +366,9 @@ U0 GrUpdateTextModeText()
 U0 GrUpdateVGAGraphics()
 {//Update Graphic Card
 }
-U8 *_3days_screen=DrawWindowNew;
+U8 *_3days_screen=NULL;
+if(!__IsCmdLine)
+	_3days_screen=DrawWindowNew;
 U0 GrUpdateScrn()
 {//Called by the Window Manager \dLK,"HERE",A="FF:::/Adam/WinMgr.HC,GrUpdateScrn"\d, 30 times a second.
   CDC *dc;
