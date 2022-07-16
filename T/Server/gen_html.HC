@@ -324,7 +324,7 @@ fmt_line:
 	  case '|':
 	    ln2=ln;
 	    last=ClosePair(last,stream,len_ptr);
-	    last=EnterPair(last,stream,len_ptr,'TD');
+	    last=EnterPair(last,stream,len_ptr,'TD');
 	    break;
 	  case '[':
 	    ln2=StrFirstOcc(ln+1,"]");
@@ -523,7 +523,7 @@ U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
 	}
 	FileGet(srv,stream,url,req);
 }
-CServer *srv=CreateServer(8000);
+CServer *srv=CreateServer(8080);
 srv->get=&Get;
 srv->post=&Post;
 Serve(srv);
