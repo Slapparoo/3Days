@@ -57,7 +57,7 @@ I64 __EncodeQueryValue(U8 *s,U8 *to) {
        if(to) *to++='+';
        len2++;
        break;
-       default:
+       default:
        if(to) *to++='%';
        if(to) *to++=xdigits[(s[i]>>4)&0xf];
        if(to) *to++=xdigits[s[i]&0xf];
@@ -166,7 +166,8 @@ U8 *Trim(U8 *buf) {
 			*StrFirstOcc(buf," \t\n\x0d")=0;
 	return SkipWhitespace(buf);
 }
-U0 ParseRequest(CDyadStream *stream,CConnection *con) {
+U0 ParseRequest(CConnection *con) {
+        CDyadStream *stream=con->stream;
 	U8 *http2,*t1,buf[STR_LEN],buf2[STR_LEN],*t2,*ptr,*optr;
 	CHashGeneric *hash;
 	CHTTPRequest req;
@@ -431,7 +432,7 @@ en:
   return;
 process:
   con->buffer[con->b_ptr]=0;
-  ParseRequest(s,con);
+  DeathWait(Spawn(&ParseRequest,con));
   if(con->post_data)
     HashTableDel(con->post_data);
   QueRem(con);

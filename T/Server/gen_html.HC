@@ -204,6 +204,41 @@ Bool IsAbsLink(U8 *link) {
   return FALSE;
 
 }
+U8 *StrFirstOccNonEsc(U8 *str,U8 *occ) {
+  U8 *ostr=str,*find;
+  loop:
+  find=StrFirstOcc(str,occ);
+  if(find!=ostr&&find&&find[-1]=='!') {
+    //Escaped
+    str=find+1;
+    goto loop;
+  }
+  if(find&&ostr!=find&&*find=='_'&&find[1]!='_') {
+    if(Bt(char_bmp_word,find[-1])) {
+      if(find[0]==find[1])
+        str=find+2;
+      else
+        str=find+1;
+      goto loop;
+    }
+  }
+  return find;
+}
+U8 *RemoveEscapedChars(U8 *t1) {
+  U8 *t2,*t3;
+  //Remove !'s that signify escaped items
+  t3=t2=t1;
+  for(;*t2;t2++) {
+    if(t3!=t2)
+      *t3=*t2;
+     if(*t2=='!'&&StrOcc("-_/*[{|",t2[1]))
+       ;
+     else
+       t3++;
+  }
+  *t3=0;
+  return t1;
+}
 I64 FmtText(U8 *ftxt,CDyadStream *stream,CURL *url) {
   Bool toc_enable=TRUE;
   U8 *fptr,
@@ -259,13 +294,17 @@ loop:
         cheader=theader;
       } else
         Free(t1);
-      goto next;
+      goto next_reset;
     }
     if(*ln=='-') {
       for(i=0;ln[i]=='-';i++);
       if(i>=4) {
         last=ClosePair(last,stream,len_ptr);
         WriteLn(stream,len_ptr,"<HR>");
+        next_reset:
+        LBtr(&flags,WGf_CODE);
+        LBtr(&flags,WGf_TABLE);
+        LBtr(&flags,WGf_PARA);
         goto next;
       }
     }
@@ -313,7 +352,7 @@ fmt_line:
         start:
 	  t1=t2=NULL;
           case '{':
-            ln2=StrFirstOcc(ln+1,"}");
+            ln2=StrFirstOccNonEsc(ln+1,"}");
 	    if(ln2){
               t1=StrSlice(ln+1,ln2);
               if(!StrCmp(t1,"no-toc")) {
@@ -327,7 +366,7 @@ fmt_line:
 	    last=EnterPair(last,stream,len_ptr,'TD');
 	    break;
 	  case '[':
-	    ln2=StrFirstOcc(ln+1,"]");
+	    ln2=StrFirstOccNonEsc(ln+1,"]");
 	    if(!ln2) {
 	      ln2=ln;
 	      Write(stream,len_ptr,"[");
@@ -336,13 +375,13 @@ fmt_line:
 	      t3=StrNew(t1);//Trimming mutates t1
 	      if(IsImage(Trim(t1))) {
 	        Write(stream,len_ptr,"<IMG SRC=\"images/%s\">",Trim(t1));
-	      } else if(!StrFirstOcc(t3," ")) {
+	      } else if(!StrFirstOccNonEsc(t3," ")) {
 	        if(IsAbsLink(Trim(t1)))
 		  Write(stream,len_ptr,"<A HREF=\"""%s\">%s</A>",Trim(t1),Trim(t1));
 	        else
 		  Write(stream,len_ptr,"<A HREF=\"""/%s\">%s</A>",Trim(t1),Trim(t1));
 	      }else {
-	        t2=StrFirstOcc(t3," ");
+	        t2=StrFirstOccNonEsc(t3," ");
 	        *t2++=0;
 	        t2=HTMLify(t2);
 	        if(IsAbsLink(Trim(t1)))
@@ -354,44 +393,44 @@ fmt_line:
 	    }
 	    break;
 	  case '*':
-	    ln2=StrFirstOcc(ln+1,"*");
+	    ln2=StrFirstOccNonEsc(ln+1,"*");
 	    if(!ln2) {
 	      ln2=ln;
 	      Write(stream,len_ptr,"*");
 	    } else
-	      Write(stream,len_ptr,"<B>%s</B>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	      Write(stream,len_ptr,"<B>%s</B>",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln+1,ln2))));
 	    break;
 	  case '/':
-	    ln2=StrFirstOcc(ln+1,"/");
+	    ln2=StrFirstOccNonEsc(ln+1,"/");
 	    if(!ln2) {
 	      ln2=ln;
 	      Write(stream,len_ptr,"/");
 	    } else
-	      Write(stream,len_ptr,"<I>%s</I>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	      Write(stream,len_ptr,"<I>%s</I>",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln+1,ln2))));
 	    break;
 	  case '_':
-	    ln2=StrFirstOcc(ln+1,"_");
+	    ln2=StrFirstOccNonEsc(ln+1,"_");
 	    if(!ln2) {
 	      ln2=ln;
 	      Write(stream,len_ptr,"_");
 	    } else
-	      Write(stream,len_ptr,"<U>%s</U>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	      Write(stream,len_ptr,"<U>%s</U>",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln+1,ln2))));
 	    break;
 	  case '-':
-	    ln2=StrFirstOcc(ln+1,"-");
+	    ln2=StrFirstOccNonEsc(ln+1,"-");
 	    if(!ln2) {
 	      ln2=ln;
 	      Write(stream,len_ptr,"-");
 	    } else
-	      Write(stream,len_ptr,"<S>%s</S>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	      Write(stream,len_ptr,"<S>%s</S>",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln+1,ln2))));
 	    break;
 	  case '+':
-	    ln2=StrFirstOcc(ln+1,"+");
+	    ln2=StrFirstOccNonEsc(ln+1,"+");
 	    if(!ln2) {
 	      ln2=ln;
 	      Write(stream,len_ptr,"+");
 	    } else
-	      Write(stream,len_ptr,"<MARK>%s</MARK>",t2=HTMLify(t1=StrSlice(ln+1,ln2)));
+	      Write(stream,len_ptr,"<MARK>%s</MARK>",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln+1,ln2))));
 	    break;
         end:
 	  if(*ln2)
@@ -401,9 +440,9 @@ fmt_line:
 	  Free(t2),Free(t1);
 	  break;
         default:
-	  ln2=StrFirstOcc(ln,"-_/*[{|");
+	  ln2=StrFirstOccNonEsc(ln,"-_/*[{|");
 	  if(!ln2) ln2=ln+StrLen(ln);
-	  Write(stream,len_ptr,"%s",t2=HTMLify(t1=StrSlice(ln,ln2)));
+          Write(stream,len_ptr,"%s",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln,ln2))));
 	  Free(t1),Free(t2);
 	  ln=ln2;
       }
