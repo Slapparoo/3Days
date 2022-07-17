@@ -250,7 +250,7 @@ I64 FmtText(U8 *ftxt,CDyadStream *stream,CURL *url) {
   flags=0;
   len_ptr=&len;
   QueInit(markup);
-  QueInit(headers);
+  QueInit(headers);
 loop:
   cheader=headers;
   last=markup;
@@ -444,10 +444,10 @@ fmt_line:
 	  Free(t2),Free(t1);
 	  break;
         default:
-	  ln2=StrFirstOccNonEsc(ln,"-_/+*}[{|");
+	  ln2=StrFirstOccNonEsc(ln,"-_/+*[{|");
 	  if(!ln2) ln2=ln+StrLen(ln);
 	  Write(stream,len_ptr,"%s",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln,ln2))));
-	  Free(t1),Free(t2);
+	  Free(t1),Free(t2);
 	  ln=ln2;
       }
     }
