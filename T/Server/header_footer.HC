@@ -10,12 +10,12 @@ U8 *WikiHeader(CDyadStream *s,I64 *len_ptr,U8 *points_to,I64 flags=TRUE) {
 	WriteLn(s,len_ptr,"</HEAD>");
 	WriteLn(s,len_ptr,"<BODY>");
 	WriteLn(s,len_ptr,"<NAV CLASS=\"fixed border split-nav\">");
-		WriteLn(s,len_ptr,"<DIV class=\"nav-brand\"><H3><A HREF=\"/WikiHome\">" WIKI_NAME "</A></H3></DIV>");
+		WriteLn(s,len_ptr,"<DIV class=\"nav-brand\"><H3><A HREF=\"/WikiHome\">" WIKI_NAME "</A></H3></DIV>");
 		WriteLn(s,len_ptr,"<DIV><UL CLASS=\"inline\">");
 			WriteLn(s,len_ptr,"<LI><A HREF=\""WIKI_INDEX"\">INDEX</A></LI>");
 			if(flags&WHF_EDIT)
 				WriteLn(s,len_ptr,"<LI><A HREF=\""WIKI_EDIT"?PAGENAME=%s\">EDIT</A></LI>",points_to);
-			if(flags&WHF_EDIT)
+			if(flags&WHF_CHANGES)
 				WriteLn(s,len_ptr,"<LI><A HREF=\""WIKI_CHANGES"?FILE=%s\">CHANGE-LOG</A></LI>",points_to);
 			WriteLn(s,len_ptr,"<LI><A HREF=\""WIKI_SEARCH"\">SEARCH</A></LI>",points_to);
 		WriteLn(s,len_ptr,"</UL></DIV>");

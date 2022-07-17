@@ -98,7 +98,6 @@ CInit;
 #include "FONT.HC"
 #include "FONT2.HC"
 #include "KMISC.HC"
-#include "KeyDev.HC"
 #include "KBMESSAGE.HC"
 #include "MOUSE.HC"
 #include "JOB.HC"
@@ -172,5 +171,7 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 #include "ADBG.HC"
 #include "Sched.HC"
 #include "MAlloc2.HC"
+#include "Diff.HC"
+#include "KeyDev.HC"
 ///#include "Training.HC";
 #endif

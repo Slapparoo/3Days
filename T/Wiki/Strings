@@ -53,3 +53,31 @@ Here are some of the bitmaps
 |WildMatch(test,pattern)|Returns a bool if the wildcard pattern matches.
 |Str2I64(str,base=10,end_ptr=NULL)| Parses a I64 with base(2,10 or 16)
 |Str2F64(str,end_ptr=NULL)|Turns a string into a F64
+|StrScan(str,fmt,...)|Opposite of Print,be sure to pass U8!*!* to '%s'(needs a pointer to a string).
+== StrUtil and MStrUtil
+Have you ever wanted to do typical string routines without re-inventing the wheel.
+/StrUtil/ and /MStrUtil/ are your freinds
+Let's see an example:
+ "%s\n",StrUtil("ABC",SUF_TO_LOWER);
+StrUtil takes a string and some flags. 
+Here we made the string lowercase.
+We can also trim the white space on the string by combining /SUF_REM_LEADING/ and /SUF_REM_TRAILING/.
+ "%s\n",StrUtil(" abc def  ",SUF_REM_TRAILING|SUF_REM_LEADING);
+=== StrUtil
+StrUtil will modify the pointer you provide to it.
+ U8 *abc="ABC";
+ StrUtil(abc,SUF_TO_LOWER);
+ "%s\n",abc;
+=== MStrUtil
+MStrUtil will create a /MAlloc/'ed copy of the str,*it will not modify the pointer provided to it*.
+ U8 *new=MStrUtil("abc",SUF_TO_LOWER);
+ "%s\n",new;
+ Free(new);
+=== Flags
+Here are some of the epic flags.
+|Flag|Meaning
+|SUF_REM_LEADING| Remove leading whitespace 
+|SUF_REM_TRAILING| Remove trailing whitespace
+|SUF_REM_SPACES|Remove spaces
+|SUF_TO_UPPER|Uppercase
+|SUF_TO_LOWER|Lowercase

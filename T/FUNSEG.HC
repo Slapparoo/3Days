@@ -275,7 +275,7 @@ Bool Man(U8 *st,I64 edf_dof_flags=0)
   Bool res=FALSE;
   U8 **st2;
   CHashSrcSym *tmph;
-  if(IsRaw&&tmph=HashFind(st,Fs->hash_table,-1)) {
+  if(IsRaw&&(tmph=HashFind(st,Fs->hash_table,-1))) {
 	"%s\n",tmph->src_link;
 	return;
   }

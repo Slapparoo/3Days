@@ -7,7 +7,7 @@ new_page:
     WriteLn(stream,,"Server: Bungis");
     WriteLn(stream,,"Content-Type: text/html");
     WriteLn(stream,,"");
-    WikiHeader(stream,NULL,"Make a New Page!!!",FALSE);
+    WikiHeader(stream,NULL,"Make a New Page!!!",FALSE);
     WriteLn(stream,NULL,"<FORM ACTION=\""WIKI_EDIT"?PAGENAME=%s\"CLASS=\"form-group\" METHOD=\"POST\">",page);
     WriteLn(stream,NULL,"<LABEL FOR=\"PAGENAME\">New page name</LABEL>");
     WriteLn(stream,NULL,"<INPUT NAME=\"PAGENAME\" TYPE=\"text\">");
@@ -20,7 +20,7 @@ new_page:
 		WriteLn(stream,,"HTTP/1.1 404 OK");
 		WriteLn(stream,,"Server: Bungis");
 		WriteLn(stream,,"Content-Type: text/html");
-		WriteLn(stream,,"");    
+		WriteLn(stream,,"");    
 		WikiHeader(stream,NULL,"Attempted Directory Edit.",FALSE);
 		WriteLn(stream,NULL,"<H1>You attemped to edit a directory!!!</H1>");
 		WikiFooter(stream,NULL,url);
@@ -30,7 +30,7 @@ new_page:
     WriteLn(stream,,"Server: Bungis");
     WriteLn(stream,,"Content-Type: text/html");
     WriteLn(stream,,"");
-    WikiHeader(stream,NULL,page,FALSE);
+    WikiHeader(stream,NULL,page,WHF_CHANGES);
     WriteLn(stream,NULL,"<FORM ACTION=\""WIKI_EDIT"?PAGENAME=%s\"CLASS=\"form-group\" METHOD=\"POST\">",page);
     WriteLn(stream,NULL,"<TEXTAREA NAME=\"PAGETEXT\" COLS=\"70\" ROWS=\"100\" TYPE=\"textarea\">");
     if(FileFind(file)) {
@@ -140,7 +140,7 @@ loop:
     WriteLn(stream,,"Content-Type: text/html");
     WriteLn(stream,,"");
 
-    WikiHeader(stream,NULL,link,FALSE);
+    WikiHeader(stream,NULL,link,WHF_CHANGES);
     WriteLn(stream,NULL,"<FORM ACTION=\""WIKI_EDIT"?PAGENAME=%s\"CLASS=\"form-group\" METHOD=\"POST\">",hash->user_data1);
     WriteLn(stream,NULL,"<LABEL FOR=\"PAGENAME\">%s</LABEL>",hash->user_data1);
     WriteLn(stream,NULL,"<INPUT NAME=\"PAGENAME\" TYPE=\"text\"><BR>");

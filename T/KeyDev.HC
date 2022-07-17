@@ -59,7 +59,7 @@ U0 CtrlAltDel(I64)
 U0 CtrlAltC(I64)
 {
     if(TaskValidate(sys_focus_task))
-		sys_focus_task->rip=&Break;
+		sys_focus_task->rip=&Break;
 }
 
 U0 CtrlAltF(I64)
@@ -126,6 +126,8 @@ U0 KeyDevInit()
   MemSet(&keydev.put_key_head,0,sizeof(CKeyDevEntry));
   QueInit(&keydev.put_key_head);
   //KeyDevAdd(&KDInputFilterPutKey,&KDInputFilterPutS,0x40000000,FALSE); TODO RESTORE(?)
+  CtrlAltCBSet('A',&CtrlAltA,"Cmd /Extended ASCII");
+  CtrlAltCBSet('G',&CtrlAltG,"Cmd /Grid On","Cmd /Grid Off");
   CtrlAltCBSet('C',&CtrlAltC,"Cmd /Break Execution",,TRUE);
   //CtrlAltCBSet('D',&CtrlAltD,"Cmd /Enter Debugger",,TRUE);
   CtrlAltCBSet('N',&CtrlAltN,"Cmd /Next Window",,TRUE);
@@ -135,5 +137,6 @@ U0 KeyDevInit()
   CtrlAltCBSet('T',&CtrlAltT,"Cmd /Terminal Window");
   //CtrlAltCBSet('V',&CtrlAltV,"Cmd /VGA Flush",,TRUE);
   CtrlAltCBSet('X',&CtrlAltX,"Cmd /Kill Focused Task",,TRUE);
+  CtrlAltCBSet('B',&CtrlAltB,"Cmd /Bible");
 }
 KeyDevInit;

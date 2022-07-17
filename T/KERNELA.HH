@@ -222,7 +222,7 @@ import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 #else
-extern U0i InteruptCore(I64i);
+extern U0i InteruptCore(I64i);
 extern U8i *NewVirtualChunk(I64i,I64i low32);
 extern U8i *FreeVirtualChunk(U8i *,I64i sz);
 extern U0i DyadInit();
@@ -5981,3 +5981,29 @@ extern U8 *AMAlloc(I64 size);
 extern Bool IsValidPtr(U8 *ptr);
 extern U0 EdCharIns(I64 ch,I64 sc,CDoc *doc);
 extern CTask *adam_task;
+extern Bool YorN();
+extern I64 PressAKey();
+extern Bool AreYouSure();
+public extern Bool Del(U8 *f1);
+public extern U32 char_bmp_alpha[16],char_bmp_alpha_numeric[16],
+char_bmp_alpha_numeric_no_at[16],	char_bmp_word[16],
+char_bmp_dec_numeric[16],		char_bmp_hex_numeric[16],
+char_bmp_white_space[16],		char_bmp_non_eol_white_space[16],
+char_bmp_zero_cr_nl_cursor[16],	char_bmp_zero_tab_cr_nl_cursor[16],
+char_bmp_zero_tab_cr_nl_cursor_dollar[16],
+char_bmp_macro[16],			char_bmp_printable[16],
+char_bmp_displayable[16],		char_bmp_safe_dollar[16],
+char_bmp_filename[16],			char_bmp_non_eol[16];
+#define DS_USE_FILE1	0
+#define DS_USE_FILE2	1
+#define DS_REMAINDER_1	2
+#define DS_REMAINDER_2	3
+#define DS_ABORT_FILE	4
+#define DF_MODIFIED			0x01
+#define DF_DONT_MODIFIED		0x02
+#define DF_REMAINDER_ALL_FILE1		0x04
+#define DF_REMAINDER_ALL_FILE2		0x08
+#define DF_ABORT_FILE			0x10
+#define DF_ABORT_ALL_FILES		0x20
+#define DF_NO_MORE_PMTS_THIS_FILE	0x40
+public extern Bool Diff(U8 *dst_file,U8 *src_file,I64 *_df_flags=NULL);

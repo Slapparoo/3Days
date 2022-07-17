@@ -345,4 +345,3 @@ U0 CtrlAltB(I64)
 {
   PopUp("BibleView;");
 }
-CtrlAltCBSet('B',&CtrlAltB,"Cmd /Bible");

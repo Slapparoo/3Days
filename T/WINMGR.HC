@@ -341,7 +341,7 @@ Bool WinKeyNavMenu()
     sys_cur_submenu_entry=NULL;
     old_pos.x=ms.pos.x; old_pos.y=ms.pos.y;
     ms.pos.x=new_pos.x=ms.pos.y=new_pos.y=0;
-    while (Bt(kbd.down_bitmap,SC_ALT)) {
+    while (Bt(kbd.down_bitmap,SC_ALT)&&!Bt(kbd.down_bitmap,SC_CTRL)) {
       old_key_cnt=kbd.cnt;
       if (Bt(kbd.down_bitmap,SC_CURSOR_LEFT)) {
 	while (Bt(kbd.down_bitmap,SC_CURSOR_LEFT) && kbd.cnt==old_key_cnt)
