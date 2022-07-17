@@ -193,16 +193,14 @@ int VFsCd(char *to,int flags) {
         vec_pusharr(&path,cur_dir+2,strlen(cur_dir+2)+1); // +2 for 'drv-letter' and ':'
     }
     VFsInplaceHostDelims(path.data);
-    if(!__FExists(path.data)&&!make) {
-		if(!allow_fail)
-			failed=1;
-    } else if(!__FExists(path.data)&&make) {
-        #ifndef TARGET_WIN32
-        mkdir(path.data,0700);
-        #else
-        mkdir(path.data);
-        #endif
-    }
+    if(make)
+		if(!__FExists(path.data)) {
+			#ifndef TARGET_WIN32
+			mkdir(path.data,0700);
+			#else
+			mkdir(path.data);
+			#endif
+		}
     loop:
     vec_pop(&path);
     d=strchr(to,TOS_delim);
@@ -242,19 +240,14 @@ int VFsCd(char *to,int flags) {
     if(path.data[path.length-1]!=delim)
         vec_push(&path,delim);
     vec_push(&path,0);
-    if(!__FExists(path.data)&&!make) {
-		if(!allow_fail)
-			failed=1;
-    } else if(!__FExists(path.data)&&make) {
-        #ifndef TARGET_WIN32
-        mkdir(path.data,0700);
-        #else
-        mkdir(path.data);
-        #endif
-    } else if(!__FIsDir(path.data)) {
-		if(!allow_fail)
-			failed=1;
-    }  
+    if(make)
+		if(!__FExists(path.data)) {
+			#ifndef TARGET_WIN32
+			mkdir(path.data,0700);
+			#else
+			mkdir(path.data);
+			#endif
+		}
     if(*d) {
         next:
         to=++d;
@@ -264,6 +257,8 @@ int VFsCd(char *to,int flags) {
     if(path.data[path.length-1]!=delim)
         vec_push(&path,delim);
     vec_push(&path,0);
+    failed|=!__FExists(path.data);
+    failed|=!__FIsDir(path.data);
     if(!failed) {
 		if(static_root!=cur_dir)
 			HolyFree(cur_dir);

@@ -13,6 +13,10 @@
 #include <stdatomic.h>
 #include <assert.h>
 #include <errno.h>
+#else
+#include <memoryapi.h>
+#include <sysinfoapi.h>
+#include <winnt.h>
 #endif
 void *NewVirtualChunk(int64_t sz,int64_t low32) {
 	#ifndef TARGET_WIN32

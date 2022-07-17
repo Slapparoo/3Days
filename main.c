@@ -188,7 +188,9 @@ int main(int argc,char **argv)
 	if(1) {
 		//Create the Window,there is 1 screen God willing.
 		if(!is_cmd_line) {
+			#ifndef TARGET_WIN32
 			assert(XInitThreads());
+			#endif
 			NewDrawWindow();
 		}
         int flags=0;
