@@ -289,10 +289,10 @@ static int32_t __ScanKey(int64_t *ch,int64_t *sc,UINT msg,WPARAM w,LPARAM *_e) {
             case VK_LEFT:
             *sc=mod|SC_CURSOR_LEFT;
             return 1;
-            case VK_PRIOR:
+            case VK_NEXT:
             *sc=mod|SC_PAGE_DOWN;
             return 1;
-            case VK_NEXT:
+            case VK_PRIOR:
             *sc=mod|SC_PAGE_UP;
             return 1;
             case VK_HOME:
@@ -395,7 +395,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
     wc.lpfnWndProc=WndProc;
     wc.lpszClassName="Holy Drawer";
 	wc.hInstance=hInstance;
-	ShowCursor(0);
 	RegisterClassA(&wc);
 	hwnd=CreateWindowExA(
 		NULL,
