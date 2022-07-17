@@ -6007,3 +6007,27 @@ char_bmp_filename[16],			char_bmp_non_eol[16];
 #define DF_ABORT_ALL_FILES		0x20
 #define DF_NO_MORE_PMTS_THIS_FILE	0x40
 public extern Bool Diff(U8 *dst_file,U8 *src_file,I64 *_df_flags=NULL);
+extern CDirEntry *Cd2DirEntry(CDirEntry *tmpde,U8 *abs_name);
+
+#define FM_NORMAL	0
+#define FM_PICK_FILE	1
+#define FM_PICK_DIR	2
+
+#define DEF2_PROCESSED		1
+#define DEF2_NOT_INITIALIZED	2
+
+#define FMR_INCLUDE		0
+#define FMR_ADAM_INCLUDE	1
+#define FMR_DELETE		2
+#define FMR_RENAME		3
+#define FMR_MKDIR		4
+#define FMR_PLAIN		5
+#define FMR_PASTE		6
+#define FMR_CHG_DSK		7
+#define FMR_FORMAT		8
+#define FMR_MOUNT_REDSEA_ISO_C	9
+#define FMR_UNMOUNT		10
+#define FMR_MAKE_REDSEA_ISO_C	11
+#define FMR_BURN_ISO		12
+#define FMR_HELP		13
+public extern U8 *FileMgr(I64 mode=FM_NORMAL,CTask *mem_task=NULL);

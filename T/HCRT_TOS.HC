@@ -172,6 +172,7 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 #include "Sched.HC"
 #include "MAlloc2.HC"
 #include "Diff.HC"
-#include "KeyDev.HC"
+#include "KeyDev.HC"
+#include "FILEMGR.HC";
 ///#include "Training.HC";
 #endif

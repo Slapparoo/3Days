@@ -163,7 +163,17 @@ int VFsCd(char *to,int flags) {
 	#else
 	WaitForSingleObject(mp_mtx,INFINITE);
 	#endif
-    root_len=strlen(root=*map_get(&mount_points,drv_buf));
+	if(!(root=map_get(&mount_points,drv_buf))) {
+		vec_deinit(&path);
+		#ifndef TARGET_WIN32
+		pthread_mutex_unlock(&mp_mtx);
+		#else
+		ReleaseMutex(mp_mtx);
+		#endif
+		return 0;
+	}
+	root=*(char**)root;
+	root_len=strlen(root);
     #ifndef TARGET_WIN32
 	pthread_mutex_unlock(&mp_mtx);
 	#else

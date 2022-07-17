@@ -1,217 +1,38 @@
 =Quick Guide 
-Top toolbar usage
-* [?edit Edit] Allows you to edit pages ( see below for rules )
-* [?delete Delete] Allows you to delete pages
-* [WikiHome Home] Takes you to the wiki front page
-* [Index Index] List all the pages in the wiki
-* [Changes Changes] Lists the pages changed by date
-* [Create New] Creates a new wiki page by title
-* [WikiHelp Help] Takes you to this help page
-
-Use the text entry box to perform a very simple keyword search on the
-Wiki contents. Hit return to activate the search.
-
-To search through the page names: Open the Index (and the index boxes), 
-open the built in browser search, keys <ctrl><f> 
-
-Use the WikiSandbox to practice formatting.
-
-----
-=Formatting rules
-
-=Top Level Heading
-  =Top Level Heading (H1)
-==Second Level Heading
-  ==Second Level Heading (H2)
-More levels 
-  === (H3), ==== (H4) etc
-----
-The horizontal lines in this page are made with 4 or more dashes:
- ---- Horizonal line
-----
-
-Paragraphs are separated by an empty line
-
-Like this. Another paragraph.
-
- Paragraphs are separated by a blank line.
-
- Like this. Another paragraph.
-----
-*Bold text*, /italic text/, _underscore text_ and -strikethrough-.
-  *Bold text*, /italic text/, _underscore text_ and -strikethrough-.
-/*Combination of bold and italics*/
-  /*Combination of bold and italics*/
-----
-
-{B}Text color{B}
- {B}Text color{B}
-(Y)Background color(Y)
- (Y)Background color(Y)
-
-Colors: {B}B blue{B}  {C}C cyan{C}  {G}G green{G}  {P}P pink{P}  {R}R red{R}  {Y}Y yellow{Y}
-
-Colors: (B)B blue(B)  (C)C cyan(C)  (G)G green(G)  (P)P pink(P)  (R)R red(R)  (Y)Y yellow(Y)
-----
-
-+Highlight+
- +Highlight+
+You can do cool stuff in TempleOS Tiki
+== Horizontal Rule
 -----
-
-WikiLinks are formed by two or more words in /camelcase/.
- WikiLinks are formed by two or more words in /camelcase/.
-External links begin with http://, like http://www.freepan.org
- External links begin with http://, like http://www.freepan.org
-Forced wiki [links] are a alphanumeric string surrounded by square brackets.
- Forced wiki [links] are a alphanumeric string surrounded by square brackets.
-Named http links have text with an !http:// link inside, like [http://www.freepan.org FreePAN]
- Named http links have text with an !http:// link inside, like [http://www.freepan.org FreePAN]
-Sometimes !WordsShouldNotMakeAWikiLink so put a '! ' beforehand.
- Sometimes !WordsShouldNotMakeAWikiLink so put a '! ' beforehand.
-Same thing with !http://foobar.com
- Same thing with !http://foobar.com
-Open external links in new tags:
- {{wwwlink=new_tab}} opens external link in a new tab
- {{wwwlink=current_tab}} opens external link in a current tab
-----
-
-Links to images display the image:
-
- Pictures size and border: {{width=100 height=50 border=2}}
- Return to the default width, height and border: {{picture=default}}
-
-Some text before
-{{width=100 height=50 border=1}}
-http://www.google.com/images/logo.gif
-Some text after
- {{width=100 height=50 border=1 right}}                              
-{{width=100 height=50 border=1 right}} http://www.google.com/images/logo.gif
-Picture is on the right
-
-More text
-
- {{width=100 height=50 border=1 left}}                              
-{{width=100 height=50 border=1 left}} http://www.google.com/images/logo.gif
-Picture is on the left
-
-More text
-
-{{width=100 height=50 border=1}}
-Picture http links have picture with an !http:// link inside, like [http://www.google.com/images/logo.gif http://www.google.com]
- Picture http links have picture with an !http:// link inside, like [http://www.google.com/images/logo.gif http://www.google.com]
-----
-
- Video youtube, videomotion, veoh, vimeo, flash... embedded:
- youtube=http://www.youtube.com/v/---adress--- 
- dailymotion=http://www.dailymotion.com/swf/---adress--- 
- vimeo=http://..... veoh=http://..... flash=http://.....
- line starts with youtube... and terminate the adress with a space
-----
-
-Unordered lists begin with a '* '. The number of asterisks determines the level:
-* foo
-* bar
-** boom
-** bam
-* baz
-
-  * foo
-  * bar
-  ** boom
-  ** bam
-  * baz
-
-Ordered lists work the same, but use a '#'
-----
-Tables begin the line with a '|' and before every new column after.
-
-| row:1,col:1 | row:1,col:2
-| row:2,col:1 | row:2,col:2
- | row:1,col:1 | row:1,col:2
- | row:2,col:1 | row:2,col:2
----
-Quotation begins with ' 
-
- 'I had a monumental idea this morning, but I didn't like it
-'I had a monumental idea this morning, but I didn't like it
-----
- {{expand}} and {{collapse}} use javascript and must be enabled in the user's browser.
-Expand text
-
- {{expand}}  or  {{expand=your label here}}
- text, links, images
- {{-expand}}
-
-{{expand}}
-text, links: http://www.google.com
-{{-expand}}
-
-Imbricated
- {{expand}}
- Some text
- {{expand}}
- More text
- {{-expand}}
- {{-expand}}
-{{expand}}
-Some text
-{{expand}}
-More text
-{{-expand}}
-{{-expand}}
-----
-Collapse text, can be imbricated too.
-
- {{collapse}}  or  {{collapse=your label here}}
- text, links, images
- {{-collapse}}
-
-{{collapse}}
-text, links: http://www.google.com
-{{-collapse}}
-----
-Simple form: ToDo list
- {{entry}} or {{entry tiny/small/medium/large/huge date}}
- !{{data}}   (remove ! before this tag)
- Entries are added in the page after the tag data
- {{delete}} deletes the selected field
- {{save}} saves the checked fields
-{{entry}}
-{{data}}
-{{delete}}{{save}}
-----
- Table of contents {{toc}} can be between collapse or expand
-{{collapse=Table of contents}}{{toc}}{{-collapse}}
-----
-<In
-Lines prefixed with a space are unformatted ( Like examples o are unformatted ( Like examples on this page )
-
-----
- There is a `keyword` in this line.
-There is a `keyword` in this line.
-
-----
- Schedule text with {{schedule=date;show this text if date is true;show this text if false}}
- or {{schedule=date;show it is true}} or {{schedule=date;;show it is false}}
- date can be the day of the week Monday...Sunday or the month January...December
- or the day of he month 1,2,...31 or the month + the day of he month, ex. July 04
- Example: {{schedule=Monday;+It's Monday Deal with it.+}}
-{{schedule=Monday;+It's Monday. Deal with it.+}}
- {{schedule=d/m/n}} set the date of the page to perform a test
- d=0...6 (Sunday...Saturday) m=1...12 (January...December) n=1...31 
-
-----
- To upload file or image into the server with {{upload}}
-Upload your file below then go to Index [Index?Folder=images images] 
-or [Index?Folder=files files] to check your file uploaded:
-
-(Note:size allowed can be set to 0 or limited.)
-{{upload}}
-
-----
- Define a private zone in the page with {{private}}
- Login is required to show after this tag
-{{private}}
- This text is hidded if you are not logged!
-
-----
+ -----
+== Bold
+I am *bold*
+ I am *bold*
+== Italic
+I am /italic/
+ I am /italic/
+== Underline
+I am _underline_
+ I am _underline_
+== Highlight
+I am +highlighted+
+ I am +highlighted+
+== Headers
+These will make a table of contents(can be disabled with !{no-toc!})
+ = Header 1
+ == Header 2
+ === Header 3
+ ==== Header 4
+== Escape sequences 
+Use ! to escape a formatting character 
+I64 !*Foo(I64 !* foo=1!/3);
+ I64 !*Foo(I64 !* foo=1!/3);
+== Lists
+* 1
+** 2
+** 3
+*** 4
+** 5
+ * 1
+ ** 2
+ ** 3
+ *** 4
+ ** 5
