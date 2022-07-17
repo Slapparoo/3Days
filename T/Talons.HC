@@ -927,7 +927,7 @@ U0 Core0Talons()
 	fish_left,tt,best_score);
 
   //We made an alias of this we don't want freed.
-  dc->depth_buf=NULL;
+  dc->depth_buf=NULL;
   DCDel(dc);
   Refresh;
 }
@@ -1034,7 +1034,7 @@ U0 AnimateTask(I64)
 	  tmpb->p.y+=10*ms/1000*MAP_SCALE*Sin(tmpb->é);
 
 	  tmpb->p.z=BIRD_ELEVATION*MAP_SCALE+
-		elevations[tmpb->p.y/MAP_SCALE%MAP_HEIGHT][tmpb->p.x/MAP_SCALE%MAP_WIDTH];
+		elevations[MaxI64(0,(tmpb->p.y/MAP_SCALE)%MAP_HEIGHT)][MaxI64(0,(tmpb->p.x/MAP_SCALE)%MAP_WIDTH)];
 	  tmpb->é+=2*ã*ms/1000/10;
 	  tmpb=tmpb->next;
 	}
