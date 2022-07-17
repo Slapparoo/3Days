@@ -231,7 +231,7 @@ U8 *RemoveEscapedChars(U8 *t1) {
   for(;*t2;t2++) {
     if(t3!=t2)
       *t3=*t2;
-     if(*t2=='!'&&StrOcc("-_/*[{|",t2[1]))
+     if(*t2=='!'&&StrOcc("-_/*[}{|",t2[1]))
        ;
      else
        t3++;
@@ -250,7 +250,7 @@ I64 FmtText(U8 *ftxt,CDyadStream *stream,CURL *url) {
   flags=0;
   len_ptr=&len;
   QueInit(markup);
-  QueInit(headers);
+  QueInit(headers);
 loop:
   cheader=headers;
   last=markup;
@@ -301,7 +301,7 @@ loop:
       if(i>=4) {
         last=ClosePair(last,stream,len_ptr);
         WriteLn(stream,len_ptr,"<HR>");
-        next_reset:
+next_reset:
         LBtr(&flags,WGf_CODE);
         LBtr(&flags,WGf_TABLE);
         LBtr(&flags,WGf_PARA);
@@ -311,7 +311,10 @@ loop:
     if(*ln=='*') {
       for(i=0;ln[i]=='*';i++);
       ln+=i;
-      depth=list_depths[list_depths_i];
+      if(list_depths_i)
+        depth=list_depths[list_depths_i-1];
+      else
+        depth=1;
       if(!list_depths_i) {
         last=EnterPair(last,stream,len_ptr,'UL');
         list_depths[list_depths_i++]=i;
@@ -351,14 +354,15 @@ fmt_line:
       switch(*ln) {
         start:
 	  t1=t2=NULL;
-          case '{':
-            ln2=StrFirstOccNonEsc(ln+1,"}");
+	  case '{':
+	    ln2=StrFirstOccNonEsc(ln+1,"}");
 	    if(ln2){
-              t1=StrSlice(ln+1,ln2);
-              if(!StrCmp(t1,"no-toc")) {
-	  	toc_enable=FALSE;
-              }
-            }
+	      t1=StrSlice(ln+1,ln2);
+	      if(!StrCmp(t1,"no-toc")) {
+	        toc_enable=FALSE;
+	      }
+	    } else
+              ln2=StrLen(ln)+ln;
 	    break;
 	  case '|':
 	    ln2=ln;
@@ -422,7 +426,7 @@ fmt_line:
 	      ln2=ln;
 	      Write(stream,len_ptr,"-");
 	    } else
-	      Write(stream,len_ptr,"<S>%s</S>",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln+1,ln2))));
+	      Write(stream,len_ptr,"<S>%s</S>",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln+1,ln2))));
 	    break;
 	  case '+':
 	    ln2=StrFirstOccNonEsc(ln+1,"+");
@@ -440,9 +444,9 @@ fmt_line:
 	  Free(t2),Free(t1);
 	  break;
         default:
-	  ln2=StrFirstOccNonEsc(ln,"-_/*[{|");
+	  ln2=StrFirstOccNonEsc(ln,"-_/+*}[{|");
 	  if(!ln2) ln2=ln+StrLen(ln);
-          Write(stream,len_ptr,"%s",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln,ln2))));
+	  Write(stream,len_ptr,"%s",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln,ln2))));
 	  Free(t1),Free(t2);
 	  ln=ln2;
       }
@@ -459,15 +463,15 @@ next:
     Free(oln);
   }
 finish:
-  while(markup!=(last=ClosePair(last,stream,len_ptr)));
-  if(len_ptr) {
-    len_ptr=NULL;
-    goto loop;
-  }
-  QueDel(markup);
-  for(theader=headers->next;theader!=headers;theader=theader->next)
-    Free(theader->text);
-  QueDel(headers);
+    while(markup!=(last=ClosePair(last,stream,len_ptr)));
+    if(len_ptr) {
+        len_ptr=NULL;
+        goto loop;
+    }
+    QueDel(markup);
+    for(theader=headers->next;theader!=headers;theader=theader->next)
+        Free(theader->text);
+    QueDel(headers);
 }
 U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   U8 *path=ChrootFile(url->abs_path),*ftxt,*fptr,

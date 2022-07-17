@@ -30,6 +30,26 @@ The most basic string operation compares strings,it is called /StrICmp/. It will
 |StrMatch(needle,haystack)|Look for needle in haystack
 |StrIMatch(needle,haystack)|Look for needle in haystack(not case-sensitive)
 |StrCpy(dest,src)|Copy src into dest
+== Char bitmaps
+In TempleOS,we are provided bitmaps that tell up properties about all the characters in the TempleOS character set. Becuase they are *bit*maps,we use /Bt/ to test for the character's bit in the set. 
+For example,to test if a character is whitespace we can do
+ "%d\n",Bt(char_bmp_white_space,' ');
+ "Not whitespace:%d\n",Bt(char_bmp_white_space,'d');
+Here are some of the bitmaps
+|Bitmap|Meaning
+|char_bmp_alpha|Alphabet characters(includes '@')
+|char_bmp_alpha_numeric|Alphabet and number characters(includes '@')
+|char_bmp_alpha_numeric_no_at| Alphabet characters
+|char_bmp_word|Word characters
+|char_bmp_dec_numeric|Decimal digits
+|char_bmp_hex_numeric|Hexadecimal digits
+|char_bmp_white_space|Whitespace(includes end of line)
+|char_bmp_non_eol_white_space|Whitespace
 == Other String Operations
 |Function|Meaning
 |StrOcc(str,ch)|  Counts the occurrence of ch in str
+|LstSub(idx,lst)| Returns match idx of '%Z' style string
+|LstMatch(needle,haystack)| Looks for match of needle in '%Z' style string,returns -1 if not found.
+|WildMatch(test,pattern)|Returns a bool if the wildcard pattern matches.
+|Str2I64(str,base=10,end_ptr=NULL)| Parses a I64 with base(2,10 or 16)
+|Str2F64(str,end_ptr=NULL)|Turns a string into a F64
