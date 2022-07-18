@@ -47,7 +47,7 @@ U0 PutExcept(Bool catch_it=TRUE)
 {//Print exception msg and catch exception.
   "Except:%c:",Fs->except_ch;
   "%P:%P:%P:%P:%P:%P\n",Fs->except_callers[0],Fs->except_callers[1],
-	Fs->except_callers[2],Fs->except_callers[3],Fs->except_callers[4],
+	Fs->except_callers[2],Fs->except_callers[3],Fs->except_callers[4],
 	Fs->except_callers[5],Fs->except_callers[6],Fs->except_callers[7];
   Fs->catch_except=catch_it;
 }
@@ -116,7 +116,7 @@ U0 throw(I64 ch=0,Bool no_log=FALSE)
 }
 //I used an empty try/catch to force noregs
 //#exe {Option(OPTf_NO_REG_VAR,OFF);;};;
-U0 Break()
+U0 __Break()
 {//Send <CTRL-ALT-c>.
   if (Bt(&(Fs->task_flags),TASKf_BREAK_TO_SHIFT_ESC))
     Msg(MSG_KEY_DOWN,CH_SHIFT_ESC,0x20100000201);
@@ -132,7 +132,14 @@ U0 Break()
   }
   try ; catch ;
 }
-
+asm {
+	_BREAK::
+	PUSH_C_REGS
+	CALL &__Break
+	POP_C_REGS
+	RET
+};
+_extern _BREAK U0 Break();
 Bool BreakLock(CTask *task=NULL)
 {//Disables <CTRL-ALT-c>.
   if (!task) task=Fs;
@@ -149,7 +156,7 @@ Bool BreakUnlock(CTask *task=NULL)
     if (task==Fs)
       Break;
     else
-      task->rip=&Break;
+      task->rip=_BREAK;
   }
   return res;
 }

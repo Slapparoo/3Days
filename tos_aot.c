@@ -217,23 +217,8 @@ struct CBinFile {
     int64_t org,patch_table_offset,file_size;
 } ;
 typedef struct CBinFile CBinFile ;
-void FualtCB() {
-    #ifndef TARGET_WIN32
-    sigset_t set;
-    sigfillset(&set);
-    sigprocmask(SIG_UNBLOCK,&set,NULL);
-    #endif
-    vec_CHash_t *f=map_get(&TOSLoader,"FualtRoutine");
-    if(f)
-			FFI_CALL_TOS_0(f->data[0].val);
-	exit(1);
-}
 void *Load(char *fn,int64_t ld_flags) {
-    #ifndef TARGET_WIN32
-    signal(SIGBUS,FualtCB);
-    #endif
-    signal(SIGSEGV,FualtCB);
-    FILE *f;
+	FILE *f;
     char *mod_base,*absname;
     int64_t size,mod_align,misalign;
     CBinFile *bfh,*bfh_addr;
@@ -255,6 +240,13 @@ void *Load(char *fn,int64_t ld_flags) {
     
     mod_base=(char*)bfh_addr+sizeof(CBinFile);
     LoadPass1((char*)bfh_addr+bfh_addr->patch_table_offset,mod_base,ld_flags);
+    vec_CHash_t *FualtCB=map_get(&TOSLoader,"FualtRoutine");
+	if(FualtCB) {
+		#ifndef TARGET_WIN32
+		signal(SIGBUS,FualtCB->data[0].val);
+		#endif
+		signal(SIGSEGV,FualtCB->data[0].val);
+	}
     LoadPass2((char*)bfh_addr+bfh_addr->patch_table_offset,mod_base,ld_flags);    
     //Stuff may still be using data once we exit
     //PoopFree(bfh_addr);

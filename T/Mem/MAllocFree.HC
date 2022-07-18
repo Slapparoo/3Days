@@ -1,7 +1,7 @@
 U8 *GetFs2() {
 	return Fs;
 }
-asm {
+asm {
 //************************************
 //See $LK,"::/Doc/Credits.DD"$.
 _MALLOC::
@@ -10,6 +10,8 @@ _MALLOC::
 	MOV	RBP,RSP
 	PUSH	RSI
 	PUSH	RDI
+	PUSH R10
+	MOV	R10,0
 
 	XOR	RBX,RBX
 	MOV	RDX,U64 SF_ARG2[RBP]
@@ -27,6 +29,8 @@ _MALLOC::
 	MOV	RDX,U64 CTask.data_heap[RDX]
 	LOCK
 	BTS	I64 CTask.task_flags[R8],TASKf_BREAK_LOCKED
+	JNC	@@10
+	MOV	R10, 1
 @@10:	CMP	U32 CHeapCtrl.hc_signature[RDX],HEAP_CTRL_SIGNATURE_VAL
 	JE	@@15
 	PUSH	RDX
@@ -211,13 +215,16 @@ MALLOC_ALMOST_DONE:
 	POP	RAX
 
 MALLOC_FINAL_EXIT:
-    CMP	U32 CTask.task_signature[R8],TASK_SIGNATURE_VAL
-    JNE @@01
-    PUSH RAX
+	CMP	U32 CTask.task_signature[R8],TASK_SIGNATURE_VAL
+	JNE @@01
+	CMP R10,0
+	JE @@01
+	PUSH RAX
 	PUSH	R8
 	CALL	&BreakUnlock
 	POP RAX
 	@@01:
+	POP R10
 	POP	RDI
 	POP	RSI
 	POP	RBP
@@ -229,11 +236,14 @@ _FREE::
 	MOV	RBP,RSP
 	PUSH	RSI
 	PUSH	RDI
+	PUSH	R10
 	CALL	&Fs
 	MOV	R8,RAX
 	LOCK
 	BTS	I64 CTask.task_flags[R8],TASKf_BREAK_LOCKED
-	
+	JNC	@@1
+	MOV	R10,1
+@@1:
 	//TEST	U8 [SYS_SEMAS+SEMA_HEAPLOG_ACTIVE*DFT_CACHE_LINE_WIDTH],1
 	JMP	@@15
 	MOV	RBX,U64 SF_ARG1[RBP]
@@ -337,8 +347,12 @@ _FREE::
 	BTR	U32 CHeapCtrl.locked_flags[RDX],HClf_LOCKED
 	POPFD
 FREE_DONE:
+	CMP R10,0
+	JE	I32 @@01
 	PUSH	R8
 	CALL	&BreakUnlock
+@@01:
+	POP	R10
 	POP	RDI
 	POP	RSI
 	POP	RBP

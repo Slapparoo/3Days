@@ -179,3 +179,6 @@ void HolyFree(void *ptr);
 void *HolyMAlloc(int64_t sz);
 char *HolyStrDup(char *str);
 void InteruptCore(int core);
+void LaunchCore0(void *fp);
+void WaitForCore0();
+void __ShutdownCore(int core);

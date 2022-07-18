@@ -198,10 +198,10 @@ int main(int argc,char **argv)
         if(0==access("HCRT.BIN",F_OK)) {
 			puts("Using ./HCRT.BIN as the default binary.");
 			hcrt_bin_loc="HCRT.BIN";
-			pthread_create(&core0,NULL,Core0,NULL);
+			LaunchCore0(Core0);
         } else if(0==access( HCRT_INSTALLTED_DIR,F_OK)) {
 			hcrt_bin_loc=HCRT_INSTALLTED_DIR;
-			pthread_create(&core0,NULL,Core0,NULL);
+			LaunchCore0(Core0);
         }
     #else
       char buffer[MAX_PATH];
@@ -211,7 +211,7 @@ int main(int argc,char **argv)
       hcrt_bin_loc=strdup(buffer);
       puts(buffer);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
-		CreateThread(NULL,0,Core0,NULL,0,NULL);
+		LaunchCore0(Core0);
       }
     #endif
     }
@@ -220,11 +220,7 @@ int main(int argc,char **argv)
 		InputLoop(&_shutdown);
 		exit(0);
 	} else {
-		#ifndef TARGET_WIN32
-		pthread_join(core0,NULL);
-		#else
-		WaitForSingleObject(core0,INFINITE);
-		#endif
+		WaitForCore0();
 	}
     exit(0);
     #endif
@@ -233,11 +229,5 @@ int main(int argc,char **argv)
 CLoader Loader;
 void __Shutdown() {
 	_shutdown=1;
-	#ifndef TARGET_WIN32
-	pthread_kill(core0,SIGUSR1);
-	pthread_join(core0,NULL);
-	#else
-	TerminateThread(core0,0);
-	WaitForMultipleObjects(1,&core0,TRUE,INFINITE);
-	#endif
+	__ShutdownCore(0);
 }

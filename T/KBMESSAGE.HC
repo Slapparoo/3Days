@@ -506,22 +506,26 @@ static U0 _Exit() {
 	Exit;
 }
 static U0 KBCb(I64 c,I64 s) {
-	while(LBts(&kb_mtx,0))
-		PAUSE;
-    kbd.last_down_scan_code=s;
-    kbd.scan_code=s;
-    BEqu(&kbd.down_bitmap,s&0x7f,!(s&SCF_KEY_UP));
-    FifoI64Ins(kbd.scan_code_fifo,s);
-    kbd.timestamp=__GetTicks;
-    c=ScanCode2Char(s&0x7f);
-    if(s&SCF_ALT&&s&SCF_CTRL&&(c=='c'||c=='x')&&TaskValidate(sys_focus_task)) {
-		if(c=='c')
-			sys_focus_task->rip=&Break;
-		else if(c=='x')
-			sys_focus_task->rip=&_Exit;
-		InteruptCore(0);
-	}
-    LBtr(&kb_mtx,0);
+  U8 *old_rip;
+  while(LBts(&kb_mtx,0))
+    PAUSE;
+  kbd.last_down_scan_code=s;
+  kbd.scan_code=s;
+  BEqu(&kbd.down_bitmap,s&0x7f,!(s&SCF_KEY_UP));
+  FifoI64Ins(kbd.scan_code_fifo,s);
+  kbd.timestamp=__GetTicks;
+  c=ScanCode2Char(s&0x7f);
+  if(s&SCF_ALT&&s&SCF_CTRL&&(c=='c'||c=='x')&&TaskValidate(sys_focus_task)) {
+    if(c=='c'){
+      old_rip=sys_focus_task->rip;
+      sys_focus_task->rsp-=8;
+      sys_focus_task->rsp(U8**)[0]=old_rip;
+      sys_focus_task->rip=_BREAK;
+    } else if(c=='x')
+      sys_focus_task->rip=&_Exit;
+    InteruptCore(0);
+  }
+  LBtr(&kb_mtx,0);
 }
 SetKBCallback(&KBCb,sys_focus_task);
 

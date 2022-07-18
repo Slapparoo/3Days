@@ -18,7 +18,7 @@ U0 HashFunSegFind(CHashTable *h,U8 *addr,
   for (i=0;i<=h->mask;i++) {
     tmpex=h->body[i];
 	while(tmpex) {
-	    if(tmpex->type&HTT_FUN&&tmpex(CHashSrcSym*)->dbg_info) {
+	    if((tmpex->type&HTT_FUN||tmpex->type&HTT_UNIMP_FUN)&&tmpex(CHashSrcSym*)->dbg_info) {
 			info=tmpex(CHashSrcSym*)->dbg_info;
 			if(tmpex(CHashFun*)->exe_addr<=addr<=info->body[info->max_line-info->min_line+1]) {
 				has_lower=HasLower(tmpex->str);
@@ -98,7 +98,7 @@ return;
   if (addr) {
     {
       if (tmpex=FunSegFind(addr,&offset)) {
-	if (tmpex->type&HTT_FUN)
+	if (tmpex->type&HTT_FUN||tmpex->type&HTT_UNIMP_FUN)
 	  is_fun=TRUE;
     str=tmpex->str;
       }
@@ -163,7 +163,7 @@ I64 SrcLineNum(U8 *addr,I64 cnt=1)
   U32 *body;
   U8 *src,*src2;
   if (tmph=FunSegFind(addr,&offset)) {
-    if (tmph->type&(HTT_FUN|HTT_EXPORT_SYS_SYM)) {
+    if (tmph->type&(HTT_FUN|HTT_EXPORT_SYS_SYM|HTT_UNIMP_FUN)) {
       if (dbg_info=tmph->dbg_info) {
 	num_lines=dbg_info->max_line-dbg_info->min_line+1;
 	body=dbg_info->body;
@@ -218,7 +218,7 @@ U8 *SrcFileName(U8 *addr,I64 cnt=1)
   CDbgInfo *dbg_info;
   U8 *src;
   if ((tmph=FunSegFind(addr,&offset)) &&
-	tmph->type&(HTT_FUN|HTT_EXPORT_SYS_SYM)) {
+	tmph->type&(HTT_FUN|HTT_EXPORT_SYS_SYM|HTT_UNIMP_FUN)) {
       best=tmph->src_link;
   }
   if (best) {

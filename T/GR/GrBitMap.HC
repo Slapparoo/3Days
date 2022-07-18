@@ -1011,7 +1011,7 @@ if(!dc) dc=gr.dc;
 }
 
 #help_index "Graphics"
-public I64 GrRect(CDC *dc=gr.dc,I64 x,I64 y,I64 w,I64 h)
+public I64 GrRect(CDC *dc=NULL,I64 x,I64 y,I64 w,I64 h)
 {//2D. Width Height. Clipping but not transformation.
 //Returns cnt of pixs changed.
   I64 i,res=0,j,k1,kk1,w1,h1,w2,h2,dist,
@@ -1023,7 +1023,7 @@ public I64 GrRect(CDC *dc=gr.dc,I64 x,I64 y,I64 w,I64 h)
   CColorROPU32 color,c,dither_colors;
   Bool dither,probability_dither;
   CTask *win_task;
-
+  if(!dc) dc=gr.dc;
   if (dc->flags & DCF_SCRN_BITMAP) {
     win_task=dc->win_task;
     x+=win_task->scroll_x;

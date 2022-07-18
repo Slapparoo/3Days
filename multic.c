@@ -66,16 +66,21 @@ typedef struct {
 } CCore;
 static CCore cores[64];
 static void LaunchCore(void *c) {
+	vec_CHash_t *FualtCB=map_get(&TOSLoader,"FualtRoutine");
+	if(FualtCB) {
+		#ifndef TARGET_WIN32
+		signal(SIGBUS,FualtCB->data[0].val);
+		#endif
+		signal(SIGSEGV,FualtCB->data[0].val);
+	}
 	VFsThrdInit();
 	CHash init=map_get(&TOSLoader,"TaskInit")->data[0];
 	FFI_CALL_TOS_2(init.val,GetFs(),0);
 	__core_num=c;
 	#ifndef TARGET_WIN32
-	signal(SIGBUS,FualtCB);
 	CHash yield=map_get(&TOSLoader,"Yield")->data[0];
 	signal(SIGUSR2,yield.val);
 	#endif
-    signal(SIGSEGV,FualtCB);
 	(*cores[__core_num].fp)();
 }
 void InteruptCore(int core) {
@@ -85,6 +90,23 @@ void InteruptCore(int core) {
 	
 	#endif
 }
+void LaunchCore0(void *fp) {
+	int core=0;
+	cores[core].core_num=core;
+	cores[core].fp=NULL;
+	#ifndef TARGET_WIN32
+	pthread_create(&cores[core].thread,NULL,fp,core);
+	#else
+	cores[core].thread=CreateThread(NULL,0,fp,core,0,NULL);
+	#endif
+}
+void WaitForCore0() {
+	#ifndef TARGET_WIN32
+	pthread_join(cores[0].thread,NULL);
+	#else
+	WaitForSingleObject(cores[0].thread,INFINITE);
+	#endif
+}
 void CreateCore(int core,void *fp) {
 	cores[core].core_num=core;
 	cores[core].fp=fp;
@@ -92,5 +114,14 @@ void CreateCore(int core,void *fp) {
 	pthread_create(&cores[core].thread,NULL,LaunchCore,core);
 	#else
 	cores[core].thread=CreateThread(NULL,0,LaunchCore,core,0,NULL);
+	#endif
+}
+void __ShutdownCore(int core) {
+	#ifndef TARGET_WIN32
+	pthread_kill(cores[core].thread,SIGUSR1);
+	pthread_join(cores[core].thread,NULL);
+	#else
+	TerminateThread(cores[core].thread,0);
+	WaitForMultipleObjects(1,&cores[core].thread,TRUE,INFINITE);
 	#endif
 }

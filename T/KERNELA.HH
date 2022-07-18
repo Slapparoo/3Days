@@ -976,7 +976,8 @@ public class CHashTable
 #define HTT_MODULE		0x04000 //CHashGeneric
 #define HTT_HELP_FILE		0x08000 //CHashSrcSym
 #define HTT_FRAME_PTR		0x10000 //CHashGeneric
-#define HTG_TYPE_MASK		0x1FFFF
+#define HTT_UNIMP_FUN		0x20000 //CHashFun
+#define HTG_TYPE_MASK		0x3FFFF
 
 #define HTF_PRIVATE		0x00800000
 #define HTF_PUBLIC		0x01000000
@@ -4765,7 +4766,6 @@ class CMakeSongSettings
   I64  octave			format "$$DA-TRM,A=\"Octave:%d\"$$\n";
   I64  octave_state;
 };
-extern U0 Break();
 extern U0 PutChars(U64 ch);
 extern U0 PutExcept(Bool catch_it=TRUE);
 public extern U0 BibleView();
@@ -5138,7 +5138,6 @@ extern U0 PutExcept(Bool catch_it=TRUE);
 extern U0 SysTry(U8 *catch_start,U8 *untry_start);
 extern U0 SysUntry();
 extern U0 throw(I64 ch=0,Bool no_log=FALSE);
-extern U0 Break();
 extern Bool BreakLock(CTask *task=NULL);
 extern Bool BreakUnlock(CTask *task=NULL);
 extern U0 LoadOneImport(U8 **_src,U8 *module_base,I64 ld_flags);

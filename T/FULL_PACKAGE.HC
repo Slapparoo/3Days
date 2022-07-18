@@ -72,13 +72,13 @@ Gs->seth_task=Spawn(&CoreAPSethTask,NULL,"Seth");
 adam_task=Spawn(&Adam,NULL,"Adam",,);
 //Dont Exit
 DeathWait(adam_task);
-U0 FualtRoutine(U8 *ptr,U8 *got) {
-	U8 **p=ptr,*link,*par,*fstr;
+U0 FualtRoutine() {
+	U8 *link,*par,*fstr;
 	I64 len=15;
 	CHashFun *f;
 	I64 i=0;
 	for(i=0;i!=len;i++) {
-		par=Caller(i+2);
+		par=Caller(i);
 		if(!par) goto en;
 		link=SrcEdLink(par); //+1 for self,+1 for fault routine
 		f=FunSegFind(par,NULL);

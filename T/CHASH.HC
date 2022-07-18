@@ -389,6 +389,11 @@ U0 DbgInfoRead(U8 *name) {
 		ptr+=8;
 		if(type&HTT_FUN) {
 			tmph=HashFind(ptr,Fs->hash_table,HTT_FUN);
+			if(!tmph) {
+				tmph=CAlloc(sizeof(CHashFun));
+				tmph->str=StrNew(ptr);
+				tmph->type=HTT_UNIMP_FUN;
+			}
 			ptr+=StrLen(ptr)+1;
 			fn=ptr;
 			ptr+=StrLen(ptr)+1;
@@ -397,7 +402,7 @@ U0 DbgInfoRead(U8 *name) {
 			min=ptr(U32*)[0];
 			max=ptr(U32*)[1];
 			ptr+=2*sizeof(U32);
-			if(tmph&&tmph->type&HTT_FUN) {
+			if(tmph&&(tmph->type&HTT_FUN||tmph->type&HTT_UNIMP_FUN)) {
 				tmph->type|=type; //type may include HTF_PUBLIC
 				Free(tmph->src_link);
 				Free(tmph->idx);
