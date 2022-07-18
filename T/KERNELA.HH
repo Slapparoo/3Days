@@ -221,7 +221,9 @@ import U0 __Del(U8 *);
 import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
+import U0i UnblockSignals();
 #else
+extern U0i UnblockSignals();
 extern U0i InteruptCore(I64i);
 extern U8i *NewVirtualChunk(I64i,I64i low32);
 extern U8i *FreeVirtualChunk(U8i *,I64i sz);

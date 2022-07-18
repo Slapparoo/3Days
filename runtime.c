@@ -66,6 +66,11 @@ static void *STK_DyadListen(int64_t *stk) {
 static void *STK_DyadConnect(int64_t *stk) {
 	return dyad_connect(stk[0],stk[1],stk[2]);
 }
+static void UnblockSignals() {
+	sigset_t all;
+	sigfillset(&all);
+	sigprocmask(SIG_UNBLOCK,&all,NULL);
+}
 static void STK_DyadWrite(int64_t *stk) {
 	dyad_write(stk[0],stk[1],stk[2]);
 }
@@ -474,6 +479,7 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"DrawWindowDel",STK_DrawWindowDel,1);
     STK_RegisterFunctionPtr(&ffi_blob,"DrawWindowUpdate",STK_DrawWindowUpdate,4);
     STK_RegisterFunctionPtr(&ffi_blob,"DrawWindowNew",STK_NewDrawWindow,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"UnblockSignals",UnblockSignals,0);
     //SPECIAL
     STK_RegisterFunctionPtr(&ffi_blob,"TOSPrint",STK_TOSPrint,0);
     STK_RegisterFunctionPtr(&ffi_blob,"FileNameAbs",STK_FileNameAbs,1);

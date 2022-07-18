@@ -77,6 +77,7 @@ U0 FualtRoutine() {
 	I64 len=15;
 	CHashFun *f;
 	I64 i=0;
+	UnblockSignals;
 	for(i=0;i!=len;i++) {
 		par=Caller(i);
 		if(!par) goto en;
