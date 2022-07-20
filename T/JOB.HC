@@ -35,7 +35,7 @@ U0 TaskRstAwaitingMsg(CTask *task=NULL)
   if (!task) task=Fs;
   Bool old;
   PUSHFD
-  old=BreakLock;
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   do {
     if (TaskValidate(task))
       LBtr(&task->task_flags,TASKf_AWAITING_MSG);
@@ -62,7 +62,7 @@ CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
   res->ctrl=&srv->srv_ctrl;
 
   PUSHFD
-  old=BreakLock;
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);  
   while (LBts(&srv->srv_ctrl.flags,JOBCf_LOCKED)) {
     PAUSE;
   }
@@ -102,7 +102,7 @@ CJob *TaskText(CTask *srv,CTask *master,U8 *data,I64 flags)
   res->aux_str=StrNew(data,adam_task);
 
   PUSHFD
-  old=BreakLock;
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);  
   task=srv->last_input_filter_task;
   if (Bt(&flags,JOBf_HIGHEST_PRIORITY) || task==srv) {
     if (task!=srv)
@@ -151,7 +151,7 @@ CJob *TaskMsg(CTask *_srv,CTask *master,
   tmpc->aux2=arg2;
   tmpc->flags=flags;
   PUSHFD
-  old=BreakLock;
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);  
   /* TODO RESTORE
   if (Bt(&sys_semas[SEMA_RECORD_MACRO],0) &&
 	srv!=sys_macro_task && msg_code==MSG_KEY_DOWN) {
@@ -194,7 +194,7 @@ Bool JobResScan(CJob *rqst=NULL,I64 *_res=NULL)
     else
       ctrl=rqst->ctrl;
     PUSHFD
-    old=BreakLock;
+    old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);  
     while (LBts(&ctrl->flags,JOBCf_LOCKED)) {
 		PAUSE;
     }

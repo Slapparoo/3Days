@@ -260,7 +260,7 @@ I64 WinOnTopWindows()
   I64 res=0;
   Bool old;
   PUSHFD
-  old=BreakLock;
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   task=sys_winmgr_task->next_task;
   while (task!=sys_winmgr_task && task!=first_moved_fwd) {
         task1=task->next_task;
@@ -298,7 +298,7 @@ public I64 WinToTop(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (!sys_winmgr_task || task==sys_winmgr_task)
     return 0;
   PUSHFD
-  old=BreakLock;
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   if (!TaskValidate(task)) {
     if(old)
 	  BreakUnlock;

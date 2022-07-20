@@ -394,7 +394,7 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (!task) task=Fs;
   Bool old;
   PUSHFD
-  old=BreakLock;
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);  
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
     PAUSE;
   }

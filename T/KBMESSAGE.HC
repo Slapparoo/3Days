@@ -516,11 +516,14 @@ static U0 KBCb(I64 c,I64 s) {
   kbd.timestamp=__GetTicks;
   c=ScanCode2Char(s&0x7f);
   if(s&SCF_ALT&&s&SCF_CTRL&&(c=='c'||c=='x')&&TaskValidate(sys_focus_task)) {
-    if(c=='c'){
-      old_rip=sys_focus_task->rip;
-      sys_focus_task->rsp-=8;
-      sys_focus_task->rsp(U8**)[0]=old_rip;
-      sys_focus_task->rip=_BREAK;
+    if(c=='c'){
+      if(!Bt(&sys_focus_task->task_flags,TASKf_BREAK_LOCKED)) {
+        old_rip=sys_focus_task->rip;
+        sys_focus_task->rsp-=8;
+        sys_focus_task->rsp(U8**)[0]=old_rip;
+        sys_focus_task->rip=_BREAK;
+      } else
+        LBts(&sys_focus_task->task_flags,TASKf_PENDING_BREAK);
     } else if(c=='x')
       sys_focus_task->rip=&_Exit;
     InteruptCore(0);

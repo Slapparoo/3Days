@@ -139,7 +139,7 @@ I64 HashTablePurge(CHashTable *table)
     CHashSrcSym *tmph,*tmph1,*tmph2;
     Bool old;
     if (!table) return 0;
-    old=BreakLock;
+    old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);
     for (i=0; i<=table->mask; i++) {
         tmph=table->body[i];
         while (tmph) {

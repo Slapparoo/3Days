@@ -21,7 +21,7 @@ U0 HeapCtrlDel(CHeapCtrl *hc)
   Bool old;
   if (hc&&hc!=&ahc) {
     PUSHFD
-    old=BreakLock;
+    old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);
     while (LBts(&hc->locked_flags,HClf_LOCKED))
       PAUSE
     m=hc->next_mem_blk;

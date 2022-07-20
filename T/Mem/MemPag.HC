@@ -31,7 +31,7 @@ Return: NULL if out of memory.
   I64 i;
   Bool old;
   PUSHFD
-  old=BreakLock;
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   if(!bp) {
 	//Look for recylceable 32bit pages
 	while(LBts(&mem_blks_lock,0))
@@ -69,7 +69,7 @@ U0 MemPagFree(CMemBlk *m,CBlkPool *bp=NULL)
   Bool old;
   if (m) {
     PUSHFD
-    BreakLock;
+    old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
     pags=m->pags;
     m->mb_signature=MBS_UNUSED_SIGNATURE_VAL;
     FreeVirtualChunk(m,pags<<MEM_PAG_BITS);
@@ -123,7 +123,7 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
   Bool old;
   if (m) {
     PUSHFD
-    old=BreakLock;
+    old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
     if (m->mb_signature!=MBS_USED_SIGNATURE_VAL)
       SysBadFree(m);
     else {
