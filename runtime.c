@@ -66,11 +66,6 @@ static void *STK_DyadListen(int64_t *stk) {
 static void *STK_DyadConnect(int64_t *stk) {
 	return dyad_connect(stk[0],stk[1],stk[2]);
 }
-static void UnblockSignals() {
-	sigset_t all;
-	sigfillset(&all);
-	sigprocmask(SIG_UNBLOCK,&all,NULL);
-}
 static void STK_DyadWrite(int64_t *stk) {
 	dyad_write(stk[0],stk[1],stk[2]);
 }
@@ -97,6 +92,13 @@ static STK_DyadSetOnListenCallback(int64_t *stk) {
 	dyad_addListener(stk[0],DYAD_EVENT_ACCEPT,&DyadListenCB,stk[1],stk[2]);
 }
 #endif
+static void UnblockSignals() {
+	#ifndef TARGET_WIN32
+	sigset_t all;
+	sigfillset(&all);
+	sigprocmask(SIG_UNBLOCK,&all,NULL);
+	#endif
+}
 typedef struct CType CType;
 static int64_t BFFS(int64_t v) {
 	if(!v) return -1;

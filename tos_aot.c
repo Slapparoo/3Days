@@ -245,9 +245,16 @@ void *Load(char *fn,int64_t ld_flags) {
 		#ifndef TARGET_WIN32
 		signal(SIGBUS,FualtCB->data[0].val);
 		#endif
-		signal(SIGSEGV,FualtCB->data[0].val);
 	}
     LoadPass2((char*)bfh_addr+bfh_addr->patch_table_offset,mod_base,ld_flags);    
     //Stuff may still be using data once we exit
     //PoopFree(bfh_addr);
 }
+#ifdef TARGET_WIN32
+void FualtCB() {
+	vec_CHash_t *FualtCB=map_get(&TOSLoader,"FualtRoutine");
+	if(FualtCB)
+		FFI_CALL_TOS_0(FualtCB->data[0].val);
+    exit(1);
+}
+#endif

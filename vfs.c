@@ -342,6 +342,7 @@ char *__VFsFileNameAbs(char *name) {
     end:
     vec_deinit(&head);
     TD_FREE(file);
+    VFsInplaceHostDelims(path.data);
     if(!failed)
         return path.data;
     vec_deinit(&path);
@@ -368,19 +369,29 @@ int64_t VFsUnixTime(char *name) {
 	char *fn=__VFsFileNameAbs(name);
 	int64_t t64;
 	FILETIME t;
-	GetFileTime(fn,NULL,NULL,&t);
+	if(!fn) return 0;
+	if(!__FExists(fn))
+	  return 0;
+	HANDLE fh=CreateFileA(fn,GENERIC_READ,0,NULL,OPEN_ALWAYS,0,NULL);
+	GetFileTime(fh,NULL,NULL,&t);
 	t64=t.dwLowDateTime|(t.dwHighDateTime<<32);
 	TD_FREE(fn);
+	CloseHandle(fh);
 	return t64;
 }
 int64_t VFsFSize(char *name) {
 	char *fn=__VFsFileNameAbs(name);
 	int64_t s64;
 	int32_t h32;
-	s64=GetFileSize(fn,&h32);
+	if(!fn) return 0;
+	if(!__FExists(fn))
+	  return 0;
+	HANDLE fh=CreateFileA(fn,GENERIC_READ,0,NULL,OPEN_ALWAYS,0,NULL);
+	s64=GetFileSize(fh,&h32);
 	s64|=h32<<32;
 	TD_FREE(fn);
-	return fn;
+	CloseHandle(fh);
+	return s64;
 }
 #endif
 char *VFsFileNameAbs(char *name) {
