@@ -87,8 +87,6 @@ U8 *FunSegCacheFind(U8 *addr,I64 *_offset)
 
 U0 StrPrintFunSeg(U8 *buf,I64 addr,I64 field_len,I64 flags)
 {
-*buf=0;
-return;
   I64 offset;
   CHashExport *tmpex;
   U8 *str,*str2;
@@ -233,7 +231,7 @@ U8 *SrcEdLink(U8 *addr,I64 cnt=1,CTask *mt=NULL)
 {//MAlloc file,line link to src of addr.
   U8 *filename,*st,*st2;
   I64 linenum;
-  if (filename=SrcFileName(addr,cnt)) {
+  if (filename=SrcFileName(addr,cnt)) {
     linenum=SrcLineNum(addr,cnt);
     if (linenum<1)
       linenum=1;

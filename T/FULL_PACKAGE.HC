@@ -31,9 +31,6 @@ U0 LoadImps() {
     //Load asm externs second
     ExePrint2("#define BOOT_3DAYS\n#include \"KERNELB.HH\";\n");
 }
-static U0 SetGsNum(I64) {
-	Gs->num=__CoreNum;
-}
 U0 StartUpTasks()
 {
   CTask *user1,*user2;
@@ -48,9 +45,11 @@ U0 StartUpTasks()
 U0 Adam(U8 *) {
 	I64 idx;
 	LoadImps;
-	Gs->num=__CoreNum;//It should be 0
-	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
+	cpu_structs[Gs->num=__CoreNum]=Gs;//It should be 0
+	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
 		__SpawnCore(idx,&CoreAPSethTask);
+                while(!cpu_structs[idx])
+                  PAUSE;
 	}
     if(FileFind("HCRT.DBG.Z"))
 		DbgInfoRead("HCRT.DBG.Z");
@@ -77,7 +76,7 @@ U0 FualtRoutine() {
 	I64 len=15;
 	CHashFun *f;
 	I64 i=0;
-	UnblockSignals;
+	UnblockSignals;
 	for(i=0;i!=len;i++) {
 		par=Caller(i);
 		if(!par) goto en;

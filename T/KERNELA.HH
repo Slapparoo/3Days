@@ -6006,7 +6006,7 @@ char_bmp_filename[16],			char_bmp_non_eol[16];
 #define DF_REMAINDER_ALL_FILE2		0x08
 #define DF_ABORT_FILE			0x10
 #define DF_ABORT_ALL_FILES		0x20
-#define DF_NO_MORE_PMTS_THIS_FILE	0x40
+#define DF_NO_MORE_PMTS_THIS_FILE	0x40
 public extern Bool Diff(U8 *dst_file,U8 *src_file,I64 *_df_flags=NULL);
 extern CDirEntry *Cd2DirEntry(CDirEntry *tmpde,U8 *abs_name);
 
@@ -6032,3 +6032,38 @@ extern CDirEntry *Cd2DirEntry(CDirEntry *tmpde,U8 *abs_name);
 #define FMR_BURN_ISO		12
 #define FMR_HELP		13
 public extern U8 *FileMgr(I64 mode=FM_NORMAL,CTask *mem_task=NULL);
+extern CKbdStateGlbls	kbd;
+extern F64 LowPass1(F64 a,F64 y0,F64 y,F64 dt=1.0);
+public extern CMathODE *ODENew(I64 n,F64 max_tolerance=1e-6,I64 flags=0);
+public extern Bool ODEPause(CMathODE *ode,Bool val=ON);
+public extern U0 ODEDel(CMathODE *ode);
+public extern I64 ODESize(CMathODE *ode);
+extern U0 ODESetMassesPtrs(CMathODE *ode,F64 *state,F64 *DstateDt);
+extern U0 ODEState2Internal(CMathODE *ode);
+extern U0 ODEInternal2State(CMathODE *ode);
+public extern U0 ODERenum(CMathODE *ode);
+public extern CMass *MassFind(CMathODE *ode,F64 x,F64 y,F64 z=0);
+public extern CSpring *SpringFind(CMathODE *ode,F64 x,F64 y,F64 z=0);
+public extern U0 MassOrSpringFind(
+	CMathODE *ode,CMass **res_mass,CSpring **res_spring,
+	F64 x,F64 y,F64 z=0);
+public extern CMass *MassFindNum(CMathODE *ode,I64 num);
+public extern U0 ODERstInactive(CMathODE *ode);
+extern U0 ODECalcSprings(CMathODE *ode);
+extern U0 ODECalcDrag(CMathODE *ode);
+extern U0 ODEApplyAccelerationLimit(CMathODE *ode);
+extern U0 ODEMPTask(CMathODE *ode);
+extern U0 ODEMPWake(CMathODE *ode);
+extern U0 ODEMPSleep(CMathODE *ode);
+extern U0 ODECallMPDerivative(CMathODE *ode,F64 t,F64 *state,F64 *DstateDt);
+extern U0 ODECallDerivative(CMathODE *ode,F64 t,F64 *state,F64 *DstateDt);
+extern U0 ODEOneStep(CMathODE *ode);
+extern U0 ODERK4OneStep(CMathODE *ode);
+extern U0 ODECashKarp(CMathODE *ode);
+extern U0 ODERK5OneStep(CMathODE *ode);
+extern U0 ODEsUpdate(CTask *task);
+extern CCPU *cpu_structs[64];
+public extern I64 gr_x_offsets[8],
+	   gr_y_offsets[8],
+	  gr_x_offsets2[4],
+	  gr_y_offsets2[4];

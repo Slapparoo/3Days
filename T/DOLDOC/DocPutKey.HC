@@ -220,7 +220,7 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 		    KeyDescSet("Edit/Autocomplete Sym");
 		} else {
 		  DocUnlock(doc);
-		  if (AutoComplete(ON)) {
+		  if (AutoComplete(ON)) {
 		    if (sc&SCF_SHIFT)
 		      ACMan(sc.u8[0]-SC_F1+1,Fs);
 		    else
@@ -512,7 +512,7 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 	    if (sc&SCF_KEY_DESC)
 	      KeyDescSet("Cmd /Personal Menu");
 	    else {
-	      m=DocRead("~/PersonalMenu.DD.Z");
+	      m=DocRead("/PersonalMenu.DD.Z");
 	      DocMenu(m);
 	      DocDel(m);
 	    }

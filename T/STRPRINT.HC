@@ -215,7 +215,7 @@ in 64-bits.  Use exponentiated forms
 to avoid this.
 */
   I64 i,j,l,ch,k,k0,n,n0,len,dec_len,flags,old_flags,
-	aux_fmt_num,comma_cnt,comma_fmt_cnt,cur_arg=0;
+        aux_fmt_num,comma_cnt,comma_fmt_cnt,cur_arg=0;
   U64 m;
   F64 d,d1;
   CDoc *doc;
@@ -237,39 +237,39 @@ to avoid this.
     if (ch=='%') {
       flags=0;
       if (*fmt=='-') {
-	flags|=PRTF_LEFT_JUSTIFY;
-	fmt++;
+        flags|=PRTF_LEFT_JUSTIFY;
+        fmt++;
       }
       if (*fmt=='0') {
-	flags|=PRTF_PAD_ZERO;
-	fmt++;
+        flags|=PRTF_PAD_ZERO;
+        fmt++;
       }
       len=0;
       while ('0'<=*fmt<='9')
-	len=len*10+ *fmt++ -'0';
+        len=len*10+ *fmt++ -'0';
       if (*fmt=='*') {
-	fmt++;
-	if (cur_arg>=argc)
+        fmt++;
+        if (cur_arg>=argc)
 	  throw('StrPrint');
-	len=argv[cur_arg++];
+        len=argv[cur_arg++];
       }
       dec_len=0;
       if (*fmt=='.') {
-	fmt++;
-	while ('0'<=*fmt<='9')
+        fmt++;
+        while ('0'<=*fmt<='9')
 	  dec_len=dec_len*10+ *fmt++ -'0';
-	if (*fmt=='*') {
+        if (*fmt=='*') {
 	  fmt++;
 	  if (cur_arg>=argc)
 	    throw('StrPrint');
 	  dec_len=argv[cur_arg++];
-	}
-	flags|=PRTF_DECIMAL;
+        }
+        flags|=PRTF_DECIMAL;
       }
 
       aux_fmt_num=0;
       while (TRUE) {
-	switch (*fmt) {
+        switch (*fmt) {
 	  start:
 	    case '\d':
 	      flags|=PRTF_DOLLAR;
@@ -297,44 +297,44 @@ to avoid this.
 	      flags|=PRTF_QUESTION;
 	    } else {
 	      if (*fmt=='*') {
-		fmt++;
-		if (cur_arg>=argc)
+	        fmt++;
+	        if (cur_arg>=argc)
 		  throw('StrPrint');
-		aux_fmt_num=argv[cur_arg++];
+	        aux_fmt_num=argv[cur_arg++];
 	      } else {
-		if (*fmt=='-') {
+	        if (*fmt=='-') {
 		  fmt++;
 		  flags|=PRTF_NEG_AUX_FMT_NUM;
-		}
-		while ('0'<=*fmt<='9')
+	        }
+	        while ('0'<=*fmt<='9')
 		  aux_fmt_num=aux_fmt_num*10+ *fmt++ -'0';
-		if (flags&PRTF_NEG_AUX_FMT_NUM)
+	        if (flags&PRTF_NEG_AUX_FMT_NUM)
 		  aux_fmt_num=-aux_fmt_num;
 	      }
 	    }
 	    break;
 	  default:
 	    goto sp_arg;
-	}
+        }
       }
 
       sp_arg:
       k=0;
       switch (*fmt++) {
-	start:
+        start:
 	  case 'F':
 	    if (cur_arg>=argc)
 	      throw('StrPrint');
-	    /*
-	    if (flags&PRTF_DOLLAR) {
-	      doc=argv[cur_arg++];
-	      old_flags=doc->flags;
-	      doc->flags|=DOCF_NO_CURSOR;
-	      ptr=DocSave(doc);
-	      doc->flags=old_flags;
-	    } else
-	      ptr=FileRead(argv[cur_arg++]);
-	     */
+/*
+if (flags&PRTF_DOLLAR) {
+doc=argv[cur_arg++];
+old_flags=doc->flags;
+doc->flags|=DOCF_NO_CURSOR;
+ptr=DocSave(doc);
+doc->flags=old_flags;
+} else
+ptr=FileRead(argv[cur_arg++]);
+*/
 	    break;
 	  case 'Q':
 	    if (cur_arg>=argc)
@@ -356,12 +356,12 @@ to avoid this.
 	      throw('StrPrint');
 	    ptr=MPrintTime(argv[cur_arg++]);
 	    break;
-	end:
+        end:
 	  OutStr(ptr,_buf,_dst,len,flags);
 	  Free(ptr);
 	  break;
 
-	start:
+        start:
 	  case 's':
 	    if (cur_arg>=argc)
 	      throw('StrPrint');
@@ -384,11 +384,11 @@ to avoid this.
 	    ptr=DefineSub(argv[cur_arg],argv[cur_arg+1]);
 	    cur_arg=cur_arg+2;
 	    break;
-	end:
+        end:
 	  OutStr(ptr,_buf,_dst,len,flags);
 	  break;
 
-	start:
+        start:
 	  case 'c':
 	    if (cur_arg>=argc)
 	      throw('StrPrint');
@@ -406,22 +406,26 @@ to avoid this.
 	      ptr++;
 	    }
 	    break;
-	end:
+        end:
 	  if (!(flags&PRTF_AUX_FMT_NUM))
 	    aux_fmt_num=1;
 	  while (aux_fmt_num-->0)
 	    OutStr(tmp_buf,_buf,_dst,len,flags);
 	  break;
-	case 'p':
-	case 'P':
+        case 'p':
+        case 'P':
 	  if (cur_arg>=argc)
 	    throw('StrPrint');
-          t1=SrcEdLink(argv[cur_arg++]);
-      if(t1)
-		OutStr(t1,_buf,_dst,StrLen(t1),flags);
-	  Free(t1);
+	  StrPrintFunSeg(tmp_buf,argv[cur_arg],len,flags);
+	  if (!__IsCmdLine || !_buf) {
+	    StrPrint(tmp_buf2,"$$LK,\"%s\",A=\"AD:0x%X\"$$",
+		  tmp_buf,argv[cur_arg]);
+	    OutStr(tmp_buf2,_buf,_dst,len,flags);
+	  } else
+	    OutStr(tmp_buf,_buf,_dst,len,flags);
+
 	  break;
-	case 'd':
+        case 'd':
 	  if (cur_arg>=argc)
 	    throw('StrPrint');
 	  m=argv[cur_arg++];
@@ -441,8 +445,8 @@ sp_out_dec:
 	      tmp_buf[k++]=ModU64(&m,10)+'0';
 	      if (!m) break;
 	      if (!--comma_cnt) {
-		tmp_buf[k++]=',';
-		comma_cnt=3;
+	        tmp_buf[k++]=',';
+	        comma_cnt=3;
 	      }
 	    } while (k<TMP_BUF_LEN-SLOP);
 sp_out_comma_num:
@@ -458,23 +462,23 @@ sp_out_comma_num:
 	      k=0;
 	    if (flags&PRTF_PAD_ZERO) {
 	      if (flags&PRTF_NEG)
-		SPutChar(_dst,'-',_buf);
+	        SPutChar(_dst,'-',_buf);
 	      comma_cnt=(len-k-i+comma_fmt_cnt-comma_cnt+1)
 	      %(comma_fmt_cnt+1)+1;
 	      for (;i<len-k;i++) {
-		if (!--comma_cnt) {
+	        if (!--comma_cnt) {
 		  SPutChar(_dst,',',_buf);
 		  comma_cnt=comma_fmt_cnt;
 		  if (++i>=len-k)
 		    break;
-		}
-		SPutChar(_dst,'0',_buf);
+	        }
+	        SPutChar(_dst,'0',_buf);
 	      }
 	    } else {
 	      for (;i<len-k;i++)
-		SPutChar(_dst,CH_SPACE,_buf);
+	        SPutChar(_dst,CH_SPACE,_buf);
 	      if (flags&PRTF_NEG)
-		SPutChar(_dst,'-',_buf);
+	        SPutChar(_dst,'-',_buf);
 	    }
 	  } else {
 	    do {
@@ -494,25 +498,25 @@ sp_out_num:
 	      k=0;
 	    if (flags&PRTF_PAD_ZERO) {
 	      if (flags&PRTF_NEG)
-		SPutChar(_dst,'-',_buf);
+	        SPutChar(_dst,'-',_buf);
 	      for (;i<len-k;i++)
-		SPutChar(_dst,'0',_buf);
+	        SPutChar(_dst,'0',_buf);
 	    } else {
 	      for (;i<len-k;i++)
-		SPutChar(_dst,CH_SPACE,_buf);
+	        SPutChar(_dst,CH_SPACE,_buf);
 	      if (flags&PRTF_NEG)
-		SPutChar(_dst,'-',_buf);
+	        SPutChar(_dst,'-',_buf);
 	    }
 	  }
 	  for (i=k-1;i>=0;i--)
 	    SPutChar(_dst,tmp_buf[i],_buf);
 	  break;
-	case 'u':
+        case 'u':
 	  if (cur_arg>=argc)
 	    throw('StrPrint');
 	  m=argv[cur_arg++];
 	  goto sp_out_dec;
-	case 'f':
+        case 'f':
 	  if (cur_arg>=argc)
 	    throw('StrPrint');
 	  d=argv[cur_arg++](F64);
@@ -569,24 +573,24 @@ sp_out_inf:
 	    comma_cnt=i&3;
 	    while (i-- && k<TMP_BUF_LEN-SLOP) {
 	      if (i>2 && !comma_cnt--) {
-		tmp_buf[k++]=',';
-		comma_cnt=2;
-		if (!--i) break;
+	        tmp_buf[k++]=',';
+	        comma_cnt=2;
+	        if (!--i) break;
 	      }
 	      if (n) {
-		n--;
-		tmp_buf[k++]='0';
+	        n--;
+	        tmp_buf[k++]='0';
 	      } else
-		tmp_buf[k++]=ModU64(&m,10)+'0';
+	        tmp_buf[k++]=ModU64(&m,10)+'0';
 	      if (!i) break;
 	    }
 	  } else {
 	    while (i-- && k<TMP_BUF_LEN-SLOP) {
 	      if (n) {
-		n--;
-		tmp_buf[k++]='0';
+	        n--;
+	        tmp_buf[k++]='0';
 	      } else
-		tmp_buf[k++]=ModU64(&m,10)+'0';
+	        tmp_buf[k++]=ModU64(&m,10)+'0';
 	    }
 	  }
 	  if (dec_len)
@@ -595,28 +599,28 @@ sp_out_inf:
 	    comma_cnt=3;
 	    do {
 	      if (n) {
-		n--;
-		tmp_buf[k++]='0';
+	        n--;
+	        tmp_buf[k++]='0';
 	      } else
-		tmp_buf[k++]=ModU64(&m,10)+'0';
+	        tmp_buf[k++]=ModU64(&m,10)+'0';
 	      if (!m) break;
 	      if (!--comma_cnt) {
-		tmp_buf[k++]=',';
-		comma_cnt=3;
+	        tmp_buf[k++]=',';
+	        comma_cnt=3;
 	      }
 	    } while (k<TMP_BUF_LEN-SLOP);
 	  } else {
 	    do {
 	      if (n) {
-		n--;
-		tmp_buf[k++]='0';
+	        n--;
+	        tmp_buf[k++]='0';
 	      } else
-		tmp_buf[k++]=ModU64(&m,10)+'0';
+	        tmp_buf[k++]=ModU64(&m,10)+'0';
 	      if (!m) break;
 	    } while (k<TMP_BUF_LEN-SLOP);
 	  }
 	  goto sp_out_num;
-	case 'e':
+        case 'e':
 	  if (!len) len=12;
 	  flags|=PRTF_TRUNCATE;
 
@@ -658,21 +662,21 @@ sp_out_e:
 	    if (d) {
 	      d1=d+Pow10I64(-dec_len)/2;
 	      if (d1<1.0) {
-		d*=10;
-		n=n0-1;
-		k=k0;
+	        d*=10;
+	        n=n0-1;
+	        k=k0;
 	      } else if (d1>=10) {
-		d/=10;
-		n=n0+1;
-		k=k0;
+	        d/=10;
+	        n=n0+1;
+	        k=k0;
 	      } else
-		break;
+	        break;
 	    } else
 	      break;
 	  }
 
 	  goto sp_out_f;
-	case 'g':
+        case 'g':
 	  if (!len) len=12;
 	  flags|=PRTF_TRUNCATE;
 	  if (cur_arg>=argc)
@@ -691,7 +695,7 @@ sp_out_e:
 	    goto sp_out_e;
 	  else
 	    goto sp_out_f;
-	case 'n':
+        case 'n':
 	  if (!len) len=12;
 	  flags|=PRTF_TRUNCATE;
 	  if (cur_arg>=argc)
@@ -715,15 +719,15 @@ sp_out_eng: //Engineering notation
 	  if (flags&PRTF_AUX_FMT_NUM && -24<=n<=24) {
 	    if (flags&PRTF_QUESTION) {
 	      if (flags&PRTF_NEG_E)
-		i=-n/3;
+	        i=-n/3;
 	      else
-		i=n/3;
+	        i=n/3;
 	      j=0;
 	    } else {
 	      if (flags&PRTF_NEG_E)
-		j=-n-aux_fmt_num;
+	        j=-n-aux_fmt_num;
 	      else
-		j=n-aux_fmt_num;
+	        j=n-aux_fmt_num;
 	      d*=Pow10I64(j);
 	      i=aux_fmt_num/3;
 	    }
@@ -736,17 +740,17 @@ sp_out_eng: //Engineering notation
 	    if (!(flags&PRTF_DECIMAL)) {
 	      dec_len=len-k-2;
 	      if (flags&PRTF_NEG)
-		dec_len--;
+	        dec_len--;
 	      if (j>0) {
-		if (flags&PRTF_COMMA)
+	        if (flags&PRTF_COMMA)
 		  dec_len-=4*j/3;
-		else
+	        else
 		  dec_len-=j;
 	      }
 	      d1=d+Pow10I64(-dec_len+1)/2;
 	      if (d1>=10) {
-		dec_len--;
-		if (d1>=100)
+	        dec_len--;
+	        if (d1>=100)
 		  dec_len--;
 	      }
 	    }
@@ -760,11 +764,11 @@ sp_out_eng: //Engineering notation
 	    if (!dec_len) {
 	      dec_len=len-k-2;
 	      if (flags&PRTF_NEG)
-		dec_len--;
+	        dec_len--;
 	      d1=d+Pow10I64(-dec_len+1)/2;
 	      if (d1>=10) {
-		dec_len--;
-		if (d1>=100)
+	        dec_len--;
+	        if (d1>=100)
 		  dec_len--;
 	      }
 	    }
@@ -775,8 +779,8 @@ sp_out_eng: //Engineering notation
 	    dec_len-=dec_len/4;
 	  }
 	  goto sp_out_f;
-	case 'X':
-	X:
+        case 'X':
+X:
 	  if (cur_arg>=argc)
 	    throw('StrPrint');
 	  m=argv[cur_arg++];
@@ -789,8 +793,8 @@ sp_out_eng: //Engineering notation
 	      m>>=4;
 	      if (!m) break;
 	      if (!--comma_cnt) {
-		tmp_buf[k++]=',';
-		comma_cnt=4;
+	        tmp_buf[k++]=',';
+	        comma_cnt=4;
 	      }
 	    } while (k<TMP_BUF_LEN-SLOP);
 	    goto sp_out_comma_num;
@@ -803,8 +807,8 @@ sp_out_eng: //Engineering notation
 	    } while (m && k<TMP_BUF_LEN-SLOP);
 	    goto sp_out_num;
 	  }
-	case 'x':
-	x:
+        case 'x':
+x:
 	  if (cur_arg>=argc)
 	    throw('StrPrint');
 	  m=argv[cur_arg++];
@@ -817,8 +821,8 @@ sp_out_eng: //Engineering notation
 	      m>>=4;
 	      if (!m) break;
 	      if (!--comma_cnt) {
-		tmp_buf[k++]=',';
-		comma_cnt=4;
+	        tmp_buf[k++]=',';
+	        comma_cnt=4;
 	      }
 	    } while (k<TMP_BUF_LEN-SLOP);
 	    goto sp_out_comma_num;
@@ -831,8 +835,8 @@ sp_out_eng: //Engineering notation
 	    } while (m && k<TMP_BUF_LEN-SLOP);
 	    goto sp_out_num;
 	  }
-	case 'b':
-	case 'B':
+        case 'b':
+        case 'B':
 	  if (cur_arg>=argc)
 	    throw('StrPrint');
 	  m=argv[cur_arg++];
@@ -843,8 +847,8 @@ sp_out_eng: //Engineering notation
 	      m>>=1;
 	      if (!m) break;
 	      if (!--comma_cnt) {
-		tmp_buf[k++]=',';
-		comma_cnt=4;
+	        tmp_buf[k++]=',';
+	        comma_cnt=4;
 	      }
 	    } while (k<TMP_BUF_LEN-SLOP);
 	    goto sp_out_comma_num;
@@ -855,7 +859,7 @@ sp_out_eng: //Engineering notation
 	    } while (m && k<TMP_BUF_LEN-SLOP);
 	    goto sp_out_num;
 	  }
-	case '%':
+        case '%':
 	  SPutChar(_dst,'%',_buf);
 	  break;
       }

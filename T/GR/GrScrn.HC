@@ -4,7 +4,7 @@ U0 GrUpdateTaskODEs(CTask *task)
 {
   sys_task_being_scrn_updated=task;
   try
-    ;//ODEsUpdate(task); TODO URGENT RESTORE
+    ODEsUpdate(task);
   catch {
     LBts(&task->win_inhibit,WIf_SELF_ODE);
     "Exception in WinMgr: Update Task ODEs\n";
@@ -70,25 +70,22 @@ U0 GrUpdateTasks()
       task=task->next_task;
     } while (task!=task1);
 
-    /*TODO URGENT RESTORE
     for (i=0;i<mp_cnt;i++) { //Loop through all cores.
-      task1=task=cpu_structs[i].seth_task;
+      task1=task=cpu_structs[i]->seth_task;
       do {
 	if (!TaskValidate(task)) break;
 	GrUpdateTaskODEs(task);
 	if (!TaskValidate(task)) break;
 	task=task->next_task;
       } while (task!=task1);
-    }*/
+    }
   } catch {
     PutExcept(FALSE);
     //Dbg("Exception in WinMgr"); TODO RESTORE
   }
-  /*TODO URGENT RESTORE
   winmgr.last_ode_time=winmgr.ode_time;
-  ode_alloced_factor=LowPass1(0.1,ode_alloced_factor,
+  ode_alloced_factor=LowPass1(0.1,ode_alloced_factor,
 	Clamp(Gs->idle_factor-0.1,0.2,0.8),1/winmgr.fps);
-*/
   sys_task_being_scrn_updated=NULL;
 }
 

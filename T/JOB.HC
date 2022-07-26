@@ -50,7 +50,7 @@ U0 TaskRstAwaitingMsg(CTask *task=NULL)
 CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
 {//Queues a request to compile and execute src code text.
   CJob *res;
-  Bool old;
+  Bool old;
   if (!data || !TaskValidate(srv) || master && !TaskValidate(master) ||
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
@@ -527,6 +527,7 @@ Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE)
 
 U0 CoreAPSethTask()
 {
+  cpu_structs[__CoreNum]=Gs;
   QueInit(&(Gs->next_dying));
   Gs->num=__CoreNum;
   Gs->seth_task=Fs;
