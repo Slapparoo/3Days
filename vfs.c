@@ -518,8 +518,8 @@ static void CopyDir(char *dst,char *src) {
 		mkdir(dst,0700);
 		#endif
 	}
-	char buf[1024],sbuf[1024],*s;
-	int64_t root,sz,sroot;
+	char buf[1024],sbuf[1024],*s,buffer[0x10000];
+	int64_t root,sz,sroot,r;
 	strcpy(buf,dst);
 	buf[root=strlen(buf)]=delim;
 	buf[++root]=0;
@@ -540,19 +540,63 @@ static void CopyDir(char *dst,char *src) {
 		if(__FIsDir(sbuf)) {
 			CopyDir(buf,sbuf);
 		} else {
-			s=FileRead(sbuf,&sz);
-			FileWrite(buf,s,sz);
-			TD_FREE(s);
+			FILE *read=fopen(sbuf,"rb"),*write=fopen(buf,"wb");
+			while(r=fread(buffer,1,sizeof(buffer),read)) {
+				if(r<0) break;
+				fwrite(buffer,1,r,write);
+			}
+			fclose(read);
+			fclose(write);
 		}
 	}
 }
+
+static int __FIsNewer(char *fn,char *fn2) {
+	#ifndef TARGET_WIN32
+	struct stat s,s2;
+	stat(fn,&s),stat(fn2,&s2);
+	int64_t r=mktime(localtime(&s.st_ctime)),r2=mktime(localtime(&s2.st_ctime));
+	if(r>r2) return 1;
+	else return 0;
+	#else
+	int32_t h32;
+	int64_t s64,s64_2;
+	HANDLE fh=CreateFileA(fn,GENERIC_READ,0,NULL,OPEN_ALWAYS,0,NULL),
+		fh2=CreateFileA(fn2,GENERIC_READ,0,NULL,OPEN_ALWAYS,0,NULL);
+	s64=GetFileSize(fh,&h32);
+	s64|=h32<<32;
+	s64_2=GetFileSize(fh,&h32);
+	s64_2|=h32<<32;
+	CloseHandle(fh),CloseHandle(fh2);
+	return s64>s64_2;
+	#endif
+}
+
 void CreateTemplateBootDrv(char *to,char *template,int overwrite) {
+	char buffer[1024],drvl[16],buffer2[1024];
 	if(!overwrite)
 		if(__FExists(to)) {
-			VFsMountDrive('T',to);
-			return;
+			if(!__FIsNewer(template,to)) {
+				VFsMountDrive('T',to);
+				return;
+			}
 		}
-	char buffer[1024],drvl[16],buffer2[1024];
+	if(__FExists(to)) {
+				int64_t try;
+				for(try=0;try!=0x10000;try++) {
+					sprintf(buffer,"%s_BAKCUP.%d",to,try);
+					if(!__FExists(buffer)) {
+						printf("Newer Template drive found,backing up old drive to \"%s\".\n",buffer);
+						//Rename the old boot drive to something else
+						#ifdef TARGET_WIN32
+						MoveFile(to,buffer);
+						#else
+						rename(to,buffer);
+						#endif
+						break;
+					}
+				}
+			}
 	#ifdef TARGET_WIN32
     GetModuleFileNameA(NULL,buffer,sizeof(buffer));
     _splitpath(buffer,drvl,buffer2,NULL,NULL);

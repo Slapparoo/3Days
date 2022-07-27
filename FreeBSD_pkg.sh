@@ -22,7 +22,7 @@ echo "/usr/local/bin/3d" >> ${STAGEDIR}/plist
 foreach f ($files)
     if -d $f then
     	cp -r $f ${STAGEDIR}/usr/local/include/3Days
-    	set tmp = ` find T` 
+    	set tmp = ` find $f` 
     	foreach t ( $tmp )
     	    if ! -d $t then
     	        echo "/usr/local/include/3Days/$t" >> ${STAGEDIR}/plist

@@ -1,5 +1,5 @@
 name: 3days
-version:  0.2.00
+version:  0.2.70
 comment: A HolyC Compiler
 desc: <<EOD
 This is a 64bit HolyC JIT Compiler,it also includes an assembler.
@@ -8,4 +8,3 @@ arch: amd64
 maintainer: nrootconauto@gmail.com
 prefix: /
 origin: devel/3Days
-deps: {sdl2:{origin:"devel/sdl20",version:"2.0.12_7"}}
