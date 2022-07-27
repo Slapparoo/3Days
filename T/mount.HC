@@ -14,7 +14,7 @@
 #define RS_ROOT_CLUS           0x5A
 class CDirEntryPhys {
   U16	attr;
-  U8	name[CDIR_FILENAME_LEN];
+  U8	name[38];
   I64	clus,size;
   CDate datetime;
 };
@@ -25,15 +25,12 @@ U0 WriteDirent(U8 *body,U8 *cbody,U8 *to) {
 	if(!StrLen(dirent->name)) return;
 	if(!StrCmp(".",dirent->name)||!StrCmp("..",dirent->name)) goto next;
 	U8 *full_name=MStrPrint("%s/%s",to,dirent->name),*buf;
-	TOSPrint("cbody:%p\n",cbody-body);
 	if(dirent->attr&RS_ATTR_DIR) {
 		DirMk(full_name);
-		TOSPrint("Directory %s:\n",full_name);
 		if(body+RS_BLK_SIZE*dirent->clus!=cbody)
 			WriteDirent(body,body+RS_BLK_SIZE*dirent->clus,full_name);
 	} else {
-		TOSPrint("File %s:\n",full_name);
-		if(IsDotZ(full_name)) {
+		if(IsDotZ(full_name)) {
 			buf=ExpandBuf(body+RS_BLK_SIZE*dirent->clus,Fs);
 			FileWrite(full_name,buf,(body+RS_BLK_SIZE*dirent->clus)(CArcCompress*)->expanded_size);
 			Free(buf);
