@@ -431,8 +431,10 @@ int64_t VFsFileWrite(char *name,char *data,int64_t len) {
     name=__VFsFileNameAbs(name);
     if(name) {
         f=fopen(name,"wb");
-        fwrite(data,1,len,f);
-        fclose(f);
+        if(f) {
+			fwrite(data,1,len,f);
+			fclose(f);
+		}
     }
     TD_FREE(name);
     return !!name;

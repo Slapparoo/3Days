@@ -4346,7 +4346,12 @@ public extern CCtrl *CtrlFindUnique(CTask *haystack_task,I64 needle_type);
 public extern Bool CtrlInside(CCtrl *c,I64 x,I64 y);
 public extern CCtrl *ViewAnglesNew(CTask *task=NULL);
 public extern U0 ViewAnglesDel(CTask *task=NULL);
-extern class CCtrlBttnState;
+class CCtrlBttnState
+{
+  I64 state,num_states,flags;
+  U8 *state_texts;
+  CColorROPU32 *state_colors;
+};
 public extern CCtrl *CtrlBttnNew(I64 x,I64 y,I64 width=-1,I64 height=-1,
 	I64 num_states=1,U8 *state_texts,
 	I32 *state_colors,CCtrlBttnState *_s=NULL);
@@ -6075,4 +6080,4 @@ extern CMsHardStateGlbls ms_hard_last;
 extern CMsStateGlbls ms_last;
 extern U0 ProgressBarsRegTf(U8 *path=NULL);
 extern U0 ProgressBarsRst(U8 *path=NULL);
-extern Bool ScrnCast(Bool val=ON,Bool just_audio=FALSE,U8 *print_fmt="/Tmp/%X.GR");
+extern Bool ScrnCast(Bool val=ON,Bool just_audio=FALSE,U8 *print_fmt="/Tmp/%X.GR");
