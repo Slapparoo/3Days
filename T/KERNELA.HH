@@ -6066,4 +6066,13 @@ extern CCPU *cpu_structs[64];
 public extern I64 gr_x_offsets[8],
 	   gr_y_offsets[8],
 	  gr_x_offsets2[4],
-	  gr_y_offsets2[4];
+	  gr_y_offsets2[4];
+extern CScrnCastGlbls	scrncast;
+public extern CMsStateGlbls ms;
+public extern CGridGlbls ms_grid;
+public extern CMsHardStateGlbls ms_hard;
+extern CMsHardStateGlbls ms_hard_last;
+extern CMsStateGlbls ms_last;
+extern U0 ProgressBarsRegTf(U8 *path=NULL);
+extern U0 ProgressBarsRst(U8 *path=NULL);
+extern Bool ScrnCast(Bool val=ON,Bool just_audio=FALSE,U8 *print_fmt="/Tmp/%X.GR");
