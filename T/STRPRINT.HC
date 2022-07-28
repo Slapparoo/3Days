@@ -419,11 +419,11 @@ ptr=FileRead(argv[cur_arg++]);
 	  StrPrintFunSeg(tmp_buf,argv[cur_arg],len,flags);
 	  if (!__IsCmdLine || !_buf) {
 	    StrPrint(tmp_buf2,"$$LK,\"%s\",A=\"AD:0x%X\"$$",
-		  tmp_buf,argv[cur_arg]);
+		  tmp_buf,argv[cur_arg]);
 	    OutStr(tmp_buf2,_buf,_dst,len,flags);
 	  } else
 	    OutStr(tmp_buf,_buf,_dst,len,flags);
-
+	  cur_arg++;
 	  break;
         case 'd':
 	  if (cur_arg>=argc)

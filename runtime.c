@@ -421,6 +421,22 @@ int64_t STK___FExists(int64_t *stk) {
 int64_t STK_ChDrv(int64_t *stk) {
 	return VFsChDrv(stk[0]);
 }
+#ifndef TARGET_WIN32
+#include <time.h>
+int64_t STK_Now(int64_t *stk) {
+	int64_t t;
+	t=time(NULL);
+	return t;
+}
+#else
+int64_t STK_Now(int64_t *stk) {
+	int64_t r;
+	FILETIME ft;
+	GetSystemTimeAsFileTime(&ft);
+	r=ft.dwLowDateTime|(ft.dwHighDateTime<<32);
+	return r;
+}
+#endif
 int64_t mp_cnt(int64_t *stk) {
 	#ifndef TARGET_WIN32
 	return sysconf(_SC_NPROCESSORS_ONLN);
@@ -445,6 +461,7 @@ void TOS_RegisterFuncPtrs() {
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
+	STK_RegisterFunctionPtr(&ffi_blob,"UnixNow",STK_Now,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"InteruptCore",STK_InteruptCore,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"NewVirtualChunk",STK_NewVirtualChunk,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"FreeVirtualChunk",STK_FreeVirtualChunk,2);

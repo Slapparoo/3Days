@@ -143,6 +143,7 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U64i UnixNow();
 import U0i InteruptCore(I64i);
 import U8i *NewVirtualChunk(I64i,I64i low32);
 import U8i *FreeVirtualChunk(U8i *,I64i sz);
@@ -223,6 +224,7 @@ import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 import U0i UnblockSignals();
 #else
+extern U64i UnixNow();
 extern U0i UnblockSignals();
 extern U0i InteruptCore(I64i);
 extern U8i *NewVirtualChunk(I64i,I64i low32);
@@ -6081,3 +6083,4 @@ extern CMsStateGlbls ms_last;
 extern U0 ProgressBarsRegTf(U8 *path=NULL);
 extern U0 ProgressBarsRst(U8 *path=NULL);
 extern Bool ScrnCast(Bool val=ON,Bool just_audio=FALSE,U8 *print_fmt="/Tmp/%X.GR");
+extern CDate Now();
