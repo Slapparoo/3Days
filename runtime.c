@@ -357,6 +357,7 @@ int64_t STK_DrawWindowDel(int64_t *stk) {
     DrawWindowDel(stk[0]);
 }
 int64_t STK___GetTicks() {
+	#ifndef TARGET_WIN32
 	//https://stackoverflow.com/questions/2958291/equivalent-to-gettickcount-on-linux
     struct timespec ts;
     int64_t theTick = 0U;
@@ -364,6 +365,9 @@ int64_t STK___GetTicks() {
     theTick  = ts.tv_nsec / 1000000;
     theTick += ts.tv_sec * 1000;
     return theTick;
+    #else
+    return GetTickCount64();
+    #endif
 }
 int64_t STK_SetKBCallback(int64_t *stk) {
     SetKBCallback(stk[0],stk[1]);

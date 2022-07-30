@@ -83,7 +83,6 @@ ${INSTALL_TYPE}
 SetOverwrite ifnewer
 SetOutPath "$INSTDIR"
 File "3d_loader.exe"
-File "SDL2.dll"
 File "HCRT.BIN"
 SetOutPath "$INSTDIR\T"
 File /r "T\*"
@@ -137,7 +136,6 @@ SectionEnd
 
 Section Uninstall
 ${INSTALL_TYPE}
-Delete "$INSTDIR\SDL2.dll"
 Delete "$INSTDIR\${MAIN_APP_EXE}"
 Delete "$INSTDIR\HCRT.BIN"
 RmDir /r "$INSTDIR\T"
