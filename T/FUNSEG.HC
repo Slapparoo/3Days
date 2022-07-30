@@ -89,40 +89,38 @@ U0 StrPrintFunSeg(U8 *buf,I64 addr,I64 field_len,I64 flags)
 {
   I64 offset;
   CHashExport *tmpex;
-  U8 *str,*str2;
+  U8 *str=NULL,*str2;
   Bool is_fun=FALSE;
   if (!(flags&PRTF_TRUNCATE))
     field_len=0;
   if (addr) {
-    {
-      if (tmpex=FunSegFind(addr,&offset)) {
-	if (tmpex->type&HTT_FUN||tmpex->type&HTT_UNIMP_FUN)
-	  is_fun=TRUE;
-    str=tmpex->str;
-      }
+    if (tmpex=FunSegFind(addr,&offset)) {
+      if (tmpex->type&HTT_FUN||tmpex->type&HTT_UNIMP_FUN)
+        is_fun=TRUE;
+      str=tmpex->str;
     }
     if (str) {
       if (offset>0xFFFF) offset=0xFFFF;
       if (flags&PRTF_COMMA) {
-	if (is_fun) {
+        if (is_fun) {
 	  str2=MStrPrint("&%s",str);
-      if (!field_len)
+	  if (!field_len)
 	    StrCpy(buf,str2);
 	  else if (flags&PRTF_LEFT_JUSTIFY && StrLen(str2)<field_len)
 	    StrCpy(buf,str2);
 	  else
 	    StrPrint(buf,"%*ts",field_len,str2);
 	  Free(str2);
-	} else {
+        } else {
 	  if (!field_len)
 	    StrCpy(buf,str);
 	  else if (flags&PRTF_LEFT_JUSTIFY && StrLen(str)<field_len)
 	    StrCpy(buf,str);
 	  else
 	    StrPrint(buf,"%*ts",field_len,str);
-	}
+        }
       } else {
-	if (is_fun) {
+        if (is_fun) {
 	  str2=MStrPrint("&%s",str);
 	  if (field_len && field_len>7) {
 	    if (flags&PRTF_LEFT_JUSTIFY && StrLen(str2)<field_len-7)
@@ -132,7 +130,7 @@ U0 StrPrintFunSeg(U8 *buf,I64 addr,I64 field_len,I64 flags)
 	  } else
 	    StrPrint(buf,"%s+0x%04X",str2,offset);
 	  Free(str2);
-	} else {
+        } else {
 	  if (field_len && field_len>7) {
 	    if (flags&PRTF_LEFT_JUSTIFY && StrLen(str)<field_len-7)
 	      StrPrint(buf,"%s+0x%04X",str,offset);
@@ -140,7 +138,7 @@ U0 StrPrintFunSeg(U8 *buf,I64 addr,I64 field_len,I64 flags)
 	      StrPrint(buf,"%*ts+0x%04X",field_len-7,str,offset);
 	  } else
 	    StrPrint(buf,"%s+0x%04X",str,offset);
-	}
+        }
       }
       return;
     }
@@ -181,7 +179,7 @@ I64 SrcLineNum(U8 *addr,I64 cnt=1)
 
 	  //interpolate to guess line num
 	cur_line=ClampI64(ToF64(addr-body[first_line])*(last_line-first_line+1)/
-	      (body[last_line]-body[first_line]+1),first_line,last_line);
+	      (body[last_line]-body[first_line]+1),first_line,last_line);
 
 	//retreat while too high
 	while ((!body[cur_line] || body[cur_line]>=addr) && cur_line>first_line)
@@ -231,7 +229,7 @@ U8 *SrcEdLink(U8 *addr,I64 cnt=1,CTask *mt=NULL)
 {//MAlloc file,line link to src of addr.
   U8 *filename,*st,*st2;
   I64 linenum;
-  if (filename=SrcFileName(addr,cnt)) {
+  if (filename=SrcFileName(addr,cnt)) {
     linenum=SrcLineNum(addr,cnt);
     if (linenum<1)
       linenum=1;

@@ -292,10 +292,13 @@ int64_t STK_TOSPrint(int64_t *stk) {
 	return VFsDel(stk[0]);
 }
 int64_t STK_FOpen(int64_t *stk) {
-    return fopen(stk[1],stk[2]);
+	char *fn=__VFsFileNameAbs(stk[0]);
+    FILE *f=fopen(fn,stk[1]);
+    TD_FREE(fn);
+    return f;
 }
 int64_t STK_FClose(int64_t *stk) {
-    return fclose(stk[1]);
+    return fclose(stk[0]);
 }
 #define NEXT_BLK 0x7FFFFFFFFFFFFFFFll
 int64_t STK_FBlkRead(int64_t *stk) {
