@@ -146,7 +146,8 @@ static void LoadPass1(char *src,char *mod_base,int64_t ld_flags) {
             break;
             case IET_ZEROED_CODE_HEAP:
             case IET_CODE_HEAP:
-            ptr3=PoopMAlloc32(*(int32_t*)src);
+            abort();
+            //ptr3=PoopMAlloc32(*(int32_t*)src);
             src+=4;
             fill_data:            
             if(*st_ptr) {
@@ -163,7 +164,8 @@ static void LoadPass1(char *src,char *mod_base,int64_t ld_flags) {
             break;
             case IET_DATA_HEAP:
             case IET_ZEROED_DATA_HEAP:
-            ptr3=PoopMAlloc32(*(int32_t*)src);
+            abort();
+            //ptr3=PoopMAlloc32(*(int32_t*)src);
             src+=4;
             goto fill_data;
         }
@@ -215,23 +217,8 @@ struct CBinFile {
     int64_t org,patch_table_offset,file_size;
 } ;
 typedef struct CBinFile CBinFile ;
-void FualtCB() {
-    #ifndef TARGET_WIN32
-    sigset_t set;
-    sigfillset(&set);
-    sigprocmask(SIG_UNBLOCK,&set,NULL);
-    #endif
-    vec_CHash_t *f=map_get(&TOSLoader,"FualtRoutine");
-    if(f)
-			FFI_CALL_TOS_0(f->data[0].val);
-	exit(1);
-}
 void *Load(char *fn,int64_t ld_flags) {
-    #ifndef TARGET_WIN32
-    signal(SIGBUS,FualtCB);
-    #endif
-    signal(SIGSEGV,FualtCB);
-    FILE *f;
+	FILE *f;
     char *mod_base,*absname;
     int64_t size,mod_align,misalign;
     CBinFile *bfh,*bfh_addr;
@@ -243,7 +230,7 @@ void *Load(char *fn,int64_t ld_flags) {
     fseek(f,0,SEEK_END);
     size=ftell(f)-size;
     fseek(f,0,SEEK_SET);
-    fread(bfh_addr=bfh=PoopMAlloc32(size),1,size,f);
+    fread(bfh_addr=bfh=NewVirtualChunk(size,1),1,size,f);
     fclose(f);
 
     assert(bfh->bin_signature[0]=='T');
@@ -253,7 +240,21 @@ void *Load(char *fn,int64_t ld_flags) {
     
     mod_base=(char*)bfh_addr+sizeof(CBinFile);
     LoadPass1((char*)bfh_addr+bfh_addr->patch_table_offset,mod_base,ld_flags);
+    vec_CHash_t *FualtCB=map_get(&TOSLoader,"FualtRoutine");
+	if(FualtCB) {
+		#ifndef TARGET_WIN32
+		signal(SIGBUS,FualtCB->data[0].val);
+		#endif
+	}
     LoadPass2((char*)bfh_addr+bfh_addr->patch_table_offset,mod_base,ld_flags);    
     //Stuff may still be using data once we exit
     //PoopFree(bfh_addr);
 }
+#ifdef TARGET_WIN32
+void FualtCB() {
+	vec_CHash_t *FualtCB=map_get(&TOSLoader,"FualtRoutine");
+	if(FualtCB)
+		FFI_CALL_TOS_0(FualtCB->data[0].val);
+    exit(1);
+}
+#endif

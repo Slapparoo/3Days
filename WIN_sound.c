@@ -37,7 +37,7 @@ void InitSound() {
 	format.cbSize=0;
 	sema=CreateSemaphore(NULL,1,1,NULL);
 	assert(MMSYSERR_NOERROR==waveOutOpen(&wout,WAVE_MAPPER,&format,__cb,sema,CALLBACK_FUNCTION));
-	hdr.lpData = PoopMAlloc(BUF_SZ*format.wBitsPerSample/8);
+	hdr.lpData = TD_MALLOC(BUF_SZ*format.wBitsPerSample/8);
 	hdr.dwBufferLength = BUF_SZ*format.wBitsPerSample/8;
 	hdr.dwBytesRecorded=0;
 	hdr.dwUser=0;

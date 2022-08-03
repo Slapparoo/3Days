@@ -31,9 +31,6 @@ U0 LoadImps() {
     //Load asm externs second
     ExePrint2("#define BOOT_3DAYS\n#include \"KERNELB.HH\";\n");
 }
-static U0 SetGsNum(I64) {
-	Gs->num=__CoreNum;
-}
 U0 StartUpTasks()
 {
   CTask *user1,*user2;
@@ -42,21 +39,24 @@ U0 StartUpTasks()
   WinToTop(user1);
   WinTileVert;
   WallPaperInit;
-  DeathWait(Spawn(&ACInit,"/KERNEL*.HH",,mp_cnt-1));
+  ACInit("/KERNEL*.HH");
   AutoComplete(ON);
 }
 U0 Adam(U8 *) {
 	I64 idx;
 	LoadImps;
-	Gs->num=__CoreNum;//It should be 0
-	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
+	cpu_structs[Gs->num=__CoreNum]=Gs;//It should be 0
+	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
 		__SpawnCore(idx,&CoreAPSethTask);
+                while(!cpu_structs[idx])
+                  PAUSE;
 	}
     if(FileFind("HCRT.DBG.Z"))
 		DbgInfoRead("HCRT.DBG.Z");
-	boundscheck_enable=1;
 	if(!__IsCmdLine) {
 		sys_winmgr_task=Spawn(&WinMgrTask);
+		//Grab pointer
+		ExePrint2("#include \"AMOUSE.HC.Z\";;");
 	} else {
 		DeathWait(User);
 		Exit3Days;
@@ -71,15 +71,16 @@ Gs->seth_task=Spawn(&CoreAPSethTask,NULL,"Seth");
 adam_task=Spawn(&Adam,NULL,"Adam",,);
 //Dont Exit
 DeathWait(adam_task);
-U0 FualtRoutine(U8 *ptr,U8 *got) {
-	U8 **p=ptr,*link,*par,*fstr;
+U0 FualtRoutine() {
+	U8 *link,*par,*fstr;
 	I64 len=15;
 	CHashFun *f;
 	I64 i=0;
+	UnblockSignals;
 	for(i=0;i!=len;i++) {
-		par=Caller(i+2);
+		par=Caller(i);
 		if(!par) goto en;
-		link=SrcEdLink(par); //+1 for self,+1 for fault routine
+		link=SrcEdLink(par); //+1 for self,+1 for fault routine
 		f=FunSegFind(par,NULL);
 		if(f)
 			fstr=f->str;

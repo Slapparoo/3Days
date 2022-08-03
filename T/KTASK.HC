@@ -247,9 +247,9 @@ I64 ExeCmdLine(CCmpCtrl *cc)
 }
 Bool TaskValidate(CTask *task)
 {//return TRUE if task looks valid.
-  if (!task)
-    return FALSE;
-  else if(task->task_signature!=TASK_SIGNATURE_VAL)
+  if(!task)
+	return FALSE;
+  if(task->task_signature!=TASK_SIGNATURE_VAL)
     return FALSE;
   else
     return ToBool(task);
@@ -257,7 +257,9 @@ Bool TaskValidate(CTask *task)
 
 I64 TaskInit(CTask *task,I64 stk_size)
 {//Returns Fs of task
-  
+  if(!task->data_heap) task->data_heap=&ahc;
+  if(!task->code_heap) task->code_heap=&ahc;
+  task->task_signature=TASK_SIGNATURE_VAL;
   task->addr=task->next_task=task->last_task=
 	task->next_input_filter_task=task->last_input_filter_task=
 	task;
@@ -279,7 +281,7 @@ I64 TaskInit(CTask *task,I64 stk_size)
   QueInit(&task->next_ctrl);
   QueInit(&task->next_ode);
   
-  task->hash_table=HashTableNew(TASK_HASH_TABLE_SIZE);
+  task->hash_table=HashTableNew(TASK_HASH_TABLE_SIZE,task);
   task->text_attr	=WHITE<<4+BLUE;
   task->border_src	=BDS_CONST;
   //task->border_attr	=DrvTextAttrGet(':'); RESTORE
@@ -289,7 +291,6 @@ I64 TaskInit(CTask *task,I64 stk_size)
   task->win_right	=text.cols-2;
   task->win_top		=13;
   task->win_bottom	=text.rows-2;
-  task->task_signature=TASK_SIGNATURE_VAL;
 
     /*
   if (blkdev.home_dir) {//Beware Adam \dLK,"TaskInit",A="FF:::/Kernel/KStart64.HC,TaskInit"\d. I guess ok until \dLK,"DskChg",A="FF:::/Kernel/KMain.HC,DskChg"\d().
@@ -299,7 +300,7 @@ I64 TaskInit(CTask *task,I64 stk_size)
     task->cur_dir=StrNew("/Home",task);
     */
     //TODO Restore
-    task->cur_dir=DirCur;
+    task->cur_dir=StrNew(Fs->cur_dir,task);
   return task;
 }
 CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
@@ -313,11 +314,13 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
   if(!parent) parent=adam_task;
   if(target_cpu==-1)
 	target_cpu=Gs->num;
-  CTask *task=MAlloc(sizeof(CTask));
+  CTask *task=MAlloc32(sizeof(CTask),adam_task);
   U8 **stack;
   if (!task_name) task_name="Unnamed Task";
   task->parent_task=parent;
   task->gs=parent->gs;
+  task->code_heap=HeapCtrlInit(,task,NULL);
+  task->data_heap=HeapCtrlInit(,task,1);
   TaskInit(task,0);
   task->hash_table->next=parent->hash_table;
   MemCpy(task->task_name,task_name,TASK_NAME_LEN);
@@ -352,7 +355,7 @@ U0 UserTaskCont()
     } catch {
       if ((doc=Fs->put_doc) && doc->doc_signature==DOC_SIGNATURE_VAL)
 	DocUnlock(doc);
-      "Caught a %c\n",Fs->except_ch;
+      PutExcept;
       Fs->catch_except=TRUE;
     }
   } while (cont);
@@ -360,6 +363,7 @@ U0 UserTaskCont()
 U0 UserStartUp()
 {//Run each time a user a spawned
   DocTermNew;
+  Type("::/Doc/Start.DD");
   LBts(&(Fs->display_flags),DISPLAYf_SHOW);
   WinToTop;
   WinZBufUpdate;
@@ -389,7 +393,9 @@ CTask *User(U8 *fmt=NULL,...)
 U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
 {//Those things calculated from other variables.
   if (!task) task=Fs;
+  Bool old;
   PUSHFD
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);  
   while (LBts(&task->task_flags,TASKf_TASK_LOCK)) {
     PAUSE;
   }
@@ -400,6 +406,8 @@ U0 TaskDerivedValsUpdate(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (update_z_buf && Bt(&task->display_flags,DISPLAYf_SHOW))
     LBts(&sys_semas[SEMA_UPDATE_WIN_Z_BUF],0);
   LBtr(&task->task_flags,TASKf_TASK_LOCK);
+  if(old)
+    BreakUnlock;
   POPFD
 }
 U0 BirthWait(CTask **_task) {
@@ -426,7 +434,9 @@ U0 TaskKillDying() {
     while (task!=&(Gs->next_dying)) {
       task1=task->next;
       QueRem(task);
-      FreeTaskMem(task);
+      HeapCtrlDel(task(CTask*)->data_heap);
+      HeapCtrlDel(task(CTask*)->code_heap);
+      Free(task);
       task=task1;
     }
     LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);

@@ -58,8 +58,16 @@ U0 CtrlAltDel(I64)
 
 U0 CtrlAltC(I64)
 {
-    if(TaskValidate(sys_focus_task))
-		sys_focus_task->rip=&Break;
+  U8 *old_rip;
+  if(TaskValidate(sys_focus_task)) {
+    if(!Bt(&sys_focus_task->task_flags,TASKf_BREAK_LOCKED)) {
+      old_rip=sys_focus_task->rip;
+      sys_focus_task->rsp-=8;
+      sys_focus_task->rsp(U8**)[0]=old_rip;
+      sys_focus_task->rip=_BREAK;
+    } else
+      LBts(&sys_focus_task->task_flags,TASKf_PENDING_BREAK);
+  }
 }
 
 U0 CtrlAltF(I64)
@@ -126,7 +134,9 @@ U0 KeyDevInit()
   MemSet(&keydev.put_key_head,0,sizeof(CKeyDevEntry));
   QueInit(&keydev.put_key_head);
   //KeyDevAdd(&KDInputFilterPutKey,&KDInputFilterPutS,0x40000000,FALSE); TODO RESTORE(?)
-  CtrlAltCBSet('C',&CtrlAltC,"Cmd /Break Execution",,TRUE);
+  CtrlAltCBSet('A',&CtrlAltA,"Cmd /Extended ASCII");
+  CtrlAltCBSet('G',&CtrlAltG,"Cmd /Grid On","Cmd /Grid Off");
+  //CtrlAltCBSet('C',&CtrlAltC,"Cmd /Break Execution",,TRUE); //Handled by input routine
   //CtrlAltCBSet('D',&CtrlAltD,"Cmd /Enter Debugger",,TRUE);
   CtrlAltCBSet('N',&CtrlAltN,"Cmd /Next Window",,TRUE);
   CtrlAltCBSet('F',&CtrlAltF,"Cmd /Toggle Aux Font");
@@ -134,6 +144,7 @@ U0 KeyDevInit()
   CtrlAltCBSet('N',&CtrlAltN,"Cmd /Next Focus Task",,TRUE);
   CtrlAltCBSet('T',&CtrlAltT,"Cmd /Terminal Window");
   //CtrlAltCBSet('V',&CtrlAltV,"Cmd /VGA Flush",,TRUE);
-  CtrlAltCBSet('X',&CtrlAltX,"Cmd /Kill Focused Task",,TRUE);
+  //CtrlAltCBSet('X',&CtrlAltX,"Cmd /Kill Focused Task",,TRUE); Handled by input routine
+  CtrlAltCBSet('B',&CtrlAltB,"Cmd /Bible");
 }
 KeyDevInit;

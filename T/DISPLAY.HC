@@ -1,8 +1,10 @@
 U0 WinDerivedValsUpdate(CTask *task)
 {//Those things calculated from other variables.
   if (!task) task=Fs;
+  Bool old;
   //Assert: This is called with TASKf_TASK_LOCK set
   PUSHFD
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   task->win_width =task->win_right-task->win_left+1;
   task->win_height=task->win_bottom-task->win_top+1;
   task->pix_left	=FONT_WIDTH*task->win_left;
@@ -11,6 +13,8 @@ U0 WinDerivedValsUpdate(CTask *task)
   task->pix_top		=FONT_HEIGHT*task->win_top;
   task->pix_bottom	=FONT_HEIGHT*(task->win_bottom+1)-1;
   task->pix_height	=task->pix_bottom-task->pix_top+1;
+  if(old)
+	BreakUnlock;
   POPFD
 }
 

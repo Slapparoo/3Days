@@ -141,7 +141,23 @@ extern class CFile;
 #define ARGT_XMM0	55 // Not implemented
 #define OCF_ALIAS	1
 extern class CCPU;
+extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U64i UnixNow();
+import U0i InteruptCore(I64i);
+import U8i *NewVirtualChunk(I64i,I64i low32);
+import U8i *FreeVirtualChunk(U8i *,I64i sz);
+import U0i DyadInit();
+import U0i DyadUpdate();
+import U0i DyadShutdown();
+import CDyadStream *DyadNewStream();
+import I64i DyadListen(CDyadStream *,I64i port);
+import I64i DyadConnect(CDyadStream *,U8i*,I64i port);
+import U0i DyadWrite(CDyadStream *,U8i*,I64i);
+import U0i DyadEnd(CDyadStream *);
+import U0i DyadClose(CDyadStream *);
+import U8i *DyadGetAddress(CDyadStream *);
+import U0i DyadSetReadCallback(U0i(*fptr)(CDyadStream *,U8i *,I64i,U8i *),U8i *);
 import I64i mp_cnt();
 import U0i SetFs(CTask*);
 import CTask* GetFs();
@@ -166,8 +182,8 @@ public import Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public import Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public import U0 FClose(CFile *f);
 public import CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
-public import I64i MSize(U8i *src);   //size of heap object
-public import I64i MSize2(U8i *src); //Internal size
+//public import I64i MSize(U8i *src);   //size of heap object
+//public import I64i MSize2(U8i *src); //Internal size
 public import U8i *CAlloc(I64i size,CTask *t=0);
 public import U0i TOSPrint(U8i *,...);
 public import U8i *__FileRead(U8i *filename,I64i *_size=0,CTask *t=0);
@@ -206,7 +222,25 @@ import U0 __Del(U8 *);
 import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
+import U0i UnblockSignals();
 #else
+extern U64i UnixNow();
+extern U0i UnblockSignals();
+extern U0i InteruptCore(I64i);
+extern U8i *NewVirtualChunk(I64i,I64i low32);
+extern U8i *FreeVirtualChunk(U8i *,I64i sz);
+extern U0i DyadInit();
+extern U0i DyadUpdate();
+extern U0i DyadShutdown();
+extern CDyadStream *DyadNewStream();
+extern I64i DyadListen(CDyadStream *,I64i port);
+extern I64i DyadConnect(CDyadStream *,U8i*,I64i port);
+extern U0i DyadWrite(CDyadStream *,U8i*,I64i);
+extern U0i DyadEnd(CDyadStream *);
+extern U0i DyadClose(CDyadStream *);
+extern U8i *DyadGetAddress(CDyadStream *);
+extern U0i DyadSetReadCallback(CDyadStream *,U0i(*fptr)(CDyadStream *,U8i *,I64i,U8i *),U8i *);
+extern U0i DyadSetOnListenCallback(CDyadStream *,U0i(*fptr)(CDyadStream *,U8i *,I64i,U8i *),U8i *);
 extern I64i mp_cnt();
 extern U0i SetFs(CTask*);
 extern CTask* GetFs();
@@ -232,8 +266,6 @@ extern U8i *GetClipboardText();
 extern U8i *SetClipboardText(U8i *);
 extern U0 __Del(U8 *);
 public extern U8 *DirCur();
-public extern I64i MSize(U8i *src);   //size of heap object
-public extern I64i MSize2(U8i *src); //Internal size
 public extern U8i *CAlloc(I64i size,CTask *t=0);
 public extern U0i TOSPrint(U8i *,...);
 public extern U8i *__FileRead(U8i *filename,I64i *_size=0,CTask *t=0);
@@ -273,6 +305,8 @@ public extern Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1)
 public extern U0 FClose(CFile *f);
 public extern CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
 #endif
+public extern I64i MSize(U8i *src);   //size of heap object
+public extern I64i MSize2(U8i *src); //Internal size
 extern U0i Exit();
 extern class CAOT;
 extern class CAOTHeapGlbl;
@@ -946,7 +980,8 @@ public class CHashTable
 #define HTT_MODULE		0x04000 //CHashGeneric
 #define HTT_HELP_FILE		0x08000 //CHashSrcSym
 #define HTT_FRAME_PTR		0x10000 //CHashGeneric
-#define HTG_TYPE_MASK		0x1FFFF
+#define HTT_UNIMP_FUN		0x20000 //CHashFun
+#define HTG_TYPE_MASK		0x3FFFF
 
 #define HTF_PRIVATE		0x00800000
 #define HTF_PUBLIC		0x01000000
@@ -1035,7 +1070,7 @@ public class CArrayDim
 };
 
 #define MLMF_IS_STR	1
-public class CMemberLstMeta
+public class CMemberLstMeta
 {
   CMemberLstMeta *next;
   U8	*str;
@@ -2756,7 +2791,7 @@ class CISOPriDesc
 #define MT_DVD		2
 
 //CDirEntry flags (Used by \dLK,"FileMgr",A="MN:FileMgr"\d())
-#define CDIR_FILENAME_LEN	38 //Must include terminator zero
+#define CDIR_FILENAME_LEN	2048 //Must include terminator zero
 public class CDirEntry
 {
   CDirEntry *next,*parent,*sub;
@@ -3045,6 +3080,7 @@ class CMemBlk
 {
   CMemBlk *next,*last;
   U32	mb_signature,pags;
+  CMemBlk *next2,*last2;
 };
 
 #define MRT_UNUSED	0
@@ -4312,7 +4348,12 @@ public extern CCtrl *CtrlFindUnique(CTask *haystack_task,I64 needle_type);
 public extern Bool CtrlInside(CCtrl *c,I64 x,I64 y);
 public extern CCtrl *ViewAnglesNew(CTask *task=NULL);
 public extern U0 ViewAnglesDel(CTask *task=NULL);
-extern class CCtrlBttnState;
+class CCtrlBttnState
+{
+  I64 state,num_states,flags;
+  U8 *state_texts;
+  CColorROPU32 *state_colors;
+};
 public extern CCtrl *CtrlBttnNew(I64 x,I64 y,I64 width=-1,I64 height=-1,
 	I64 num_states=1,U8 *state_texts,
 	I32 *state_colors,CCtrlBttnState *_s=NULL);
@@ -4734,7 +4775,6 @@ class CMakeSongSettings
   I64  octave			format "$$DA-TRM,A=\"Octave:%d\"$$\n";
   I64  octave_state;
 };
-extern U0 Break();
 extern U0 PutChars(U64 ch);
 extern U0 PutExcept(Bool catch_it=TRUE);
 public extern U0 BibleView();
@@ -5107,7 +5147,6 @@ extern U0 PutExcept(Bool catch_it=TRUE);
 extern U0 SysTry(U8 *catch_start,U8 *untry_start);
 extern U0 SysUntry();
 extern U0 throw(I64 ch=0,Bool no_log=FALSE);
-extern U0 Break();
 extern Bool BreakLock(CTask *task=NULL);
 extern Bool BreakUnlock(CTask *task=NULL);
 extern U0 LoadOneImport(U8 **_src,U8 *module_base,I64 ld_flags);
@@ -5933,3 +5972,115 @@ extern CJob *JobQue(I64 (*fp_addr)(U8 *data),U8 *data=NULL,
 extern U0 CoreAPSethTask();
 extern U0 TaskKillDying();
 extern U0 TaskFocusNext();
+extern CHeapCtrl *HeapCtrlInit(CHeapCtrl *hc=NULL,CTask *task=NULL,CBlkPool *bp);
+extern U0 HeapCtrlDel(CHeapCtrl *hc);
+extern U8 *StrNew(U8 *buf,CTask *mem_task=NULL)
+extern U8 *AStrNew(U8 *buf)
+extern U8 *CAllocAligned(I64 size,I64 alignment,
+	CTask *mem_task=NULL,I64 misalignment=0);
+extern U8 *MAllocAligned(I64 size,I64 alignment,
+	CTask *mem_task=NULL,I64 misalignment=0);
+extern U8 *AMAllocIdent(U8 *src);
+extern U8 *MAllocIdent(U8 *src,CTask *mem_task=NULL);
+extern U8 *ACAlloc(I64 size);
+extern U8 *MAlloc32(I64 size,CTask *task=NULL);
+extern U8 *CAlloc(I64 size,CTask *mem_task=NULL);
+extern U8 *AMAlloc(I64 size);
+extern Bool IsValidPtr(U8 *ptr);
+extern U0 EdCharIns(I64 ch,I64 sc,CDoc *doc);
+extern CTask *adam_task;
+extern Bool YorN();
+extern I64 PressAKey();
+extern Bool AreYouSure();
+public extern Bool Del(U8 *f1);
+public extern U32 char_bmp_alpha[16],char_bmp_alpha_numeric[16],
+char_bmp_alpha_numeric_no_at[16],	char_bmp_word[16],
+char_bmp_dec_numeric[16],		char_bmp_hex_numeric[16],
+char_bmp_white_space[16],		char_bmp_non_eol_white_space[16],
+char_bmp_zero_cr_nl_cursor[16],	char_bmp_zero_tab_cr_nl_cursor[16],
+char_bmp_zero_tab_cr_nl_cursor_dollar[16],
+char_bmp_macro[16],			char_bmp_printable[16],
+char_bmp_displayable[16],		char_bmp_safe_dollar[16],
+char_bmp_filename[16],			char_bmp_non_eol[16];
+#define DS_USE_FILE1	0
+#define DS_USE_FILE2	1
+#define DS_REMAINDER_1	2
+#define DS_REMAINDER_2	3
+#define DS_ABORT_FILE	4
+#define DF_MODIFIED			0x01
+#define DF_DONT_MODIFIED		0x02
+#define DF_REMAINDER_ALL_FILE1		0x04
+#define DF_REMAINDER_ALL_FILE2		0x08
+#define DF_ABORT_FILE			0x10
+#define DF_ABORT_ALL_FILES		0x20
+#define DF_NO_MORE_PMTS_THIS_FILE	0x40
+public extern Bool Diff(U8 *dst_file,U8 *src_file,I64 *_df_flags=NULL);
+extern CDirEntry *Cd2DirEntry(CDirEntry *tmpde,U8 *abs_name);
+
+#define FM_NORMAL	0
+#define FM_PICK_FILE	1
+#define FM_PICK_DIR	2
+
+#define DEF2_PROCESSED		1
+#define DEF2_NOT_INITIALIZED	2
+
+#define FMR_INCLUDE		0
+#define FMR_ADAM_INCLUDE	1
+#define FMR_DELETE		2
+#define FMR_RENAME		3
+#define FMR_MKDIR		4
+#define FMR_PLAIN		5
+#define FMR_PASTE		6
+#define FMR_CHG_DSK		7
+#define FMR_FORMAT		8
+#define FMR_MOUNT_REDSEA_ISO_C	9
+#define FMR_UNMOUNT		10
+#define FMR_MAKE_REDSEA_ISO_C	11
+#define FMR_BURN_ISO		12
+#define FMR_HELP		13
+public extern U8 *FileMgr(I64 mode=FM_NORMAL,CTask *mem_task=NULL);
+extern CKbdStateGlbls	kbd;
+extern F64 LowPass1(F64 a,F64 y0,F64 y,F64 dt=1.0);
+public extern CMathODE *ODENew(I64 n,F64 max_tolerance=1e-6,I64 flags=0);
+public extern Bool ODEPause(CMathODE *ode,Bool val=ON);
+public extern U0 ODEDel(CMathODE *ode);
+public extern I64 ODESize(CMathODE *ode);
+extern U0 ODESetMassesPtrs(CMathODE *ode,F64 *state,F64 *DstateDt);
+extern U0 ODEState2Internal(CMathODE *ode);
+extern U0 ODEInternal2State(CMathODE *ode);
+public extern U0 ODERenum(CMathODE *ode);
+public extern CMass *MassFind(CMathODE *ode,F64 x,F64 y,F64 z=0);
+public extern CSpring *SpringFind(CMathODE *ode,F64 x,F64 y,F64 z=0);
+public extern U0 MassOrSpringFind(
+	CMathODE *ode,CMass **res_mass,CSpring **res_spring,
+	F64 x,F64 y,F64 z=0);
+public extern CMass *MassFindNum(CMathODE *ode,I64 num);
+public extern U0 ODERstInactive(CMathODE *ode);
+extern U0 ODECalcSprings(CMathODE *ode);
+extern U0 ODECalcDrag(CMathODE *ode);
+extern U0 ODEApplyAccelerationLimit(CMathODE *ode);
+extern U0 ODEMPTask(CMathODE *ode);
+extern U0 ODEMPWake(CMathODE *ode);
+extern U0 ODEMPSleep(CMathODE *ode);
+extern U0 ODECallMPDerivative(CMathODE *ode,F64 t,F64 *state,F64 *DstateDt);
+extern U0 ODECallDerivative(CMathODE *ode,F64 t,F64 *state,F64 *DstateDt);
+extern U0 ODEOneStep(CMathODE *ode);
+extern U0 ODERK4OneStep(CMathODE *ode);
+extern U0 ODECashKarp(CMathODE *ode);
+extern U0 ODERK5OneStep(CMathODE *ode);
+extern U0 ODEsUpdate(CTask *task);
+extern CCPU *cpu_structs[64];
+public extern I64 gr_x_offsets[8],
+	   gr_y_offsets[8],
+	  gr_x_offsets2[4],
+	  gr_y_offsets2[4];
+extern CScrnCastGlbls	scrncast;
+public extern CMsStateGlbls ms;
+public extern CGridGlbls ms_grid;
+public extern CMsHardStateGlbls ms_hard;
+extern CMsHardStateGlbls ms_hard_last;
+extern CMsStateGlbls ms_last;
+extern U0 ProgressBarsRegTf(U8 *path=NULL);
+extern U0 ProgressBarsRst(U8 *path=NULL);
+extern Bool ScrnCast(Bool val=ON,Bool just_audio=FALSE,U8 *print_fmt="/Tmp/%X.GR");
+extern CDate Now();

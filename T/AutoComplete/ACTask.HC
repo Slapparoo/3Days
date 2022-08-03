@@ -103,14 +103,14 @@ U0 ACPutChoices(CDoc *focus_l,CDocEntry *doc_e,CTask *focus_task,
 
   if (!ac.cur_word || StrCmp(ac.cur_word,buf) || force_refresh) {
     st=ac.cur_word;
-    ac.cur_word=StrNew(buf);
+    ac.cur_word=AStrNew(buf);
     Free(st);
     ac.num_fillins=0;
     if (*ac.cur_word)
       for (i=0;i<=ac.hash_table->mask && tS<timeout_time;i++) {
 	tmpw=ac.hash_table->body[i];
 	while (tmpw) {
-	  if (!MemCmp(ac.cur_word,tmpw->str,StrLen(ac.cur_word)))
+	  if (tmpw->str&&!MemCmp(ac.cur_word,tmpw->str,StrLen(ac.cur_word)))
 	    ACFillInAdd(tmpw);
 	  tmpw=tmpw->next;
 	}
@@ -180,7 +180,7 @@ U0 ACTaskCtrl(I64 sc,I64 last_sc,
 	  KeyMapFamily(original_focus_task,0,
 		ToBool(!(sc&SCF_SHIFT)),ToBool(sc&SCF_SHIFT));
 	KeyMapCtrlAltFamily(
-	      ToBool(!(sc&SCF_SHIFT)),ToBool(sc&SCF_SHIFT));
+	      ToBool(!(sc&SCF_SHIFT)),ToBool(sc&SCF_SHIFT));
       } else if (TaskValidate(original_focus_task) &&
 	    !Bt(&original_focus_task->win_inhibit,WIf_SELF_KEY_DESC)) {
 	ACDocRst(27,3);
@@ -223,10 +223,9 @@ U0 ACTask(I64)
   WinHorz(51,Fs->win_right);
   LBts(&(Fs->display_flags),DISPLAYf_WIN_ON_TOP);
   Fs->win_inhibit=WIG_NO_FOCUS_TASK_DFT;
-  Free(ac.cur_word);
   ac.cur_word=NULL;
   while (TRUE) {
-    if (scan_code&(SCF_CTRL|SCF_ALT)) {
+    if (scan_code&(SCF_CTRL|SCF_ALT)||__GetTicks>KbdMsEvtTime+500) {
       last_scan_code=scan_code;
       scan_code=kbd.scan_code;
     }
@@ -236,11 +235,11 @@ U0 ACTask(I64)
       focus_task=focus_task->parent_task;
     if (scan_code&SCF_CTRL)
       ACTaskCtrl(scan_code,last_scan_code,focus_task,original_focus_task);
-     else if (TaskValidate(focus_task)) {
+    else if (TaskValidate(focus_task)) {
       if (scan_code&SCF_ALT)
-	ACTaskAlt(scan_code,last_scan_code,focus_task,original_focus_task);
+        ACTaskAlt(scan_code,last_scan_code,focus_task,original_focus_task);
       else
-	ACTaskNormal(scan_code,last_scan_code,focus_task,original_focus_task);
+        ACTaskNormal(scan_code,last_scan_code,focus_task,original_focus_task);
     }
     Sleep(333);
     if (ScanMsg(&ch,,1<<MSG_KEY_DOWN) && (ch==CH_ESC||ch==CH_SHIFT_ESC))

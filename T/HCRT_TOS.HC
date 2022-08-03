@@ -1,5 +1,17 @@
 #define FPTRS 1
 #include "KERNELA.HH"
+Bool dol_doc_inited=FALSE;
+Bool IsRaw() {
+	return __IsCmdLine;
+}
+extern U0 InitHeaps();
+InitHeaps;
+CHeapCtrl ahc;
+HeapCtrlInit(&ahc,Fs,0);
+SetFs(MAlloc(sizeof(CTask),&ahc));
+Fs->data_heap=&ahc;
+Fs->code_heap=&ahc;
+Fs->cur_dir=StrNew("T:/",&ahc);
 U32 SYS_CTRL_ALT_FLAGS=0;
 CCPU *mp_cores[64];
 CCPU *Gs() {
@@ -11,7 +23,6 @@ CTask *Fs() {
 	return GetFs;
 }
 TaskInit(Fs,0);
-#include "MAlloc2.HC"
 #include "KGLBLS.HC"
 U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
 	I64 len2;
@@ -26,6 +37,7 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
         throw('FILE');
     }
 	if(!t) t=Fs;
+	Yield;
 	data=__FileRead(fn,&len2,t);
 	if(IsDotZ(fn2)) {
 		exp=ExpandBuf(data,t);
@@ -86,7 +98,6 @@ CInit;
 #include "FONT.HC"
 #include "FONT2.HC"
 #include "KMISC.HC"
-#include "KeyDev.HC"
 #include "KBMESSAGE.HC"
 #include "MOUSE.HC"
 #include "JOB.HC"
@@ -100,6 +111,7 @@ CInit;
 #ifdef COMPONET_GRAPHICS
 #include "TASK_SETTINGS.HC"
 #include "ASND.HC"
+#include "AMathODE.HC.Z";
 #include "GR/MakeGr.HC"
 #include "MENU.HC"
 #include "WIN.HC"
@@ -159,5 +171,9 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 #include "ADskB.HC"
 #include "ADBG.HC"
 #include "Sched.HC"
-///#include "Training.HC";
+#include "MAlloc2.HC"
+#include "Diff.HC"
+#include "KeyDev.HC"
+#include "FILEMGR.HC";
+#include "Training.HC.Z";
 #endif

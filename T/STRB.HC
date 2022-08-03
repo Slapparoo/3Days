@@ -233,7 +233,7 @@ U8 *StrFind(U8 *needle,U8 *haystack_str,I64 flags=0)
       haystack_str=StrMatch(needle,haystack_str);
     if (haystack_str && flags & SFF_WHOLE_LABELS_BEFORE &&
 	  haystack_str!=saved_haystack_str &&
-	  Bt(char_bmp_alpha_numeric,*(haystack_str-1))) {
+	  Bt(char_bmp_alpha_numeric,*(haystack_str-1))) {
       haystack_str++;
       if (*haystack_str)
 	cont=TRUE;
@@ -732,11 +732,13 @@ and take addr.
 U0 GetOutOfDollar()
 {//If a $$ has been printed, print another $$ to exit mode.
   CDoc *doc;
+  if (IsRaw&&text.raw_flags&RWF_IN_DOLLAR)
+      '$$';
   if (fp_doc_put && (doc=(*fp_doc_put)(Fs)) && doc->flags&DOCF_IN_DOLLAR)
     '$$';
 }
 CDate Now() {
-	return 0;//Str2Date("1/1/1970"); //TODO ACUTALL TIME
+	return Unix2CDate(UnixNow);
 }
 CDate Str2Date(U8 *_src)
 {/*"*+nnnn", "*-nnnn", "mm/dd", "mm/dd/yy"

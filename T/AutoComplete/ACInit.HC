@@ -12,7 +12,7 @@ public U0 ACDWordsLoad()
   if (in_ptr=FileRead(ACD_WORD_FILENAME,&size)) {
     in_start=in_ptr;
     Free(acd.word_lst);
-    acd.word_lst=MAlloc(size);
+    acd.word_lst=AMAlloc(size);
     MemCpy(acd.word_lst,in_start,size);
     acd.word_lst_size=size;
 
@@ -49,7 +49,7 @@ CHashAC *ACHashAdd(U8 *w)
     return tmpw;
   }
   tmpw=CAlloc(sizeof(CHashAC));
-  tmpw->str=StrNew(w);
+  tmpw->str=StrNew(w,adam_task);
   tmpw->type=HTT_WORD;
   tmpw->use_cnt=1;
   tmpw->hits=1;

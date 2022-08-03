@@ -14,8 +14,8 @@ set CFiles = ( \
  "./multic.c" \
  "./vfs.c" \
  "./ext/ln/linenoise.c" \
+ "./ext/dyad/src/dyad.c" \
 )
 set AsmFiles = ( \
   "./FFI_SYSV.yasm" \
-  "./swapctxSYSV.yasm" \
 )

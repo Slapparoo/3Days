@@ -116,7 +116,7 @@ U0 throw(I64 ch=0,Bool no_log=FALSE)
 }
 //I used an empty try/catch to force noregs
 //#exe {Option(OPTf_NO_REG_VAR,OFF);;};;
-U0 Break()
+U0 __Break()
 {//Send <CTRL-ALT-c>.
   if (Bt(&(Fs->task_flags),TASKf_BREAK_TO_SHIFT_ESC))
     Msg(MSG_KEY_DOWN,CH_SHIFT_ESC,0x20100000201);
@@ -130,8 +130,16 @@ U0 Break()
     */
     throw('Break');
   }
+  try ; catch ;
 }
-
+asm {
+	_BREAK::
+	PUSH_C_REGS
+	CALL &__Break
+	POP_C_REGS
+	RET
+};
+_extern _BREAK U0 Break();
 Bool BreakLock(CTask *task=NULL)
 {//Disables <CTRL-ALT-c>.
   if (!task) task=Fs;
@@ -145,11 +153,10 @@ Bool BreakUnlock(CTask *task=NULL)
   if (!task) task=Fs;
   res=LBtr(&task->task_flags,TASKf_BREAK_LOCKED);
   if (LBtr(&task->task_flags,TASKf_PENDING_BREAK)) {
-    TOSPrint("Pending\n");
     if (task==Fs)
       Break;
     else
-      task->rip=&Break;
+      task->rip=_BREAK;
   }
   return res;
 }

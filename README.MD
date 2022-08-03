@@ -1,15 +1,14 @@
 # Welcome to 3Days,a HolyC compiler
-Welcome to 3Days,a HolyC Compiler for FreeBSD and Windows,(a linux build will be out shortly).
+Welcome to 3Days,a HolyC Compiler for FreeBSD and Windows.
 
 This contains a port of the TempleOS compiler from the original sources of TempleOS,along with other things like the DolDoc engine and Gr stuff.
-To get started,you will need `tcsh`,`SDL2`, and `gcc` to build the stuff,which you can do by typing `tcsh make.tcsh` on linux and `tcsh makeBSD.tcsh` on FreeBSD.
-There is a wonky `makeWIN.tcsh`,but you will need tcsh for windows. 
+To get started,you will need `tcsh`,`libX11`, and `gcc` to build the stuff,which you can do by typing `make` on linux and `gmake` on FreeBSD.
 
 # Development
-This compiler has had a long history,it started out being written in C/yacc. I wasnt pleased with it so i rewrote it in HolyC. After I had a working HolyC compiler,I ported the TempleOS compiler to run under FreeBSD,which led to an easy port of the DolDoc engine
-All depencies (except for SDL on unix) are included with this repo so building should be a problem. 
+This compiler has had a long history,it started out being written in C/yacc. I wasn't pleased with it so i rewrote it in HolyC. After I had a working HolyC compiler,I ported the TempleOS compiler to run under FreeBSD,which led to an easy port of the DolDoc engine
+All depencies (except for X11 on unix) are included with this repo so building should not be a problem. 
 
-To build the compiler binary `HCRT.BIN`,type `Cmp("FULL_PACKAGE.HC",,"HCRT.BIN");` in 3Days in the root directory of `T:`
+To build the compiler binary `HCRT.BIN`,type `Cmp("FULL_PACKAGE.HC","HCRT.DBG.Z","HCRT.BIN");` in 3Days in the root directory of `T:`
 There is a booting process though, `KERNELA.HH` contains the functions that aren't linked to assembler symbols,but `KERNELB.HH` contains functions linked to assembler symbols. They are loaded in `FULL_PACKAGE.HC`
  
 
@@ -43,12 +42,19 @@ for(x=0;x!=10;x++)
     "%d\n",x;
 ```
 
-# Contributing
-I could use help in the areas of porting more TempleOS stuff to 3Days,there is a lot of things marked as `RESTORE` in the source,restoring them would be epic.
-Good things would include 
-- Autocomplete
-- A Holy Bible API
-- Games 
+# Getting Started
+Welcome to the world of TempleOS,you should see 2 terminals. You can type into them for fun. Try typing `Dir;` to get a directory listing. You will probably see the (HolyC) source files for 3Days. 
+
+![Screenshot 1](scrot1.png)
+
+TempleOS allows you to click the files or folders. Try clicking `Sup1Games` or `Cd("Sup1Games");`to go into a folder and type `Dir;` to see the contents.
+
+Inside the directory you should see `AfterEgypt`,in that folder should be lots of files. You can run of file by `#include "Run.HC.Z"` or by right clicking it and pressing the include button(left clicking will open it's source code in a editor). 
+
+![Screenshot 2](scrot2.png)
+
+# Tips
+ * You can press `ctrl+m` to get the personal menu,this will give you some links(not all are implemented at the moment).
 
 # Screenshot
 ![Screenshot](hello.png)

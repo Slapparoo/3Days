@@ -40,7 +40,7 @@ static CDrawWindow *dw=NULL;
 static char *clip_text=NULL;
 CDrawWindow *NewDrawWindow() {
 	if(!dw) {
-		dw=PoopMAlloc(sizeof(*dw));
+		dw=TD_MALLOC(sizeof(*dw));
 		int64_t i;
 		XColor c;
 		for(i=0;i!=16;i++) {
@@ -289,10 +289,10 @@ static int32_t __ScanKey(int64_t *ch,int64_t *sc,UINT msg,WPARAM w,LPARAM *_e) {
             case VK_LEFT:
             *sc=mod|SC_CURSOR_LEFT;
             return 1;
-            case VK_PRIOR:
+            case VK_NEXT:
             *sc=mod|SC_PAGE_DOWN;
             return 1;
-            case VK_NEXT:
+            case VK_PRIOR:
             *sc=mod|SC_PAGE_UP;
             return 1;
             case VK_HOME:
@@ -371,7 +371,7 @@ static int MSCallback(HWND hwnd,void *d,UINT msg,WPARAM w,LPARAM e) {
             ent:;
             int x2=x-cx,y2=y-cy;
             if(x2>=640) x2=640;
-            if(x2>=480) y2=480;
+            if(y2>=480) y2=480;
             if(y2<0) y2=0;
             if(x2<0) x2=0;
             FFI_CALL_TOS_4(ms_cb,x2,y2,z,state);
@@ -384,6 +384,7 @@ void SetMSCallback(void *fptr) {
     ms_cb=fptr;
 }
 LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam);
+static HANDLE normal_c;
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, int nCmdShow) {
     MSG  msg;
     HWND hwnd;
@@ -395,7 +396,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
     wc.lpfnWndProc=WndProc;
     wc.lpszClassName="Holy Drawer";
 	wc.hInstance=hInstance;
-	ShowCursor(0);
 	RegisterClassA(&wc);
 	hwnd=CreateWindowExA(
 		NULL,
@@ -416,13 +416,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 		NULL,
 		NULL,
 		NULL,
-		10+ceil(640.*dpi/96.),
-		10+ceil(480.*dpi/96.),
+		10+ceil(740.*dpi/96.),
+		10+ceil(580.*dpi/96.),
 		SWP_NOMOVE
 	);
 	NewDrawWindow()->win=hwnd;
 	argv=CommandLineToArgvA_wine(lpCmdLine,&argc);
 	_main(argc,argv);
+	SetCursor(normal_c=LoadCursor(NULL,IDC_ARROW));
 	ShowWindow(hwnd, nCmdShow);
 	while (GetMessage(&msg, NULL, 0, 0))  {
 		DispatchMessage(&msg);
@@ -510,6 +511,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 				MSCallback(hwnd,NULL,msg,wParam,lParam);
 			break;
 		case WM_PAINT:
+		    SetCursor(normal_c);
 			WaitForSingleObject(mutex,INFINITE);
 			GetClientRect(hwnd,&rct);
 			CenterWindow(hwnd,&cx,&cy);

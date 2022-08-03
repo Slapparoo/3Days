@@ -23,7 +23,82 @@ extern void HCLongJmp(void *ptr);
 #include "ext/wineditline-2.206/include/editline/readline.h"
 #else
 #include <sys/mman.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <sys/types.h>
+#include <errno.h>
 #endif
+void HolyFree(void *ptr) {
+	static void *fptr;
+	if(!fptr) {
+		fptr=map_get(&TOSLoader,"_FREE")->data->val;
+	}
+	FFI_CALL_TOS_1(fptr,ptr);
+}
+void *HolyMAlloc(int64_t sz) {
+	static void *fptr;
+	if(!fptr) {
+		fptr=map_get(&TOSLoader,"CAlloc")->data->val;
+	}
+	return FFI_CALL_TOS_2(fptr,sz,NULL);
+}
+char *HolyStrDup(char *str) {
+	return strcpy(HolyMAlloc(strlen(str)+1),str);
+}
+#ifdef USE_NETWORKING
+#include "ext/dyad/src/dyad.h"
+static void STK_DyadInit() {
+		dyad_init();
+		dyad_setUpdateTimeout(0.);
+}
+static void STK_DyadUpdate() {
+	dyad_update();
+}
+static void STK_DyadShutdown() {
+	dyad_shutdown();
+}
+static void *STK_DyadNewStream() {
+	return dyad_newStream();
+}
+static void *STK_DyadListen(int64_t *stk) {
+	return dyad_listen(stk[0],stk[1]);
+}
+static void *STK_DyadConnect(int64_t *stk) {
+	return dyad_connect(stk[0],stk[1],stk[2]);
+}
+static void STK_DyadWrite(int64_t *stk) {
+	dyad_write(stk[0],stk[1],stk[2]);
+}
+static void STK_DyadEnd(int64_t *stk) {
+	dyad_end(stk[0]);
+}
+static void STK_DyadClose(int64_t *stk) {
+	dyad_close(stk[0]);
+}
+static char *STK_DyadGetAddress(int64_t *stk) {
+	char *ret=dyad_getAddress(stk[0]);
+	return HolyStrDup(ret);
+}
+static void DyadReadCB(dyad_Event *e) {
+	FFI_CALL_TOS_4(e->udata,e->stream,e->data,e->size,e->udata2);
+}
+static void STK_DyadSetReadCallback(int64_t *stk) {
+	dyad_addListener(stk[0],DYAD_EVENT_LINE,&DyadReadCB,stk[1],stk[2]);
+}
+static void DyadListenCB(dyad_Event *e) {
+	FFI_CALL_TOS_2(e->udata,e->remote,e->udata2);
+}
+static STK_DyadSetOnListenCallback(int64_t *stk) {
+	dyad_addListener(stk[0],DYAD_EVENT_ACCEPT,&DyadListenCB,stk[1],stk[2]);
+}
+#endif
+static void UnblockSignals() {
+	#ifndef TARGET_WIN32
+	sigset_t all;
+	sigfillset(&all);
+	sigprocmask(SIG_UNBLOCK,&all,NULL);
+	#endif
+}
 typedef struct CType CType;
 static int64_t BFFS(int64_t v) {
 	if(!v) return -1;
@@ -45,12 +120,6 @@ static int64_t __Move(char *old,char *new) {
 	TD_FREE(old);
 	TD_FREE(new);
     return ret;
-}
-static int64_t STK_StrNew(int64_t *stk) {
-    return PoopAllocSetTask(strdup(stk[0]),stk[1]);
-}
-static int64_t STK_MAllocIdent(int64_t *stk) {
-    return PoopAllocSetTask(memcpy(PoopMAlloc(MSize(*stk)),*stk,MSize(*stk)),stk[1]);
 }
 static int64_t IsDir(char *fn) {
     fn=__VFsFileNameAbs(fn);
@@ -74,13 +143,12 @@ void* FileRead(char *fn,int64_t *sz) {
     size_t len=ftell(f);
     fseek(f,0, SEEK_SET);
     len-=ftell(f);
-    void *data=TD_MALLOC(len+1);
+    void *data=HolyMAlloc(len+1);
     fread(data, 1, len, f);
     fclose(f);
     if(sz) *sz=len;
     return data;
 }
-#define POOP_STRDUP(s) strcpy(PoopMAlloc(strlen(s)+1),s) 
 static char **__Dir(char *fn) {
 	int64_t sz;
 	char **ret;
@@ -94,13 +162,16 @@ static char **__Dir(char *fn) {
     vec_str_t items;
     vec_init(&items);
     while(ent=readdir(dir))
-        vec_push(&items,POOP_STRDUP(ent->d_name));
+        vec_push(&items,HolyStrDup(ent->d_name));
     vec_push(&items,NULL);
     TD_FREE(fn);
     sz=items.length*sizeof(char*);
-    ret=memcpy(PoopMAlloc(sz),items.data,sz);
+    ret=memcpy(HolyMAlloc(sz),items.data,sz);
     vec_deinit(&items);
     return ret;
+}
+static void STK_InteruptCore(int64_t *stk) {
+	InteruptCore(stk[0]);
 }
 static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
   map_iter_t iter;
@@ -204,7 +275,9 @@ int64_t STK_FileRead(int64_t *stk) {
 	int64_t sz;
     char *r=VFsFileRead(stk[0],&sz),*r2=NULL;
     if(stk[1]) ((int64_t*)stk[1])[0]=sz;
-    return r;
+	r2=memcpy(HolyMAlloc(sz+1),r,sz);
+    TD_FREE(r);
+    return r2;
 }
 int64_t STK_FileWrite(int64_t *stk) {
     return VFsFileWrite(stk[0],stk[1],stk[2]);
@@ -218,20 +291,14 @@ int64_t STK_TOSPrint(int64_t *stk) {
  int64_t STK_Del(int64_t *stk) {
 	return VFsDel(stk[0]);
 }
-int64_t STK_MSize(int64_t *stk) {
-    return MSize(stk[0]);
-}
-void *STK_PoopMAlloc(int64_t *stk) {
-    return PoopMallocTask(stk[0],stk[1]);
-}
-void *STK_PoopMAlloc32(int64_t *stk) {
-    return PoopMalloc32Task(stk[0],stk[1]);
-}
 int64_t STK_FOpen(int64_t *stk) {
-    return fopen(stk[1],stk[2]);
+	char *fn=__VFsFileNameAbs(stk[0]);
+    FILE *f=fopen(fn,stk[1]);
+    TD_FREE(fn);
+    return f;
 }
 int64_t STK_FClose(int64_t *stk) {
-    return fclose(stk[1]);
+    return fclose(stk[0]);
 }
 #define NEXT_BLK 0x7FFFFFFFFFFFFFFFll
 int64_t STK_FBlkRead(int64_t *stk) {
@@ -246,9 +313,6 @@ int64_t STK_FBlkWrite(int64_t *stk) {
     }
     return fwrite(stk[1],1<<9,stk[3],stk[0]);
 }
-int64_t STK_PoopFree(int64_t *stk) {
-    PoopFree(stk[0]);
-}
 int64_t STK___Move(int64_t *stk) {
 	return __Move(stk[0],stk[1]);
 }
@@ -257,7 +321,7 @@ int64_t STK_Cd(int64_t *stk) {
 }
 int64_t STK_DirCur(int64_t *stk) {
     char *d=VFsDirCur(),*r;
-    r=POOP_STRDUP(d);
+    r=HolyStrDup(d);
     TD_FREE(d);
     return r;
 }
@@ -265,12 +329,12 @@ int64_t STK_DirMk(int64_t *stk) {
 	char *d=VFsDirCur();
     int r=VFsCd(stk[0],VFS_CDF_MAKE);
     VFsCd(d,0);
-    PoopFree(d);
+    TD_FREE(d);
     return r;
 }
 int64_t STK_FileNameAbs(int64_t *stk) {
     char *a=VFsFileNameAbs(stk[0]),*r;
-    r=POOP_STRDUP(a);
+    r=HolyStrDup(a);
     TD_FREE(a);
     return r;
 }
@@ -293,6 +357,7 @@ int64_t STK_DrawWindowDel(int64_t *stk) {
     DrawWindowDel(stk[0]);
 }
 int64_t STK___GetTicks() {
+	#ifndef TARGET_WIN32
 	//https://stackoverflow.com/questions/2958291/equivalent-to-gettickcount-on-linux
     struct timespec ts;
     int64_t theTick = 0U;
@@ -300,6 +365,9 @@ int64_t STK___GetTicks() {
     theTick  = ts.tv_nsec / 1000000;
     theTick += ts.tv_sec * 1000;
     return theTick;
+    #else
+    return GetTickCount();
+    #endif
 }
 int64_t STK_SetKBCallback(int64_t *stk) {
     SetKBCallback(stk[0],stk[1]);
@@ -316,9 +384,6 @@ int64_t STK_GetFs(int64_t *stk) {
 int64_t STK_SetFs(int64_t *stk) {
     SetFs(stk[0]);
 }
-int64_t STK_FreeTaskMem(int64_t *stk) {
-	PoopAllocFreeTaskMem(stk[0]);
-}
 int64_t STK_SndFreq(int64_t *stk) {
     SndFreq(stk[0]);
 }
@@ -331,20 +396,23 @@ int64_t STK___GetStr(int64_t *stk) {
 	char *s=linenoise(stk[0]);
 	if(!s) return s;
 	linenoiseHistoryAdd(s);
-	char *r=strdup(s);
+	char *r=HolyStrDup(s);
 	free(s);
 	return r;
 	#else
 	char *s=readline(stk[0]),*r;
 	if(!s) return s;
-	r=strdup(s);
+	r=HolyStrDup(s);
 	add_history(r);
 	rl_free(s);
 	#endif
 	return r;
 }
 int64_t STK_GetClipboardText(int64_t *stk) {
-    return ClipboardText();
+    char *r=ClipboardText();
+    char *r2=HolyStrDup(r);
+    TD_FREE(r);
+    return r2;
 }
 int64_t STK___SleepUntilValue(int64_t *stk) {
 }
@@ -354,30 +422,28 @@ int64_t STK_FSize(int64_t *stk) {
 int64_t STK_FUnixTime(int64_t *stk) {
 	return VFsUnixTime(stk[0]);
 }
-int64_t STK_SetPtrCallers(int64_t *stk) {
-	assert(stk[1]==5);
-	PoopAllocSetCallers(stk[0],stk[1],stk+2);
-}
 int64_t STK___FExists(int64_t *stk) {
 	return VFsFileExists(stk[0]);
 }
 int64_t STK_ChDrv(int64_t *stk) {
 	return VFsChDrv(stk[0]);
 }
-/*
- * TODO give a better name
- * Returns NULL if in bounds
- * Retusn ptr to nearest item if slightly out of bounds
- * Returns 0x7FFFFFFFFFFFFFFFll if really out of bounds
- */
-int64_t STK_InBounds(int64_t *stk) {
-	void *near_alloc=NULL;
-	if(InBounds(stk[0],0&stk[1],&near_alloc)) {
-		return NULL;
-	}
-	if(!near_alloc) return 0x7FFFFFFFFFFFFFFFll;
-	return near_alloc;
+#ifndef TARGET_WIN32
+#include <time.h>
+int64_t STK_Now(int64_t *stk) {
+	int64_t t;
+	t=time(NULL);
+	return t;
 }
+#else
+int64_t STK_Now(int64_t *stk) {
+	int64_t r;
+	FILETIME ft;
+	GetSystemTimeAsFileTime(&ft);
+	r=ft.dwLowDateTime|(ft.dwHighDateTime<<32);
+	return r;
+}
+#endif
 int64_t mp_cnt(int64_t *stk) {
 	#ifndef TARGET_WIN32
 	return sysconf(_SC_NPROCESSORS_ONLN);
@@ -390,13 +456,22 @@ int64_t mp_cnt(int64_t *stk) {
 void SpawnCore(int64_t *stk) {
 	CreateCore(stk[0],stk[1]);
 }
+int64_t STK_NewVirtualChunk(int64_t *stk) {
+	return NewVirtualChunk(stk[0],stk[1]);
+}
+int64_t STK_FreeVirtualChunk(int64_t *stk) {
+	FreeVirtualChunk(stk[0],stk[1]);
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
 	CSymbol *s;
 	vec_char_t ffi_blob;
 	vec_init(&ffi_blob);
-	STK_RegisterFunctionPtr(&ffi_blob,"FreeTaskMem",STK_FreeTaskMem,1);
+	STK_RegisterFunctionPtr(&ffi_blob,"UnixNow",STK_Now,0);
+	STK_RegisterFunctionPtr(&ffi_blob,"InteruptCore",STK_InteruptCore,1);
+	STK_RegisterFunctionPtr(&ffi_blob,"NewVirtualChunk",STK_NewVirtualChunk,2);
+	STK_RegisterFunctionPtr(&ffi_blob,"FreeVirtualChunk",STK_FreeVirtualChunk,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CmdLineBootText",CmdLineBootText,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"Exit3Days",__Shutdown,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"ChDrv",STK_ChDrv,1);
@@ -407,11 +482,6 @@ void TOS_RegisterFuncPtrs() {
 	STK_RegisterFunctionPtr(&ffi_blob,"GetGs",GetGs,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"__SpawnCore",SpawnCore,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CoreNum",CoreNum,0);
-	STK_RegisterFunctionPtr(&ffi_blob,"__InBounds",STK_InBounds,2);
-	STK_RegisterFunctionPtr(&ffi_blob,"SetPtrCallers",STK_SetPtrCallers,2+5);
-	STK_RegisterFunctionPtr(&ffi_blob,"__MAlloc32",STK_PoopMAlloc32,2);
-	STK_RegisterFunctionPtr(&ffi_blob,"__MAlloc",STK_PoopMAlloc,2);
-	STK_RegisterFunctionPtr(&ffi_blob,"__Free",STK_PoopFree,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"FUnixTime",STK_FUnixTime,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"FSize",STK_FSize,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__SleepUntilValue",STK___SleepUntilValue,3);
@@ -435,10 +505,9 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"DrawWindowDel",STK_DrawWindowDel,1);
     STK_RegisterFunctionPtr(&ffi_blob,"DrawWindowUpdate",STK_DrawWindowUpdate,4);
     STK_RegisterFunctionPtr(&ffi_blob,"DrawWindowNew",STK_NewDrawWindow,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"UnblockSignals",UnblockSignals,0);
     //SPECIAL
     STK_RegisterFunctionPtr(&ffi_blob,"TOSPrint",STK_TOSPrint,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"MSize",STK_MSize,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"MSize2",STK_MSize,1);
     STK_RegisterFunctionPtr(&ffi_blob,"FileNameAbs",STK_FileNameAbs,1);
     STK_RegisterFunctionPtr(&ffi_blob,"DirNameAbs",STK_FileNameAbs,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__Dir",STK___Dir,1);
@@ -446,7 +515,21 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"DirCur",STK_DirCur,0);
     STK_RegisterFunctionPtr(&ffi_blob,"DirMk",STK_DirMk,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__Del",STK_Del,1);
-    char *blob=PoopMAlloc32(ffi_blob.length);
+    #ifdef USE_NETWORKING
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadInit",&STK_DyadInit,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadUpdate",&STK_DyadUpdate,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadShutdown",&STK_DyadShutdown,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadNewStream",&STK_DyadNewStream,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadListen",&STK_DyadListen,2);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadConnect",&STK_DyadConnect,3);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadWrite",&STK_DyadWrite,3);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadEnd",&STK_DyadEnd,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadClose",&STK_DyadClose,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadGetAddress",STK_DyadGetAddress,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadSetReadCallback",STK_DyadSetReadCallback,3);
+    STK_RegisterFunctionPtr(&ffi_blob,"DyadSetOnListenCallback",STK_DyadSetOnListenCallback,3);
+    #endif
+    char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);
     miter=map_iter(&Loader.symbols);

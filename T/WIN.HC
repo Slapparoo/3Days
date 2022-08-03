@@ -109,8 +109,6 @@ U0 CtrlAltG(I64 sc)
   else
     PopUp("WinGrid(ON);");
 }
-CtrlAltCBSet('G',&CtrlAltG,"Cmd /Grid On","Cmd /Grid Off");
-
 CTask *ext_ASCII_task;
 U0 ExtendedASCII()
 {
@@ -143,7 +141,6 @@ U0 CtrlAltA(I64)
   if (ext_ASCII_task=sys_focus_task)
     Spawn(&ExtendedASCII);
 }
-CtrlAltCBSet('A',&CtrlAltA,"Cmd /Extended ASCII");
 public U0 WinScrollNull(CTask *task,CD3I64 *s)
 {//If panning a window has been done, restore to zero.
   s->x=task->scroll_x;
@@ -261,11 +258,15 @@ I64 WinOnTopWindows()
 {
   CTask *task,*task1,*first_moved_fwd=NULL;
   I64 res=0;
+  Bool old;
   PUSHFD
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   task=sys_winmgr_task->next_task;
   while (task!=sys_winmgr_task && task!=first_moved_fwd) {
         task1=task->next_task;
     if (!TaskValidate(task)) {
+	  if(old)
+	    BreakUnlock;
       POPFD
       return res;
     }
@@ -279,6 +280,8 @@ I64 WinOnTopWindows()
     }
     task=task1;
   }
+  if(old)
+	BreakUnlock;
   POPFD
   return res;
 }
@@ -287,6 +290,7 @@ public I64 WinToTop(CTask *task=NULL,Bool update_z_buf=TRUE)
 {//Put task's win on top of window stack.
   CTask *task1;
   I64 res=0;
+  Bool old;
   if (!task) task=Fs;
   if (!TaskValidate(task))
     return 0;
@@ -294,7 +298,10 @@ public I64 WinToTop(CTask *task=NULL,Bool update_z_buf=TRUE)
   if (!sys_winmgr_task || task==sys_winmgr_task)
     return 0;
   PUSHFD
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   if (!TaskValidate(task)) {
+    if(old)
+	  BreakUnlock;
     POPFD
     return 0;
   }
@@ -320,6 +327,8 @@ public I64 WinToTop(CTask *task=NULL,Bool update_z_buf=TRUE)
 	  task->popup_task->parent_task==task)
       res+=WinToTop(task->popup_task,FALSE);
   }
+  if(old)
+	BreakUnlock;
   POPFD
   res+=WinOnTopWindows;
   if (res && update_z_buf)

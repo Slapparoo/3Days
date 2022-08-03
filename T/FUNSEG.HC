@@ -18,7 +18,7 @@ U0 HashFunSegFind(CHashTable *h,U8 *addr,
   for (i=0;i<=h->mask;i++) {
     tmpex=h->body[i];
 	while(tmpex) {
-	    if(tmpex->type&HTT_FUN&&tmpex(CHashSrcSym*)->dbg_info) {
+	    if((tmpex->type&HTT_FUN||tmpex->type&HTT_UNIMP_FUN)&&tmpex(CHashSrcSym*)->dbg_info) {
 			info=tmpex(CHashSrcSym*)->dbg_info;
 			if(tmpex(CHashFun*)->exe_addr<=addr<=info->body[info->max_line-info->min_line+1]) {
 				has_lower=HasLower(tmpex->str);
@@ -87,44 +87,40 @@ U8 *FunSegCacheFind(U8 *addr,I64 *_offset)
 
 U0 StrPrintFunSeg(U8 *buf,I64 addr,I64 field_len,I64 flags)
 {
-*buf=0;
-return;
   I64 offset;
   CHashExport *tmpex;
-  U8 *str,*str2;
+  U8 *str=NULL,*str2;
   Bool is_fun=FALSE;
   if (!(flags&PRTF_TRUNCATE))
     field_len=0;
   if (addr) {
-    {
-      if (tmpex=FunSegFind(addr,&offset)) {
-	if (tmpex->type&HTT_FUN)
-	  is_fun=TRUE;
-    str=tmpex->str;
-      }
+    if (tmpex=FunSegFind(addr,&offset)) {
+      if (tmpex->type&HTT_FUN||tmpex->type&HTT_UNIMP_FUN)
+        is_fun=TRUE;
+      str=tmpex->str;
     }
     if (str) {
       if (offset>0xFFFF) offset=0xFFFF;
       if (flags&PRTF_COMMA) {
-	if (is_fun) {
+        if (is_fun) {
 	  str2=MStrPrint("&%s",str);
-      if (!field_len)
+	  if (!field_len)
 	    StrCpy(buf,str2);
 	  else if (flags&PRTF_LEFT_JUSTIFY && StrLen(str2)<field_len)
 	    StrCpy(buf,str2);
 	  else
 	    StrPrint(buf,"%*ts",field_len,str2);
 	  Free(str2);
-	} else {
+        } else {
 	  if (!field_len)
 	    StrCpy(buf,str);
 	  else if (flags&PRTF_LEFT_JUSTIFY && StrLen(str)<field_len)
 	    StrCpy(buf,str);
 	  else
 	    StrPrint(buf,"%*ts",field_len,str);
-	}
+        }
       } else {
-	if (is_fun) {
+        if (is_fun) {
 	  str2=MStrPrint("&%s",str);
 	  if (field_len && field_len>7) {
 	    if (flags&PRTF_LEFT_JUSTIFY && StrLen(str2)<field_len-7)
@@ -134,7 +130,7 @@ return;
 	  } else
 	    StrPrint(buf,"%s+0x%04X",str2,offset);
 	  Free(str2);
-	} else {
+        } else {
 	  if (field_len && field_len>7) {
 	    if (flags&PRTF_LEFT_JUSTIFY && StrLen(str)<field_len-7)
 	      StrPrint(buf,"%s+0x%04X",str,offset);
@@ -142,7 +138,7 @@ return;
 	      StrPrint(buf,"%*ts+0x%04X",field_len-7,str,offset);
 	  } else
 	    StrPrint(buf,"%s+0x%04X",str,offset);
-	}
+        }
       }
       return;
     }
@@ -163,7 +159,7 @@ I64 SrcLineNum(U8 *addr,I64 cnt=1)
   U32 *body;
   U8 *src,*src2;
   if (tmph=FunSegFind(addr,&offset)) {
-    if (tmph->type&(HTT_FUN|HTT_EXPORT_SYS_SYM)) {
+    if (tmph->type&(HTT_FUN|HTT_EXPORT_SYS_SYM|HTT_UNIMP_FUN)) {
       if (dbg_info=tmph->dbg_info) {
 	num_lines=dbg_info->max_line-dbg_info->min_line+1;
 	body=dbg_info->body;
@@ -183,7 +179,7 @@ I64 SrcLineNum(U8 *addr,I64 cnt=1)
 
 	  //interpolate to guess line num
 	cur_line=ClampI64(ToF64(addr-body[first_line])*(last_line-first_line+1)/
-	      (body[last_line]-body[first_line]+1),first_line,last_line);
+	      (body[last_line]-body[first_line]+1),first_line,last_line);
 
 	//retreat while too high
 	while ((!body[cur_line] || body[cur_line]>=addr) && cur_line>first_line)
@@ -218,7 +214,7 @@ U8 *SrcFileName(U8 *addr,I64 cnt=1)
   CDbgInfo *dbg_info;
   U8 *src;
   if ((tmph=FunSegFind(addr,&offset)) &&
-	tmph->type&(HTT_FUN|HTT_EXPORT_SYS_SYM)) {
+	tmph->type&(HTT_FUN|HTT_EXPORT_SYS_SYM|HTT_UNIMP_FUN)) {
       best=tmph->src_link;
   }
   if (best) {
@@ -275,6 +271,12 @@ Bool Man(U8 *st,I64 edf_dof_flags=0)
   Bool res=FALSE;
   U8 **st2;
   CHashSrcSym *tmph;
+  if(IsRaw&&(tmph=HashFind(st,Fs->hash_table,-1))) {
+	"%s\n",tmph->src_link;
+	return;
+  }
+  if(IsRaw)
+	return;
   st2=MStrPrint("MN:%s",st);
   res=Ed(st2,edf_dof_flags);
   Free(st2);

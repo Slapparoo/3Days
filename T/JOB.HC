@@ -33,19 +33,24 @@ U0 JobCtrlInit(CJobCtrl *ctrl)
 U0 TaskRstAwaitingMsg(CTask *task=NULL)
 {//Pop-ups get parent messages so wake-up our pop-ups if we got a msg.
   if (!task) task=Fs;
+  Bool old;
   PUSHFD
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   do {
     if (TaskValidate(task))
       LBtr(&task->task_flags,TASKf_AWAITING_MSG);
     else
       break;
   } while (task=task->popup_task);
+  if(old)
+    BreakUnlock;
   POPFD
 }
 
 CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
 {//Queues a request to compile and execute src code text.
   CJob *res;
+  Bool old;
   if (!data || !TaskValidate(srv) || master && !TaskValidate(master) ||
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
@@ -57,11 +62,13 @@ CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
   res->ctrl=&srv->srv_ctrl;
 
   PUSHFD
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);  
   while (LBts(&srv->srv_ctrl.flags,JOBCf_LOCKED)) {
     PAUSE;
   }
   if (!TaskValidate(srv)) {
     LBtr(&srv->srv_ctrl.flags,JOBCf_LOCKED);
+    if(old) BreakUnlock;
     POPFD
     JobDel(res);
     return NULL;
@@ -75,6 +82,7 @@ CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
       Yield;
     }
   }
+  if(old) BreakUnlock;
   POPFD
   return res;
 }
@@ -83,6 +91,7 @@ CJob *TaskText(CTask *srv,CTask *master,U8 *data,I64 flags)
 {//Post StdIn text to servant task. Tell who the master task is.
   CJob *res;
   CTask *task;
+  Bool old;
   if (!data || !TaskValidate(srv) || master && !TaskValidate(master) ||
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
@@ -93,6 +102,7 @@ CJob *TaskText(CTask *srv,CTask *master,U8 *data,I64 flags)
   res->aux_str=StrNew(data,adam_task);
 
   PUSHFD
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);  
   task=srv->last_input_filter_task;
   if (Bt(&flags,JOBf_HIGHEST_PRIORITY) || task==srv) {
     if (task!=srv)
@@ -118,6 +128,7 @@ CJob *TaskText(CTask *srv,CTask *master,U8 *data,I64 flags)
     QueIns(res,task->srv_ctrl.last_waiting);
     LBtr(&task->srv_ctrl.flags,JOBCf_LOCKED);
   }
+  if(old) BreakUnlock;
   POPFD
   return res;
 }
@@ -128,6 +139,7 @@ CJob *TaskMsg(CTask *_srv,CTask *master,
 //See \dLK,"flags",A="MN:JOBf_WAKE_MASTER"\d and \dLK,"msg_code",A="MN:MSG_CMD"\d.
   CJob *tmpc1,*tmpc;
   CTask *srv=_srv;
+  Bool old;
   if (!TaskValidate(srv) || master && !TaskValidate(master)||
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
@@ -139,6 +151,7 @@ CJob *TaskMsg(CTask *_srv,CTask *master,
   tmpc->aux2=arg2;
   tmpc->flags=flags;
   PUSHFD
+  old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);  
   /* TODO RESTORE
   if (Bt(&sys_semas[SEMA_RECORD_MACRO],0) &&
 	srv!=sys_macro_task && msg_code==MSG_KEY_DOWN) {
@@ -162,6 +175,8 @@ CJob *TaskMsg(CTask *_srv,CTask *master,
     QueIns(tmpc,srv->srv_ctrl.last_waiting);
     LBtr(&srv->srv_ctrl.flags,JOBCf_LOCKED);
   }
+  if(old)
+    BreakUnlock;
   POPFD
   if (msg_code<0) //Down-Up
     TaskMsg(_srv,master,-msg_code+1,arg1,arg2,flags);
@@ -172,12 +187,14 @@ Bool JobResScan(CJob *rqst=NULL,I64 *_res=NULL)
 {//Check rqst complete, return with or without.
   CJobCtrl *ctrl;
   CJob *tmpc,*tmpc1;
+  Bool old;
   if (!rqst || Bt(&rqst->flags,JOBf_DONE)) {
     if (!rqst || rqst->master_task)
       ctrl=&(Fs->srv_ctrl);
     else
       ctrl=rqst->ctrl;
     PUSHFD
+    old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED);  
     while (LBts(&ctrl->flags,JOBCf_LOCKED)) {
 		PAUSE;
     }
@@ -187,6 +204,8 @@ Bool JobResScan(CJob *rqst=NULL,I64 *_res=NULL)
       if (!rqst || rqst==tmpc) {
 	QueRem(tmpc);
 	LBtr(&ctrl->flags,JOBCf_LOCKED);
+	if(old)
+	  BreakUnlock;
 	POPFD
 	if (_res)
 	  *_res=tmpc->res;
@@ -216,7 +235,7 @@ I64 JobResGet(CJob *rqst=NULL)
   } else {
     while (!Bt(&rqst->flags,JOBf_DONE)) {
       LBts(&(Fs->task_flags),TASKf_IDLE);
-      PAUSE;
+      Yield;
     }
   }
   LBtr(&(Fs->task_flags),TASKf_IDLE);
@@ -508,6 +527,7 @@ Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE)
 
 U0 CoreAPSethTask()
 {
+  cpu_structs[__CoreNum]=Gs;
   QueInit(&(Gs->next_dying));
   Gs->num=__CoreNum;
   Gs->seth_task=Fs;
@@ -524,7 +544,7 @@ U0 CoreAPSethTask()
     //LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
     LBtr(&ctrl->flags,JOBCf_LOCKED);
     LBts(&(Fs->task_flags),TASKf_IDLE);
-    ms=10,t=__GetTicks;
+    ms=100,t=__GetTicks;
     for(task=Fs->next_task;task!=task1;task=task->next_task) {
 		if(Bt(&task->task_flags,TASKf_SUSPENDED)||Bt(&task->task_flags,TASKf_AWAITING_MSG))
 			goto next;
@@ -552,7 +572,7 @@ CJob *JobQue(I64 (*fp_addr)(U8 *data),U8 *data=NULL,
     throw('MultCore');
   tmpc=CAlloc(sizeof(CJob),adam_task);
   if (aux_str)
-    tmpc->aux_str=StrNew(aux_str,adam_task);
+    tmpc->aux_str=StrNew(aux_str,adam_task);
   tmpc->job_code=job_code;
   tmpc->addr=fp_addr;
   tmpc->fun_arg=data;
