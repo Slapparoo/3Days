@@ -112,7 +112,7 @@ CInit;
 #include "TASK_SETTINGS.HC"
 #include "ASND.HC"
 #include "AMathODE.HC.Z";
-#include "GR/MakeGr.HC"
+#include "GR/MakeGr.HC"
 #include "MENU.HC"
 #include "WIN.HC"
 #include "DOLDOC/MakeDoc.HC"
@@ -175,5 +175,5 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 #include "Diff.HC"
 #include "KeyDev.HC"
 #include "FILEMGR.HC";
-///#include "Training.HC";
+#include "Training.HC.Z";
 #endif

@@ -413,6 +413,11 @@ ptr=FileRead(argv[cur_arg++]);
 	    OutStr(tmp_buf,_buf,_dst,len,flags);
 	  break;
         case 'p':
+	  if (cur_arg>=argc)
+	    throw('StrPrint');
+	  StrPrintFunSeg(tmp_buf,argv[cur_arg++],len,flags);
+	  OutStr(tmp_buf,_buf,_dst,len,flags);
+	  break;
         case 'P':
 	  if (cur_arg>=argc)
 	    throw('StrPrint');
@@ -423,7 +428,7 @@ ptr=FileRead(argv[cur_arg++]);
 	    OutStr(tmp_buf2,_buf,_dst,len,flags);
 	  } else
 	    OutStr(tmp_buf,_buf,_dst,len,flags);
-	  cur_arg++;
+	  cur_arg++;
 	  break;
         case 'd':
 	  if (cur_arg>=argc)

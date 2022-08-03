@@ -515,7 +515,7 @@ static U0 KBCb(I64 c,I64 s) {
   FifoI64Ins(kbd.scan_code_fifo,s);
   kbd.timestamp=__GetTicks;
   c=ScanCode2Char(s&0x7f);
-  if(s&SCF_ALT&&s&SCF_CTRL&&(c=='c'||c=='x')&&TaskValidate(sys_focus_task)) {
+  if(!(s&SCF_KEY_UP)&&s&SCF_ALT&&s&SCF_CTRL&&(c=='c'||c=='x')&&TaskValidate(sys_focus_task)) {
     if(c=='c'){
       if(!Bt(&sys_focus_task->task_flags,TASKf_BREAK_LOCKED)) {
         old_rip=sys_focus_task->rip;
