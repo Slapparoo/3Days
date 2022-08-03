@@ -2,7 +2,7 @@
 Welcome to 3Days,a HolyC Compiler for FreeBSD and Windows.
 
 This contains a port of the TempleOS compiler from the original sources of TempleOS,along with other things like the DolDoc engine and Gr stuff.
-To get started,you will need `tcsh`,`libX11`, and `gcc` to build the stuff,which you can do by typing `tcsh make.tcsh` on linux and on FreeBSD.
+To get started,you will need `tcsh`,`libX11`, and `gcc` to build the stuff,which you can do by typing `make` on linux and `gmake` on FreeBSD.
 
 # Development
 This compiler has had a long history,it started out being written in C/yacc. I wasn't pleased with it so i rewrote it in HolyC. After I had a working HolyC compiler,I ported the TempleOS compiler to run under FreeBSD,which led to an easy port of the DolDoc engine

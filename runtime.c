@@ -366,7 +366,7 @@ int64_t STK___GetTicks() {
     theTick += ts.tv_sec * 1000;
     return theTick;
     #else
-    return GetTickCount64();
+    return GetTickCount();
     #endif
 }
 int64_t STK_SetKBCallback(int64_t *stk) {
