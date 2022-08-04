@@ -507,16 +507,42 @@ void SetMSCallback(void *fptr) {
 }
 static void utf8_send(char *text,XEvent ev) {
 	Display *dpy=dw->disp;
-    XLockDisplay(dpy);
+    XSelectionEvent ssev;
+	XLockDisplay(dpy);
 	Atom utf8 = XInternAtom(dpy, "UTF8_STRING", False);
+	Atom targets=XInternAtom(dw->disp, "TARGETS", False);
+    Atom atom=XInternAtom(dw->disp, "ATOM", False);
     XSelectionRequestEvent *sev;
 	loop:;
 	sev=&ev.xselectionrequest;
-	XSelectionEvent ssev;
+	if(sev->target==targets) {
+		XChangeProperty(
+			dpy,
+			sev->requestor,
+			sev->property,
+			atom,
+			32, //expects 8/16/32 bits
+			PropModeReplace,
+			&utf8,
+			1
+		);
+		goto set;
+	} else if(sev->target!=utf8||sev->property==None) {
+		//Oh no
+		ssev.type=SelectionNotify;
+		ssev.requestor=sev->requestor;
+		ssev.selection=sev->selection;
+		ssev.target=sev->target;
+		ssev.property=None;
+		ssev.time=CurrentTime;
+		XSendEvent(dpy, sev->requestor, True, NoEventMask, (XEvent *)&ssev);
+		goto end;
+	}
 	if(!text)
 		text="";
     XChangeProperty(dpy, sev->requestor, sev->property, utf8, 8, PropModeReplace,
                     (unsigned char *)text, strlen(text));
+     set:
     ssev.type = SelectionNotify;
     ssev.requestor = sev->requestor;
     ssev.selection = sev->selection;
