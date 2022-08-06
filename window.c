@@ -8,6 +8,7 @@ typedef struct CDrawWindow {
     Display *disp;
     GC gc;
     Atom clip3days;
+    Cursor empty_cursor;
     int64_t sz_x,sz_y;
 } CDrawWindow;
 static int32_t gr_palette_std[]={
@@ -29,6 +30,8 @@ CDrawWindow *NewDrawWindow() {
 		long screen=DefaultScreen(dw->disp);
 		Colormap cmap;
 		XColor c;
+		Pixmap cpm;
+		Cursor cursor;
 		int64_t i,black,white;
 		for(i=0;i!=16;i++) {
 			c.pixel=i;
@@ -48,6 +51,14 @@ CDrawWindow *NewDrawWindow() {
 		XSelectInput(dw->disp,dw->window,
 			KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask|StructureNotifyMask);
 		dw->gc=XCreateGC(dw->disp,dw->window,0,0);
+		//Make a empty cursor
+		char data[]={0};
+		XColor colors[]={0};
+		cpm=XCreateBitmapFromData(dw->disp,dw->window,data,1,1);
+		dw->empty_cursor=XCreatePixmapCursor(dw->disp,cpm,cpm,colors,colors,0,0);
+		XFreePixmap(dw->disp,cpm);
+		XDefineCursor(dw->disp,dw->window,dw->empty_cursor);
+		//
 		dw->sz_x=640,dw->sz_y=480;
 		white=WhitePixel(dw->disp,screen);
 		XSetBackground(dw->disp,dw->gc,white);
