@@ -168,6 +168,7 @@ static char **__Dir(char *fn) {
     sz=items.length*sizeof(char*);
     ret=memcpy(HolyMAlloc(sz),items.data,sz);
     vec_deinit(&items);
+    closedir(dir);
     return ret;
 }
 static void STK_InteruptCore(int64_t *stk) {
