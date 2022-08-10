@@ -53,6 +53,18 @@ static char *VFsInplaceHostDelims(char *p) {
 			*strchr(p,TOS_delim)=delim;
 	return p;
 }
+static char *VFsInplaceRemoveRepeatSlashes(char *p) {
+	char *dst=p,*o=p;
+	for(;*p;p++) {
+	  if(dst!=p)
+	    *dst=*p;
+	  if(*p=='/'&&p[1]=='/') {
+	  } else
+		dst++;
+	}
+	*dst=0;
+	return o;
+}
 char * VFsDirCur() {
 	return strdup(cur_dir);
 }
@@ -269,6 +281,7 @@ int VFsCd(char *to,int flags) {
 			sprintf(buffer,"%s:%s",drv_buf,path.data+root_len);
 		cur_dir=HolyStrDup(buffer);
 		VFsInplaceConvertDelims(cur_dir);
+		VFsInplaceRemoveRepeatSlashes(cur_dir);
 	} else
 		vec_deinit(&path);
     return !failed;
@@ -432,6 +445,7 @@ char VFsChDrv(char to) {
 		} else {
 			char buf2[1024];
 			snprintf(buf2,"%s:/",buf);
+			VFsInplaceRemoveRepeatSlashes(buf2);
 			cur_dir=HolyStrDup(buf2);
 		}
     }

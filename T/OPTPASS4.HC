@@ -8,7 +8,7 @@ Bool OptIC4(CIntermediateCode *tmpi)
   tmpil1=tmpi;
   if (!(tmpil2=OptLag1(tmpil1)))
     return FALSE;
-
+  
   if (tmpil2->res.type&MDF_STK && !(tmpil2->ic_flags&ICF_PUSH_RES)) {
     if (tmpil1->ic_code==IC_ADD_CONST && tmpil1->arg1.type&MDF_STK) {
       if ((tmpil2->ic_code==IC_REG || tmpil2->ic_code==IC_MOV) &&
@@ -21,7 +21,7 @@ Bool OptIC4(CIntermediateCode *tmpi)
 	  tmpil1->arg1.type=MDF_DISP+tmpil1->arg1.type.raw_type;
 	  tmpil1->arg1.reg=tmpil2->arg1.reg;
 	  tmpil1->arg1.disp=i;
-	  OptFree(tmpil2);
+	  OptSetNOP1(tmpil2);
 	  return TRUE;
 	}
       } else if (tmpil2->ic_code==IC_SHL_CONST && tmpil2->arg1.type&MDF_REG) {
@@ -39,7 +39,7 @@ Bool OptIC4(CIntermediateCode *tmpi)
 	  else
 	    tmpil1->arg1.reg|=0xC000;
 	  tmpil1->arg1.disp=i;
-	  OptFree(tmpil2);
+	  OptSetNOP1(tmpil2);
 	  return TRUE;
 	}
       }
@@ -114,7 +114,7 @@ Bool OptIC4(CIntermediateCode *tmpi)
 	      tmpil1->arg1_type_pointed_to;
 	tmpil1->arg1.reg=tmpil2->arg1.reg;
 	tmpil1->arg1.disp=tmpil2->arg1.disp;
-	OptFree(tmpil2);
+	OptSetNOP1(tmpil2);
 	return TRUE;
       }
     }
@@ -154,7 +154,7 @@ U0 OptPass4(CCmpCtrl *cc,COptReg *reg_offsets,I64 *_type)
 	if (lb->use_cnt>0)
 	  lb->use_cnt--;
       }
-      tmpi=OptFree(tmpi);
+      tmpi=OptSetNOP1(tmpi);
     } else {
       tmpc=tmpi->ic_class;
       tmpi1=tmpi2=&cmp.ic_nop;
@@ -215,7 +215,7 @@ U0 OptPass4(CCmpCtrl *cc,COptReg *reg_offsets,I64 *_type)
 		tmpi->arg1.type=MDF_REG+tmpi->arg1.type.raw_type;
 		tmpi->arg1.reg=i;
 		tmpi->arg1.disp=0;
-		OptFree(tmpi1);
+		OptSetNOP1(tmpi1);
 	      }
 	    }
 	  } else if ((tmpi1->ic_code==IC_ABS_ADDR ||
@@ -230,7 +230,7 @@ U0 OptPass4(CCmpCtrl *cc,COptReg *reg_offsets,I64 *_type)
 	    tmpi->ic_code=IC_MOV;
 	    tmpi->arg1.type=MDF_RIP_DISP32+tmpi->arg1_type_pointed_to;
 	    tmpi->arg1.reg=REG_RIP;
-	    OptFree(tmpi1);
+	    OptSetNOP1(tmpi1);
 	  }
 	  break;
 	case IC_BR_MM_ZERO:
@@ -274,7 +274,7 @@ p4_lea_gone:
 	    tmpi->arg1.type=MDF_RIP_DISP32+tmpi->arg1_type_pointed_to;
 	    tmpi->arg1.reg=REG_RIP;
 	    tmpi->ic_flags|=ICF_BY_VAL;
-	    OptFree(tmpi1);
+	    OptSetNOP1(tmpi1);
 	  }
 	  break;
 	case IC_ADD:
@@ -293,7 +293,7 @@ p4_sib:
 		tmpi->ic_flags|=(tmpi1->ic_flags|tmpi2->ic_flags)
 		&ICG_NO_CVT_MASK;
 		OptSetNOP2(tmpi1);
-		OptFree(tmpi2);
+		OptSetNOP1(tmpi2);
 
 		tmpi->ic_code=IC_LEA;
 		tmpi->arg1.type=MDF_SIB+RT_I64;
@@ -435,7 +435,8 @@ p4_sib:
 	    *_type=tmpi->ic_class->raw_type;
 	  break;
 	case IC_NOP1:
-	  tmpi=OptFree(tmpi);
+          //We will delete them later
+	  //tmpi=OptFree(tmpi);
 	  break;
 	case IC_BR_BT:
 	case IC_BR_BTS:
@@ -461,13 +462,13 @@ p4_sib:
 		    if (tmpil2->arg1.type&(MDF_IMM|MDG_REG_DISP_SIB_RIP)) {
 		      if (tmpi2) {
 			tmpi->ic_flags|=tmpi2->ic_flags;
-			OptFree(tmpi2);
+			OptSetNOP1(tmpi2);
 		      }
 		      tmpi->ic_flags|=tmpil2->ic_flags|ICF_BY_VAL;
 		      tmpi->arg2.type=tmpil2->arg1.type;
 		      tmpi->arg2.reg =tmpil2->arg1.reg;
 		      tmpi->arg2.disp=tmpil2->arg1.disp;
-		      OptFree(tmpil2);
+		      OptSetNOP1(tmpil2);
 		    }
 		    break;
 		  } else if (tmpil2->ic_code!=IC_ABS_ADDR &&
@@ -496,12 +497,12 @@ p4_sib:
 	      if (tmpil2) {
 		if (tmpi2) {
 		  tmpi->ic_flags|=tmpi2->ic_flags;
-		  OptFree(tmpi2);
+		  OptSetNOP1(tmpi2);
 		}
 		tmpi->ic_flags|=tmpil2->ic_flags|ICF_BY_VAL;
 		tmpi->arg2.type=MDF_RIP_DISP32+tmpi->arg2.type.raw_type;
 		tmpi->arg2.reg=REG_RIP;
-		OptFree(tmpil2);
+		OptSetNOP1(tmpil2);
 	      }
 	    } else if (tmpi2->ic_code==IC_MOV && tmpi2->res.type&MDF_STK &&
 		  tmpi2->arg1.type==MDF_IMM+RT_I64 &&
@@ -511,7 +512,7 @@ p4_sib:
 	      tmpi->ic_flags|=tmpi2->ic_flags|ICF_BY_VAL;
 	      tmpi->arg2.type=MDF_RIP_DISP32+tmpi->arg2.type.raw_type;
 	      tmpi->arg2.reg=REG_RIP;
-	      OptFree(tmpi2);
+	      OptSetNOP1(tmpi2);
 	    }
 	  }
 	  break;
@@ -682,6 +683,13 @@ p4_sib:
 	  PrsPush(ps,tmpi);
       }
     }
+    tmpi=tmpi_next;
+  }
+  tmpi=cc->coc.coc_head.next;
+  while (tmpi!=cc->coc.coc_head) {
+    tmpi_next=tmpi->next;
+    if(tmpi->ic_code==IC_NOP1)
+      OptFree(tmpi);
     tmpi=tmpi_next;
   }
   if (ps->ptr>2) {

@@ -53,7 +53,7 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
   while (code=tmpi->ic_code) {
     tmpi_next=tmpi->next;
     if (code==IC_NOP1)
-      OptFree(tmpi);
+      ;
     else {
       if (tmpil1=OptLag(tmpi)) {
 	if (!(tmpil2=OptLag(tmpil1)))
@@ -198,7 +198,7 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 		  mv[i].score++;
 		  break;
 		}
-	      OptSetNOP1(tmpil2);
+	      OptSetNOP1(tmpil2);
 	    }
 	  }
 	  break;
@@ -316,7 +316,7 @@ U0 OptPass3(CCmpCtrl *cc,COptReg *reg_offsets)
 	      tmpi->ic_code=IC_JMP;
 	    } else {
 	      OptSetNOP1(tmpi1);
-	      tmpi=OptFree(tmpi);
+	      OptSetNOP1(tmpi);
 	      break;
 	    }
 	  }
@@ -399,7 +399,6 @@ here1:
 	  lb->use_cnt++;
 	  break;
 	case IC_NOP1:
-	  tmpi=OptFree(tmpi);
 	  break;
 	case IC_NOP2:
 	  ps->ptr+=tmpi->ic_data;
@@ -615,6 +614,13 @@ R12 and R13 as non-pointer register variables, such as index variables i,j,k.
       }
     }
     Free(mv);
+  }
+  tmpi=cc->coc.coc_head.next;
+  while (tmpi!=cc->coc.coc_head) {
+    tmpi_next=tmpi->next;
+    if(tmpi->ic_code==IC_NOP1)
+      OptFree(tmpi);
+    tmpi=tmpi_next;
   }
   if (ps->ptr>2) {
     "Pass:%d Stk:%08X\n",cc->pass,ps->ptr;

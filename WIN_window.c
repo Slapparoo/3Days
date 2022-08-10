@@ -423,7 +423,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 	NewDrawWindow()->win=hwnd;
 	argv=CommandLineToArgvA_wine(lpCmdLine,&argc);
 	_main(argc,argv);
-	SetCursor(normal_c=LoadCursor(NULL,IDC_ARROW));
+	SetCursor(NULL);
 	ShowWindow(hwnd, nCmdShow);
 	while (GetMessage(&msg, NULL, 0, 0))  {
 		DispatchMessage(&msg);
@@ -507,11 +507,11 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 		case WM_RBUTTONDOWN:
 		case WM_MOUSEWHEEL:
 		case WM_MOUSEMOVE:
+			SetCursor(NULL);
 			if(kb_cb)
 				MSCallback(hwnd,NULL,msg,wParam,lParam);
 			break;
 		case WM_PAINT:
-		    SetCursor(normal_c);
 			WaitForSingleObject(mutex,INFINITE);
 			GetClientRect(hwnd,&rct);
 			CenterWindow(hwnd,&cx,&cy);

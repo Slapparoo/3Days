@@ -2313,7 +2313,7 @@ class CCodeCtrl
 {
   CCodeCtrl *coc_next;
   CCodeMisc *coc_next_misc,*coc_last_misc;
-  CIntermediateCodeBase	coc_head;
+  CIntermediateCode	coc_head;
 };
 
 #define __DATE__ #exe{StreamPrint("\"%D\"",Now);}
