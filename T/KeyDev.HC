@@ -79,11 +79,6 @@ U0 CtrlAltM(I64)
 {
   //Mute(!IsMute); TODO URGENT RESTORE
 }
-
-U0 CtrlAltN(I64)
-{
-  //LBts(sys_ctrl_alt_flags,CTRL_ALT_TAB); TODO URGENT RESTORE
-}
 U0 UCL2(I64) {
   UserCmdLine;
 }

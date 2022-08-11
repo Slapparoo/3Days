@@ -87,12 +87,14 @@ void InteruptCore(int core) {
 	#ifndef TARGET_WIN32
 	pthread_kill(cores[core].thread,SIGUSR2);
 	#else
-	CHash *hash;
+	vec_CHash_t *hash;
 	CONTEXT ctx;
 	if(hash=map_get(&TOSLoader,"Yield")) {
+		memset(&ctx,0,sizeof ctx);
+		ctx.ContextFlags=CONTEXT_FULL; 
 		SuspendThread(cores[core].thread);
 		GetThreadContext(cores[core].thread,&ctx);
-		ctx.Rip=hash->val;
+		ctx.Rip=hash->data[0].val;
 		SetThreadContext(cores[core].thread,&ctx);
 		ResumeThread(cores[core].thread);
 	}
