@@ -25,47 +25,53 @@ CTask *Fs() {
 TaskInit(Fs,0);
 #include "KGLBLS.HC"
 U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
-	I64 len2;
-    //CHANGE,TempleOS grabs loaded files from RAM,some functions use
-    //blkdev.tmp_filename as a "defualt" file,so im going to assume its loaded
-    if(fn==blkdev.tmp_filename) {
-        return StrNew("");
+  I64 len2;
+//CHANGE,TempleOS grabs loaded files from RAM,some functions use
+  //blkdev.tmp_filename as a "defualt" file,so im going to assume its loaded
+  if(fn==blkdev.tmp_filename) {
+    return StrNew("");
+  }
+  U8 *fn2=FileNameAbs(fn),*data=NULL,*exp;
+  if(!__FExists(fn2)) {
+    exp=MStrPrint("%s.Z",fn2);
+    if(!__FExists(exp)) {
+      Free(fn2),Free(exp);
+      PrintErr("File \"%s\" not found!",fn);
+      throw('FILE');
     }
-	U8 *fn2=FileNameAbs(fn),*data=NULL,*exp;
-	if(!__FExists(fn2)) {
-        PrintErr("File \"%s\" not found!",fn);
-        throw('FILE');
-    }
-	if(!t) t=Fs;
-	Yield;
-	data=__FileRead(fn,&len2,t);
-	if(IsDotZ(fn2)) {
-		exp=ExpandBuf(data,t);
-		if(len)
-			*len=data(CArcCompress*)->expanded_size;
-		Free(data);
-		data=exp;
-	} else {
-		if(len)
-			*len=len2;
-	}
-	Free(fn2);
-	return data;
+    Free(fn2);
+    fn2=exp;
+  }
+  if(!t) t=Fs;
+  Yield;
+  data=__FileRead(fn,&len2,t);
+  if(IsDotZ(fn2)) {
+    exp=ExpandBuf(data,t);
+    if(len)
+      *len=data(CArcCompress*)->expanded_size;
+    Free(data);
+    data=exp;
+  } else {
+    if(len)
+      *len=len2;
+  }
+  Free(fn2);
+  return data;
 }
 I64i FileWrite(U8i *fn,U8i *buf,I64i len) {
-	I64 len2,r;
-	U8 *fn2=FileNameAbs(fn),*data=NULL;
-	CArcCompress *cmp;
-	if(!fn2) return 0;
-	if(IsDotZ(fn2)) {
-        if(!buf) buf="";
-		cmp=CompressBuf(buf,len,Fs);
-		r=__FileWrite(fn2,cmp,cmp->compressed_size);
-		Free(cmp);
-	} else
-		r=__FileWrite(fn2,buf,len);
-	Free(fn2);
-	return r;
+  I64 len2,r;
+  U8 *fn2=FileNameAbs(fn),*data=NULL;
+  CArcCompress *cmp;
+  if(!fn2) return 0;
+  if(IsDotZ(fn2)) {
+    if(!buf) buf="";
+    cmp=CompressBuf(buf,len,Fs);
+    r=__FileWrite(fn2,cmp,cmp->compressed_size);
+    Free(cmp);
+  } else
+    r=__FileWrite(fn2,buf,len);
+  Free(fn2);
+  return r;
 }
 #include "DOLDOC/DocExt.HC"
 #include "GR/Gr.HH"
@@ -175,5 +181,5 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 #include "Diff.HC"
 #include "KeyDev.HC"
 #include "FILEMGR.HC";
-#include "Training.HC.Z";
+#include "Training.HC.Z";
 #endif
