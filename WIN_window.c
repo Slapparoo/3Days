@@ -416,8 +416,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 		NULL,
 		NULL,
 		NULL,
-		10+ceil(740.*dpi/96.),
-		10+ceil(580.*dpi/96.),
+		10+ceil(650.*dpi/96.), //Windows makes the window smaller for some reason
+		10+ceil(510.*dpi/96.),
 		SWP_NOMOVE
 	);
 	NewDrawWindow()->win=hwnd;
