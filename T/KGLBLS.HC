@@ -25,7 +25,7 @@ CAutoCompleteDictGlbls acd;
 CAutoCompleteGlbls ac;
 public CWinMgrGlbls winmgr={0,0,0,WINMGR_FPS,__GetTicks,__GetTicks,NULL,FALSE,FALSE,FALSE};
 winmgr.t=CAlloc(sizeof(CWinMgrTimingGlbls));
-winmgr.t->last_calc_idle_time=__GetTicks;
+winmgr.t->last_calc_idle_time=tS;
 CTask *sys_macro_task;
 CKbdStateGlbls	kbd;
 I64 sys_msg_flags[1]={0};
@@ -82,4 +82,4 @@ public _extern SYS_PROGRESSES
 CBlkDevGlbls	blkdev;
 CGodGlbls god;
 CKeyDevGlbls keydev;
-CCPU *cpu_structs[64];
+CCPU *cpu_structs[64];

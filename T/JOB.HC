@@ -527,14 +527,14 @@ Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE)
 
 U0 CoreAPSethTask()
 {
-  cpu_structs[__CoreNum]=Gs;
+  cpu_structs[__CoreNum]=Gs;
   QueInit(&(Gs->next_dying));
   Gs->num=__CoreNum;
   Gs->seth_task=Fs;
   mp_cores[Gs->num]=Gs;
   CJobCtrl *ctrl=&(Fs->srv_ctrl);
   CTask *task,*task1=Fs;
-  I64 ms,t;
+  I64 ms,t,last_checkin=__GetTicks;
   while (TRUE) {
     do {
       TaskKillDying;
@@ -552,8 +552,10 @@ U0 CoreAPSethTask()
 			ms=task->wake_jiffy-t;
 		next:
     }
-    if(ms>=0)
-		__Sleep(ms);
+    if(ms>=0) {
+	Gs->idle_pt_hits+=ms;
+	__Sleep(ms);
+    }
     Yield;
     LBtr(&(Fs->task_flags),TASKf_IDLE);
   }

@@ -40,7 +40,7 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
       throw('FILE');
     }
     Free(fn2);
-    fn2=exp;
+    fn2=exp;
   }
   if(!t) t=Fs;
   Yield;
@@ -156,7 +156,6 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "CTRLSBTTN.HC"
 #include "CTRLSSLIDER.HC"
 #include "WINMGR.HC"
-#include "WALLPAPER.HC"
 #include "AutoComplete/MakeAC.HC"
 #include "God/MakeGod.HC"
 #include "Find.HC"

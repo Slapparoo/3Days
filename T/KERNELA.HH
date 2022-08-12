@@ -4350,7 +4350,7 @@ public extern CCtrl *ViewAnglesNew(CTask *task=NULL);
 public extern U0 ViewAnglesDel(CTask *task=NULL);
 class CCtrlBttnState
 {
-  I64 state,num_states,flags;
+  I64 state,num_states,flags;
   U8 *state_texts;
   CColorROPU32 *state_colors;
 };
@@ -6084,3 +6084,4 @@ extern U0 ProgressBarsRegTf(U8 *path=NULL);
 extern U0 ProgressBarsRst(U8 *path=NULL);
 extern Bool ScrnCast(Bool val=ON,Bool just_audio=FALSE,U8 *print_fmt="/Tmp/%X.GR");
 extern CDate Now();
+extern U8 *TaskCaller(CTask *task=NULL,I64 num=0,Bool saved_context=FALSE);

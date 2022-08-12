@@ -189,14 +189,20 @@ U0 WinCalcIdles()
   CWinMgrTimingGlbls *t=winmgr.t;
   winmgr.ideal_refresh_tS=tS;
   if ((t->calc_idle_delta_time=
-	(calc_idle_time=tS)-t->last_calc_idle_time)>.25) {
-    PUSHFD
-    total_jiffies=1000;
+	(calc_idle_time=tS)-t->last_calc_idle_time)>.5) {
+    total_jiffies=__GetTicks;
     for (i=0;i<mp_cnt;i++)
-      idle_pt_hits[i]=1000;
-    POPFD
-
+      idle_pt_hits[i]=cpu_structs[i]->idle_pt_hits;
     total_jiffies_delta=total_jiffies-t->last_total_jiffies;
+    for (i=0;i<mp_cnt;i++) {
+      c=cpu_structs[i];
+      if (total_jiffies_delta && (k=idle_pt_hits[i]-t->last_idle_pt_hits[i])>=0)
+	c->idle_factor=Clamp(ToF64(k)/total_jiffies_delta,0.01,0.99);
+      else
+	c->idle_factor=0.01;
+      t->last_idle_pt_hits[i]=idle_pt_hits[i];
+    }
+
     t->last_total_jiffies=total_jiffies;
     t->last_calc_idle_time=calc_idle_time;
     t->calc_idle_cnt++;

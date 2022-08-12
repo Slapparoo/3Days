@@ -28,6 +28,33 @@ U8 *__CallerBP(U8 **rbp,I64 num=1)
   ptr=rbp+1;
   return *ptr;
 }
+U8 *TaskCaller(CTask *task=NULL,I64 num=0,Bool saved_context=FALSE)
+{//Fetches addr of Nth caller on task's stk.
+  U8 **ptr,**rbp,**rsp;
+  if (!task) task=Fs;
+  if (!saved_context && task==Fs)
+    return Caller(num+1);
+  if (!TaskValidate(task))
+    return NULL;
+  rbp=task->rbp;
+  rsp=task->rsp;
+  if (num) {
+    while (rbp) {
+      ptr=rbp+1;
+      if (! --num)
+	return *ptr;
+      if (rbp>=*rbp)
+	break;
+      rbp=*rbp;
+    }
+    return NULL;
+  } else {
+    if (task->rip==_RET)
+      return *rsp;
+    else
+      return task->rip;
+  }
+}
 U0 FaultCB(U8 **rbp,U8 *fptr) {
     I64 bt=1;
     U8 *ln,*fn;

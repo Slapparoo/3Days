@@ -16,7 +16,7 @@ static int32_t gr_palette_std[]={
 0xAA0000,0xAA00AA,0xAA5500,0xAAAAAA,
 0x555555,0x5555FF,0x55FF55,0x55ffff,
 0xFF5555,0xFF55FF,0xFFFF55,0xFFFFFF};
-static XColor palette[16];
+static uint32_t palette[256];
 static void StartInputScanner();
 static CDrawWindow *dw=NULL;
 static char *clip_text=NULL;
@@ -34,12 +34,10 @@ CDrawWindow *NewDrawWindow() {
 		Cursor cursor;
 		int64_t i,black,white;
 		for(i=0;i!=16;i++) {
-			c.pixel=i;
-			c.blue=(gr_palette_std[i]&0xff);
-			c.green=((gr_palette_std[i]>>8)&0xff);
-			c.red=((gr_palette_std[i]>>16)&0xff);
-			c.flags=DoRed|DoGreen|DoBlue;
-			palette[i]=c;
+			palette[i]=gr_palette_std[i];
+		}
+		for(i=16;i!=256;i++) {
+			palette[i]=0;
 		}
 		black=BlackPixel(dw->disp,screen);
 		dw->window=XCreateSimpleWindow(
@@ -84,26 +82,20 @@ static void CenterImage(CDrawWindow *win,int64_t *x_off,int64_t *y_off) {
 char buf[640*480*4];
 void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,int64_t h) {
 	uint8_t *colors=_colors;
-	int64_t x,y,cx,cy,mul=4,b,black,white,wx,wy,b2;
+	int64_t x,y,cx,cy,b,black,white,wx,wy,b2;
 	XLockDisplay(dw->disp);
 	long screen=DefaultScreen(dw->disp);
 	Visual *vis=XDefaultVisual(dw->disp,screen);
 	int dplanes=DisplayPlanes(dw->disp,screen);
 	wx=win->sz_x>480?win->sz_x:480;
 	wy=win->sz_y>640?win->sz_y:640;
-	char *scrn=calloc(1,4*wx*wy);
+	uint32_t *scrn=calloc(4,wx*wy);
 	XImage *img=XCreateImage(dw->disp,vis,dplanes,ZPixmap,0,scrn,wx,wy,8,0);
 	CenterImage(dw,&cx,&cy);
 	for(y=cy;y!=cy+h;y++)
 		for(x=cx;x!=cx+internal_width;x++) {
-			if(colors[b=(x-cx)+(y-cy)*internal_width]>=16) {
-				colors[b]=0;
-			}
 			b2=x+y*wx;
-			img->data[b2*mul]=palette[colors[b]].blue;
-			img->data[b2*mul+1]=palette[colors[b]].green;
-			img->data[b2*mul+2]=palette[colors[b]].red;
-			img->data[b2*mul+3]=0;
+			((uint32_t*)img->data)[b2]=palette[*colors++];
 		}
 	XPutImage(dw->disp,dw->window,dw->gc,img,0,0,0,0,wx,wy);
 	XFlush(dw->disp);

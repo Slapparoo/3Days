@@ -38,7 +38,11 @@ U0 StartUpTasks()
   user2=User;
   WinToTop(user1);
   WinTileVert;
-  WallPaperInit;
+  try {
+    ExeFile("/WallPaper.HC.Z");
+    ExePrint("WallPaperInit;;");
+  } catch
+    PutExcept;
   ACInit("/KERNEL*.HH");
   AutoComplete(ON);
 }
@@ -46,7 +50,7 @@ U0 Adam(U8 *) {
 	I64 idx;
 	LoadImps;
 	cpu_structs[Gs->num=__CoreNum]=Gs;//It should be 0
-	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
+	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
 		__SpawnCore(idx,&CoreAPSethTask);
                 while(!cpu_structs[idx])
                   PAUSE;
