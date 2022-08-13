@@ -5037,7 +5037,7 @@ extern CDirEntry *FilesFind__(U8 *files_find_mask,I64 fuf_flags=0,
                        CDirEntry *parent=NULL);
 extern CDirEntry *FilesFind2(U8 *files_find_mask,I64 fuf_flags);
 extern CDirEntry *FilesFind(U8 *files_find_mask,I64 fuf_flags=0);
-extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0);
+extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=FUF_Z_OR_NOT_Z);
 extern U0 PutFileLink(U8 *filename,U8 *full_name=NULL,I64 line=0,Bool plain_text=FALSE);
 extern I64 Dir(U8 *files_find_mask=".",Bool full=FALSE);
 extern U8 *FileExtDot(U8 *src);
@@ -6084,4 +6084,4 @@ extern U0 ProgressBarsRegTf(U8 *path=NULL);
 extern U0 ProgressBarsRst(U8 *path=NULL);
 extern Bool ScrnCast(Bool val=ON,Bool just_audio=FALSE,U8 *print_fmt="/Tmp/%X.GR");
 extern CDate Now();
-extern U8 *TaskCaller(CTask *task=NULL,I64 num=0,Bool saved_context=FALSE);
+extern U8 *TaskCaller(CTask *task=NULL,I64 num=0,Bool saved_context=FALSE);

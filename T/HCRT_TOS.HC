@@ -44,7 +44,7 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
   }
   if(!t) t=Fs;
   Yield;
-  data=__FileRead(fn,&len2,t);
+  data=__FileRead(fn2,&len2,t);
   if(IsDotZ(fn2)) {
     exp=ExpandBuf(data,t);
     if(len)

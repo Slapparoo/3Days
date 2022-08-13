@@ -341,7 +341,7 @@ public extern U0 DirEntryDel(CDirEntry *tmpde);
 public extern U0 DirEntryDel2(CDirEntry *tmpde);
 public extern U0 DirTreeDel(CDirEntry *tmpde);
 public extern U0 DirTreeDel2(CDirEntry *tmpde);
-public extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0);
+public extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=FUF_Z_OR_NOT_Z);
 public extern U8 *FileRead(U8 *filename,I64 *_size=NULL,CTask *t=NULL);
 public extern I64 FileWrite(U8 *filename,
 	U8 *fbuf,I64 size);
@@ -621,7 +621,7 @@ public extern U0 TaskQueRem(CTask *task);
 public extern Bool TaskValidate(CTask *task);
 public extern U0 TaskWait(CTask *task=NULL,Bool cmd_line_pmt=FALSE);
 public extern CTask *User(U8 *fmt=NULL,...);
-public extern CTask *adam_task;
+public extern CTask *adam_task;
 public extern I64 sys_num_spawned_tasks;
 extern CTask *sys_winmgr_task,*sys_task_being_scrn_updated;
 
