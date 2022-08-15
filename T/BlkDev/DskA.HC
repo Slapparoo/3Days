@@ -111,7 +111,7 @@ public I64 CopyTree(U8 *src_files_find_mask,U8 *dst_files_find_mask,
     DirTreeDel(tmpde);
     Free(st1);
   }
-  return res;
+  return res;
 }
 
 I64 DelTreeDirs(CDirEntry *tmpde1)
@@ -159,7 +159,7 @@ public I64 DelTree(U8 *files_find_mask,U8 *fu_flags=NULL)
   if (IsDir(files_find_mask))
   {
     res=DelTreeDirs(FilesFind(files_find_mask,fuf_flags));
-    res+=Del(files_find_mask);
+    res+=__Del(files_find_mask);
   }
   else
     res=DelTreeFiles(FilesFind(files_find_mask,fuf_flags));

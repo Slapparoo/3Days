@@ -265,7 +265,7 @@ CServer *CreateServer(I64 port) {
 CConnection *connects=MAlloc(sizeof(CQue));
 QueInit(connects);
 I64 con_locked;
-U0 ReadLine(CDyadStream *s,U8 *data,I64 len,CServer *serv) {
+U0 SReadLine(CDyadStream *s,U8 *data,I64 len,CServer *serv) {
   while(Bts(&con_locked,0))
     PAUSE;
   CConnection *first,*con;
@@ -432,7 +432,7 @@ en:
   return;
 process:
   con->buffer[con->b_ptr]=0;
-  DeathWait(Spawn(&ParseRequest,con));
+  DeathWait(Spawn(&ParseRequest,con));
   if(con->post_data)
     HashTableDel(con->post_data);
   QueRem(con);
@@ -442,7 +442,7 @@ process:
   Free(con);
 }
 U0 ListenCallback(CDyadStream *s,CServer *srv) {
-	DyadSetReadCallback(s,&ReadLine,srv);
+	DyadSetReadCallback(s,&SReadLine,srv);
 }
 U0 Serve(CServer *srv) {
 	DyadListen(srv->s_sock,srv->port);

@@ -1,111 +1,3 @@
-#include "http.HC"
-#define WIKI_EDIT"/EDIT"
-#define WIKI_ROOT "/Wiki/"
-#define WIKI_NAME "TempleOS Tiki"
-#define WIKI_HOME "/"
-#define WIKI_INDEX "/INDEX"
-#define WIKI_SEARCH "/FIND"
-#define WIKI_PREVIEW "/Wiki/Preview"
-#define WIKI_UPLOAD "/UPLOAD"
-#define WIKI_BACKUP "/WikiBackups/"
-#define WIKI_CHANGES "/CHANGES"
-#define WIKI_CHANGES_FOR_FILE "/FCHANGE"
-#define WIKI_RESTORE "/RESTORE" //Takes FILE and REVISION 
-DirMk(WIKI_ROOT);
-DirMk(WIKI_PREVIEW);
-DirMk(WIKI_BACKUP);
-#include "header_footer.HC";
-U8 *ReadLine(U8 *t,U8 **en) {
-  U8 *r,*e;
-  if(!*t) {
-    if(en) *en=NULL;
-	return NULL;
-  }
-  if(e=StrFirstOcc(t,"\n")) {
-chug:
-    r=MAlloc(e-t+1);
-    MemCpy(r,t,e-t);
-    r[e-t]=0;
-  } else {
-    e=StrLen(t)+t;
-    goto chug;
-  }
-  if(en) {
-    if(*e=='\n')
-      *en=e+1;
-    else
-      *en=e;
-  }
-  return r;
-}
-U8 *ChrootFile(U8 *fn,U8 *prefix=WIKI_ROOT) {
-	U8 *virt=MStrPrint("%s/%s",prefix,fn);
-	U8 *abs=FileNameAbs(virt),*abs2=FileNameAbs(prefix);
-	if(!StrNCmp(abs,abs2,StrLen(abs2))) {
-		Free(abs),Free(abs2);
-		return virt;
-	}
-	Free(abs),Free(abs2),Free(virt);
-	if(StrLastOcc(fn,"/")) {
-		return MStrPrint("%s/%s",prefix,StrLastOcc(fn,"/")+1);
-	}
-	return MStrPrint("%s/%s",prefix,fn);
-}
-U8 *StrSlice(U8 *ptr,U8 *en) {
-  U8 *r=MAlloc(en-ptr+1);
-  MemCpy(r,ptr,en-ptr);
-  r[en-ptr]=0;
-  return r;
-}
-Bool IsImage(U8 *name) {
-  U8 *dot=FileExtDot(name);
-  if(dot++) {
-    if(!StrICmp(dot,"GIF")) return TRUE;
-    if(!StrICmp(dot,"JPEG")) return TRUE;
-    if(!StrICmp(dot,"JPG")) return TRUE;
-    if(!StrICmp(dot,"PNG")) return TRUE;
-    if(!StrICmp(dot,"BMP")) return TRUE;
-  }
-  return FALSE;
-}
-U8 *HTMLify(U8 *str) {
-  U8 *ptr,*r=StrNew(""),*t,*t2;
-  for(;*str;){
-    ptr=StrFirstOcc(str,"<>;&\"");
-    if(!ptr)
-      ptr=str+StrLen(str);
-    switch(*ptr) {
-      start:
-        t=MStrPrint("%s%s",r,t2=StrSlice(str,ptr));
-        Free(r),Free(t2);
-        r=t;
-        case ';': //?
-        t=MStrPrint("%s&#59;",r);
-		break;
-        case '<':
-	  t=MStrPrint("%s&lt",r);
-	  break;
-        case '>':
-	  t=MStrPrint("%s&gt",r);
-	  break;
-        case '&':
-	  t=MStrPrint("%s&amp",r);
-	  break;
-        case '"':
-	  t=MStrPrint("%s&quot",r);
-	  break;
-		case 0:
-		t=StrNew(r);
-		break;
-      end:
-        Free(r);
-        if(*ptr) ptr++;
-        r=t;
-    }
-    str=ptr;
-  }
-  return r;
-}
 #define WGf_CODE 1
 #define WGf_PARA 2
 #define WGf_LIST 3
@@ -447,7 +339,7 @@ fmt_line:
 	  ln2=StrFirstOccNonEsc(ln,"-_/+*[{|");
 	  if(!ln2) ln2=ln+StrLen(ln);
 	  Write(stream,len_ptr,"%s",t2=HTMLify(RemoveEscapedChars(t1=StrSlice(ln,ln2))));
-	  Free(t1),Free(t2);
+	  Free(t1),Free(t2);
 	  ln=ln2;
       }
     }
@@ -510,11 +402,6 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   }
   Free(path);
 }
-#include "find.HC"
-#include"filter.HC"
-#include "backup.HC"
-#include "edit.HC"
-#include "index.HC"
 U0 Post(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTable *tab) {
 	U8 *dot=FileExtDot(url->abs_path);
 	if(!StrICmp(url->abs_path,WIKI_EDIT)) {

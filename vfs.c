@@ -371,8 +371,22 @@ int64_t VFsUnixTime(char *name) {
 	return r;
 }
 int64_t VFsFSize(char *name) {
-	char *fn=__VFsFileNameAbs(name);
 	struct stat s;
+	long cnt;
+	DIR *d;
+	char *fn=__VFsFileNameAbs(name);
+	if(!__FExists(fn)) {
+		TD_FREE(fn);
+		return -1;
+	} else if(__FIsDir(fn)) {
+		d=opendir(fn);
+		cnt=0;
+		while(readdir(d))
+			cnt++;
+		closedir(d);
+		TD_FREE(fn);
+		return cnt;
+	}
 	stat(fn,&s);
 	TD_FREE(fn);
 	return s.st_size;

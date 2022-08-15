@@ -1,9 +1,8 @@
-#include "diff.HC";
 I64 GenerateChangeText(CDiffItem *diff,U8 *to=NULL) {
   I64 len=0,i,items=MSize(diff)/sizeof(CDiffItem);
   for(i=0;i!=items;i++) {
     switch (diff[i].type) {
-      case DIFF_SAME:
+      case DIFF_SAME:
         break;
       start:
         case DIFF_DELETE:
