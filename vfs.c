@@ -399,9 +399,9 @@ int64_t VFsUnixTime(char *name) {
 	if(!fn) return 0;
 	if(!__FExists(fn))
 	  return 0;
-	HANDLE fh=CreateFileA(fn,GENERIC_READ,0,NULL,OPEN_ALWAYS,0,NULL);
+	HANDLE fh=CreateFileA(fn,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL);
 	GetFileTime(fh,NULL,NULL,&t);
-	t64=t.dwLowDateTime|(t.dwHighDateTime<<32);
+	t64=t.dwLowDateTime|((int64_t)t.dwHighDateTime<<32);
 	TD_FREE(fn);
 	CloseHandle(fh);
 	return t64;
@@ -411,11 +411,27 @@ int64_t VFsFSize(char *name) {
 	int64_t s64;
 	int32_t h32;
 	if(!fn) return 0;
-	if(!__FExists(fn))
-	  return 0;
-	HANDLE fh=CreateFileA(fn,GENERIC_READ,0,NULL,OPEN_ALWAYS,0,NULL);
+	if(!__FExists(fn)) {
+		TD_FREE(fn);
+		return 0;
+    }
+	if(__FIsDir(fn)) {
+		WIN32_FIND_DATAA data;
+		HANDLE dh;
+		char buffer[strlen(fn)+4];
+		strcpy(buffer,fn);
+		strcat(buffer,"\\*");
+		s64=0;
+		dh=FindFirstFileA(buffer,&data);
+		while(FindNextFileA(dh,&data))
+			s64++;
+		TD_FREE(fn);
+		CloseHandle(dh);
+		return s64;
+	}
+	HANDLE fh=CreateFileA(fn,GENERIC_READ,0,NULL,OPEN_EXISTING,0,NULL);
 	s64=GetFileSize(fh,&h32);
-	s64|=h32<<32;
+	s64|=(int64_t)h32<<32;
 	TD_FREE(fn);
 	CloseHandle(fh);
 	return s64;
@@ -589,12 +605,13 @@ static int __FIsNewer(char *fn,char *fn2) {
 	#else
 	int32_t h32;
 	int64_t s64,s64_2;
-	HANDLE fh=CreateFileA(fn,GENERIC_READ,0,NULL,OPEN_ALWAYS,0,NULL),
-		fh2=CreateFileA(fn2,GENERIC_READ,0,NULL,OPEN_ALWAYS,0,NULL);
-	s64=GetFileSize(fh,&h32);
-	s64|=h32<<32;
-	s64_2=GetFileSize(fh,&h32);
-	s64_2|=h32<<32;
+	FILETIME t;
+	HANDLE fh=CreateFileA(fn,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL),
+		fh2=CreateFileA(fn2,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL);
+	GetFileTime(fh,NULL,NULL,&t);
+	s64=t.dwLowDateTime|((int64_t)t.dwHighDateTime<<32);
+	GetFileTime(fh2,NULL,NULL,&t);
+	s64_2=t.dwLowDateTime|((int64_t)t.dwHighDateTime<<32);
 	CloseHandle(fh),CloseHandle(fh2);
 	return s64>s64_2;
 	#endif

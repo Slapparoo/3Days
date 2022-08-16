@@ -22,7 +22,7 @@
 #define HCRT_INSTALLTED_DIR "\\HCRT\\HCRT_TOS.BIN"
 #define DFT_T_DRIVE "3DAYS_BOOT"
 //Is relative to install dir on windows
-#define DFT_TEMPLATE ".\\T\\"
+#define DFT_TEMPLATE "\\T"
 #endif
 static void Core0Exit(int sig) {
 	/*CHash **ka=map_get(&TOSLoader,"KillAdam");
@@ -149,8 +149,14 @@ int main(int argc,char **argv)
 		#endif
 	}
     TOS_RegisterFuncPtrs();
-    char *template=DFT_TEMPLATE;
+    #ifdef TARGET_WIN32
+    char template[MAX_PATH];
+    GetModuleFileNameA(NULL,template,sizeof(template));
+    dirname(template);
+    strcat(template,DFT_TEMPLATE);
+    #endif
     #ifndef TARGET_WIN32 
+    char *template=DFT_TEMPLATE;
     if(0==access("./T",F_OK))
 		template="./T",puts("Using ./T as the template directory.");
     #endif
