@@ -8,6 +8,9 @@ OBJS=$(COBJS) $(AOBJS)
 LIBS= -lm -lX11 -lpthread $(shell pkg-config --libs portaudio-2.0)
 all: 3d_loader 
 	echo "done"
+3days-0.3.00.pkg: FreeBSD_pkg.sh 3d_loader T
+	./3d_loader -t T -c T/ReleasePackage.HC
+	tcsh FreeBSD_pkg.sh
 3days.deb: Debian_pkg.sh 3d_loader T
 	./3d_loader -t T -c T/ReleasePackage.HC
 	tcsh Debian_pkg.sh
