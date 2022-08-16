@@ -11,8 +11,6 @@ mkdir -p ${STAGEDIR}/usr/local/include/3Days
 cp 3d_loader ${STAGEDIR}/usr/local/bin/3d
 strip ${STAGEDIR}/usr/local/bin/3d
 chmod +x ${STAGEDIR}/usr/local/bin/3d
-if -e T/T rm -r T/T
-./3d_loader -t T -c T/ReleasePackage.HC
 rm ${STAGEDIR}/plist
 echo "/usr/local/bin/3d" >> ${STAGEDIR}/plist
 cp HCRT.BIN ${STAGEDIR}/usr/local/include/3Days/

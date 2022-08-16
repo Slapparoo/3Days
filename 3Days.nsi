@@ -6,7 +6,7 @@
 
 !define APP_NAME "3Days"
 !define COMP_NAME "nrootconauto@gmail.com"
-!define VERSION "00.02.00.00"
+!define VERSION "00.03.00.00"
 !define COPYRIGHT "None"
 !define DESCRIPTION "A HolyC Compiler"
 !define INSTALLER_NAME "3d_setup.exe"
