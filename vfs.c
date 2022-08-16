@@ -2,6 +2,8 @@
 static  int RootPathLen();
 //I dislike this file. Windows uses '\\' as a delimeter ,but TempleOS uses '/'
 //So key an eye out for delim/TOS_delim
+
+//Send a prayer to whoever wrote this (https://www.daniweb.com/programming/software-development/threads/197362/how-to-open-a-directory-using-createfile)
 #include <ctype.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -12,6 +14,13 @@ static  int RootPathLen();
 #include <windows.h>
 #include <synchapi.h>
 #include <processthreadsapi.h>
+static int64_t FILETIME2Unix(FILETIME *t) {
+	//https://www.frenk.com/2009/12/convert-filetime-to-unix-timestamp/	
+	int64_t time=t->dwLowDateTime|((int64_t)t->dwHighDateTime<<32),adj;
+	adj=10000*(int64_t)11644473600000ll;
+	time-=adj;
+	return time/10000000ll;
+}
 #endif
 #define VFS_T_FILE 1 
 #define VFS_T_DIR 2 
@@ -394,17 +403,15 @@ int64_t VFsFSize(char *name) {
 #else
 int64_t VFsUnixTime(char *name) {
 	char *fn=__VFsFileNameAbs(name);
-	int64_t t64;
 	FILETIME t;
 	if(!fn) return 0;
 	if(!__FExists(fn))
 	  return 0;
-	HANDLE fh=CreateFileA(fn,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL);
+	HANDLE fh=CreateFileA(fn,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,NULL);
 	GetFileTime(fh,NULL,NULL,&t);
-	t64=t.dwLowDateTime|((int64_t)t.dwHighDateTime<<32);
 	TD_FREE(fn);
 	CloseHandle(fh);
-	return t64;
+	return FILETIME2Unix(&t);
 }
 int64_t VFsFSize(char *name) {
 	char *fn=__VFsFileNameAbs(name);
@@ -429,7 +436,7 @@ int64_t VFsFSize(char *name) {
 		CloseHandle(dh);
 		return s64;
 	}
-	HANDLE fh=CreateFileA(fn,GENERIC_READ,0,NULL,OPEN_EXISTING,0,NULL);
+	HANDLE fh=CreateFileA(fn,GENERIC_READ,0,NULL,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,NULL);
 	s64=GetFileSize(fh,&h32);
 	s64|=(int64_t)h32<<32;
 	TD_FREE(fn);
@@ -606,8 +613,8 @@ static int __FIsNewer(char *fn,char *fn2) {
 	int32_t h32;
 	int64_t s64,s64_2;
 	FILETIME t;
-	HANDLE fh=CreateFileA(fn,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL),
-		fh2=CreateFileA(fn2,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL);
+	HANDLE fh=CreateFileA(fn,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,NULL),
+		fh2=CreateFileA(fn2,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,NULL);
 	GetFileTime(fh,NULL,NULL,&t);
 	s64=t.dwLowDateTime|((int64_t)t.dwHighDateTime<<32);
 	GetFileTime(fh2,NULL,NULL,&t);
@@ -643,15 +650,8 @@ void CreateTemplateBootDrv(char *to,char *template,int overwrite) {
 				}
 			}
 	#ifdef TARGET_WIN32
-    GetModuleFileNameA(NULL,buffer,sizeof(buffer));
-    _splitpath(buffer,drvl,buffer2,NULL,NULL);
-    strcat(buffer2,template);
-    strcpy(buffer,drvl);
-    strcat(buffer,buffer2);
-    if(buffer2[strlen(buffer2)-1]==delim)
-		buffer2[strlen(buffer2)-1]=0;
-    assert(__FExists(buffer2));
-    strcat(buffer,"\\");
+    strcpy(buffer2,template);
+    strcat(buffer2,"\\");
     #else
     strcpy(buffer2,template);
     assert(__FExists(buffer2));

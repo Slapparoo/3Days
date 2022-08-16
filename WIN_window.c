@@ -28,13 +28,7 @@ static int32_t gr_palette_std[]={
 0xAA0000,0xAA00AA,0xAA5500,0xAAAAAA,
 0x555555,0x5555FF,0x55FF55,0x55ffff,
 0xFF5555,0xFF55FF,0xFFFF55,0xFFFFFF};
-typedef struct {
-	char pixel;
-	char blue;
-	char green;
-	char red;
-} XColor;
-static XColor palette[16];
+static int32_t palette[256];
 static void StartInputScanner();
 static CDrawWindow *dw=NULL;
 static char *clip_text=NULL;
@@ -42,18 +36,13 @@ CDrawWindow *NewDrawWindow() {
 	if(!dw) {
 		dw=TD_MALLOC(sizeof(*dw));
 		int64_t i;
-		XColor c;
 		for(i=0;i!=16;i++) {
-			c.pixel=i;
-			c.blue=(gr_palette_std[i]&0xff);
-			c.green=((gr_palette_std[i]>>8)&0xff);
-			c.red=((gr_palette_std[i]>>16)&0xff);
-			palette[i]=c;
+			palette[i]=gr_palette_std[i];
 		}
 	}
 	return dw;
 }
-char buf[640*480*4];
+int32_t buf[640*480];
 void DrawWindowDel(CDrawWindow *win) {
 }
 #define CH_CTRLA	0x01
@@ -433,18 +422,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h) {
 	int64_t x,y,b,b2,mul=4;
 	WaitForSingleObject(mutex,INFINITE);
-	for(y=0;y!=480;y++)
+	for(y=0;y!=480;y++) {
+		b2=(480-y-1)*internal_width;
 		for(x=0;x!=640;x++) {
-			if(colors[b=x+y*internal_width]>=16) {
-				colors[b]=0;
-			}
-			b2=(x)+(480-y-1)*internal_width;
-			buf[b2*mul]=palette[colors[b]].blue;
-			buf[b2*mul+1]=palette[colors[b]].green;
-			buf[b2*mul+2]=palette[colors[b]].red;
-			buf[b2*mul+3]=0;
+			buf[b2++]=palette[*colors++];
 			//img->data[b*4+3]=0;
 		}
+	}
 	ReleaseMutex(mutex);
 	RedrawWindow(
 		win->win,

@@ -437,12 +437,18 @@ int64_t STK_Now(int64_t *stk) {
 	return t;
 }
 #else
+static int64_t FILETIME2Unix(FILETIME *t) {
+	//https://www.frenk.com/2009/12/convert-filetime-to-unix-timestamp/	
+	int64_t time=t->dwLowDateTime|((int64_t)t->dwHighDateTime<<32),adj;
+	adj=10000*(int64_t)11644473600000ll;
+	time-=adj;
+	return time/10000000ll;
+}
 int64_t STK_Now(int64_t *stk) {
 	int64_t r;
 	FILETIME ft;
 	GetSystemTimeAsFileTime(&ft);
-	r=ft.dwLowDateTime|(ft.dwHighDateTime<<32);
-	return r;
+	return FILETIME2Unix(&ft);
 }
 #endif
 int64_t mp_cnt(int64_t *stk) {
