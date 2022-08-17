@@ -280,7 +280,7 @@ int VFsCd(char *to,int flags) {
     vec_push(&path,0);
     failed|=!__FExists(path.data);
     failed|=!__FIsDir(path.data);
-    if(!failed) {
+    if(!failed||allow_fail) {
 		if(static_root!=cur_dir)
 			HolyFree(cur_dir);
 		char buffer[4048];
@@ -291,9 +291,9 @@ int VFsCd(char *to,int flags) {
 		cur_dir=HolyStrDup(buffer);
 		VFsInplaceConvertDelims(cur_dir);
 		VFsInplaceRemoveRepeatSlashes(cur_dir);
-	} else
-		vec_deinit(&path);
-    return !failed;
+	}
+	vec_deinit(&path);
+    return !failed||allow_fail;
 }
 int64_t VFsDel(char *p) {
 	p=__VFsFileNameAbs(p);

@@ -95,17 +95,18 @@ U8 *HTMLify(U8 *str) {
   return r;
 }
 U8 *ChrootFile(U8 *fn,U8 *prefix=WIKI_ROOT) {
-	U8 *virt=MStrPrint("%s/%s",prefix,fn);
-	U8 *abs=StrNew(virt),*abs2=FileNameAbs(prefix);
-	if(!StrNCmp(abs,abs2,StrLen(abs2))) {
-		Free(abs),Free(abs2);
-		return virt;
-	}
-	Free(abs),Free(abs2),Free(virt);
-	if(StrLastOcc(fn,"/")) {
-		return MStrPrint("%s/%s",prefix,StrLastOcc(fn,"/")+1);
-	}
-	return MStrPrint("%s/%s",prefix,fn);
+  U8 *virt=MStrPrint("/%s/%s",prefix,fn);
+  U8 *abs=FileNameAbs(virt),*abs2=FileNameAbs(prefix);
+  TOSPrint("virt:%s\n",virt);
+  if(!StrNCmp(abs,abs2,StrLen(abs2))) {
+    Free(abs),Free(abs2);
+    return virt;
+  }
+  Free(abs),Free(abs2),Free(virt);
+  if(StrLastOcc(fn,"/")) {
+    return MStrPrint("%s/%s",prefix,StrLastOcc(fn,"/")+1);
+  }
+  return MStrPrint("%s/%s",prefix,fn);
 }
 extern I64 FmtText(U8 *ftxt,CDyadStream *stream,CURL *url);
 U8 *DotZify(U8 *t) {
