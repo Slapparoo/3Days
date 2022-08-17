@@ -368,7 +368,7 @@ I64 GetKey(I64 *_scan_code=NULL,Bool echo=FALSE,Bool raw_cursor=FALSE)
     Sleep(1);
     LBtr(&(Fs->task_flags),TASKf_IDLE);
   }
-  if (raw_cursor && cursor_on)
+  if (raw_cursor && cursor_on)
     "%c",CH_BACKSPACE;
   if (echo)
     PutKey(ch,sc);
@@ -478,26 +478,7 @@ I64 KbdMsgsQue()
 	TaskMsg(task_focus,0,MSG_KEY_DOWN,arg1,arg2,0);
 	msg_code=MSG_KEY_DOWN;
       }
-      if(arg2&SCF_ALT && arg2&SCF_CTRL &&msg_code==MSG_KEY_DOWN) {
-		arg1=ToUpper(ScanCode2Char(arg2&0xff));
-		if('A'<=arg1<='Z') {
-		  arg1-='A';
-		  if(keydev.fp_ctrl_alt_cbs&&keydev.fp_ctrl_alt_cbs[arg1])
-			(*keydev.fp_ctrl_alt_cbs[arg1])(arg2);
-		}
-	  }
     }
-  } else {
-	while (FifoI64Rem(kbd.scan_code_fifo,&arg2)) {
-		if(arg2&SCF_ALT && arg2&SCF_CTRL) {
-			arg1=ToUpper(ScanCode2Char(arg2&0xff));
-			if('A'<=arg1<='Z') {
-			  arg1-='A';
-			  if(keydev.fp_ctrl_alt_cbs&&keydev.fp_ctrl_alt_cbs[arg1])
-				(*keydev.fp_ctrl_alt_cbs[arg1])(arg2);
-			}
-		  }
-	}
   }
   return msg_code;
 }
@@ -515,6 +496,10 @@ static U0 KBCb(I64 c,I64 s) {
   FifoI64Ins(kbd.scan_code_fifo,s);
   kbd.timestamp=__GetTicks;
   c=ScanCode2Char(s&0x7f);
+  if(keydev.fp_ctrl_alt_cbs&&!(s&SCF_KEY_UP)&&s&SCF_ALT&&s&SCF_CTRL&&'a'<=c<='z') {
+    if(keydev.fp_ctrl_alt_cbs[c-'a'])
+      (*keydev.fp_ctrl_alt_cbs[c-'a'])(s);
+  }
   if(!(s&SCF_KEY_UP)&&s&SCF_ALT&&s&SCF_CTRL&&(c=='c'||c=='x')&&TaskValidate(sys_focus_task)) {
     if(c=='c') {
        LBts(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_C);
