@@ -83,8 +83,23 @@ U0 EditPost(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTa
   if(!hash&&!(t1=GetQueryValue(url->query,"PAGENAME"))) return;
   if(hash) {
     link=ChrootFile(hash->user_data1);
+    if(!FileExtDot(t1)) {
+      t2=MStrPrint("%s.WIKI.Z",link);
+      Free(link);
+      link=t2;
+    }
     plink=ChrootFile(hash->user_data1,WIKI_PREVIEW);
+    if(!FileExtDot(t1)) {
+      t2=MStrPrint("%s.WIKI.Z",plink);
+      Free(plink);
+      plink=t2;
+    }
   } else {
+    if(!FileExtDot(t1)) {
+      t2=MStrPrint("%s.WIKI.Z",t1);
+      Free(t1);
+      t1=t2;
+    }
     link=ChrootFile(t1);
     plink=ChrootFile(t1,WIKI_PREVIEW);
     Free(t1);
@@ -125,7 +140,7 @@ loop:
 	BackupFile(link+StrLen(WIKI_ROOT),ftxt);
         FileWrite(link=DotZify(link),ftxt,t1-ftxt);
      }
-    }
+    }
     Free(profan);
     Free(ftxt);
     if(hash3&&!StrICmp(hash3->user_data1,"PREVIEW"))

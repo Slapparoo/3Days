@@ -74,7 +74,7 @@ U8 *MakeIndex(CDyadStream *stream,I64 *len_ptr,CHeaderItem *index) {
         cpair=EnterPair(cpair,stream,len_ptr,'OL');
       while(++last_idx<cur->depth);
     }
-    if(cur->depth<last_idx){
+    if(cur->depth<last_idx){
       do
         cpair=ClosePair(cpair,stream,len_ptr);
       while(--last_idx>cur->depth);
@@ -381,6 +381,12 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
     //Copy into URL to "redirect"
     StrCpy(url->abs_path,"/WikiHome");
   }
+  if(!FileExtDot(path)) {
+    t1=MStrPrint("%s.WIKI.Z",path);
+    Free(path);
+    StrCpy(url->abs_path,t1);
+    path=t1;
+  }
   if(FileFind(path)&&!IsDir(path)) {
 //dummy write an index to compute its length
     WriteLn(stream,,"HTTP/1.1 200 OK");
@@ -447,7 +453,7 @@ U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
 		WikiGet(srv,stream,url,req);
 		return;
 	}        
-	if(!StrICmp(dot,".WIKI")||!StrICmp(dot,".Z")||!StrICmp(dot,".WIKI.Z")) {
+	if(!StrICmp(dot,".WIKI.Z")) {
 		WikiGet(srv,stream,url,req);
 		return;
 	}
