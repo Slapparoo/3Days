@@ -16,6 +16,10 @@ U0SelCopy(CDirEntry *head,U8 *to,I64 argc,U8 **exclude) {
         to2=MStrPrint("%s/%s",to,c_ent->name);
       else
         to2=MStrPrint("%s/%s.Z",to,c_ent->name);
+      if(FileFind(to2)) {
+        "Repeat file %s,Aborting\n",to2;
+        throw('Repeat');
+      }
       data=FileRead(c_ent->full_name,&len);
       FileWrite(to2,data,len);
       Free(data);
@@ -31,11 +35,13 @@ U0SelCopy(CDirEntry *head,U8 *to,I64 argc,U8 **exclude) {
 U0 ReleasePackage(U8 *to,...) {
   I64 i;
   CDirEntry *ents;
-  U8 **argv2=MAlloc((argc+1)*sizeof(U8*)); //includes directory we are writing to
+  U8 **argv2=MAlloc((argc+1)*sizeof(U8*)),*all; //includes directory we are writing to
   for(i=0;i!=argc;i++)
     argv2[i]=FileNameAbs(argv[i]);
-  DelTree(to);
   argv2[i]=FileNameAbs(to);
+  DelTree(all=MStrPrint("%s/*",to)); //Delete files in dirs
+  DelTree(to); //Delete dirs
+  Free(all);
   ents=FilesFind("/*",FUF_RECURSE);
   SelCopy(ents,to,argc+1,argv2);
   DirTreeDel(ents);
@@ -44,5 +50,5 @@ U0 ReleasePackage(U8 *to,...) {
   Free(argv2);
 }
 ChDrv('T');
-ReleasePackage("T","Offical","Greek","TempleOS.ISO");
-Exit;
+ReleasePackage("T","Offical","Greek","TempleOS.ISO");
+Exit;
