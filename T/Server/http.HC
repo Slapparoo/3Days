@@ -1,22 +1,4 @@
 DyadInit;
-class CURL {
-	U8 hostname[STR_LEN];
-	U8 abs_path[STR_LEN];
-	U8 query[STR_LEN];
-	I64 port;
-};
-class CHTTPRequest {
-	#define HTTP_GET 1
-	#define HTTP_POST 2
-	
-	I64 method;
-};
-class CServer {
-	I64 port;
-	CDyadStream *s_sock;
-	U0(*get)(CServer*,CDyadStream*,CURL*,CHTTPRequest*);
-	U0(*post)(CServer*,CDyadStream*,CURL*,CHTTPRequest*,CHashTable *);
-};
 class CConnection:CQue {
 	//These occupy .u8[0]
 	#define CON_S_METHOD 1
@@ -265,7 +247,7 @@ CServer *CreateServer(I64 port) {
 CConnection *connects=MAlloc(sizeof(CQue));
 QueInit(connects);
 I64 con_locked;
-U0 SReadLine(CDyadStream *s,U8 *data,I64 len,CServer *serv) {
+U0 SReadLine(CDyadStream *s,U8 *data,I64 len,CServer *serv) {
   while(Bts(&con_locked,0))
     PAUSE;
   CConnection *first,*con;

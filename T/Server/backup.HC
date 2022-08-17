@@ -45,7 +45,7 @@ U0 BackupFile(U8 *file,U8 *ntxt) {
     while(StrFirstOcc(timestamp,":"))
       *StrFirstOcc(timestamp,":")='.';
     if(opath) {
-      fmted=MStrPrint("%s/%s__%s.Z",clone,timestamp,opath+1);
+      fmted=MStrPrint("%s/%s__%s.Z",clone,timestamp,opath+1);
       cnam2=ChrootFile(fmted,WIKI_BACKUP);
       Free(clone);
       clone=StrNew(cnam2);
@@ -53,7 +53,7 @@ U0 BackupFile(U8 *file,U8 *ntxt) {
       *opath=0;
       DirMk(clone);
       *opath='/';
-      dnam=clone;
+      dnam=clone=DotZify(clone);
     } else {
       fmted=MStrPrint("%s__%s.Z",timestamp,clone);
       cnam2=ChrootFile(fmted,WIKI_BACKUP);
@@ -164,7 +164,7 @@ U0 RestoreGet(CServer *s,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   chrooted2=ChrootFile(f,WIKI_ROOT);
   oftxt=ftxt=FileRead(chrooted);
   ftxt+=StrLen(ftxt)+1; //Skip timestamp
-  FileWrite(chrooted2,ftxt,StrLen(ftxt));
+  FileWrite(chrooted2=DotZify(chrooted2),ftxt,StrLen(ftxt));
   Free(oftxt);
   WikiHeader(stream,NULL,"File reverted");
   WriteLn(stream,NULL,"<H1>Reverted &quot%s&quot</H1>",chrooted);

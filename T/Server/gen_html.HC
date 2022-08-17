@@ -7,13 +7,13 @@ U0 FileGet(CServer *srv,CDyadStream*stream,CURL *url,CHTTPRequest *req) {
   U8 *f,*mime,*dot=FileExtDot(link);
   I64 len;
   if(dot&&FileFind(link)){
-    if(!StrICmp(dot,".GIF")) mime="image/gif";
-    else if(!StrICmp(dot,".JPEG")) mime="image/jpeg";
-    else if(!StrICmp(dot,".JPG")) mime="image/jpg";
-    else if(!StrICmp(dot,".PNG"))  mime="image/png";
-    else if(!StrICmp(dot,".BMP"))  mime="image/bmp";
-    else if(!StrICmp(dot,".CSS"))  mime="text/css";
-    else if(!StrICmp(dot,".MIN.CSS"))  mime="text/css";
+    if(!StrICmp(dot,".GIF")||!StrICmp(dot,".GIF.Z")) mime="image/gif";
+    else if(!StrICmp(dot,".JPEG")||!StrICmp(dot,".JPEG.Z")) mime="image/jpeg";
+    else if(!StrICmp(dot,".JPG")||!StrICmp(dot,".JPG.Z")) mime="image/jpg";
+    else if(!StrICmp(dot,".PNG")||!StrICmp(dot,".PNG.Z"))  mime="image/png";
+    else if(!StrICmp(dot,".BMP")||!StrICmp(dot,".BMP.Z"))  mime="image/bmp";
+    else if(!StrICmp(dot,".CSS")||!StrICmp(dot,".CSS.Z"))  mime="text/css";
+    else if(!StrICmp(dot,".MIN.CSS")||!StrICmp(dot,".MIN.CSS.Z"))  mime="text/css";
     else mime="text/plain";
     f=FileRead(link,&len);
     WriteLn(stream,,"HTTP/1.1 200 OK");
@@ -74,7 +74,7 @@ U8 *MakeIndex(CDyadStream *stream,I64 *len_ptr,CHeaderItem *index) {
         cpair=EnterPair(cpair,stream,len_ptr,'OL');
       while(++last_idx<cur->depth);
     }
-    if(cur->depth<last_idx){
+    if(cur->depth<last_idx){
       do
         cpair=ClosePair(cpair,stream,len_ptr);
       while(--last_idx>cur->depth);
@@ -447,7 +447,7 @@ U0 Get(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req)  {
 		WikiGet(srv,stream,url,req);
 		return;
 	}        
-	if(dot&&!StrICmp(dot,".WIKI")) {
+	if(!StrICmp(dot,".WIKI")||!StrICmp(dot,".Z")||!StrICmp(dot,".WIKI.Z")) {
 		WikiGet(srv,stream,url,req);
 		return;
 	}

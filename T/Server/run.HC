@@ -16,7 +16,7 @@ if(!FileFind(WIKI_PREVIEW))
   DirMk(WIKI_PREVIEW);
 if(!FileFind(WIKI_BACKUP))
   DirMk(WIKI_BACKUP);
-#include "utils.HC"
+#include "utils.HC"
 #include "http.HC"
 #include "header_footer.HC"
 #include "find.HC"
@@ -26,4 +26,4 @@ if(!FileFind(WIKI_BACKUP))
 #include "backup.HC"
 #include "edit.HC"
 #include "index.HC"
-#include "gen_html.HC";
+#include "gen_html.HC";

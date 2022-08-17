@@ -8,7 +8,7 @@ U0 FindGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 	I64 len=0,*len_ptr=&len,mat,fcnt,f;
 	CFifoI64 *matches=FifoI64New(0x80);
 	ents=FilesFind(WIKI_ROOT"/*",FUF_RECURSE);
-	loop:
+	loop:
 	WikiHeader(stream,len_ptr,title);
 	WriteLn(stream,len_ptr,"<FORM CLASS=\"form-group\" ACTION=\""WIKI_SEARCH"\">");
 	WriteLn(stream,len_ptr,"<LABEL FOR=\"s\">SEARCH:</LABEL>");
@@ -23,7 +23,8 @@ U0 FindGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 				goto next;
 			if(!(dot=FileExtDot(c_ent->name))) {
 				;
-			} else if(StrICmp(dot,".WIKI"))
+			} else if(!StrICmp(dot,".WIKI")||!StrICmp(dot,".Z")||!StrICmp(dot,".WIKI.Z")) {
+                        } else
 				goto next;
 			Yield;
 			ptr=ftxt=FileRead(c_ent->full_name);

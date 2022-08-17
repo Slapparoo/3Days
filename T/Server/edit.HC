@@ -7,7 +7,7 @@ new_page:
     WriteLn(stream,,"Server: Bungis");
     WriteLn(stream,,"Content-Type: text/html");
     WriteLn(stream,,"");
-    WikiHeader(stream,NULL,"Make a New Page!!!",FALSE);
+    WikiHeader(stream,NULL,"Make a New Page!!!",FALSE);
     WriteLn(stream,NULL,"<FORM ACTION=\""WIKI_EDIT"?PAGENAME=%s\"CLASS=\"form-group\" METHOD=\"POST\">",page);
     WriteLn(stream,NULL,"<LABEL FOR=\"PAGENAME\">New page name</LABEL>");
     WriteLn(stream,NULL,"<INPUT NAME=\"PAGENAME\" TYPE=\"text\">");
@@ -113,7 +113,7 @@ loop:
         DirMk(t2);
         Free(t2);
       }
-      FileWrite(plink,ftxt,t1-ftxt);
+      FileWrite(plink=DotZify(plink),ftxt,t1-ftxt);
     } else {
       if(StrLastOcc(link,"/")) {
         t2=StrNew(link);
@@ -123,9 +123,9 @@ loop:
       }
       if(!profan) {
 	BackupFile(link+StrLen(WIKI_ROOT),ftxt);
-        FileWrite(link,ftxt,t1-ftxt);
-     }
-    }
+        FileWrite(link=DotZify(link),ftxt,t1-ftxt);
+     }
+    }
     Free(profan);
     Free(ftxt);
     if(hash3&&!StrICmp(hash3->user_data1,"PREVIEW"))
@@ -174,7 +174,7 @@ loop:
     }
     WikiFooter(stream,NULL,url);
   } else {
-    FileWrite(link,"",0);
+    FileWrite(link=DotZify(link),"",0);
     goto loop;
   }
 en:

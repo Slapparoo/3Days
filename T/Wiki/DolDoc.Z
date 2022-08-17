@@ -1,0 +1,137 @@
+= DolDoc
+DolDoc means dollar sign documents. It's uses a notation of dollar signs to specifiy the layout of a document
++You will need to press $ twice in TempleOS as pressing it normally puts it in escape mode.+
+Let's see some basic usage of DolDoc
+ "$BG,BLUE$$FG,YELLOW$I am yellow.$FD$$BD$\n";
+Here we see we have yellow on a blue background. We use *FD* *BD* to set the forground and background to their defualt colors.
+== Attributes
+DolDoc entries can have attributes and arguments. For example *BG* here takes a color argument.
+ "$BG,BLUE$I am blue,$$FD";
+Some arguments take names,like *LM*(left macro) takes a string that is inputed to the terminal when pressed.
+ "\n\n$BT,\"ONIONS\",LM=\"Beep;\n\"$\n\n"; //We specified a \n in LM to simulate pressing enter.
+There are attributes too,they start with the plus or minus sign. Lets see an example.
+ "$TX+CX,\"CENTER\"$";
+Now we can see that the text is centered.
+== List of DolDoc codes
+|Code|Meaning
+|TX|Text
+|CR|Newline
+|SR|Wordwrap line
+|CU|Cursor pos
+|TB|Tab
+|CL|Clear items without +H
+|PB|Page break
+|PL|Page length
+|LM|Left margin
+|RM|Right margin
+|HD|Header margin 
+|FO|Bottom margin
+|ID|Indents X indents,can be negative
+|FD|Use(or change) default foreground color
+|BD|Use(or change) default background color
+|FG|Set foreground color
+|BG|Set background color
+|PT|Prompt
+|WW|Use 1 to trigger word wrap, 0 to disable word wrap
+|UL|Use 1 to trigger underline, 0 to disable it
+|IV|Use 1 to trigger inverting the text's colors,0 to disable it
+|BK|Turn blink on or off with 1 or 0
+|SX|Pick a number -7 through 7 to shift the text
+|SY|Pick a number -7 through 7 to shift the text
+|CM|Takes 2 arguments X movement and Y movement
+|LK|Link,will be explained later
+|BT|Button, +surround with newlines to make space for the button border+
+|CB|Checkbox
+|LS|Define a define list with *D* and DefineLstLoad,this will let you select items from a list.
+|MA|Macro,will run code with is clicked,use *LM* to set the macro text
+|TR|Tree,use indent to nest the trees and use a negative indent to un-nest the trees.
+|HL|Turn syntax highlighting on with 1 or 0.
+== List of DolDoc attributes
+To use an attribute,use a plus or minus sign to add/remove the flag from the item.
+Example:
+ "$TX+CX+H,\"I have CX and H flags.\"$\n";
+|Attribute|Descrition
+|H|Will prevenet CL from deleteing it
+|L|Will tell the thing to behave as a link 
+|TR|Will tell the thing to behave as a tree
+|LS|Will tell the thing to act as a list
+|PU|Will cuase macro text to run in a popup window.
+|C|Will cuase a tree to e collapsed
+|X|Will set the exit and save flag on a macro
+|Q|Will set a exit and not-save flag on a macro
+|RD| Refresh data on screen update
+|UD| Update data on typing
+== Argument codes
+You use a comma and the name to specify an argument value.
+|T|The tag(displayed text) is set with this
+|LEN|LEN sets the length of the DA field 
+|A|Links use this for link location
+|D|LS and list-likes use this for setting the DefineLstLoad'ed string that has the list items in it.
+|LE|Left expression,will evaluate this expression's value when left clicked.
+|RE|Right expression,will evaluate this expression
+|LM|Left macro text,will put the text in input buffer when clicked.
+|RM|Right macto text,will put the text in input buffer when clicked.
+|RT|Set the raw type of the data of the item,use I8-64,or U8-64 or F64
+|U|User data
+|SCX|Scroll X in col columns
+|SX| Shift plus or minux 7 pixels
+|SY| Same as above but for Y cordnates
+== DolDoc programming API.
+Sometimes you will want to get down and dirty with DolDoc.
+To get the current DolDoc of the task,use *DocPut* and  *DocPrint* to print to that document.
+ DocPrint(DocPut,"\n\n$$BT+CX,\"Hello\"$$\n\n");
+DocPrint will return a *CDocEntry*. We can poke at it's data to make it do stuff.
+Here are some of the instresting fields of CDocEntry
+ class CDocEntry:CDocEntryBase {
+ 	I64(*left_cb)(CDoc*,CDocEntry*)
+ 	I64(*right_cb)(CDoc*,CDocEntry*)
+ 	U8 *data;
+ };
+To use the left_cb/right_cb,we must set the DOCEF_LEFT_CB/DOCEF_RIGHT_CB flags in *de_flags*.
+Here is an example
+ I64 Beep2(CDoc *,CDocEntry *) {
+ 	Beep;
+ }
+ CDocEntry *de=DocPrint(DocPut,"\n\n$$BT+CX,\"Hello\"$$\n\n");
+ de->de_flags|=DOCEF_LEFT_CB;
+ de->left_cb=&Beep2;
+Make sure you print whole DolDoc commands with *DocPrint*,if you want to do otherwise use *DocPrintPartial*. If you want print multiple DolDoc commands at once,use *DocPrintAtomic*.
+If you want to type one file into another,use *DocType(doc,filename)*
+
+Say you want to save a DolDoc,we can do this 2 ways,we can save to memory or a file.
+To save to memory,do this,
+ I64 len;
+ U8 *mem=DocSave(DocPut,&len);
+ //Do whatever
+ Free(mem);
+Or to save to a file,do this
+ CDoc *doc=DocNew("Filename.DD"); //The document's filename detirmined at it's creation.
+ DocPrint("$TX,\"Hello World\"$");
+ DocWrite(doc);
+ DocDel(doc);
+You can use *DocMenu* to get the value of button clicks.
+ U0 CreateDialog() {
+ 	CDocEntry *nums[3];
+ 	I64 i;
+ 	DocClear(DocPut);
+ 	"$$TX+CX,\"Pick a number:\"$$\n";
+ 	for(i=0;i!=3;i++) {
+ 		nums[i]=DocPrint(DocPut,"\n\n$$BT+CX,\"%d\",LE=%d$$\n\n",i,i);
+ 	}
+ 	DocBottom(DocPut);
+ 	switch(DocMenu(DocPut)) {
+ 	start:
+ 		DocClear(DocPut);
+ 		case 0:
+ 		"You picked nothing lol.\n";
+ 		break;
+ 		case 1:
+ 		"One is the one\n";
+ 		break;
+ 		case 2:
+ 		"Two is too good\n";
+ 		break;
+ 	end:
+ 	}
+ }
+ CreateDialog;

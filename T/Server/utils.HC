@@ -1,3 +1,21 @@
+class CURL {
+	U8 hostname[STR_LEN];
+	U8 abs_path[STR_LEN];
+	U8 query[STR_LEN];
+	I64 port;
+};
+class CHTTPRequest {
+	#define HTTP_GET 1
+	#define HTTP_POST 2
+	
+	I64 method;
+};
+class CServer {
+	I64 port;
+	CDyadStream *s_sock;
+	U0(*get)(CServer*,CDyadStream*,CURL*,CHTTPRequest*);
+	U0(*post)(CServer*,CDyadStream*,CURL*,CHTTPRequest*,CHashTable *);
+};
 U8 *ReadLine(U8 *t,U8 **en) {
   U8 *r,*e;
   if(!*t) {
@@ -78,7 +96,7 @@ U8 *HTMLify(U8 *str) {
 }
 U8 *ChrootFile(U8 *fn,U8 *prefix=WIKI_ROOT) {
 	U8 *virt=MStrPrint("%s/%s",prefix,fn);
-	U8 *abs=FileNameAbs(virt),*abs2=FileNameAbs(prefix);
+	U8 *abs=StrNew(virt),*abs2=FileNameAbs(prefix);
 	if(!StrNCmp(abs,abs2,StrLen(abs2))) {
 		Free(abs),Free(abs2);
 		return virt;
@@ -90,3 +108,13 @@ U8 *ChrootFile(U8 *fn,U8 *prefix=WIKI_ROOT) {
 	return MStrPrint("%s/%s",prefix,fn);
 }
 extern I64 FmtText(U8 *ftxt,CDyadStream *stream,CURL *url);
+U8 *DotZify(U8 *t) {
+  U8 *r=t;
+  I64 len=StrLen(t);
+  if(StrOcc(t,'.'))
+    if(!(t[len-2]=='.'&&t[len-1]=='Z')) {
+      r=MStrPrint("%s.Z",t);
+      Free(t);
+    }
+  return r;
+}

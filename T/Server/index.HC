@@ -31,7 +31,7 @@ U0 UploadPost(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHash
 		WriteLn(stream,,"Server: Bungis");
 		WriteLn(stream,,"Content-Type: text/html");
 		WriteLn(stream,,"");
-		where=ChrootFile(hash->user_data2);
+		where=DotZify(ChrootFile(hash->user_data2));
 		FileWrite(where,hash->user_data1,hash->user_data0);
 		blurb=MStrPrint("File %s uploaded.",hash->user_data2);
 		WikiHeader(stream,NULL,blurb,FALSE);
@@ -78,7 +78,7 @@ U0 IndexGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
         WriteLn(stream,NULL,"<FORM ACTION=\""WIKI_EDIT"\" CLASS=\"form-group>\">");
 	WriteLn(stream,NULL,"<LABELFOR=\"PAGENAME\">New Page:</LABEL>");
 	WriteLn(stream,NULL,"<INPUT TYPE=\"TEXT\" NAME=\"PAGENAME\" ID=\"PAGENAME\">");
-	WriteLn(stream,NULL,"</FORM>");
+	WriteLn(stream,NULL,"</FORM>");
 	WriteLn(stream,NULL,"<H1>Contents of %s</H1>",rel_dir);
 	WriteLn(stream,NULL,"<UL>");
 	for(i=0;i!=ent_cnt;i++) {
@@ -86,7 +86,7 @@ U0 IndexGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 			goto next;
 		if(IsDir(sorted[i]->full_name)) {
 			WriteLn(stream,NULL,"<LI><A HREF=\""WIKI_INDEX"%s/%s\">%s</A><SPAN CLASS=\"badge secondary\">Folder</SPAN></LI>",rel_dir,sorted[i]->name,sorted[i]->name);
-		} else {
+		} else {
 			WriteLn(stream,NULL,"<LI><A HREF=\"%s/%s\">%s</A>(Last edit at %D-%T)</LI>",rel_dir,sorted[i]->name,sorted[i]->name,sorted[i]->datetime,sorted[i]->datetime);
 		}
 		next:

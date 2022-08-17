@@ -1,0 +1,78 @@
+= Multithreading.
+*TempleOS is non-preemptive. This means the tasks must explicitly tell the operating system when to swap out to another task on the core.*
+In TempleOS,"threads" are called /CTask/s and you can get the current /CTask/ via /Fs/.
+To swap out to the next task on the core,do this
+ Yield;
+You should always keep this in mind. If you need to interupt a core,press /Ctrl+Alt+C/.
+== Spawning threads
+To spawn a thread,do this.
+ U0 Foo(U8 *data) {
+   Beep;
+ }
+
+ Spawn(&Foo,"Some_data","TaskName");
+This will spawn a process on the current cpu.
+To spawn it on another CPU,do this
+ U0 Foo(U8 *data) {
+   Beep;
+ }
+ I64  cpu=1;
+ Spawn(&Foo,"Some_data","TaskName",cpu);
+(*Keep in mind that only CTasks on core 0 have windows.*) 
+== Keeping Things in Sync
+When you have multiple threads,you may want to make sure they dont try to access the same data at the same time or things may get messy. [https://en.wikipedia.org/wiki/Race_condition].
+TempleOS uses alot of spin-locks.
+They look like this.
+ I64 beep_lock=0;
+ U0 OneThread(I64 snd) {
+   //This will spin until bit 0 is reset(look at the end of the function) 
+   while(LBts(&beep_lock,0)) //LBts has a side effect of setting the bit after it is checked
+     Yield; //We are going to be beeping for awhile so Yield out control to other tasks
+   Beep(snd);
+   //We reset bit 0 of beep_lock to signify we are done with it.
+   LBtr(&beep_lock,0);
+ }
+ I64 i;
+ for(i;i!=10;i++) {
+   Spawn(&OneThread,i*7+10);
+   "Spawned a thread!!\n";
+ }
+If we dont want to /Yield/ control to other threads we can use /PAUSE/ which tells he CPU that it is in a spinlock. Only use this in "mission critical" sections of code as the CPU will spin not give other tasks a time to jam out.
+ I64 add_lock=0;
+ I64 total=0;
+ U0 Add(I64 i) {
+   while(LBts(&add_lock,0))
+      PAUSE; //"Mission critical" so just wait to the other threads to be done 
+   total+=i;
+    LBtr(&add_lock,0);
+ }
+ I64 i,t=0;
+ CTask *wait_for[10];
+ for(i=0;i!=10;i++) {
+   t+=i;
+   wait_for[i]=Spawn(&Add,i,"Adder",i%mp_cnt); //Spawn on multiple cores(mp_cnt is the number of cores and we % to always get a core below the total number of cores)
+ }
+ for(i=0;i!=10;i++) {
+   DeathWait(wait_for[i]); //Make sure we wait for the threads to finish.
+ }
+ "Total is %d(expected %d)\n",total,t;
+As we just saw,we can use /DeathWait/ to wait for a thread to be done! Here we wait 5 seconds for the sleep thread to finish
+ CTask *sleep=Spawn(&Sleep,5000);
+ DeathWait(sleep);
+== Talking to each other
+This section is kind of advanced. A certian type of thread (/SrvCmdLine/) will run a thread that accepts jobs What are /CJob/s? They are created with /TaskExe/ and friends.
+We can get a job's result with /JobResGet/
+Lets see it in action
+ CTask *parent=Fs;
+ CTask *jobber=Spawn(&SrvCmdLine,NULL,"Jobber",,parent);
+ I64 res;
+ CJob *job=TaskExe(jobber,parent,"1+1;;;",0);
+ res=JobResGet(job);
+ Kill(jobber);
+ "I got %d\n",res;
+=== Simulating User Input
+Say we want to actually talk to a Thread,we could spawn a user terminal with /User/ and use /XTalk/ to send input to it.
+ CTask *u=User;
+ XTalk(u,"\"Exiting in 5 seconds\\n\";\n"); //Be sure to put a semi-colon at the end as we are "the-user".
+ Sleep(5000);
+ XTalk(u,"Exit;\n");
