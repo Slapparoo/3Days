@@ -78,7 +78,7 @@ static void LaunchCore(void *c) {
 	FFI_CALL_TOS_2(init.val,GetFs(),0);
 	__core_num=c;
 	#ifndef TARGET_WIN32
-	CHash yield=map_get(&TOSLoader,"Yield")->data[0];
+	CHash yield=map_get(&TOSLoader,"__InteruptCoreRoutine")->data[0];
 	signal(SIGUSR2,yield.val);
 	#endif
 	(*cores[__core_num].fp)();
