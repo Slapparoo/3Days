@@ -6,7 +6,7 @@ public U0 ACDWordsLoad()
 {//Put words from word list into hash table.
   I64 size;
   CHashGeneric *tmph;
-  U8 *in_ptr,*in_start,*st2;
+   U8 *in_ptr,*in_start,*st2;
   U16 *d;
   acd.num_words=0;
   if (in_ptr=FileRead(ACD_WORD_FILENAME,&size)) {
@@ -21,7 +21,7 @@ public U0 ACDWordsLoad()
 	in_ptr++;
       if (*in_ptr) {
 	st2=MStrUtil(in_ptr,SUF_TO_UPPER);
-	tmph=CAlloc(sizeof(CHashGeneric)+StrLen(st2)+1);
+	tmph=ACAlloc(sizeof(CHashGeneric)+StrLen(st2)+1);
 	StrCpy(tmph+1,st2);
 	Free(st2);
 	in_ptr+=StrLen(in_ptr)+1;
@@ -48,7 +48,7 @@ CHashAC *ACHashAdd(U8 *w)
     tmpw->hits++;
     return tmpw;
   }
-  tmpw=CAlloc(sizeof(CHashAC));
+  tmpw=ACAlloc(sizeof(CHashAC));
   tmpw->str=StrNew(w,adam_task);
   tmpw->type=HTT_WORD;
   tmpw->use_cnt=1;
@@ -113,7 +113,7 @@ public U0 ACInit(U8 *mask=NULL)
   Bool start_flag;
   AutoComplete;
   while (LBts(&ac.flags,ACf_INIT_IN_PROGRESS)) {
-    Yield;
+    Yield;
   }
   if (FileFind(ACD_DEF_FILENAME_Z) &&
 	!FileFind(ACD_DEF_FILENAME)) {
@@ -121,7 +121,7 @@ public U0 ACInit(U8 *mask=NULL)
   }
 
   HashTableDel(ac.hash_table);
-  ac.hash_table=HashTableNew(2048);
+  ac.hash_table=HashTableNew(2048,adam_task);
 
   ac.num_words=0;
   Free(ac.cur_word);
@@ -135,3 +135,4 @@ public U0 ACInit(U8 *mask=NULL)
 	AutoComplete(ON);
 }
 
+

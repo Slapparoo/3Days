@@ -24,12 +24,15 @@ static U0 __BootstrapForeachSymbol__(U0 *cptr) {
     __BootstrapForeachSymbol(cptr);
 }
 U0 LoadImps() {
-    ExePrint2(
+  ExePrint(
         "#define FPTRS\n#include \"KERNELA.HH\";"
-    );
-    __BootstrapForeachSymbol(&BootstrapImportSymbol);
-    //Load asm externs second
-    ExePrint2("#define BOOT_3DAYS\n#include \"KERNELB.HH\";\n");
+        );
+  __BootstrapForeachSymbol(&BootstrapImportSymbol);
+//Load asm externs second
+  ExePrint("#define BOOT_3DAYS\n#include \"KERNELB.HH\";\n");
+}
+static U0 StartUpCore1(I64) {
+  ACInit("/KERNEL*.HH");
 }
 U0 StartUpTasks()
 {
@@ -40,16 +43,15 @@ U0 StartUpTasks()
   WinTileVert;
   try {
     ExeFile("/WallPaper.HC.Z");
-    ExePrint("WallPaperInit;;");
+    ExePrint("WallPaperInit;;");
   } catch
     PutExcept;
-  ACInit("/KERNEL*.HH");
   AutoComplete(ON);
 }
 U0 Adam(U8 *) {
 	I64 idx;
 	LoadImps;
-	cpu_structs[Gs->num=__CoreNum]=Gs;//It should be 0
+	cpu_structs[Gs->num=__CoreNum]=Gs;//It should be 0
 	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
 		__SpawnCore(idx,&CoreAPSethTask);
                 while(!cpu_structs[idx])
@@ -60,11 +62,12 @@ U0 Adam(U8 *) {
 	if(!__IsCmdLine) {
 		sys_winmgr_task=Spawn(&WinMgrTask);
 		//Grab pointer
-		ExePrint2("#include \"AMOUSE.HC.Z\";;");
+		ExePrint("#include \"AMOUSE.HC.Z\";;");
 	} else {
 		DeathWait(User);
 		Exit3Days;
 	}
+        Spawn(&StartUpCore1,NULL,,mp_cnt-1);
 	Refresh; //Wait for window manager.
 	StartUpTasks;
 	//We are "adam" task

@@ -496,16 +496,22 @@ static U0 KBCb(I64 c,I64 s) {
   FifoI64Ins(kbd.scan_code_fifo,s);
   kbd.timestamp=__GetTicks;
   c=ScanCode2Char(s&0x7f);
-  if(keydev.fp_ctrl_alt_cbs&&!(s&SCF_KEY_UP)&&s&SCF_ALT&&s&SCF_CTRL&&'a'<=c<='z') {
+  if(keydev.fp_ctrl_alt_cbs&&!(s&SCF_KEY_UP)&&s&SCF_ALT&&s&SCF_CTRL&&'a'<=c<='z') {
     if(keydev.fp_ctrl_alt_cbs[c-'a'])
       (*keydev.fp_ctrl_alt_cbs[c-'a'])(s);
   }
   if(!(s&SCF_KEY_UP)&&s&SCF_ALT&&s&SCF_CTRL&&(c=='c'||c=='x')&&TaskValidate(sys_focus_task)) {
     if(c=='c') {
-       LBts(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_C);
-    } else if(c=='x')
-      LBts(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_X);
-    InteruptCore(0);
+       if(!Bt(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_C)) {
+         LBts(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_C);
+         InteruptCore(0);
+       }
+    } else if(c=='x') {
+      if(!Bt(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_X)) {
+        LBts(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_X);
+        InteruptCore(0);
+      }
+    }
   }
   LBtr(&kb_mtx,0);
 }
