@@ -4,6 +4,15 @@ Bool dol_doc_inited=FALSE;
 Bool IsRaw() {
 	return __IsCmdLine;
 }
+CSysFixedArea sys_fixed_area,*SYS_FIXED_AREA;
+SYS_FIXED_AREA=&sys_fixed_area;
+U0 InitFX() {
+  I64 noreg ptr;
+  ptr=SYS_FIXED_AREA;
+  MOV RAX,U64 &ptr[RBP];
+  FXSAVE U64[RAX]
+}
+InitFX;
 extern U0 InitHeaps();
 InitHeaps;
 CHeapCtrl ahc;
@@ -44,7 +53,7 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
   }
   if(!t) t=Fs;
   Yield;
-  data=__FileRead(fn2,&len2,t);
+  data=__FileRead(fn2,&len2,t);
   if(IsDotZ(fn2)) {
     exp=ExpandBuf(data,t);
     if(len)

@@ -92,6 +92,9 @@ It's a little faster.
 	PUSH	RCX
 	MOV	RSP,RAX
 
+	MOV	RAX, U64 CTask.fpu_mmx[RSI]
+	FXSAVE	U64 [RAX]
+
 	MOV	RDX,U64 CTask.bpt_lst[RSI]
 @@05:	TEST	RDX,RDX
 	JZ	@@10
@@ -122,6 +125,10 @@ _TASK_CONTEXT_RESTORE::
 	JMP	@@10
 
 @@15:	INC	U64 CTask.swap_cnter[RSI]
+
+	MOV	RAX,U64 CTask.fpu_mmx[RSI]
+	FXRSTOR	U64 [RAX]
+
 	MOV	RAX,RSP
 	LEA	RSP,U64 CTask.rcx[RSI]
 	POP	RCX
@@ -284,4 +291,9 @@ U0 Yield() {
 	PUSH RSI
 	_Yield;
 	POP RSI
+}
+U0 __InteruptCoreRoutine() {
+  PUSH_REGS;
+  Yield;
+  POP_REGS;
 }

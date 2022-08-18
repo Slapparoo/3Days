@@ -2062,7 +2062,7 @@ class CInst
 
 #define PUSH_C_REGS PUSH RAX PUSH RCX PUSH RDX PUSH RBX PUSH R8 PUSH R9
 #define POP_C_REGS POP R9 POP R8 POP RBX POP RDX POP RCX POP RAX
-
+
 #define PUSH_REGS PUSH RAX PUSH RCX PUSH RDX PUSH RBX PUSH RBP PUSH RSI \
 PUSH RDI PUSH R8 PUSH R9 PUSH R10 PUSH R11 PUSH R12 PUSH R13 PUSH R14 PUSH R15
 #define POP_REGS POP R15 POP R14 POP R13 POP R12 POP R11 POP R10 POP R9 \
@@ -3639,7 +3639,6 @@ public class CCPU //The Gs segment reg points to current CCPU.
 
 #define MEM_MIN_MEG		512 //512 Meg minimum.
 
-#define SYS_FIXED_AREA		0x100000
 #define SYS_16MEG_AREA_LIMIT	0x1000000
 public class CSysFixedArea
 {
@@ -3649,6 +3648,7 @@ public class CSysFixedArea
   CBlkPool sys_code_bp;
   CHeapCtrl adam_hc;
 };
+extern CSysFixedArea sys_fixed_area, *SYS_FIXED_AREA;
 #define CH_CTRLA	0x01
 #define CH_CTRLB	0x02
 #define CH_CTRLC	0x03
@@ -5037,7 +5037,7 @@ extern CDirEntry *FilesFind__(U8 *files_find_mask,I64 fuf_flags=0,
                        CDirEntry *parent=NULL);
 extern CDirEntry *FilesFind2(U8 *files_find_mask,I64 fuf_flags);
 extern CDirEntry *FilesFind(U8 *files_find_mask,I64 fuf_flags=0);
-extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=FUF_Z_OR_NOT_Z);
+extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=FUF_Z_OR_NOT_Z);
 extern U0 PutFileLink(U8 *filename,U8 *full_name=NULL,I64 line=0,Bool plain_text=FALSE);
 extern I64 Dir(U8 *files_find_mask=".",Bool full=FALSE);
 extern U8 *FileExtDot(U8 *src);

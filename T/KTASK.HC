@@ -280,6 +280,11 @@ I64 TaskInit(CTask *task,I64 stk_size)
   QueInit(&task->next_except);
   QueInit(&task->next_ctrl);
   QueInit(&task->next_ode);
+
+  task->fpu_mmx=MAllocAligned(sizeof(CFPU),0x10,task);
+  MemCpy(task->fpu_mmx,
+	SYS_FIXED_AREA+offset(CSysFixedArea.init_fpu_mmx),sizeof(CFPU));
+
   
   task->hash_table=HashTableNew(TASK_HASH_TABLE_SIZE,task);
   task->text_attr	=WHITE<<4+BLUE;

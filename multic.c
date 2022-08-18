@@ -89,7 +89,7 @@ void InteruptCore(int core) {
 	#else
 	vec_CHash_t *hash;
 	CONTEXT ctx;
-	if(hash=map_get(&TOSLoader,"Yield")) {
+	if(hash=map_get(&TOSLoader," __InteruptCoreRoutine")) {
 		memset(&ctx,0,sizeof ctx);
 		ctx.ContextFlags=CONTEXT_FULL; 
 		SuspendThread(cores[core].thread);
