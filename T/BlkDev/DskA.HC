@@ -42,7 +42,7 @@ public Bool Del(U8 *f1) {
     if(!StrCmp(".",cur->name)||!StrCmp("..",cur->name))
       ;
     else
-      __Del(cur->full_name);
+      __Del(cur->full_name);
   }
   DirTreeDel(finds);    
 }
@@ -125,7 +125,7 @@ I64 DelTreeDirs(CDirEntry *tmpde1)
   while (tmpde1)
   {
     tmpde2=tmpde1->next;
-    if (IsDir(tmpde1->full_name))
+    if (IsDir(tmpde1->full_name)&&!StrCmp(tmpde1->name,".")&&!StrCmp(tmpde1->name,".."))
     {
       if (tmpde1->sub)
         res+=DelTreeDirs(tmpde1->sub);
@@ -143,13 +143,16 @@ I64 DelTreeFiles(CDirEntry *tmpde1)
   while (tmpde1)
   {
     tmpde2=tmpde1->next;
+    if(!StrCmp(tmpde1->name,".")&&!StrCmp(tmpde1->name,".."))
+      goto next;
     if (IsDir(tmpde1->full_name))
     {
       if (tmpde1->sub)
         res+=DelTreeFiles(tmpde1->sub);
     }
-    else
+    else
       res+=__Del(tmpde1->full_name);
+    next:
     DirEntryDel(tmpde1);
     tmpde1=tmpde2;
   }
