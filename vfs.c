@@ -295,19 +295,66 @@ int VFsCd(char *to,int flags) {
 	vec_deinit(&path);
     return !failed||allow_fail;
 }
+#ifndef TARGET_WIN32
+static void DelDir(char *p) {
+	DIR *d=opendir(p); 
+	struct dirent *d2;
+	char od[PATH_MAX];
+	while(d2=readdir(d)) {
+		if(!strcmp(".",d2->d_name)||!strcmp("..",d2->d_name))
+			continue;
+		strcpy(od,p);
+		strcat(od,"/");
+		strcat(od,d2->d_name);
+		if(__FIsDir(od)) {
+			DelDir(od);
+		} else {
+			remove(od);
+		}
+	}
+	closedir(d);
+	rmdir(p);
+}
+#else
+static void DelDir(char *p) {
+	DIR *d=opendir(p); 
+	struct dirent *d2;
+	char od[PATH_MAX];
+	while(d2=readdir(d)) {
+		if(!strcmp(".",d2->d_name)||!strcmp("..",d2->d_name))
+			continue;
+		strcpy(od,p);
+		strcat(od,"\\");
+		strcat(od,d2->d_name);
+		if(__FIsDir(od)) {
+			DelDir(od);
+		} else {
+			DeleteFileA(od);
+		}
+	}
+	closedir(d);
+	RemoveDirectory(p);
+}
+#endif
 int64_t VFsDel(char *p) {
+	int r;
 	p=__VFsFileNameAbs(p);
 	if(!__FExists(p))
 		return TD_FREE(p),0;
 	#ifdef TARGET_WIN32
 	if(__FIsDir(p))
-		RemoveDirectory(p);
+		DelDir(p);
 	else
 		DeleteFileA(p);
 	#else
-	remove(p);
+	if(__FIsDir(p)) {
+		DelDir(p);
+	} else 
+		remove(p);
 	#endif
-	return TD_FREE(p),!__FExists(p);
+	r=!__FExists(p);
+	TD_FREE(p);
+	return r;
 }
 //Returns Host OS location of file
 char *__VFsFileNameAbs(char *name) {

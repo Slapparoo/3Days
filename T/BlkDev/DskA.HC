@@ -38,8 +38,12 @@ Bool Copy(U8 *src_files_find_mask,U8 *dst_files_find_mask=".")
 }
 public Bool Del(U8 *f1) {
   CDirEntry *finds=FilesFind(f1),*cur=NULL;
-  for(cur=finds;cur;cur=cur->next)
-	__Del(cur->full_name);
+  for(cur=finds;cur;cur=cur->next) {
+    if(!StrCmp(".",cur->name)||!StrCmp("..",cur->name))
+      ;
+    else
+      __Del(cur->full_name);
+  }
   DirTreeDel(finds);    
 }
 public Bool Move(U8 *f1,U8 *f2)
@@ -111,7 +115,7 @@ public I64 CopyTree(U8 *src_files_find_mask,U8 *dst_files_find_mask,
     DirTreeDel(tmpde);
     Free(st1);
   }
-  return res;
+  return res;
 }
 
 I64 DelTreeDirs(CDirEntry *tmpde1)
