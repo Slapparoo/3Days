@@ -299,7 +299,7 @@ int VFsCd(char *to,int flags) {
 static void DelDir(char *p) {
 	DIR *d=opendir(p); 
 	struct dirent *d2;
-	char od[PATH_MAX];
+	char od[2048];
 	while(d2=readdir(d)) {
 		if(!strcmp(".",d2->d_name)||!strcmp("..",d2->d_name))
 			continue;
