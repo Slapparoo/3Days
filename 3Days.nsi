@@ -85,7 +85,7 @@ SetOutPath "$INSTDIR"
 File "3d_loader.exe"
 File "HCRT.BIN"
 SetOutPath "$INSTDIR\T"
-File /r "T/T/*"
+File /r "T\T\*"
 SectionEnd
 
 ######################################################################

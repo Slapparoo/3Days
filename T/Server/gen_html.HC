@@ -375,7 +375,7 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   QueInit(markup);
   QueInit(headers);
   cheader=headers;
-  last=markup;
+  last=markup;
   if(!StrLen(url->abs_path)||!StrCmp(url->abs_path,"/")) {
     path=StrNew(WIKI_ROOT"/WikiHome");
     //Copy into URL to "redirect"
@@ -383,8 +383,8 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   }
   if(!FileExtDot(path)) {
     t1=MStrPrint("%s.WIKI.Z",path);
+    CatPrint(url->abs_path,".WIKI.Z");
     Free(path);
-    StrCpy(url->abs_path,t1);
     path=t1;
   }
   if(FileFind(path)&&!IsDir(path)) {
