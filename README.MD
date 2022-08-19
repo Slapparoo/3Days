@@ -56,6 +56,12 @@ Inside the directory you should see `AfterEgypt`,in that folder should be lots o
 # Tips
  * You can press `ctrl+m` to get the personal menu,this will give you some links(not all are implemented at the moment).
 
+# Documentation
+I added some network support in the form of a partial `Dyad` binding,which is demostrated in `/Server`. It is a wiki server with help on using 3Days.
+You can run it via the `run.HC` in that folder,and connect to `localhost:8080`.
+
+This wiki is incomplete,but you can always help to change that. Maybe one day I will host a global version of it.
+
 # Screenshot
 ![Screenshot](hello.png)
 
@@ -65,3 +71,4 @@ Inside the directory you should see `AfterEgypt`,in that folder should be lots o
  - C_Unescaper(me nrootconauto@gmail.com)
  - https://github.com/argtable/argtable3
  - https://github.com/futurist/CommandLineToArgvA
+ - https://github.com/rxi/dyad
