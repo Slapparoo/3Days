@@ -292,8 +292,9 @@ U0 Yield() {
 	_Yield;
 	POP RSI
 }
-U0 __InteruptCoreRoutine() {
+U0 __InteruptCoreRoutine() {
   PUSH_REGS;
+  UnblockSignals;
   Yield;
   POP_REGS;
 }
