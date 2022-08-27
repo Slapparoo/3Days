@@ -84,7 +84,7 @@ U0 GrUpdateTasks()
     //Dbg("Exception in WinMgr"); TODO RESTORE
   }
   winmgr.last_ode_time=winmgr.ode_time;
-  ode_alloced_factor=LowPass1(0.1,ode_alloced_factor,
+  ode_alloced_factor=LowPass1(0.1,ode_alloced_factor,
 	Clamp(Gs->idle_factor-0.1,0.2,0.8),1/winmgr.fps);
   sys_task_being_scrn_updated=NULL;
 }
@@ -110,53 +110,39 @@ public U0 GrScaleZoom(F64 scale)
   ms.scale.x*=s;
   ms.scale.y*=s;
   ms.scale.z*=s;
-  ms.offset.x=ms.pos.x-(ms.pos.x-ms.offset.x)*s;
-  ms.offset.y=ms.pos.y-(ms.pos.y-ms.offset.y)*s;
+  gr.sx=ms.pos.x;
+  gr.sy=ms.pos.y;
   ms.offset.z=ms.pos.z-(ms.pos.z-ms.offset.z)*s;
-  gr.sx=ms.pos.x-gr.zoomed_dc->width >>1/gr.scrn_zoom;
-  gr.sy=ms.pos.y-gr.zoomed_dc->height>>1/gr.scrn_zoom;
   GrFixZoomScale;
+  ms.offset.x=gr.sx;
+  ms.offset.y=gr.sy;
 }
 
 U0 GrZoomInScrn()
 {
   GrFixZoomScale;
-  I64 plane,row,col,k,l,
-	d2=gr.zoomed_dc->width>>3/gr.scrn_zoom,
-	d4=gr.zoomed_dc->width_internal>>3,
-	d5=d4-d2*gr.scrn_zoom,
-	d3=gr.zoomed_dc->height/gr.scrn_zoom,
-	d6=(gr.zoomed_dc->height-d3)*gr.dc1->width_internal>>3,
-	d7=gr.zoomed_dc->height%gr.scrn_zoom*d4;
-  U8 *src,*src2,*dst,*src3,*map=gr.scrn_zoom_tables[gr.scrn_zoom];
-
-  src=gr.dc1->body+gr.sx>>3+gr.sy*gr.dc1->width_internal>>3;
+  I64 k,l,span,j,y;
+  U8 *src,*src_cap,*dst,*ndst;
   dst=gr.zoomed_dc->body;
-  for (plane=1;plane<0x10;plane<<=1) {
-    row=d3;
-    while (row--) {
-      k=gr.scrn_zoom;
-      while (k--) {
-	src2=src;
-	col=d2;
-	while (col--) {
-	  src3=&map[*src2++];
-	  l=gr.scrn_zoom;
-	  while (l--) {
-	    *dst++=*src3;
-	    src3+=256;
-	  }
-	}
-	l=d5;
-	while (l--)
-	  *dst++=0;
-      }
-      src+=d4;
+  span=gr.zoomed_dc->width/gr.scrn_zoom;
+  for(y=0;y!=gr.zoomed_dc->height/gr.scrn_zoom;y++) {
+    src=gr.dc2->body+gr.sx+(gr.sy+y)*gr.dc2->width_internal;  
+    src_cap=src+span;
+//We fill 1 row then we multiply that row,gr.scrn_zoom times
+    //This will make our "pixels" sqaure
+    while(src!=src_cap) {
+      for(k=0;k!=gr.scrn_zoom;k++)
+        *dst++=*src;
+      src++;
     }
-    l=d7;
-    while (l--)
-      *dst++=0;
-    src+=d6;
+    dst-=span*gr.scrn_zoom;
+    //Repeat the zoomed rows as they are the same
+    for(l=1;l<gr.scrn_zoom;l++) {
+      ndst=dst+gr.zoomed_dc->width_internal;
+      MemCpy(ndst,dst,gr.zoomed_dc->width_internal);
+      dst=ndst;
+    }
+    dst=ndst+gr.zoomed_dc->width_internal;
   }
 }
 
@@ -379,5 +365,12 @@ U0 GrUpdateScrn()
   if (gr.fp_final_scrn_update)
     (*gr.fp_final_scrn_update)(dc);
   DCDel(dc);
-  DrawWindowUpdate(_3days_screen,gr.dc2->body,gr.dc2->width_internal,gr.dc2->height);
+  if(gr.scrn_zoom==1) {
+    DrawWindowUpdate(_3days_screen,gr.dc2->body,gr.dc2->width_internal,gr.dc2->height);
+  } else {
+    GrZoomInScrn;
+    DrawWindowUpdate(_3days_screen,gr.zoomed_dc->body,gr.zoomed_dc->width_internal,gr.zoomed_dc->height);
+  }
+  //God willing they are the same size
+  MemCpy(gr.scrn_image->body,gr.dc2->body,MSize(gr.scrn_image->body));
 }

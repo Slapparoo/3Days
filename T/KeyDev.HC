@@ -141,5 +141,9 @@ U0 KeyDevInit()
   //CtrlAltCBSet('V',&CtrlAltV,"Cmd /VGA Flush",,TRUE);
   //CtrlAltCBSet('X',&CtrlAltX,"Cmd /Kill Focused Task",,TRUE); Handled by input routine
   CtrlAltCBSet('B',&CtrlAltB,"Cmd /Bible");
+  CtrlAltCBSet('Z',&CtrlAltZ,"Cmd /Zoom In",
+	"Cmd /Zoom Out");
+  //Clipboard supports utf8 
+  //CtrlAltCBSet('S',&CtrlAltS,"Cmd /Scrn Shot to Clip");
 }
 KeyDevInit;
