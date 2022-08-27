@@ -1,11 +1,5 @@
 #help_index "Cmd Line (Typically)"
 
-#define FND_REPLACE	0
-#define FND_SKIP	1
-#define FND_ALL		2
-#define FND_ED		3
-#define FND_ABORT_FILE	4
-#define FND_SKIP_FILE	5
 
 I64 PopUpFindMenu()
 {

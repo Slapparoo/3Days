@@ -393,7 +393,7 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 	      KeyDescSet("Cmd /File Manager");
 	    else {
 	      DocUnlock(doc);
-	      //FileMgr; TODO URGENT RESTOR
+	      FileMgr;
 	      DocLock(doc);
 	    }
 	  }
@@ -403,7 +403,7 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 	    if (sc&SCF_KEY_DESC)
 	      KeyDescSet("Cmd /Search Files");
 	    else
-	      ;//FindWiz;
+	      FindWiz;
 	  } else {
 	    if (sc&SCF_KEY_DESC)
 	      KeyDescSet("Edit/Find & Replace");

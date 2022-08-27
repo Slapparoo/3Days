@@ -89,9 +89,6 @@ I64 CmpOffset2Reg(I64 offset,COptReg *reg_offsets)
   return -1;
 }
 
-#define FBO1_NOT_CONST	0
-#define FBO1_INT	1
-#define FBO1_F64	2
 
 Bool OptFixupBinaryOp1(CIntermediateCode *tmpi,
      CIntermediateCode *tmpi1,CIntermediateCode *tmpi2,

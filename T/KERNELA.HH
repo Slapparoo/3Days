@@ -6085,3 +6085,198 @@ extern U0 ProgressBarsRst(U8 *path=NULL);
 extern Bool ScrnCast(Bool val=ON,Bool just_audio=FALSE,U8 *print_fmt="/Tmp/%X.GR");
 extern CDate Now();
 extern U8 *TaskCaller(CTask *task=NULL,I64 num=0,Bool saved_context=FALSE);
+#define FBO1_NOT_CONST	0
+#define FBO1_INT	1
+#define FBO1_F64	2
+
+#define MODR_REG			0
+#define MODR_INDIRECT_REG		1
+#define MODR_D8_INDIRECT_REG		2
+#define MODR_D32_INDIRECT_REG		3
+#define MODR_SIB_INDIRECT_REG		4
+#define MODR_SIB_D8_INDIRECT_REG	5
+#define MODR_SIB_D32_INDIRECT_REG	6
+#define MODR_RIP_REL			7
+#define MODR_RIP_REL_IMM_U32		8
+
+#define SLASH_OP_INC		0x0003000000FFFE00
+#define SLASH_OP_DEC		0x052B000000FFFE01
+#define SLASH_OP_NOT		0x0000000000F7F602
+#define SLASH_OP_NEG		0x0000000000F7F603
+#define SLASH_OP_IMM_U8		0x0000000000838000
+#define SLASH_OP_IMM_U32	0x0000000000818300
+#define SLASH_OP_MUL		0x0000000000F7F604
+#define SLASH_OP_IMUL		0x0000000000F7F605
+#define SLASH_OP_DIV		0x0000000000F7F606
+#define SLASH_OP_MOV		0x0000000000898800
+#define SLASH_OP_MOV_IMM	0x0000000000C7C600
+#define SLASH_OP_PUSH		0x0000000000FFFF06
+#define SLASH_OP_POP		0x00000000008F8F00
+#define SLASH_OP_FADD		0x0000C1DE01DCDC00
+#define SLASH_OP_FSUB		0x0000E9DE01DCDC04
+#define SLASH_OP_FSUBR		0x0000E1DE01DCDC05
+#define SLASH_OP_FMUL		0x0000C9DE01DCDC01
+#define SLASH_OP_FDIV		0x0000F9DE01DCDC06
+#define SLASH_OP_FDIVR		0x0000F1DE01DCDC07
+#define SLASH_OP_FLD		0x0000000001DDDD00
+#define SLASH_OP_FSTP		0x0000000001DDDD03
+#define SLASH_OP_FISTTP		0x0000000001DDDD01
+#define SLASH_OP_FILD		0x0000000001DFDF05
+
+#define SPE_ABORT	(-1)
+#define SPE_EXIT	0
+#define SPE_CONT	1
+
+#define MESH_WORKSPACE_SIZE	4000
+
+#define VF_SEL		1
+#define VF_COPIED	2
+#define VF_IGNORE	4
+
+#define TF_SEL	1
+#define TF_COPIED	2
+
+#define SEL_MESH_EQU	0
+#define SEL_MESH_OR	1
+#define SEL_MESH_AND	2
+
+#define SPEDT_SIMPLE_PT		0
+#define SPEDT_WIDTH_HEIGHT	1
+
+#define SPBM_EXIT		0
+#define SPBM_MAIN_MENU		1
+#define SPBM_COLOR		2
+#define SPBM_DITHER_COLOR	3
+#define SPBM_WIDTH		4
+#define SPBM_PT			5
+#define SPBM_LINE		6
+#define SPBM_ARROW		7
+#define SPBM_RECT		8
+#define SPBM_CIRCLE		9
+#define SPBM_TEXT		10
+#define SPBM_TEXT_BOX		11
+#define SPBM_TEXT_DIAMOND	12
+#define SPBM_FLOOD_FILL		13
+#define SPBM_FLOOD_FILL_NOT	14
+#define SPBM_POLYLINE		15
+#define SPBM_POLYPT		16
+#define SPBM_COPY		17
+#define SPBM_DELETE		18
+#define SPBM_PASTE		19
+#define SPBM_PASTE_TRANSPARENT	20
+#define SPBM_FIND_AND_REPLACE	21
+#define SPBM_TRIM_TO_EXTENTS	22
+#define SPBM_ADD_OUTLINE	23
+#define SPBM_ETCH		24
+#define SPBM_UNDO		25
+#define SPBM_SAVE_GR		26
+
+#define DUR_4		0
+#define DUR_8_8		1
+#define DUR_3_3_3	2
+#define DUR_16_16_16_16	3
+#define DUR_8DOT_16	4
+#define DUR_8_16_16	5
+#define DUR_16_16_8	6
+
+#define DHT_DOC_CMD	1
+#define DHT_DOC_FLAG	2
+#define DHT_COLOR	4
+
+#define WIZ_HIGHLIGHT_ON	(DOCT_ERROR+1)
+#define WIZ_HIGHLIGHT_OFF	(DOCT_ERROR+2)
+
+#define C_INDENT_SPACES		2
+#define ASM_RENUM_SPACING	5
+
+#define EF_REINDENT	0
+#define EF_CMP_CHK	1
+#define EF_RENUM_ASM	2
+#define EF_CTRL_SLIDER	3
+#define EF_CH_SC	4
+
+#define LK_FILE 	0
+#define LK_FILE_ANCHOR	1
+#define LK_FILE_FIND	2
+#define LK_FILE_LINE	3
+#define LK_MAN_PAGE	4
+#define LK_PLAIN	5
+#define LK_PLAIN_FIND	6
+#define LK_PLAIN_LINE	7
+#define LK_BIBLE_FIND	8
+#define LK_DEF		9
+#define LK_HELP_INDEX	10
+#define LK_ADDR		11
+#define LK_DOC		12 //See \dLK,"SpriteEdText",A="MN:SpriteEdText"\d()
+#define LK_DOC_ANCHOR	13
+#define LK_DOC_FIND	14
+#define LK_DOC_LINE	15
+#define LK_PLACE_ANCHOR	16
+
+#define SM_RECORD	0
+#define SM_INS		1
+#define SM_PLAY		2
+#define SM_REPEAT_N	3
+#define SM_STOP		4
+
+#define FND_REPLACE	0
+#define FND_SKIP	1
+#define FND_ALL		2
+#define FND_ED		3
+#define FND_ABORT_FILE	4
+#define FND_SKIP_FILE	5
+
+extern I64 PopUpFindMenu();
+
+#define PE_UNARY_TERM1		0
+#define PE_UNARY_TERM2		1
+#define PE_MAYBE_MODIFIERS	2
+#define PE_UNARY_MODIFIERS	3
+#define PE_DEREFERENCE		4
+#define PE_CHECK_BINARY_OPS1	5
+#define PE_CHECK_BINARY_OPS2	6
+#define PE_DO_UNARY_OP		7
+#define PE_DO_BINARY_OP		8
+#define PE_POP_HIGHER		9
+#define PE_PUSH_LOWER		10
+#define PE_POP_ALL1		11
+#define PE_POP_ALL2		12
+
+#define FMR_INCLUDE		0
+#define FMR_ADAM_INCLUDE	1
+#define FMR_DELETE		2
+#define FMR_RENAME		3
+#define FMR_MKDIR		4
+#define FMR_PLAIN		5
+#define FMR_PASTE		6
+#define FMR_CHG_DSK		7
+#define FMR_FORMAT		8
+#define FMR_MOUNT_REDSEA_ISO_C	9
+#define FMR_UNMOUNT		10
+#define FMR_MAKE_REDSEA_ISO_C	11
+#define FMR_BURN_ISO		12
+#define FMR_HELP		13
+
+
+#define DEF2_PROCESSED		1
+#define DEF2_NOT_INITIALIZED	2
+
+#define FM_NORMAL	0
+#define FM_PICK_FILE	1
+#define FM_PICK_DIR	2
+
+#define DF_MODIFIED			0x01
+#define DF_DONT_MODIFIED		0x02
+#define DF_REMAINDER_ALL_FILE1		0x04
+#define DF_REMAINDER_ALL_FILE2		0x08
+#define DF_ABORT_FILE			0x10
+#define DF_ABORT_ALL_FILES		0x20
+#define DF_NO_MORE_PMTS_THIS_FILE	0x40
+
+#define CN_A2	0
+#define CN_A1	1
+#define CN_INST	2
+#define CN_RES	3
+
+#define SE_NOISE	0
+#define SE_SWEEP	1

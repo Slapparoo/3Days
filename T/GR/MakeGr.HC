@@ -16,9 +16,7 @@
 #include "GrComposites.HC"
 #include "ScrnCast.HC"
 
-#define SPE_ABORT	(-1)
-#define SPE_EXIT	0
-#define SPE_CONT	1
+
 #include "SpriteNew.HC"
 #include "GrSpritePlot.HC"
 #include "SpriteMesh.HC"

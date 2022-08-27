@@ -129,11 +129,7 @@ U0 EdInsCapturedMacro()
   }
 }
 
-#define SM_RECORD	0
-#define SM_INS		1
-#define SM_PLAY		2
-#define SM_REPEAT_N	3
-#define SM_STOP		4
+
 
 I64 PopUpMacroMenu()
 {

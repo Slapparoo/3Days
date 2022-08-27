@@ -1,7 +1,3 @@
-#define CN_A2	0
-#define CN_A1	1
-#define CN_INST	2
-#define CN_RES	3
 
 U0 CmpNoteFloatOp(CCmpCtrl *cc,CIntermediateCode *tmpi,
 	Bool dont_pushable,Bool dont_popable,I64 pos)

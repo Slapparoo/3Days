@@ -26,14 +26,6 @@ U0 EdReplaceTroubleAll(CDoc *doc,Bool to_safe,Bool sel)
   EdReplaceTroubleOne(doc,"'}'"     ,"'<@%d@>'"  ,i++,to_safe,sel);
 }
 
-#define C_INDENT_SPACES		2
-#define ASM_RENUM_SPACING	5
-
-#define EF_REINDENT	0
-#define EF_CMP_CHK	1
-#define EF_RENUM_ASM	2
-#define EF_CTRL_SLIDER	3
-#define EF_CH_SC	4
 
 I64 PopUpEdFmt()
 {

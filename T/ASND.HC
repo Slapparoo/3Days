@@ -319,8 +319,6 @@ U0 CurSongTask()
 
 #help_index "Snd"
 
-#define SE_NOISE	0
-#define SE_SWEEP	1
 
 class CSoundEffectFrame
 {

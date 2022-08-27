@@ -1,9 +1,4 @@
 #help_index "Graphics/Mesh"
-#define MESH_WORKSPACE_SIZE	4000
-
-#define VF_SEL		1
-#define VF_COPIED	2
-#define VF_IGNORE	4
 
 class CMeshEdVertex
 {
@@ -17,8 +12,6 @@ class CMeshEdVertex
   I32 num,flags;
 };
 
-#define TF_SEL	1
-#define TF_COPIED	2
 
 class CMeshEdTri
 {
@@ -242,9 +235,6 @@ U0 MeshP0Offset(CMeshFrame *e,I64 dx,I64 dy,I64 dz)
   }
 }
 
-#define SEL_MESH_EQU	0
-#define SEL_MESH_OR	1
-#define SEL_MESH_AND	2
 
 U0 MeshVertexSelRect(CMeshFrame *e,I64 sel_mode,I64 x1,I64 x2,I64 y1,I64 y2)
 {

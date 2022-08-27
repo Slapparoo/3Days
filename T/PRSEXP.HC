@@ -1,16 +1,4 @@
-#define PE_UNARY_TERM1		0
-#define PE_UNARY_TERM2		1
-#define PE_MAYBE_MODIFIERS	2
-#define PE_UNARY_MODIFIERS	3
-#define PE_DEREFERENCE		4
-#define PE_CHECK_BINARY_OPS1	5
-#define PE_CHECK_BINARY_OPS2	6
-#define PE_DO_UNARY_OP		7
-#define PE_DO_BINARY_OP		8
-#define PE_POP_HIGHER		9
-#define PE_PUSH_LOWER		10
-#define PE_POP_ALL1		11
-#define PE_POP_ALL2		12
+
 
 CIntermediateCode *PrsAddOp(CCmpCtrl *cc,I64 stk_op,CHashClass *tmpc)
 {

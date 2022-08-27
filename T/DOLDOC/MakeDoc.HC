@@ -13,9 +13,7 @@ See $LK,"::/Doc/DolDocOverview.DD"$
 */
 
 //Hash Types
-#define DHT_DOC_CMD	1
-#define DHT_DOC_FLAG	2
-#define DHT_COLOR	4
+
 
 public class CDolDocGlbls
 {

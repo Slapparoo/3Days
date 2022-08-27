@@ -655,8 +655,7 @@ I64 PopUpSpriteEd(CSprite **_head,I64 *_cur_elem_num)
   return res;
 }
 
-#define SPEDT_SIMPLE_PT		0
-#define SPEDT_WIDTH_HEIGHT	1
+
 
 #define SPEDF_SEL		1
 

@@ -1,33 +1,5 @@
 #help_index "Graphics/Sprite;Sprites"
 
-#define SPBM_EXIT		0
-#define SPBM_MAIN_MENU		1
-#define SPBM_COLOR		2
-#define SPBM_DITHER_COLOR	3
-#define SPBM_WIDTH		4
-#define SPBM_PT			5
-#define SPBM_LINE		6
-#define SPBM_ARROW		7
-#define SPBM_RECT		8
-#define SPBM_CIRCLE		9
-#define SPBM_TEXT		10
-#define SPBM_TEXT_BOX		11
-#define SPBM_TEXT_DIAMOND	12
-#define SPBM_FLOOD_FILL		13
-#define SPBM_FLOOD_FILL_NOT	14
-#define SPBM_POLYLINE		15
-#define SPBM_POLYPT		16
-#define SPBM_COPY		17
-#define SPBM_DELETE		18
-#define SPBM_PASTE		19
-#define SPBM_PASTE_TRANSPARENT	20
-#define SPBM_FIND_AND_REPLACE	21
-#define SPBM_TRIM_TO_EXTENTS	22
-#define SPBM_ADD_OUTLINE	23
-#define SPBM_ETCH		24
-#define SPBM_UNDO		25
-#define SPBM_SAVE_GR		26
-
 U0 GrInit4()
 {
   DefineLstLoad("ST_SPRITE_BITMAP_MENU",
