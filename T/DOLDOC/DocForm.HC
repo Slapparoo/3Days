@@ -100,9 +100,8 @@ U0 DocDataFmt(CDoc *doc,CDocEntry *doc_e,I64 d=DOCM_CANCEL)
 	}
 	Free(ptr);
       } else {
-      Free(doc_e->tag);
-	doc_e->tag=MStrPrint(doc_e->aux_str,d,doc_e->my_fmt_data); //CHANGED to avoid buffer overflows
-	i=StrLen(doc_e->tag);
+      StrPrint(doc_e->tag,doc_e->aux_str,d,doc_e->my_fmt_data);
+     	i=StrLen(doc_e->tag);
       }
       if (doc_e->de_flags & DOCEF_HAS_TERMINATOR) {
 	doc_e->tag[i++]='_';
@@ -343,3 +342,4 @@ public Bool PopUpForm(U8 *_d,U8 *class_name=lastclass,
   return PopUpPrint("DocForm(0x%X,0x%X,0x%X,0x%X,0x%X);",_d,class_name,
 	dof_flags,header,footer);
 }
+

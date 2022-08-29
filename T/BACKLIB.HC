@@ -665,87 +665,87 @@ U0 ICLea(CIntermediateCode *tmpi,CICType t1,I64 r1,I64 d1,
   }
 }
 U0 __BoundsCheck(CIntermediateCode *tmpi,I64 rip,CICType t,I64 r,I64 disp) {
-	if(tmpi->cc->flags&CCF_ASM_EXPRESSIONS) return;
-	if(r==REG_RIP||r==REG_RBP) return;
-	I64 i,width=1;
-	CHashExport *tmpex;
-	CAOTImportExport *tmpie;
-	tmpex=HashFind("SYS_WHINE_OOB",tmpi->cc->htc.hash_table_lst,HTT_EXPORT_SYS_SYM);
-	if(tmpi->cc->flags&CCF_AOT_COMPILE) {
-		 if (!tmpex) {
-			return;
-			tmpex=CAlloc(sizeof(CHashExport));
-			tmpex->str=StrNew("SYS_WHINE_OOB");
-			tmpex->type=HTT_EXPORT_SYS_SYM|HTF_UNRESOLVED|HTF_IMPORT;
-			HashAdd(tmpex,tmpi->cc->htc.glbl_hash_table);
-		 }
-	 }
-	 ICPush(tmpi,MDF_REG+RT_I64,REG_RAX,0,rip);
-	switch(t.raw_type) {
-		case RT_I0:
-		case RT_U0:
-		ICPush(tmpi,MDF_IMM+RT_I64,0,0,rip);
-		break;
-		case RT_I8:
-		case RT_U8:
-		width=1;
-		ICPush(tmpi,MDF_IMM+RT_I64,0,1,rip);
-		break;
-		case RT_I16:
-		case RT_U16:
-		width=2;
-		ICPush(tmpi,MDF_IMM+RT_I64,0,8,rip);
-		break;
-		case RT_I32:
-		case RT_U32:
-		case RT_F32:
-		case RT_UF32:
-		width=4;
-		ICPush(tmpi,MDF_IMM+RT_I64,0,4,rip);
-		break;
-		//case RT_PTR: aliased to RT_I64
-		case RT_I64:
-		case RT_U64:
-		case RT_F64:
-		case RT_UF64:
-		width=8;
-		ICPush(tmpi,MDF_IMM+RT_I64,0,8,rip);
-		break;
-		default:
-		throw('Compiler');
-	}
-	if((r>>4)&0xf==0) { //Upper 4 bits are SIB index 
-		ICPushRegs(tmpi,1<<r);
-		if(disp) {
-			//ADD U64 [RSP],0xXXxxXXxx
-			ICU32(tmpi,0x24048148);
-			ICU32(tmpi,disp);
-		}
-	} else {
-		ICLea(tmpi,MDF_REG+RT_I64,REG_RAX,0,t,r,disp,tmpi->cc,NULL,rip);
-		ICPushRegs(tmpi,1<<REG_RAX);
-	}
-	//Call _WHINE_OOB
-	i=tmpex->val-(rip+tmpi->ic_cnt+5);
-	ICU8(tmpi,0xE8);
-	if(tmpi->cc->flags&CCF_AOT_COMPILE) {
-		if (tmpex->type&HTF_IMPORT) {
-			ICU32(tmpi,-(rip+tmpi->ic_cnt+4));
-			if(tmpi->cc->flags&CCF_BUF_PRESENT) {
-				tmpie=CAlloc(sizeof(CAOTImportExport));
-				tmpie->type=IET_REL_I32;
-				tmpie->rip=rip+tmpi->ic_cnt-4;
-				tmpie->next=tmpex->ie_lst;
-				tmpex->ie_lst=tmpie;
-			}
-		} else {
-			ICU32(tmpi,i);
-		}
-	} else {
-		ICU32(tmpi,i);
-	}
-	tmpi->ic_flags&=~ICF_CODE_FINAL;
-	ICPop(tmpi,MDF_REG+RT_I64,REG_RAX,0,rip);
+  if(tmpi->cc->flags&CCF_ASM_EXPRESSIONS) return;
+  if(r==REG_RIP||r==REG_RBP) return;
+  I64 i,width=1;
+  CHashExport *tmpex;
+  CAOTImportExport *tmpie;
+  tmpex=HashFind("_SYS_WHINE_OOB",tmpi->cc->htc.hash_table_lst,HTT_EXPORT_SYS_SYM);
+  if(tmpi->cc->flags&CCF_AOT_COMPILE) {
+    if (!tmpex) {
+      return;
+      tmpex=CAlloc(sizeof(CHashExport));
+      tmpex->str=StrNew("_SYS_WHINE_OOB");
+      tmpex->type=HTT_EXPORT_SYS_SYM|HTF_UNRESOLVED|HTF_IMPORT;
+      HashAdd(tmpex,tmpi->cc->htc.glbl_hash_table);
+    }
+  }
+  ICPush(tmpi,MDF_REG+RT_I64,REG_RAX,0,rip);
+  switch(t.raw_type) {
+    case RT_I0:
+    case RT_U0:
+      ICPush(tmpi,MDF_IMM+RT_I64,0,0,rip);
+      break;
+    case RT_I8:
+    case RT_U8:
+      width=1;
+      ICPush(tmpi,MDF_IMM+RT_I64,0,1,rip);
+      break;
+    case RT_I16:
+    case RT_U16:
+      width=2;
+      ICPush(tmpi,MDF_IMM+RT_I64,0,8,rip);
+      break;
+    case RT_I32:
+    case RT_U32:
+    case RT_F32:
+    case RT_UF32:
+      width=4;
+      ICPush(tmpi,MDF_IMM+RT_I64,0,4,rip);
+      break;
+//case RT_PTR: aliased to RT_I64
+    case RT_I64:
+    case RT_U64:
+    case RT_F64:
+    case RT_UF64:
+      width=8;
+      ICPush(tmpi,MDF_IMM+RT_I64,0,8,rip);
+      break;
+    default:
+      throw('Compiler');
+  }
+  if((r>>4)&0xf==0) { //Upper 4 bits are SIB index 
+    ICPushRegs(tmpi,1<<r);
+    if(disp) {
+//ADD U64 [RSP],0xXXxxXXxx
+      ICU32(tmpi,0x24048148);
+      ICU32(tmpi,disp);
+    }
+  } else {
+    ICLea(tmpi,MDF_REG+RT_I64,REG_RAX,0,t,r,disp,tmpi->cc,NULL,rip);
+    ICPushRegs(tmpi,1<<REG_RAX);
+  }
+//Call _WHINE_OOB
+  i=tmpex->val-(rip+tmpi->ic_cnt+5);
+  ICU8(tmpi,0xE8);
+  if(tmpi->cc->flags&CCF_AOT_COMPILE) {
+    if (tmpex->type&HTF_IMPORT) {
+      ICU32(tmpi,-(rip+tmpi->ic_cnt+4));
+      if(tmpi->cc->flags&CCF_BUF_PRESENT) {
+        tmpie=CAlloc(sizeof(CAOTImportExport));
+        tmpie->type=IET_REL_I32;
+        tmpie->rip=rip+tmpi->ic_cnt-4;
+        tmpie->next=tmpex->ie_lst;
+        tmpex->ie_lst=tmpie;
+      }
+    } else {
+      ICU32(tmpi,i);
+    }
+  } else {
+    ICU32(tmpi,i);
+  }
+  tmpi->ic_flags&=~ICF_CODE_FINAL;
+  ICPop(tmpi,MDF_REG+RT_I64,REG_RAX,0,rip);
 }
 U0 ICDeref(CIntermediateCode *tmpi,I64 rip,Bool bounds_check=FALSE)
 {

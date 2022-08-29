@@ -13,7 +13,7 @@ public _extern _LBEQU Bool LBEqu(
 	U8 *bit_field,I64 bit,Bool val); //Locked Set bit equ to val.
 
 public _extern _CALL I64 Call(U8 *machine_code); //Call addr with no args.
-public _extern _CALLEXTSTR I64 CallExtStr(
+public _extern _CALLEXTSTR I64 CallExtStr(
 	/*argpop*/ U8 *name,...); //Search sym table for fun and pass it args.
 //Can have any fixed number of arguments.
 public _extern _CALL_IND I64 CallInd(
@@ -110,6 +110,7 @@ public _extern _HASH_REM_DEL Bool HashRemDel(CHash *tmph,CHashTable *table,
 	I64 instance=1);//instance must match tmph's
 
 #ifdef BOOT_3DAYS
+_extern _SYS_WHINE_OOB U0 SYS_WHINE_OOB;
 _extern _HASH_ADD_AFTER U0 HashAddAfter(CHash *tmph,
         CHash *pred,CHashTable *table); //Add hash entry after entry.
 _extern _HASH_STR I64 HashStr(U8 *st); //Hash a string.

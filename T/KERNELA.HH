@@ -1526,7 +1526,7 @@ public class CDocEntry:CDocEntryBase
 
 class CEdFindText
 {
-  U8	find_text[STR_LEN] format "\dDA-P,"
+  U8	find_text[STR_LEN] format "\dDA-P,"
 	"A=\"Find        :%s\"\d\n",
 	replace_text[STR_LEN] format "\dDA-P,"
 	"A=\"Replace     :%s\"\d\n";
@@ -2062,7 +2062,7 @@ class CInst
 
 #define PUSH_C_REGS PUSH RAX PUSH RCX PUSH RDX PUSH RBX PUSH R8 PUSH R9
 #define POP_C_REGS POP R9 POP R8 POP RBX POP RDX POP RCX POP RAX
-
+
 #define PUSH_REGS PUSH RAX PUSH RCX PUSH RDX PUSH RBX PUSH RBP PUSH RSI \
 PUSH RDI PUSH R8 PUSH R9 PUSH R10 PUSH R11 PUSH R12 PUSH R13 PUSH R14 PUSH R15
 #define POP_REGS POP R15 POP R14 POP R13 POP R12 POP R11 POP R10 POP R9 \
@@ -3058,16 +3058,19 @@ class CMemUsed
   U0	start;
 };
 #else
+extern class CMemBlk;
 class CMemUnused
 {
   U0	hc;
   U0	caller1,caller2;
   CMemUnused *next;
+  CMemBlk *blk,*pad;
   I64	size;
 };
 class CMemUsed
 {
   CHeapCtrl *hc;
+  CMemBlk *blk,*pad;
   U0	caller1,caller2;
   U0	next,last;
   I64	size;
@@ -3081,6 +3084,7 @@ class CMemBlk
   CMemBlk *next,*last;
   U32	mb_signature,pags;
   CMemBlk *next2,*last2;
+  U8 *shadow,*pad; //Byte for byte shadow memory
 };
 
 #define MRT_UNUSED	0
@@ -5986,7 +5990,8 @@ extern U8 *ACAlloc(I64 size);
 extern U8 *MAlloc32(I64 size,CTask *task=NULL);
 extern U8 *CAlloc(I64 size,CTask *mem_task=NULL);
 extern U8 *AMAlloc(I64 size);
-extern Bool IsValidPtr(U8 *ptr);
+//This dude will whine on OOB by printinng a bracktrace to the console
+extern U0 IsValidPtr(U8 *ptr,I64 sz=1);
 extern U0 EdCharIns(I64 ch,I64 sc,CDoc *doc);
 extern CTask *adam_task;
 extern Bool YorN();
@@ -6280,3 +6285,5 @@ extern I64 PopUpFindMenu();
 
 #define SE_NOISE	0
 #define SE_SWEEP	1
+
+extern U0 DocDataFmt(CDoc *doc,CDocEntry *doc_e,I64 d=DOCM_CANCEL);

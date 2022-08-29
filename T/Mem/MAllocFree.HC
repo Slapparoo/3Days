@@ -8,12 +8,15 @@ _MALLOC::
 // Throws 'OutMem'
 	PUSH	RBP
 	MOV	RBP,RSP
+	PUSH R11
+	MOV R11,INVALID_PTR
 	PUSH	RSI
 	PUSH	RDI
 	PUSH R10
 	MOV	R10,0
 
 	XOR	RBX,RBX
+	ADD	U64 SF_ARG1[RBP],16
 	MOV	RDX,U64 SF_ARG2[RBP]
 	MOV R8,RDX
 	TEST	RDX,RDX
@@ -38,7 +41,6 @@ _MALLOC::
 	JMP	I32 _SYS_HLT
 
 @@15:	MOV	RAX,U64 SF_ARG1[RBP]
-	ADD RAX,16
 	PUSHFD
 	ADD	RAX,CMemUsed.start+7	//round-up to I64
 	AND	AL,0xF8
@@ -58,6 +60,7 @@ _MALLOC::
 	TEST	RSI,RSI
 	JZ	@@35
 	MOV	RCX,U64 CMemUnused.next[RSI]
+	MOV R11,CMemUnused.blk[RSI]
 	MOV	U64 CHeapCtrl.heap_hash[RAX+RDX],RCX
 	JMP	I32 MALLOC_ALMOST_DONE
 
@@ -75,11 +78,13 @@ _MALLOC::
 	TEST	RAX,RAX
 	JZ	@@45	//Out of memory
 	MOV	RSI,RAX
+	MOV R11,RAX
 	MOV	EAX,U32 CMemBlk.pags[RSI]
 
 	SHL	RAX,MEM_PAG_BITS
 	SUB	RAX,sizeof(CMemBlk)
 	ADD	RSI,sizeof(CMemBlk)
+	MOV U64 CMemUnused.blk[RSI],R11
 	JMP	I32 MALLOC_ALMOST_DONE
 
 //Little allocation, chunk-off piece from free lst chunks
@@ -125,10 +130,13 @@ _MALLOC::
 	CMP	RDI,RBX
 	JNE	@@55
 @@55:	MOV	U64 CHeapCtrl.last_mergable[RDX],RSI
+	MOV	R11,RSI
 	LEA	RSI,U64 sizeof(CMemBlk)[RSI]
+	//See ahead
 	SUB	RAX,sizeof(CMemBlk)
 	LEA	RBX,U64 CHeapCtrl.malloc_free_lst-CMemUnused.next[RDX]
 	MOV	RDI,U64 CMemUnused.next[RBX]
+	MOV U64 CMemUnused.blk[RSI],R11
 	MOV	U64 CMemUnused.next[RSI],RDI
 	MOV	U64 CMemUnused.size[RSI],RAX
 	MOV	U64 CMemUnused.next[RBX],RSI
@@ -142,14 +150,22 @@ _MALLOC::
 	MOV	U64 CMemUnused.next[RBX],RDI
 	JMP	MALLOC_ALMOST_DONE
 
-@@70:	SUB	U64 CMemUnused.size[RSI],RAX	//UPDATE FREE ENTRY
+@@70:
+	MOV R11,U64 CMemUnused.blk[RSI]
+	SUB	U64 CMemUnused.size[RSI],RAX	//UPDATE FREE ENTRY
 	CMP	U64 CMemUnused.size[RSI],sizeof(CMemUnused)
 	JAE	@@75			//take from top of block
 	ADD	U64 CMemUnused.size[RSI],RAX	//doesn't fit, undo
 	JMP	I32 @@40
 
-@@75:	ADD	RSI,U64 CMemUnused.size[RSI]
-
+@@75:
+	ADD	RSI,U64 CMemUnused.size[RSI]
+	PUSH RDI
+	MOV RDI,INVALID_PTR
+	CMP	R11,RDI
+	POP	RDI
+	JE	I32 MALLOC_ALMOST_DONE
+	MOV U64 CMemUnused.blk[RSI],R11
 MALLOC_ALMOST_DONE:
 //RSI=res-CMemUsed.size
 //RAX=size+CMemUsed.size
@@ -205,7 +221,30 @@ MALLOC_ALMOST_DONE:
 @@100:	POP	RAX*/
 
 @@105:
-
+#ifdef BC_ENABLE
+	PUSH R8
+	PUSH	RAX
+	MOV RAX,U64 CMemUsed.blk-CMemUsed.start[RAX]
+	MOV	RCX,U64 SF_ARG1[RBP] //size
+	//Heres the deal,eailer we added 16 to the size,8 belongs to "extra room",and 8 is "useless"(used for catching OOB's)
+	//Get rid of "useless" room
+	SUB	RCX,8
+	SHR	RCX,3 //Shadow is 8:1
+	MOV	RBX,U64 [RSP] //Return ptr
+	SUB	RBX,RAX //Get offset from ret_ptr to CMemBlk
+	MOV	R8,RAX
+	MOV	RAX,U64 CMemBlk.shadow[RAX]
+	SHR	RBX,3 //Shadow is 8:1
+	LEA	RAX,U64 [RAX+RBX*1]
+	PUSH	RDI
+	MOV	RDI,RAX
+	MOV	AL,8
+	REP_STOSB
+	POP	RDI
+	POP	RAX
+	POP	R8
+	
+#endif
 	PUSH	RAX
 	MOV	RCX,U64 CMemUsed.size-CMemUsed.start[RAX]
 	SUB	RCX,CMemUsed.start
@@ -227,6 +266,7 @@ MALLOC_FINAL_EXIT:
 	POP R10
 	POP	RDI
 	POP	RSI
+	POP R11
 	POP	RBP
 	RET1	16
 //************************************
@@ -264,7 +304,7 @@ _FREE::
 #if _CFG_HEAP_DBG
 	JZ	I32 FREE_DONE
 #else
-	JZ	FREE_DONE
+	JZ	I32 FREE_DONE
 #endif
 
 	MOV	RAX,U64 CMemUsed.size-CMemUsed.start[RSI]
@@ -334,6 +374,29 @@ _FREE::
 	MOV	RBX,U64 CHeapCtrl.heap_hash[RAX+RDX]
 	MOV	U64 CMemUnused.next[RSI],RBX
 	MOV	U64 CHeapCtrl.heap_hash[RAX+RDX],RSI
+#ifdef BC_ENABLE
+	PUSH	R8
+	PUSH	RDX
+	MOV RAX,U64 SF_ARG1[RBP]
+	MOV RAX,U64 CMemUsed.blk-CMemUsed.start[RAX]
+	//Dude CMemUnused.size includes internal size too,so subtract
+	MOV	RCX,U64 CMemUnused.size [RSI] //size
+	SUB	RCX,CMemUsed.start	
+	SHR	RCX,3 //Shadow is 8:1
+	MOV	RBX,SF_ARG1[RBP] //ptr
+	SUB	RBX,RAX //Get offset from ptr to CMemBlk
+	MOV	R8,RAX
+	MOV	RAX,U64 CMemBlk.shadow[RAX]
+	SHR	RBX,3 //Shadow is 8:1
+	LEA	RAX,U64 [RAX+RBX*1]
+	PUSH	RDI
+	MOV	RDI,RAX
+	MOV	AL,0
+	REP_STOSB
+	POP	RDI
+	POP	RDX
+	POP	R8
+#endif
 	JMP	@@55
 
 @@50:	SUB	RSI,sizeof(CMemBlk)

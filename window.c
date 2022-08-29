@@ -89,7 +89,16 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	int dplanes=DisplayPlanes(dw->disp,screen);
 	wx=win->sz_x>480?win->sz_x:480;
 	wy=win->sz_y>640?win->sz_y:640;
-	uint32_t *scrn=calloc(4,wx*wy);
+	static int64_t old_wx,old_wy;
+	static uint32_t *old_scrn;
+	uint32_t *scrn;
+	if(old_wx!=wx||old_wy!=wy) {
+		if(old_scrn) free(old_scrn);
+		old_scrn=calloc(4,wx*wy);
+		old_wx=wx;
+		old_wy=wy;
+	}
+	scrn=old_scrn;
 	XImage *img=XCreateImage(dw->disp,vis,dplanes,ZPixmap,0,scrn,wx,wy,8,0);
 	CenterImage(dw,&cx,&cy);
 	for(y=cy;y!=cy+h;y++)
@@ -100,7 +109,6 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	XPutImage(dw->disp,dw->window,dw->gc,img,0,0,0,0,wx,wy);
 	XFlush(dw->disp);
 	XFree(img);
-	free(scrn);
 	XUnlockDisplay(dw->disp);
 }
 void DrawWindowDel(CDrawWindow *win) {

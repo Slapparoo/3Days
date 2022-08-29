@@ -1,13 +1,11 @@
+#define BC_ENABLE 1
 CQue valid_blks;
 CQue recycle32;
 I64 mem_blks_lock;
 U0 InitHeaps() {
-	mem_blks_lock=0;
-	QueInit(&valid_blks);
-	QueInit(&recycle32);
-}
-Bool IsValidPtr(U8 *ptr) {
-	return TRUE;
+  mem_blks_lock=0;
+  QueInit(&valid_blks);
+  QueInit(&recycle32);
 }
 U0 SysBadFree(I64 *ptr)
 {
@@ -19,7 +17,128 @@ U0 SysBadMAlloc(I64 *ptr)
 {
   throw('BadMallo');
 }
-
+#ifdef BC_ENABLE
+class CBlkCacheEnt {
+  U8 *s,*e;
+  CMemBlk *mem_blk;
+  I64 spin_lock;
+};
+#define BLK_CACHE_MASK 0xfff
+class CBlkCache {
+  CBlkCacheEnt ents[BLK_CACHE_MASK+1][16];
+  I64 indexes[BLK_CACHE_MASK+1];
+  I64 spin_lock;
+} blk_cache;
+I64 HashPtr(U64 ptr) {
+  ptr>>=MEM_PAG_BITS;
+  return ptr*((ptr>>8)&0xff);
+}
+CMemBlk *GetMemBlkFromCache(CBlkCache *cache,U8 *ptr) {
+  I64 bucket=HashPtr(ptr)&BLK_CACHE_MASK,idx;
+  CBlkCacheEnt *ent;
+  for(idx=0;idx!=16;idx++) {
+    ent=&cache->ents[bucket][idx];
+    while(LBts(&ent->spin_lock,0))
+     PAUSE;
+    if(ent->s<=ptr<ent->e) {
+      LBtr(&ent->spin_lock,0);  
+      return ent->mem_blk;
+    }
+    LBtr(&ent->spin_lock,0);  
+  }
+  return NULL;
+}
+U0 MemBlkCacheAdd(CBlkCache *cache,CMemBlk *blk) {
+  I64 p=blk->pags,bucket,i;
+  U8 *ref=blk;
+  CBlkCacheEnt *ent;
+  while(p--) {
+    bucket=HashPtr(blk(U8*)+p<<MEM_PAG_BITS)&BLK_CACHE_MASK;
+    while(LBts(&cache->spin_lock,0))
+      PAUSE;
+    i=cache->indexes[bucket]++;
+    cache->indexes[bucket]&=0xf;
+    ent=&cache->ents[bucket][i];
+    ent->s=blk;
+    ent->e=blk(U8*)+blk->pags<<MEM_PAG_BITS;
+    ent->mem_blk=blk;
+    LBtr(&cache->spin_lock,0);
+  }
+}
+U0 MemBlkCacheRemove(CBlkCache *cache,CMemBlk *blk) {
+  I64 p=blk->pags,bucket,i;
+  U8 *ref=blk;
+  CBlkCacheEnt *ent;
+  while(p--) {
+    bucket=HashPtr(blk(U8*)+p<<MEM_PAG_BITS)&BLK_CACHE_MASK;
+    while(LBts(&cache->spin_lock,0))
+      PAUSE;
+    for(i=0;i!=16;i++) {
+      ent=&cache->ents[bucket][i];
+      if(ent->mem_blk==blk) {
+        while(LBts(&ent->spin_lock,0))
+	  PAUSE;
+        ent->s=NULL;
+        ent->e=NULL;
+        ent->mem_blk=NULL;
+        LBtr(&ent->spin_lock,0);
+      }
+    }
+    LBtr(&cache->spin_lock,0);
+  }
+}
+Bool IsValidPtr(U8 *ptr,I64 sz=1) {
+  CMemBlk *blk;
+  I64 addr,k;
+  U8 *src;
+  if(blk=GetMemBlkFromCache(&blk_cache,ptr)) {
+  } else {
+    while(LBts(&mem_blks_lock,0))
+      PAUSE;
+    blk=valid_blks.next;
+    while(blk!=&valid_blks) {
+      blk=blk(U8*)-CMemBlk.next2;
+      if(blk(U8*)<=ptr<blk(U8*)+blk->pags<<MEM_PAG_BITS) {
+        MemBlkCacheAdd(&blk_cache,blk);
+        LBtr(&mem_blks_lock,0);
+        goto en;
+      }
+      blk=blk(U8*)+CMemBlk.next2;
+      blk=blk->next;
+    }
+    LBtr(&mem_blks_lock,0);
+//TODO
+//Could be allocated outside of holyC heap(from 3d_loader?)
+    return FALSE; 
+f:
+    for(k=0;TRUE;k++) {
+      //IsValidPtr+1
+      //_SYS_WHINE_OOB+2
+      if(!Caller(k+2)) break;
+      src=SrcEdLink(Caller(k+2));
+      if(src)
+        TOSPrint("[%d] %s\n",k+1,src);
+      else
+        TOSPrint("[%d] ???\n",k+1);
+      Free(src);
+    }
+    return FALSE;
+  }
+en:
+  //https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/37752.pdf
+  //Here the deal,the allocator provides rounded to 8-byte sizes,with 8-byte "useless" room
+  //So we only need to check for an 8-byte  practically
+  addr=(ptr-blk(U8*))>>3;
+  /*
+  k=blk->shadow[addr];
+  if(k&&(addr&7)+sz>k)
+    return TRUE;
+  */
+  if(!blk->shadow[addr])
+    goto f;
+  return TRUE;
+}
+#endif
 U8 *MemPagAlloc(I64 pags,CBlkPool *bp=NULL)
 {/*Alloc pags from BlkPool. Don't link to task.
 (Linking to a task means they will be freed when the task dies.)
@@ -50,11 +169,18 @@ Return: NULL if out of memory.
   QueInit(res);
   QueInit(&res->next2);
   while(LBts(&mem_blks_lock,0))
-	  PAUSE;
+    PAUSE;
   QueIns(&res->next2,valid_blks.last);
   LBtr(&mem_blks_lock,0);
   res->pags=pags;
   res->mb_signature=MBS_UNUSED_SIGNATURE_VAL;
+#ifdef BC_ENABLE
+  MemBlkCacheAdd(&blk_cache,res);
+  res->shadow=NewVirtualChunk(pags<<MEM_PAG_BITS/8,FALSE);
+  MemSet(res->shadow,FALSE,pags<<MEM_PAG_BITS/8);
+  MemSet(res->shadow,8,sizeof CMemBlk/8);
+#endif
+
 at_done:
 at_done2:
   if(old)
@@ -72,6 +198,10 @@ U0 MemPagFree(CMemBlk *m,CBlkPool *bp=NULL)
     old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
     pags=m->pags;
     m->mb_signature=MBS_UNUSED_SIGNATURE_VAL;
+#ifdef BC_ENABLE
+    MemBlkCacheRemove(&blk_cache,m);
+    FreeVirtualChunk(m->shadow,pags<<MEM_PAG_BITS/8); 
+#endif
     FreeVirtualChunk(m,pags<<MEM_PAG_BITS);
     if(old)
 	  BreakUnlock;
@@ -120,7 +250,7 @@ Return: NULL if out of memory.
 
 U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
 {//hc must be locked
-  Bool old;
+  Bool old;
   if (m) {
     PUSHFD
     old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
@@ -134,7 +264,7 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
       LBtr(&mem_blks_lock,0);
       hc->alloced_u8s-=m->pags<<MEM_PAG_BITS;
       if(!(0<=m<=U32_MAX))
-		MemPagFree(m,NULL);
+	MemPagFree(m,NULL);
       else {
         while(LBts(&mem_blks_lock,0))
           PAUSE;
@@ -149,3 +279,30 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
   }
 }
 
+CMemBlk *HeapCtrlFindMemBlk(U8 *ptr,CHeapCtrl *hc) {
+  CMemBlk *head=&hc->next_mem_blk,*cur=head->next;
+  CMemBlk *c=GetMemBlkFromCache(&blk_cache,ptr);
+  if(c)
+    return c;
+  while(head!=cur) {
+      if(cur(U8*)<=ptr<cur(U8*)+cur->pags<<MEM_PAG_BITS) {
+        MemBlkCacheAdd(&blk_cache,cur);
+        return cur;
+      }
+      cur=cur->next;
+  }
+  return NULL; 
+}
+asm {
+	_SYS_WHINE_OOB::
+	PUSH	RBP
+	MOV	RBP,RSP
+ 	PUSH_C_REGS
+	PUSH	U64 SF_ARG2[RBP]
+	PUSH	U64 SF_ARG1[RBP]
+	CALL	&IsValidPtr
+	POP_C_REGS
+	LEAVE
+	RET1	16
+};
+

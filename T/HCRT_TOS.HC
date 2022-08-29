@@ -4,7 +4,7 @@ Bool dol_doc_inited=FALSE;
 Bool IsRaw() {
 	return __IsCmdLine;
 }
-CSysFixedArea sys_fixed_area,*SYS_FIXED_AREA;
+CSysFixedArea sys_fixed_area,*SYS_FIXED_AREA;
 SYS_FIXED_AREA=&sys_fixed_area;
 U0 InitFX() {
   I64 noreg ptr;
@@ -105,6 +105,7 @@ CTask *adam_task=Fs;
 #include "KDBG.HC"
 #include "KEXCEPT.HC"
 #include "DISPLAY.HC"
+#include "MAlloc2.HC"
 #ifdef COMPONET_COMPILER
 #include "CMP_PRJ.HC"
 CInit;
@@ -178,14 +179,11 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 	MemCpy(r=MAlloc(MSize(s),t),s,MSize(s));
 	return r;
 } 
-
-//#include "PSLAMODY/Load.HC"
 #include "ARegistry.HC"
 #include "AHash.HC"
 #include "ADskB.HC"
 #include "ADBG.HC"
 #include "Sched.HC"
-#include "MAlloc2.HC"
 #include "Diff.HC"
 #include "KeyDev.HC"
 #include "FILEMGR.HC";

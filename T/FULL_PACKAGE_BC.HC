@@ -1,2 +1,2 @@
-#exe {Option(OPTf_BOUNDS_CHECK,1);;};;
+#define BC_ENABLE 1
 #include "FULL_PACKAGE.HC";;
