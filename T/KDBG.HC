@@ -1,5 +1,5 @@
 public Bool ChkOnStk(U8 *ptr,CTask *task=NULL) {
-  if(!task) task=NULL;
+  if(!task) task=Fs;
   return task->stk<=ptr<task->stk+MSize(task->stk);
 }
 U8 *Caller(I64 num=1)
