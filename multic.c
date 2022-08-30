@@ -81,7 +81,7 @@ static void LaunchCore(void *c) {
 	CHash yield=map_get(&TOSLoader,"__InteruptCoreRoutine")->data[0];
 	signal(SIGUSR2,yield.val);
 	#endif
-	(*cores[__core_num].fp)();
+	FFI_CALL_TOS_0_ZERO_BP(cores[__core_num].fp);
 }
 void InteruptCore(int core) {
 	#ifndef TARGET_WIN32
@@ -100,14 +100,15 @@ void InteruptCore(int core) {
 	}
 	#endif
 }
+
 void LaunchCore0(void *fp) {
 	int core=0;
 	cores[core].core_num=core;
 	cores[core].fp=NULL;
 	#ifndef TARGET_WIN32
-	pthread_create(&cores[core].thread,NULL,fp,core);
+	pthread_create(&cores[core].thread,NULL,FFI_CALL_TOS_0_ZERO_BP,fp);
 	#else
-	cores[core].thread=CreateThread(NULL,0,fp,core,0,NULL);
+	cores[core].thread=CreateThread(NULL,0,FFI_CALL_TOS_0_ZERO_BP,fp,0,NULL);
 	#endif
 }
 void WaitForCore0() {

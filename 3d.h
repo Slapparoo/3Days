@@ -38,6 +38,7 @@ int64_t FFI_CALL_TOS_1(void *fptr,int64_t);
 int64_t FFI_CALL_TOS_2(void *fptr,int64_t, int64_t);
 int64_t FFI_CALL_TOS_3(void *fptr,int64_t, int64_t,int64_t);
 int64_t FFI_CALL_TOS_4(void *fptr,int64_t, int64_t,int64_t,int64_t);
+int64_t FFI_CALL_TOS_0_ZERO_BP(void *fptr);
 void *Load(char *fn,int64_t ld_flags);
 #define HTT_INVALID		0
 #define HTT_EXPORT_SYS_SYM	0x00001 //CHashExport

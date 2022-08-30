@@ -1,3 +1,7 @@
+public Bool ChkOnStk(U8 *ptr,CTask *task=NULL) {
+  if(!task) task=NULL;
+  return task->stk<=ptr<task->stk+MSize(task->stk);
+}
 U8 *Caller(I64 num=1)
 {//Returns the addr of the fun which called this one,
 //or the caller of the caller, etc.
@@ -6,9 +10,8 @@ U8 *Caller(I64 num=1)
     if (rbp>=*rbp)
       return NULL;
     rbp=*rbp;
-    //TODO RESTORE
-    //if (!ChkOnStk(rbp,Fs))
-    //  return NULL;
+    if (!ChkOnStk(rbp,Fs))
+      return NULL;
   }
   ptr=rbp+1;
   return *ptr;
@@ -21,9 +24,8 @@ U8 *__CallerBP(U8 **rbp,I64 num=1)
     if (rbp>=*rbp)
       return NULL;
     rbp=*rbp;
-    //TODO RESTORE
-    //if (!ChkOnStk(rbp,Fs))
-    //  return NULL;
+    if (!ChkOnStk(rbp,Fs))
+      return NULL;
   }
   ptr=rbp+1;
   return *ptr;
@@ -39,8 +41,13 @@ U8 *TaskCaller(CTask *task=NULL,I64 num=0,Bool saved_context=FALSE)
   rbp=task->rbp;
   rsp=task->rsp;
   if (num) {
-    while (rbp) {
+    while (rbp) {
+      if(!ChkOnStk(rbp,task))
+        break;
       ptr=rbp+1;
+      //Here's the deal,I assume wine muddy's the caller stack to make it more epic,in FFI_CALL_TOS_0_BP(FFI_WIN64.yasm)
+      //I zero the caller ptr
+      if(!ptr) break;
       if (! --num)
 	return *ptr;
       if (rbp>=*rbp)

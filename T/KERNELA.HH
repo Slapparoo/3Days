@@ -1526,7 +1526,7 @@ public class CDocEntry:CDocEntryBase
 
 class CEdFindText
 {
-  U8	find_text[STR_LEN] format "\dDA-P,"
+  U8	find_text[STR_LEN] format "\dDA-P,"
 	"A=\"Find        :%s\"\d\n",
 	replace_text[STR_LEN] format "\dDA-P,"
 	"A=\"Replace     :%s\"\d\n";
@@ -3553,7 +3553,7 @@ public class CTask //The Fs segment reg points to current CTask.
 	text_attr,border_attr;
   U16	win_z_num,pad;
 
-  CTaskStk *stk;
+  U8 *stk; //CHANGED from CTaskStk to U8 * by nroot
 
   CExcept *next_except,*last_except;
   I64	except_rbp,	//throw routine's RBP
@@ -6287,3 +6287,4 @@ extern I64 PopUpFindMenu();
 #define SE_SWEEP	1
 
 extern U0 DocDataFmt(CDoc *doc,CDocEntry *doc_e,I64 d=DOCM_CANCEL);
+public extern Bool ChkOnStk(U8 *ptr,CTask *task=NULL);

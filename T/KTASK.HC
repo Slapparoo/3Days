@@ -283,7 +283,7 @@ I64 TaskInit(CTask *task,I64 stk_size)
 
   task->fpu_mmx=MAllocAligned(sizeof(CFPU),0x10,task);
   MemCpy(task->fpu_mmx,
-	SYS_FIXED_AREA+offset(CSysFixedArea.init_fpu_mmx),sizeof(CFPU));
+	SYS_FIXED_AREA+offset(CSysFixedArea.init_fpu_mmx),sizeof(CFPU));
 
   
   task->hash_table=HashTableNew(TASK_HASH_TABLE_SIZE,task);
@@ -332,7 +332,8 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
   StrCpy(task->task_title,task->task_name);
   task->title_src=TTS_TASK_NAME;
   //Insert the task into the QUE to avoid having despawn after it is spawned.
-  stack=MAlloc(0x200000,task)+0x200000;
+  task->stk=MAlloc(0x200000,task);
+  stack=task->stk+0x200000;
   stack[-1]=data;
   stack[-2]=&Exit;
   task->rsp=stack-2;

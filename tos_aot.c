@@ -181,7 +181,7 @@ static void LoadPass2(char *src,char *mod_base,int64_t f) {
         src+=strlen(st_ptr)+1;
         switch(etype) {
             case IET_MAIN:
-            FFI_CALL_TOS_0(i+mod_base);
+            FFI_CALL_TOS_0_ZERO_BP(i+mod_base);
             break;
             case IET_ABS_ADDR:
             src+=sizeof(int32_t)*i;

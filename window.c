@@ -22,6 +22,8 @@ static CDrawWindow *dw=NULL;
 static char *clip_text=NULL;
 static void
 utf8_prop(Display *dpy, XEvent ev);
+//See note in NewDrawWindow
+static Atom wmclose;
 CDrawWindow *NewDrawWindow() {
 	if(!dw) {
 		XInitThreads();
@@ -66,6 +68,11 @@ CDrawWindow *NewDrawWindow() {
 		while(XNextEvent(dw->disp,&e))
 			if(e.type==Expose)
 				break;
+		//https://stackoverflow.com/questions/10792361/how-do-i-gracefully-exit-an-x11-event-loop
+		//Here's the deal,I dont know why they made X11 like this.
+		//Send a prayer to the dude who awnsered this question.
+		wmclose=XInternAtom(dw->disp,"WM_DELETE_WINDOW",False);
+		XSetWMProtocols(dw->disp,dw->window,&wmclose,1);
 	}
 	return dw;
 }
@@ -577,7 +584,12 @@ static void __InputLoop(void *ul,int64_t clip_only) {
     XSelectionEvent *sev;
     for(;!*(int64_t*)ul;) {
 		XNextEvent(dw->disp,&e);
-		if(e.type==DestroyNotify){
+		if(e.type==ClientMessage) {
+			if(e.xclient.data.l[0]==wmclose) {
+				DrawWindowDel(dw);
+				exit(0);
+			}
+		} else if(e.type==DestroyNotify){
 			DrawWindowDel(dw);
 			break;
 		} else if(e.type==ConfigureNotify&&dw) {
