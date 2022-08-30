@@ -14,6 +14,7 @@ chmod +x ${STAGEDIR}/usr/local/bin/3d
 rm ${STAGEDIR}/plist
 echo "/usr/local/bin/3d" >> ${STAGEDIR}/plist
 cp HCRT.BIN ${STAGEDIR}/usr/local/include/3Days/
+cp HCRT_BC.BIN ${STAGEDIR}/usr/local/include/3Days/
 echo "/usr/local/include/3Days/HCRT.BIN" >> ${STAGEDIR}/plist
 cd T/T
 set files = ( ` find . ` )

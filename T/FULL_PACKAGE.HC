@@ -32,7 +32,7 @@ U0 LoadImps() {
   ExePrint("#define BOOT_3DAYS\n#include \"KERNELB.HH\";\n");
 }
 static U0 StartUpCore1(I64) {
-  ACInit("/KERNEL*.HH");
+  ACInit("/KERNEL*.HH*");
 }
 U0 StartUpTasks()
 {
@@ -51,14 +51,19 @@ U0 StartUpTasks()
 U0 Adam(U8 *) {
 	I64 idx;
 	LoadImps;
-	cpu_structs[Gs->num=__CoreNum]=Gs;//It should be 0
+	cpu_structs[Gs->num=__CoreNum]=Gs;//It should be 0
 	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
 		__SpawnCore(idx,&CoreAPSethTask);
                 while(!cpu_structs[idx])
                   PAUSE;
 	}
+#ifndef BC_ENABLE
     if(FileFind("HCRT.DBG.Z"))
 		DbgInfoRead("HCRT.DBG.Z");
+#else
+    if(FileFind("HCRT_BC.DBG.Z"))
+		DbgInfoRead("HCRT_BC.DBG.Z");
+#endif
 	if(!__IsCmdLine) {
 		sys_winmgr_task=Spawn(&WinMgrTask);
 		//Grab pointer

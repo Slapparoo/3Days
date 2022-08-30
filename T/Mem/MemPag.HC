@@ -1,4 +1,3 @@
-#define BC_ENABLE 1
 CQue valid_blks;
 CQue recycle32;
 I64 mem_blks_lock;
@@ -39,7 +38,7 @@ CMemBlk *GetMemBlkFromCache(CBlkCache *cache,U8 *ptr) {
   for(idx=0;idx!=16;idx++) {
     ent=&cache->ents[bucket][idx];
     while(LBts(&ent->spin_lock,0))
-     PAUSE;
+      PAUSE;
     if(ent->s<=ptr<ent->e) {
       LBtr(&ent->spin_lock,0);  
       return ent->mem_blk;
@@ -138,6 +137,11 @@ en:
     goto f;
   return TRUE;
 }
+#else
+Bool IsValidPtr(U8 *ptr,I64 sz=1) {
+  "Use '-b' on 3d_loader to enable bounds-checker.\n";
+  throw('UseBC');
+};
 #endif
 U8 *MemPagAlloc(I64 pags,CBlkPool *bp=NULL)
 {/*Alloc pags from BlkPool. Don't link to task.
@@ -279,21 +283,7 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
   }
 }
 
-CMemBlk *HeapCtrlFindMemBlk(U8 *ptr,CHeapCtrl *hc) {
-  CMemBlk *head=&hc->next_mem_blk,*cur=head->next;
-  CMemBlk *c=GetMemBlkFromCache(&blk_cache,ptr);
-  if(c)
-    return c;
-  while(head!=cur) {
-      if(cur(U8*)<=ptr<cur(U8*)+cur->pags<<MEM_PAG_BITS) {
-        MemBlkCacheAdd(&blk_cache,cur);
-        return cur;
-      }
-      cur=cur->next;
-  }
-  return NULL; 
-}
-asm {
+asm {
 	_SYS_WHINE_OOB::
 	PUSH	RBP
 	MOV	RBP,RSP
@@ -305,4 +295,3 @@ asm {
 	LEAVE
 	RET1	16
 };
-

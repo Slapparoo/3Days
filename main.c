@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <X11/Xlib.h>
 #define HCRT_INSTALLTED_DIR "/usr/local/include/3Days/HCRT.BIN"
+#define HCRT_INSTALLTED_DIR_BC "/usr/local/include/3Days/HCRT_BC.BIN"
 #include <libgen.h>
 #include "ext/C_Unescaper/escaper.h"
 #define DFT_T_DRIVE ".3DAYS_BOOT"
@@ -20,6 +21,7 @@
 #include <winnt.h>
 #include <synchapi.h> 
 #define HCRT_INSTALLTED_DIR "\\HCRT\\HCRT_TOS.BIN"
+#define HCRT_INSTALLTED_DIR_BC "\\HCRT\\HCRT_BC.BIN"
 #define DFT_T_DRIVE "3DAYS_BOOT"
 //Is relative to install dir on windows
 #define DFT_TEMPLATE "\\T"
@@ -39,6 +41,7 @@ static struct arg_file *TDriveArg;
 static struct arg_file *cmdLineFiles;
 static struct arg_lit *OverwriteBootDrvArg;
 static struct arg_lit *commandLineArg;
+static struct arg_lit *bounds_check_enable;
 static struct arg_end *endArg;
 char CompilerPath[1024];
 #ifdef TARGET_WIN32
@@ -125,6 +128,7 @@ int main(int argc,char **argv)
         TDriveArg=arg_file0("t",NULL,"T(boot) Drive","This tells 3days where to use(or create) the boot drive folder."),
         OverwriteBootDrvArg=arg_lit0("O", "overwrite", "Create a fresh version of the boot drive folder."),
         cmdLineFiles=arg_filen(NULL,NULL,"<files>",0,100,"Files for use with command line mode."),
+        bounds_check_enable=arg_lit0("b", "bounds", "Use the bounds checker HCRT_BC.BIN runtime,use \"Option(OPTf_BOUNDS_CHECK,1);\"."),
         endArg=arg_end(1),
     };
     int errs=arg_parse(argc, argv, argtable);
@@ -157,8 +161,6 @@ int main(int argc,char **argv)
     #endif
     #ifndef TARGET_WIN32 
     char *template=DFT_TEMPLATE;
-    if(0==access("./T",F_OK))
-		template="./T",puts("Using ./T as the template directory.");
     #endif
     //CreateTemplateBootDrv Checks if exists too
     //DFT_TEMPLATE IS RELATIVE TO PROGRAM IN WINDOWS
@@ -201,19 +203,34 @@ int main(int argc,char **argv)
 		}
         int flags=0;
     #ifndef TARGET_WIN32
-        if(0==access("HCRT.BIN",F_OK)) {
-			puts("Using ./HCRT.BIN as the default binary.");
-			hcrt_bin_loc="HCRT.BIN";
-			LaunchCore0(Core0);
-        } else if(0==access( HCRT_INSTALLTED_DIR,F_OK)) {
-			hcrt_bin_loc=HCRT_INSTALLTED_DIR;
-			LaunchCore0(Core0);
-        }
+		if(!bounds_check_enable->count) {
+			if(0==access("HCRT.BIN",F_OK)) {
+				puts("Using ./HCRT.BIN as the default binary.");
+				hcrt_bin_loc="HCRT.BIN";
+				LaunchCore0(Core0);
+			} else if(0==access( HCRT_INSTALLTED_DIR,F_OK)) {
+				hcrt_bin_loc=HCRT_INSTALLTED_DIR;
+				LaunchCore0(Core0);
+			}
+		} else {
+			if(0==access("HCRT_BC.BIN",F_OK)) {
+				puts("Using ./HCRT_BC.BIN as the default binary.");
+				hcrt_bin_loc="HCRT_BC.BIN";
+				LaunchCore0(Core0);
+			} else if(0==access( HCRT_INSTALLTED_DIR,F_OK)) {
+				hcrt_bin_loc=HCRT_INSTALLTED_DIR;
+				LaunchCore0(Core0);
+			}
+
+		}
     #else
       char buffer[MAX_PATH];
       GetModuleFileNameA(NULL,buffer,sizeof(buffer));
       dirname(buffer);
-      strcat(buffer,"\\HCRT.BIN");
+      if(!bounds_check_enable->count) {
+		strcat(buffer,"\\HCRT.BIN");
+	  } else 
+	  	strcat(buffer,"\\HCRT_BC.BIN");
       hcrt_bin_loc=strdup(buffer);
       puts(buffer);
       if(GetFileAttributesA(buffer)!=INVALID_FILE_ATTRIBUTES) {
