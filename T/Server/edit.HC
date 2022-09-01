@@ -84,7 +84,7 @@ U0 EditPost(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req,CHashTa
   if(hash) {
     link=ChrootFile(hash->user_data1);
     if(!FileExtDot(t1)) {
-      t2=MStrPrint("%s.WIKI.Z",link);
+      t2=MStrPrint("%s.WIKI.Z",link);
       Free(link);
       link=t2;
     }
@@ -139,6 +139,7 @@ loop:
       if(!profan) {
 	BackupFile(link+StrLen(WIKI_ROOT),ftxt);
         FileWrite(link=DotZify(link),ftxt,t1-ftxt);
+        ReIndex;
      }
     }
     Free(profan);

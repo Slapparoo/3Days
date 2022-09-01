@@ -97,7 +97,6 @@ U8 *HTMLify(U8 *str) {
 U8 *ChrootFile(U8 *fn,U8 *prefix=WIKI_ROOT) {
   U8 *virt=MStrPrint("/%s/%s",prefix,fn);
   U8 *abs=FileNameAbs(virt),*abs2=FileNameAbs(prefix);
-  TOSPrint("virt:%s\n",virt);
   if(!StrNCmp(abs,abs2,StrLen(abs2))) {
     Free(abs),Free(abs2);
     return virt;
