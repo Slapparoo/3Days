@@ -11,7 +11,6 @@
 #include <synchapi.h>
 #include <sysinfoapi.h>
 #include <processthreadsapi.h>
-static SYSTEMTIME genesis;
 #endif
 #ifdef linux
 //https://man7.org/linux/man-pages/man2/futex.2.html
@@ -65,6 +64,13 @@ typedef struct {
 	void (*fp)();
 } CCore;
 static CCore cores[64];
+static void ExitCore(int sig) {
+	#ifndef TARGET_WIN32
+	pthread_exit(0);
+	#else
+	ExitThread(0);
+	#endif
+} 
 static void LaunchCore(void *c) {
 	vec_CHash_t *FualtCB=map_get(&TOSLoader,"FualtRoutine");
 	if(FualtCB) {
@@ -80,6 +86,7 @@ static void LaunchCore(void *c) {
 	#ifndef TARGET_WIN32
 	CHash yield=map_get(&TOSLoader,"__InteruptCoreRoutine")->data[0];
 	signal(SIGUSR2,yield.val);
+	signal(SIGUSR1,&ExitCore);
 	#endif
 	FFI_CALL_TOS_0_ZERO_BP(cores[__core_num].fp);
 }
@@ -100,7 +107,6 @@ void InteruptCore(int core) {
 	}
 	#endif
 }
-
 void LaunchCore0(void *fp) {
 	int core=0;
 	cores[core].core_num=core;
@@ -135,4 +141,9 @@ void __ShutdownCore(int core) {
 	TerminateThread(cores[core].thread,0);
 	WaitForMultipleObjects(1,&cores[core].thread,TRUE,INFINITE);
 	#endif
+}
+void __ShutdownCores() {
+	int c;
+	for(c=0;c!=mp_cnt(NULL);c++)
+	  __ShutdownCore(c);
 }

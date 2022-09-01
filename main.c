@@ -27,9 +27,6 @@
 #define DFT_TEMPLATE "\\T"
 #endif
 static void Core0Exit(int sig) {
-	/*CHash **ka=map_get(&TOSLoader,"KillAdam");
-	if(ka)
-		FFI_CALL_TOS_0(ka[0]->val);*/
 	#ifndef TARGET_WIN32
 	pthread_exit(0);
 	#else

@@ -88,6 +88,7 @@ static void CenterImage(CDrawWindow *win,int64_t *x_off,int64_t *y_off) {
 }
 char buf[640*480*4];
 void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,int64_t h) {
+	sigset_t set,old_set;
 	uint8_t *colors=_colors;
 	int64_t x,y,cx,cy,b,black,white,wx,wy,b2;
 	XLockDisplay(dw->disp);
@@ -99,6 +100,10 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	static int64_t old_wx,old_wy;
 	static uint32_t *old_scrn;
 	uint32_t *scrn;
+	//We dont want to be shutdown while writing to the window
+	sigemptyset(&set);
+	sigaddset(&set,SIGUSR1);
+	sigprocmask(SIG_BLOCK,&set,&old_set);
 	if(old_wx!=wx||old_wy!=wy) {
 		if(old_scrn) free(old_scrn);
 		old_scrn=calloc(4,wx*wy);
@@ -117,6 +122,7 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	XFlush(dw->disp);
 	XFree(img);
 	XUnlockDisplay(dw->disp);
+	sigprocmask(SIG_SETMASK,&old_set,NULL);
 }
 void DrawWindowDel(CDrawWindow *win) {
 	XLockDisplay(dw->disp);
@@ -586,6 +592,7 @@ static void __InputLoop(void *ul,int64_t clip_only) {
 		XNextEvent(dw->disp,&e);
 		if(e.type==ClientMessage) {
 			if(e.xclient.data.l[0]==wmclose) {
+				__ShutdownCores();
 				DrawWindowDel(dw);
 				exit(0);
 			}
