@@ -127,21 +127,6 @@ U0 DebuggerSpawn(CTask *debugee) {
   WinZBufUpdate;
   UserTaskCont;
 }
-public Bool BptsDisable(Bool s,CTask *t=NULL) {
-  if(!t) t=GetDebuggedProcess;
-  CBpt *bp;
-  Bool old;
-  if(s&&(old=Bt(&t->task_flags,TASKf_DISABLE_BPTS)))
-    return s;
-  bp=&t->bpt_lst;
-  for(bp=bp->next;bp;bp=bp->next)
-    if(!s)
-      *bp->addr=bp->val;
-    else
-      *bp->addr=OC_BPT;
-  BEqu(&t->task_flags,TASKf_DISABLE_BPTS,s);
-  return old;
-}
 //
 //$BK,1$README$BK,0$
 //In Wine(and Windows?) A INT3 will give us the RIP of the INT3
@@ -151,8 +136,9 @@ public Bool BptsDisable(Bool s,CTask *t=NULL) {
 //
 U0 DebuggerLandWin(I64 sig,I64 *gps) {
   CBpt *bp;
-  BptsDisable(FALSE,Fs);
+  CTask clone;
   UnblockSignals;
+  Bool b=FALSE;
 //General purpose registers are in this order,16 is RIP
   //https://wiki.osdev.org/X86-64_Instruction_Encoding
   _RAX=gps[0];
@@ -177,17 +163,17 @@ U0 DebuggerLandWin(I64 sig,I64 *gps) {
   Fs->rflags=gps[18];
   Fs->rflags&=~(1<<RFLAGf_TRAP);
   if(sig==5) { //SIGTRAP
+    if(LBtr(&(Fs->task_flags),TASKf_DISABLE_BPTS))
+      if(!LBtr(&(Fs->task_flags),TASKf_JUST_STEPPED)) {
+        MemCpy(&clone,Fs,sizeof CTask);
+        goto fin;
+      }
 //If we SIGTRAP'ed,we probaly hit an IHT3
-    if(_RIP(U8*)[0]==OC_BPT) {
-//Remove tmporary breakpoints
-      if(bp=BptFind(_RIP,Fs)) {
-        *bp->addr=bp->val;
-      } else 
-//Move past "stray" INT3
-       _RIP++;
-    }
+    if(bp=BptFind(_RIP,Fs)) {
+        LBts(&(Fs->task_flags),TASKf_DISABLE_BPTS);
+        Fs->rflags|=1<<RFLAGf_TRAP;
+      }
   }
-  CTask clone;
   MemCpy(&clone,Fs,sizeof CTask);
   CTask *task=Spawn(&DebuggerSpawn,&clone,"Debugger",0,Fs,,1<<JOBf_WAKE_MASTER|1<<JOBf_ADD_TO_QUE);
   DeathWait(task);
@@ -202,7 +188,7 @@ fin:
 
 U0 DebuggerLand(I64 sig,I64 *gps) {
   CBpt*bp;
-  BptsDisable(FALSE,Fs);
+  CTask clone;
   UnblockSignals;
 //General purpose registers are in this order,16 is RIP
   //https://wiki.osdev.org/X86-64_Instruction_Encoding
@@ -226,18 +212,19 @@ U0 DebuggerLand(I64 sig,I64 *gps) {
   _RIP=gps[16];
 //18 is rflags
   Fs->rflags=gps[18];
-  Fs->rflags&=~(1<<RFLAGf_TRAP);
   if(sig==5) { //SIGTRAP
-//If we SIGTRAP'ed,we probaly hit an IHT3
-    if(_RIP(U8*)[-1]==OC_BPT) {
-//Remove tmporary breakpoints
-      if(bp=BptFind(_RIP-1,Fs)) {
-        *bp->addr=bp->val;
-        _RIP--;
+    if(LBtr(&(Fs->task_flags),TASKf_DISABLE_BPTS))
+      if(!LBtr(&(Fs->task_flags),TASKf_JUST_STEPPED)) {
+        MemCpy(&clone,Fs,sizeof CTask);
+        goto fin;
       }
-    }
+//If we SIGTRAP'ed,we probaly hit an IHT3
+    if(bp=BptFind(_RIP-1,Fs)) {
+        LBts(&(Fs->task_flags),TASKf_DISABLE_BPTS);
+        Fs->rflags|=1<<RFLAGf_TRAP;
+      }
   }
-  CTask clone;
+  Fs->rflags&=~(1<<RFLAGf_TRAP);
   MemCpy(&clone,Fs,sizeof CTask);
   CTask *task=Spawn(&DebuggerSpawn,&clone,"Debugger",0,Fs,,1<<JOBf_WAKE_MASTER|1<<JOBf_ADD_TO_QUE);
   DeathWait(task);
@@ -371,7 +358,6 @@ U0 G(U8 *ip=INVALID_PTR,CTask *task=NULL)
   else {
     LBtr(&task->task_flags,TASKf_DISABLE_BPTS);
     LBtr(&task->rflags,RFLAGf_TRAP);//No single step
-    Suspend(task,FALSE);
     Exit;
   }
 }
@@ -446,8 +432,9 @@ public U0 S(U8 *ip=INVALID_PTR,CTask *task=NULL) //Single-step.
   if (!task) task=GetDebuggedProcess;
   PUSHFD
   if (ip!=INVALID_PTR) task->rip=ip;
-  LBts(&task->task_flags,TASKf_DISABLE_BPTS);
 //https://en.wikipedia.org/wiki/Trap_flag
+  LBts(&task->task_flags,TASKf_DISABLE_BPTS);
+  LBts(&task->task_flags,TASKf_JUST_STEPPED);
   LBts(&task->rflags,RFLAGf_TRAP);
   POPFD
   if(bl) BreakUnlock;
@@ -503,10 +490,11 @@ U0 StkRep(CTask *task=NULL)
   '\n';
   Fs->hash_table=old_hash;
 }
+*/
 U0 Dr(CTask *task=NULL)
 {//Dump regs
   I64 i;
-  if (!task) task=Fs;
+  if (!task) task=GetDebuggedProcess;
   for (i=0;i<16;i++)
     "%3Z:%016X\n",i,"ST_U64_REGS",*TaskRegAddr(task,i);
   "RIP:%016X\n",task->rip;
@@ -542,7 +530,7 @@ U0 D(U8 *addr,I64 cnt=0x80,Bool show_offset=TRUE)
     ptr+=j;
   }
 }
-*/
+
 U0 Dm(U8 *addr,I64 cnt=0x80)
 {//Show mem addr, not offsets.
   D(addr,cnt,FALSE);

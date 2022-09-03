@@ -116,6 +116,8 @@ static LONG WINAPI VectorHandler (struct _EXCEPTION_POINTERS *info) {
     FERR(EXCEPTION_INVALID_DISPOSITION);
     FERR(EXCEPTION_STACK_OVERFLOW);
     FERR(EXCEPTION_BREAKPOINT);
+    //https://stackoverflow.com/questions/16271828/is-set-single-step-trap-available-on-win-7
+    FERR(STATUS_SINGLE_STEP);
     default:;
   }
   //SignalHandler(0);
@@ -144,7 +146,8 @@ static LONG WINAPI VectorHandler (struct _EXCEPTION_POINTERS *info) {
 		regs[16]=ctx->Rip;
 		regs[17]=&ctx->FltSave;
 		regs[18]=ctx->EFlags;
-		int sig=info->ExceptionRecord->ExceptionCode=EXCEPTION_BREAKPOINT?5:0;
+		int c=info->ExceptionRecord->ExceptionCode;
+		int sig=c==EXCEPTION_BREAKPOINT||c==STATUS_SINGLE_STEP?5:0;
 		FFI_CALL_TOS_2(fun,sig,regs);
 		return EXCEPTION_CONTINUE_EXECUTION;
 	} else 

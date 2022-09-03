@@ -3483,6 +3483,8 @@ public class CTaskSettings
 #define TASKf_KILL_AFTER_DBG	13
 
 #define TASKf_NONTIMER_RAND	14
+//Added by nroot
+#define TASKf_JUST_STEPPED 15
 
 //CTask.display_flags
 #define DISPLAYf_SHOW			0
@@ -3511,7 +3513,7 @@ class CTaskDying
 
 public class CTask //The Fs segment reg points to current CTask.
 {
-  CTask *addr; //Self-addressed ptr
+  CTask *addr; //Self-addressed ptr
   U32	task_signature,win_inhibit;
   I64	wake_jiffy;
   U32	task_flags,display_flags;
@@ -6304,9 +6306,8 @@ public extern U0 S(U8 *pc=INVALID_PTR,CTask *task=NULL);
 public extern Bool IsInValidBlk(U8 *ptr);
 public extern Bool ViewFrameVars(I64 frame=1,I64 depth=2);
 public extern  I64 *TaskRegAddr(CTask *task,I64 reg_num);
-public extern Bool BptsDisable(Bool s,CTask *t=NULL);
 extern U0 StkRep(CTask *task=NULL);
 extern U0 Dr(CTask *task=NULL);
 extern U0 D(U8 *addr,I64 cnt=0x80,Bool show_offset=TRUE);
 extern U0 Dm(U8 *addr,I64 cnt=0x80);
-extern U0 Da(U8 **addr,I64 cnt=0x10);
+extern U0 Da(U8 **addr,I64 cnt=0x10);
