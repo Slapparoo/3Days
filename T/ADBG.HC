@@ -13,7 +13,7 @@ Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
     return FALSE;
   }
   if (tmpc->base_class && !ClassRep2(doc,_d,tmpc->base_class->str,
-	depth,max_depth,dynamic,types,offset))
+        depth,max_depth,dynamic,types,offset))
     return FALSE;
   unlock=DocLock(doc);
   DocPrint(doc,"Class:\"%s\"\n",class_name);
@@ -27,19 +27,21 @@ Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
     tmpc2-=tmpc2->ptr_stars_cnt;
     if (tmpc2->type & HTT_INTERNAL_TYPE) {
       DocPrint(doc,"$$GREEN$$%-20ts:$$FG$$",ml->str);
-      if (stars==1 && (tmpc2->raw_type==RT_I8 || tmpc2->raw_type==RT_U8)) {
-	ptr=*ptr;
-	if (1) {
+      if(!IsInValidBlk(ptr)) {
+        "(Uunreadable)\n";
+      } else if (stars==1 && (tmpc2->raw_type==RT_I8 || tmpc2->raw_type==RT_U8)) {
+        ptr=*ptr;
+        if (1) {
 	  if (dynamic) {
 	    doc_e=DocPrint(doc,"$$DA-TRM-P+RD,LEN=64,A=\"%%40ts\"$$\n");
 	    doc_e->data=ptr;
 	    DocDataFmt(doc,doc_e);
 	  } else
 	    DocPrint(doc,"%40ts\n",ptr);
-	}
+        }
       } else if (!stars) {
-	j=MinI64(ml->dim.total_cnt,32);
-	if (tmpc2->raw_type==RT_I8 || tmpc2->raw_type==RT_U8) {
+        j=MinI64(ml->dim.total_cnt,32);
+        if (tmpc2->raw_type==RT_I8 || tmpc2->raw_type==RT_U8) {
 	  if (j==1) {
 	    if (dynamic) {
 	      doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=U8,A=\"%%c\"$$\n");
@@ -54,88 +56,89 @@ Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
 	    } else
 	      DocPrint(doc,"%40ts\n",ptr);
 	  }
-	}
-	for (i=0;i<j;i++) {
-	  switch (tmpc2->raw_type) {
-	    case RT_I0:
-	    case RT_U0:
-	      break;
-	    case RT_I8:
-	      if (dynamic) {
-		doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=I8,A=\"%%02X\"$$ ");
-		doc_e->data=ptr(I8 *)++;
-	      } else
-		DocPrint(doc,"%02X ",*ptr(I8 *)++);
-	      break;
-	    case RT_U8:
-	      if (dynamic) {
-		doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=U8,A=\"%%02X\"$$ ");
-		doc_e->data=ptr(U8 *)++;
-	      } else
-		DocPrint(doc,"%02X ",*ptr(U8 *)++);
-	      break;
-	    case RT_I16:
-	      if (dynamic) {
-		doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=I16,A=\"%%04X\"$$ ");
-		doc_e->data=ptr(I16 *)++;
-	      } else
-		DocPrint(doc,"%04X ",*ptr(I16 *)++);
-	      break;
-	    case RT_U16:
-	      if (dynamic) {
-		doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=U16,A=\"%%04X\"$$ ");
-		doc_e->data=ptr(U16 *)++;
-	      } else
-		DocPrint(doc,"%04X ",*ptr(U16 *)++);
-	      break;
-	    case RT_I32:
-	      if (dynamic) {
-		doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=I32,A=\"%%08X\"$$ ");
-		doc_e->data=ptr(I32 *)++;
-	      } else
-		DocPrint(doc,"%08X ",*ptr(I32 *)++);
-	      break;
-	    case RT_U32:
-	      if (dynamic) {
-		doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=U32,A=\"%%08X\"$$ ");
-		doc_e->data=ptr(U32 *)++;
-	      } else
-		DocPrint(doc,"%08X ",*ptr(U32 *)++);
-	      break;
-	    case RT_U64:
-	      if (dynamic) {
-		doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=U64,A=\"%%08X\"$$ ");
-		doc_e->data=ptr(U64 *)++;
-	      } else
-		DocPrint(doc,"%08X ",*ptr(U64 *)++);
-	      break;
-	    case RT_F64:
-	      if (dynamic) {
-		doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=F64,A=\"%%16g\"$$ ");
-		doc_e->data=ptr(F64 *)++;
-	      } else
-		DocPrint(doc,"%16g ",*ptr(I64 *)++);
-	      break;
-	    default:
-	      if (dynamic) {
-		doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,A=\"%%016X\"$$ ");
-		doc_e->data=ptr(I64 *)++;
-	      } else
-		DocPrint(doc,"%016X ",*ptr(I64 *)++);
-	  }
+        }
+        for (i=0;i<j;i++) {
+	  if(IsInValidBlk(ptr))
+	    switch (tmpc2->raw_type) {
+	      case RT_I0:
+	      case RT_U0:
+	        break;
+	      case RT_I8:
+	        if (dynamic) {
+		  doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=I8,A=\"%%02X\"$$ ");
+		  doc_e->data=ptr(I8 *)++;
+	        } else
+		  DocPrint(doc,"%02X ",*ptr(I8 *)++);
+	        break;
+	      case RT_U8:
+	        if (dynamic) {
+		  doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=U8,A=\"%%02X\"$$ ");
+		  doc_e->data=ptr(U8 *)++;
+	        } else
+		  DocPrint(doc,"%02X ",*ptr(U8 *)++);
+	        break;
+	      case RT_I16:
+	        if (dynamic) {
+		  doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=I16,A=\"%%04X\"$$ ");
+		  doc_e->data=ptr(I16 *)++;
+	        } else
+		  DocPrint(doc,"%04X ",*ptr(I16 *)++);
+	        break;
+	      case RT_U16:
+	        if (dynamic) {
+		  doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=U16,A=\"%%04X\"$$ ");
+		  doc_e->data=ptr(U16 *)++;
+	        } else
+		  DocPrint(doc,"%04X ",*ptr(U16 *)++);
+	        break;
+	      case RT_I32:
+	        if (dynamic) {
+		  doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=I32,A=\"%%08X\"$$ ");
+		  doc_e->data=ptr(I32 *)++;
+	        } else
+		  DocPrint(doc,"%08X ",*ptr(I32 *)++);
+	        break;
+	      case RT_U32:
+	        if (dynamic) {
+		  doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=U32,A=\"%%08X\"$$ ");
+		  doc_e->data=ptr(U32 *)++;
+	        } else
+		  DocPrint(doc,"%08X ",*ptr(U32 *)++);
+	        break;
+	      case RT_U64:
+	        if (dynamic) {
+		  doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=U64,A=\"%%08X\"$$ ");
+		  doc_e->data=ptr(U64 *)++;
+	        } else
+		  DocPrint(doc,"%08X ",*ptr(U64 *)++);
+	        break;
+	      case RT_F64:
+	        if (dynamic) {
+		  doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,RT=F64,A=\"%%16g\"$$ ");
+		  doc_e->data=ptr(F64 *)++;
+	        } else
+		  DocPrint(doc,"%16g ",*ptr(I64 *)++);
+	        break;
+	      default:
+	        if (dynamic) {
+		  doc_e=DocPrint(doc,"$$DA-TRM+RD+UD,A=\"%%016X\"$$ ");
+		  doc_e->data=ptr(I64 *)++;
+	        } else
+		  DocPrint(doc,"%016X ",*ptr(I64 *)++);
+	    }
 	  if (dynamic)
 	    DocDataFmt(doc,doc_e);
-	}
-	if (j<ml->dim.total_cnt)
+        }
+        if (j<ml->dim.total_cnt)
 	  DocPrint(doc,"...");
       } else
-	DocPrint(doc,"%016X",*ptr);
+        DocPrint(doc,"%016X",*ptr);
       DocPrint(doc,"\n");
     } else {
       if (depth<2) {
-	if (stars==1 && !0)
+        if (stars==1 && !0)
 	  DocPrint(doc,"%-20ts:%016X\n",ml->str,*ptr);
-	else {
+        else {
 	  DocPrint(doc,"$$TR,\"%s\"$$\n",ml->str);
 	  DocPrint(doc,"$$ID,2$$");
 	  if (!stars)
@@ -143,9 +146,9 @@ Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
 	  else if (stars==1)
 	    ClassRep2(doc,*ptr,tmpc2->str,depth+1,max_depth,dynamic);
 	  DocPrint(doc,"$$ID,-2$$");
-	}
+        }
       } else
-	DocPrint(doc,"%-20ts\n",ml->str);
+        DocPrint(doc,"%-20ts\n",ml->str);
     }
     ml=ml->next;
   }
@@ -193,6 +196,42 @@ public U0 ClassRepD(U8 *_d,U8 *class_name=lastclass,
   DocPrint(doc,"\n");
   DocRecalc(doc);
 }
+I64 *TaskRegAddr(CTask *task,I64 reg_num)
+{
+  switch (reg_num) {
+    case REG_RAX: return &task->rax;
+    case REG_RCX: return &task->rcx;
+    case REG_RDX: return &task->rdx;
+    case REG_RBX: return &task->rbx;
+    case REG_RSP: return &task->rsp;
+    case REG_RBP: return &task->rbp;
+    case REG_RSI: return &task->rsi;
+    case REG_RDI: return &task->rdi;
+    case 8 : return &task->r8;
+    case 9 : return &task->r9;
+    case 10: return &task->r10;
+    case 11: return &task->r11;
+    case 12: return &task->r12;
+    case 13: return &task->r13;
+    case 14: return &task->r14;
+    case 15: return &task->r15;
+  }
+  return NULL;
+}
+
+U0 UpdateRegVarImg(CHashFun *tmpf,U8 *_b,CTask *task)
+{
+  CMemberLst *ml;
+  CHashClass *tmpc;
+  ml=tmpf->member_lst_and_root;
+  while (ml) {
+    if (ml->reg!=REG_NONE) {
+      tmpc=OptClassFwd(ml->member_class);
+      MemCpy(_b+ml->offset,TaskRegAddr(task,ml->reg),tmpc->size);
+    }
+    ml=ml->next;
+  }
+}
 public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL)
 {//Shows names and vals of a fun's local vars using compiler's info.
   I64 size;
@@ -200,7 +239,20 @@ public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL)
   CHashFun *tmpf=HashFind(st,Fs->hash_table,HTT_FUN);
   CMemberLst *tmpm;
   if (tmpf) {
-    if(1) {
+    if (rbp) {
+      if (task) {
+//tmpf->size is negative.It's the bottom
+	//of the fun local var space relative to RBP .
+	size=tmpf->arg_cnt*8-tmpf->size+16;
+
+	img=MAlloc(size);
+	MemCpy(img,rbp+tmpf->size,size);
+	UpdateRegVarImg(tmpf,img-tmpf->size,task);
+	ClassRep(img-tmpf->size,st,max_depth,TRUE,rbp-img+tmpf->size);
+	Free(img);
+      } else
+	ClassRep(rbp,st,max_depth,TRUE);
+    } else {
       tmpm=tmpf->member_lst_and_root;
       while (tmpm) {
 	if (0<=tmpm->reg<REG_REGS_NUM)

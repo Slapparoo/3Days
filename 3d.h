@@ -185,3 +185,4 @@ void WaitForCore0();
 void __ShutdownCore(int core);
 int64_t mp_cnt(int64_t *stk);
 void __ShutdownCores();
+void SetupDebugger();

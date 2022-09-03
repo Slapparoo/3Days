@@ -3354,7 +3354,9 @@ class CBpt
 {
   CBpt	*next;
   U8	*addr,
-	val,pad[7];
+	val,
+	is_tmp, //Changed by nroot
+	pad[6];
 };
 
 class CExcept
@@ -5952,8 +5954,8 @@ extern Bool Man(U8 *st,I64 edf_dof_flags=0);
 extern Bool E(U8 *addr,I64 cnt=512,I64 edf_dof_flags=0);
 extern Bool PutSrcLink(U8 *addr,I64 cnt=1,U8 *buf=NULL);
 extern U8 *U(U8 *rip,I64 cnt=20,I64 seg_size=64);
-public U0 Uf(U8 *st);
-public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL);
+public extern U0 Uf(U8 *st);
+public extern U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL);
 #define RSAC_REPLACE	0
 #define RSAC_SKIP	1
 #define RSAC_ALL	2
@@ -6287,4 +6289,24 @@ extern I64 PopUpFindMenu();
 #define SE_SWEEP	1
 
 extern U0 DocDataFmt(CDoc *doc,CDocEntry *doc_e,I64 d=DOCM_CANCEL);
-public extern Bool ChkOnStk(U8 *ptr,CTask *task=NULL);
+public extern Bool ChkOnStk(U8 *ptr,CTask *task=NULL);
+public extern U0 CallerRep(U8 **rbp=NULL,CTask *task=NULL);
+public extern U0 G2(U8 *ip=INVALID_PTR,CTask *task=NULL);
+public extern U0 G(U8 *ip=INVALID_PTR,CTask *task=NULL);
+public extern I64 B2(CTask *task=NULL,Bool live=TRUE);
+public extern Bool B(U8 *addr,CTask *task=NULL,Bool live=TRUE);
+public extern Bool BptR(U8 *addr,CTask *task=NULL,Bool live=TRUE,Bool rem=TRUE);
+public extern Bool BptS(U8 *addr,CTask *task=NULL,Bool live=TRUE);
+public extern CBpt *BptFind(U8 *needle_addr,CTask *haystack_task=NULL,Bool rem=FALSE);
+public extern U0 DbgHelp();
+public extern U0 BList(CTask *task=NULL);
+public extern U0 S(U8 *pc=INVALID_PTR,CTask *task=NULL);
+public extern Bool IsInValidBlk(U8 *ptr);
+public extern Bool ViewFrameVars(I64 frame=1,I64 depth=2);
+public extern  I64 *TaskRegAddr(CTask *task,I64 reg_num);
+public extern Bool BptsDisable(Bool s,CTask *t=NULL);
+extern U0 StkRep(CTask *task=NULL);
+extern U0 Dr(CTask *task=NULL);
+extern U0 D(U8 *addr,I64 cnt=0x80,Bool show_offset=TRUE);
+extern U0 Dm(U8 *addr,I64 cnt=0x80);
+extern U0 Da(U8 **addr,I64 cnt=0x10);

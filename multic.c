@@ -72,13 +72,7 @@ static void ExitCore(int sig) {
 	#endif
 } 
 static void LaunchCore(void *c) {
-	vec_CHash_t *FualtCB=map_get(&TOSLoader,"FualtRoutine");
-	if(FualtCB) {
-		#ifndef TARGET_WIN32
-		signal(SIGBUS,FualtCB->data[0].val);
-		#endif
-		signal(SIGSEGV,FualtCB->data[0].val);
-	}
+	SetupDebugger();
 	VFsThrdInit();
 	CHash init=map_get(&TOSLoader,"TaskInit")->data[0];
 	FFI_CALL_TOS_2(init.val,GetFs(),0);

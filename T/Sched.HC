@@ -110,7 +110,7 @@ _TASK_CONTEXT_RESTORE::
 	INC	U64 CCPU.swap_cnter[RAX]
 	CALL &Fs
 	MOV	RSI,CTask.addr[RAX]
-	BT	U32 CTask.rflags[RSI],RFLAGf_INT
+	BT	U32 CTask.rflags[RSI],RFLAGf_INT
 	JNC	@@05
 	CALL	&Gs
 	BTS	U32 CCPU.cpu_flags[RAX],CPUf_RAN_A_TASK
@@ -146,13 +146,19 @@ _TASK_CONTEXT_RESTORE::
 	POP	R15
 	MOV	RSP,RAX
 
-	MOV	RAX,U64 CTask.rax[RSI]
+	XOR	RAX,RAX
+	MOV	AX,SS
+	PUSH	RAX
+	PUSH	U64 CTask.rsp[RSI]
 	PUSH	U64 CTask.rflags[RSI]
-	POPFD
-	MOV	RSP,CTask.rsp[RSI]
-	MOV RAX,RSI
-	MOV	RSI,U64 CTask.rsi[RAX]
-	JMP	U64 CTask.rip[RAX]
+	XOR	RAX,RAX
+	MOV	AX,CS
+	PUSH	RAX
+	PUSH	U64 CTask.rip[RSI]
+	MOV	RAX,U64 CTask.rax[RSI]
+	MOV	RSI,U64 CTask.rsi[RSI]
+	IRET
+
 	
 //************************************
 END_RSI_TASK:

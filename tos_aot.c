@@ -241,11 +241,12 @@ void *Load(char *fn,int64_t ld_flags) {
     mod_base=(char*)bfh_addr+sizeof(CBinFile);
     LoadPass1((char*)bfh_addr+bfh_addr->patch_table_offset,mod_base,ld_flags);
     vec_CHash_t *FualtCB=map_get(&TOSLoader,"FualtRoutine");
-	if(FualtCB) {
+	/*if(FualtCB) {
 		#ifndef TARGET_WIN32
 		signal(SIGBUS,FualtCB->data[0].val);
 		#endif
-	}
+	}*/
+	SetupDebugger();
     LoadPass2((char*)bfh_addr+bfh_addr->patch_table_offset,mod_base,ld_flags);    
     //Stuff may still be using data once we exit
     //PoopFree(bfh_addr);

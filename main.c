@@ -42,33 +42,6 @@ static struct arg_lit *bounds_check_enable;
 static struct arg_end *endArg;
 char CompilerPath[1024];
 #ifdef TARGET_WIN32
-#define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
-#define ENABLE_VIRTUAL_TERMINAL_INPUT 0x200
-static LONG WINAPI VectorHandler (struct _EXCEPTION_POINTERS *info) {
-  switch(info->ExceptionRecord->ExceptionCode) {
-    #define FERR(code) case code: printf("Caught %s.\nType 'Exit(0);' to exit.\n",#code); goto exit;
-    FERR(EXCEPTION_ACCESS_VIOLATION);
-    FERR(EXCEPTION_ARRAY_BOUNDS_EXCEEDED);
-    FERR(EXCEPTION_DATATYPE_MISALIGNMENT);
-    FERR(EXCEPTION_FLT_DENORMAL_OPERAND);
-    FERR(EXCEPTION_FLT_DIVIDE_BY_ZERO);
-    FERR(EXCEPTION_FLT_INEXACT_RESULT);
-    FERR(EXCEPTION_FLT_INVALID_OPERATION);
-    FERR(EXCEPTION_FLT_OVERFLOW);
-    FERR(EXCEPTION_FLT_STACK_CHECK);
-    FERR(EXCEPTION_FLT_UNDERFLOW);
-    FERR(EXCEPTION_ILLEGAL_INSTRUCTION);
-    FERR(EXCEPTION_IN_PAGE_ERROR);
-    FERR(EXCEPTION_INT_DIVIDE_BY_ZERO);
-    FERR(EXCEPTION_INVALID_DISPOSITION);
-    FERR(EXCEPTION_STACK_OVERFLOW);
-    default:;
-  }
-  //SignalHandler(0);
-  return EXCEPTION_CONTINUE_EXECUTION;
-  exit:
-  FualtCB();
-}
 BOOL WINAPI CtrlCHandlerRoutine(DWORD c) {
   printf("User Abort.\n");
   return FALSE;
@@ -113,10 +86,6 @@ int _main(int argc,char **argv)
 int main(int argc,char **argv)
 #endif
 {
-	#ifndef TARGET_WIN32
-	#else
-	AddVectoredExceptionHandler(1,&VectorHandler);
-	#endif 
     char *header=NULL,*t_drive=NULL,*tmp;
     VFsGlobalInit();
     void *argtable[]= {

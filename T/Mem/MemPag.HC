@@ -283,7 +283,7 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
   }
 }
 
-asm {
+asm {
 	_SYS_WHINE_OOB::
 	PUSH	RBP
 	MOV	RBP,RSP
@@ -295,3 +295,20 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
 	LEAVE
 	RET1	16
 };
+Bool IsInValidBlk(U8 *ptr) {
+  Bool ret=FALSE;
+  CMemBlk *blks=valid_blks.next;
+  while(LBts(&mem_blks_lock,0))
+    PAUSE;
+  while(blks!=&valid_blks) {
+    blks=blks(U8*)-CMemBlk.next2;  
+    if(blks(U8*)<=ptr<blks(U8*)+blks->pags<<MEM_PAG_BITS) {
+      ret=TRUE;
+      break;
+    }
+    blks=blks(U8*)+CMemBlk.next2;
+    blks=blks->next;
+  }
+  LBtr(&mem_blks_lock,0);
+  return ret;
+}
