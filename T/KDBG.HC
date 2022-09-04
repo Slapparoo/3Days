@@ -215,7 +215,7 @@ U0 DebuggerLand(I64 sig,I64 *gps) {
   if(sig==5) { //SIGTRAP
     if(LBtr(&(Fs->task_flags),TASKf_DISABLE_BPTS))
       if(!LBtr(&(Fs->task_flags),TASKf_JUST_STEPPED)) {
-        MemCpy(&clone,Fs,sizeof CTask);
+        MemCpy(&clone,Fs,sizeof CTask);
         goto fin;
       }
 //If we SIGTRAP'ed,we probaly hit an IHT3
@@ -379,7 +379,7 @@ U0 BList(CTask *task=NULL) {
   }
 }
 
-public Bool ViewFrameVars(I64 frame=1,I64 depth=2) {
+public Bool ViewFrameVars(I64 frame=0,I64 depth=2) {
   U8 **rbp;
   CTask *t=GetDebuggedProcess;
   CHash *fun;
@@ -424,6 +424,7 @@ U0 DbgHelp()
         ">S;\t\t\t\t//Single step.\n"
         ">G;\t\t\t\t//Resume execution.\n"
         ">G2;\t\t\t\t//B2;VGAFlush;WinFocus;G;\n"
+        ">ViewFrameVars;\t\t\t\t//Examine the variables at a frame\n"
         ">Exit;\t\t\t\t//Exit debugger.\n\n";
 }
 public U0 S(U8 *ip=INVALID_PTR,CTask *task=NULL) //Single-step.

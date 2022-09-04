@@ -3513,7 +3513,7 @@ class CTaskDying
 
 public class CTask //The Fs segment reg points to current CTask.
 {
-  CTask *addr; //Self-addressed ptr
+  CTask *addr; //Self-addressed ptr
   U32	task_signature,win_inhibit;
   I64	wake_jiffy;
   U32	task_flags,display_flags;
@@ -6304,7 +6304,7 @@ public extern U0 DbgHelp();
 public extern U0 BList(CTask *task=NULL);
 public extern U0 S(U8 *pc=INVALID_PTR,CTask *task=NULL);
 public extern Bool IsInValidBlk(U8 *ptr);
-public extern Bool ViewFrameVars(I64 frame=1,I64 depth=2);
+public extern Bool ViewFrameVars(I64 frame=0,I64 depth=2);
 public extern  I64 *TaskRegAddr(CTask *task,I64 reg_num);
 extern U0 StkRep(CTask *task=NULL);
 extern U0 Dr(CTask *task=NULL);
