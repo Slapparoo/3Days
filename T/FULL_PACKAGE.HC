@@ -23,16 +23,26 @@ static U0 BootstrapImportSymbol(U8 *name,U8 *ptr,I64 type) {
 static U0 __BootstrapForeachSymbol__(U0 *cptr) {
     __BootstrapForeachSymbol(cptr);
 }
+asm {
+//I am embeding these into the binary so end-users don't mess up thier KERNEL*.HH files
+  KERNELA_BIN::
+  BINFILE "/KERNELA.HH";
+  DU8 0;
+  KERNELB_BIN::
+  BINFILE "/KERNELB.HH";
+  DU8 0;
+
+};
 U0 LoadImps() {
-  ExePrint(
-        "#define FPTRS\n#include \"KERNELA.HH\";"
-        );
+  ExePrint2("#define FPTRS\n;;");
+  ExePutS2(KERNELA_BIN);
   __BootstrapForeachSymbol(&BootstrapImportSymbol);
 //Load asm externs second
-  ExePrint("#define BOOT_3DAYS\n#include \"KERNELB.HH\";\n");
+  ExePrint2("#define BOOT_3DAYS\n;;");
+  ExePutS2(KERNELB_BIN);
 }
 static U0 StartUpCore1(I64) {
-  ACInit("/KERNEL*.HH*");
+  ACInit("/KERNEL*.HH*");
 }
 U0 StartUpTasks()
 {
@@ -83,27 +93,3 @@ Gs->seth_task=Spawn(&CoreAPSethTask,NULL,"Seth");
 adam_task=Spawn(&Adam,NULL,"Adam",,);
 //Dont Exit
 DeathWait(adam_task);
-U0 FualtRoutine() {
-	U8 *link,*par,*fstr;
-	I64 len=15;
-	CHashFun *f;
-	I64 i=0;
-	UnblockSignals;
-	for(i=0;i!=len;i++) {
-		par=Caller(i);
-		if(!par) goto en;
-		link=SrcEdLink(par); //+1 for self,+1 for fault routine
-		f=FunSegFind(par,NULL);
-		if(f)
-			fstr=f->str;
-		else
-			fstr="???";
-		if(link) {
-			TOSPrint("%s(%s)\n",link,fstr);
-			Free(link);
-		} else 
-			TOSPrint("???\n");
-	}
-	en:
-	Exit;
-}
