@@ -185,6 +185,11 @@ fin:
   CALL(_TASK_CONTEXT_RESTORE);
 }
 
+//
+//$BK,1$README$BK,0$
+//On linux,the trap comes after the INT3
+//So keep this in mind as check _RIP-1 for the breakpoint
+//
 
 U0 DebuggerLand(I64 sig,I64 *gps) {
   CBpt*bp;
@@ -212,19 +217,24 @@ U0 DebuggerLand(I64 sig,I64 *gps) {
   _RIP=gps[16];
 //18 is rflags
   Fs->rflags=gps[18];
+  Fs->rflags&=~(1<<RFLAGf_TRAP);
   if(sig==5) { //SIGTRAP
-    if(LBtr(&(Fs->task_flags),TASKf_DISABLE_BPTS))
+    if(LBtr(&(Fs->task_flags),TASKf_DISABLE_BPTS)) {
       if(!LBtr(&(Fs->task_flags),TASKf_JUST_STEPPED)) {
         MemCpy(&clone,Fs,sizeof CTask);
         goto fin;
       }
-//If we SIGTRAP'ed,we probaly hit an IHT3
-    if(bp=BptFind(_RIP-1,Fs)) {
+    } else {
+//ONLYCHECK IFBREAKPOINTSWEREN'tDISABLED
+      //If we SIGTRAP'ed,we probaly hit an IHT3
+      if(bp=BptFind(_RIP-1,Fs)) {
+        _RIP--;
         LBts(&(Fs->task_flags),TASKf_DISABLE_BPTS);
         Fs->rflags|=1<<RFLAGf_TRAP;
       }
+    }
+
   }
-  Fs->rflags&=~(1<<RFLAGf_TRAP);
   MemCpy(&clone,Fs,sizeof CTask);
   CTask *task=Spawn(&DebuggerSpawn,&clone,"Debugger",0,Fs,,1<<JOBf_WAKE_MASTER|1<<JOBf_ADD_TO_QUE);
   DeathWait(task);
@@ -424,7 +434,7 @@ U0 DbgHelp()
         ">S;\t\t\t\t//Single step.\n"
         ">G;\t\t\t\t//Resume execution.\n"
         ">G2;\t\t\t\t//B2;VGAFlush;WinFocus;G;\n"
-        ">ViewFrameVars;\t\t\t\t//Examine the variables at a frame\n"
+        ">ViewFrameVars;\t\t\t\t//Examine the variables at a frame\n"
         ">Exit;\t\t\t\t//Exit debugger.\n\n";
 }
 public U0 S(U8 *ip=INVALID_PTR,CTask *task=NULL) //Single-step.
