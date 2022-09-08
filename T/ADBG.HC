@@ -36,8 +36,11 @@ Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
 	    doc_e=DocPrint(doc,"$$DA-TRM-P+RD,LEN=64,A=\"%%40ts\"$$\n");
 	    doc_e->data=ptr;
 	    DocDataFmt(doc,doc_e);
-	  } else
+	  } else if(IsInValidBlk(ptr))
 	    DocPrint(doc,"%40ts\n",ptr);
+	  else
+	    DocPrint(doc,"%40X\n",ptr);
+
         }
       } else if (!stars) {
         j=MinI64(ml->dim.total_cnt,32);
@@ -53,8 +56,10 @@ Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
 	      doc_e=DocPrint(doc,"$$DA-TRM-P+RD,LEN=64,A=\"%%40ts\"$$\n");
 	      doc_e->data=ptr;
 	      DocDataFmt(doc,doc_e);
-	    } else
+	    } else if(IsInValidBlk(ptr))
 	      DocPrint(doc,"%40ts\n",ptr);
+	    else
+	      DocPrint(doc,"%40X\n",ptr);
 	  }
         }
         for (i=0;i<j;i++) {
@@ -196,7 +201,7 @@ public U0 ClassRepD(U8 *_d,U8 *class_name=lastclass,
   DocPrint(doc,"\n");
   DocRecalc(doc);
 }
-I64 *TaskRegAddr(CTask *task,I64 reg_num)
+I64 *TaskRegAddr(CTask *task,I64 reg_num)
 {
   switch (reg_num) {
     case REG_RAX: return &task->rax;
@@ -225,7 +230,7 @@ U0 UpdateRegVarImg(CHashFun *tmpf,U8 *_b,CTask *task)
   CHashClass *tmpc;
   ml=tmpf->member_lst_and_root;
   while (ml) {
-    if (ml->reg!=REG_NONE) {
+    if (ml->reg&0xf==ml->reg) {//Changed as we may have REG_UNDEF
       tmpc=OptClassFwd(ml->member_class);
       MemCpy(_b+ml->offset,TaskRegAddr(task,ml->reg),tmpc->size);
     }
@@ -243,7 +248,7 @@ public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL)
       if (task) {
 //tmpf->size is negative.It's the bottom
 	//of the fun local var space relative to RBP .
-	size=tmpf->arg_cnt*8-tmpf->size+16;
+	size=tmpf->arg_cnt*8-tmpf->size+16;
 
 	img=MAlloc(size);
 	MemCpy(img,rbp+tmpf->size,size);
