@@ -206,7 +206,6 @@ int VFsCd(char *to,int flags) {
 		vec_push(&path,0);
     } else if(to[0]=='~') {
 		to++;
-		vec_pop(&path);
 		root=GetHomeDirForDrive(drv);
 		vec_pusharr(&path,root,strlen(root)+1);
 		TD_FREE(root);
@@ -248,11 +247,12 @@ int VFsCd(char *to,int flags) {
             *top2=delim;
         }
         if(RootPathLen()>=top-path.data) {
-            path.length=RootPathLen(); //+1 for delim
+            path.length=RootPathLen();
+            vec_push(&path,'/');
             vec_push(&path,0);
             goto next;
         } else if(top) {
-            path.length=top-path.data+1;
+            path.length=top-path.data+1; //+1 for delim
             vec_push(&path,0);
         }
     } else 
@@ -271,7 +271,10 @@ int VFsCd(char *to,int flags) {
 		}
     if(*d) {
         next:
-        to=++d;
+        if(*d=='/')
+          to=++d;
+        else 
+          to=d;
         goto loop;
     }
     vec_pop(&path);
@@ -375,7 +378,7 @@ char *__VFsFileNameAbs(char *name) {
     vec_char_t path,head;
     vec_init(&path);
     vec_init(&head);
-    if(name[0]!=TOS_delim) {
+    if(name[0]!=TOS_delim&&name[0]!='~') {
 		vec_pusharr(&path,old_dir,strlen(old_dir));
         vec_push(&path,TOS_delim);
         vec_pusharr(&path,name,strlen(name));

@@ -2,7 +2,7 @@ $WW,1$$FG,5$$TX+CX,"Directory Structure"$$FG$
 
 $FG,2$/Home$FG$ All your user data should be placed in here to ease backing-up your data.  When you install an application it will create a subdirectory of your $FG,2$/Home$FG$ directory for storage.
 
-$FG,2$/Apps$FG$ Applications are placed in subdirectories of $FG,2$/Apps$FG$.  Applications should have a file called $FG,2$Install.HC.Z$FG$ which will install the app, possibly making files or directories in $FG,2$/Home$FG$.  The file, $FG,2$Load.HC.Z$FG$ will load the application into mem.  The file, $FG,2$Run.HC.Z$FG$, will usually load and execute the app.  To add an app to your PersonalMenu, use $FG,2$<CTRL-l>$FG$, insert a macro with the PopUp option checked and invoke the $FG,2$Run.HC.Z$FG$ file.
+$FG,2$/Apps$FG$ Applications are placed in subdirectories of $FG,2$/Apps$FG$.  Applications should have a file called $FG,2$Install.HC$FG$ which will install the app, possibly making files or directories in $FG,2$/Home$FG$.  The file, $FG,2$Load.HC$FG$ will load the application into mem.  The file, $FG,2$Run.HC$FG$, will usually load and execute the app.  To add an app to your PersonalMenu, use $FG,2$<CTRL-l>$FG$, insert a macro with the PopUp option checked and invoke the $FG,2$Run.HC$FG$ file.
 
 $FG,2$/Demo$FG$ Here you can find lots of sample code to do various things.
 
@@ -40,13 +40,13 @@ $FG,5$$TX+CX,"Application Policies"$$FG$
 
 * Place applications in their own $FG,2$/Apps$FG$ subdirectory.
 
-* Make a file called $FG,2$Load.HC.Z$FG$ to load the application.
+* Make a file called $FG,2$Load.HC$FG$ to load the application.
 
-* Make a file called $FG,2$Run.HC.Z$FG$ to load and run the application, preferable by $FG,2$#include$FG$ing the $FG,2$Load.HC.Z$FG$ file.
+* Make a file called $FG,2$Run.HC$FG$ to load and run the application, preferable by $FG,2$#include$FG$ing the $FG,2$Load.HC$FG$ file.
 
-* Place user data in a subdirectory of $FG,2$/Home$FG$, preferably naming the subdirectory the same as the $FG,2$/Apps$FG$ subdirectory.  Or, place data in the $FG,2$Registry.HC.Z$FG$ file.  See $LK,"::/Demo/RegistryDemo.HC"$.
+* Place user data in a subdirectory of $FG,2$/Home$FG$, preferably naming the subdirectory the same as the $FG,2$/Apps$FG$ subdirectory.  Or, place data in the $FG,2$Registry.HC$FG$ file.  See $LK,"::/Demo/RegistryDemo.HC"$.
 
-* If the app needs files in the $FG,2$/Home$FG$ directory, make an $FG,2$/Apps$FG$ file called $FG,2$Install.HC.Z$FG$ or $FG,2$Install.IN.Z$FG$ to create the $FG,2$/Home$FG$ subdirectory.
+* If the app needs files in the $FG,2$/Home$FG$ directory, make an $FG,2$/Apps$FG$ file called $FG,2$Install.HC$FG$ or $FG,2$Install.IN$FG$ to create the $FG,2$/Home$FG$ subdirectory.
 
  
 

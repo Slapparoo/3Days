@@ -5,7 +5,7 @@ AFILES=FFI_SYSV.yasm
 COBJS=$(foreach o,$(CFILES),$(o).o)
 AOBJS=$(foreach o,$(AFILES),$(o).o) 
 OBJS=$(COBJS) $(AOBJS)
-LIBS= -lm -lX11 -lpthread $(shell pkg-config --libs portaudio-2.0)
+LIBS= -lm -lX11 -lXext -lpthread $(shell pkg-config --libs portaudio-2.0)
 all: 3d_loader 
 	echo "done"
 3days-0.3.00.pkg: FreeBSD_pkg.sh 3d_loader T

@@ -2810,7 +2810,7 @@ public class CDirEntry
 //See \dLK,"ST_FILE_UTIL_FLAGS",A="MN:ST_FILE_UTIL_FLAGS"\d
 #define FUf_RECURSE		0
 #define FUf_DIFF		1
-#define FUf_DEL			1
+#define FUf_DEL			1
 #define FUf_IGNORE		2
 #define FUf_ALL			3
 #define FUf_CANCEL		4
@@ -6304,10 +6304,56 @@ public extern U0 DbgHelp();
 public extern U0 BList(CTask *task=NULL);
 public extern U0 S(U8 *pc=INVALID_PTR,CTask *task=NULL);
 public extern Bool IsInValidBlk(U8 *ptr);
-public extern Bool ViewFrameVars(I64 frame=0,I64 depth=2);
+public extern Bool ViewFrameVars(I64 frame=0,I64 depth=2);
 public extern  I64 *TaskRegAddr(CTask *task,I64 reg_num);
 extern U0 StkRep(CTask *task=NULL);
 extern U0 Dr(CTask *task=NULL);
 extern U0 D(U8 *addr,I64 cnt=0x80,Bool show_offset=TRUE);
 extern U0 Dm(U8 *addr,I64 cnt=0x80);
 extern U0 Da(U8 **addr,I64 cnt=0x10);
+extern CTask *sys_focus_task;
+
+#help_index "DolDoc"
+extern Bool DocEd(CDoc *doc,I64 dof_flags=0);
+extern I64 DocEntryRun(CDoc *doc,CDocEntry *doc_e,
+	Bool exited,I64 *_has_action=NULL);
+extern U0 DocFormBwd(CDoc *doc,Bool giveup=FALSE);
+extern Bool DocGoToLine(CDoc *doc,I64 line_num);
+extern U0 DocLoad(CDoc *doc,U8 *src2,I64 size);
+extern U0 DocPrintAtomic(CDoc *doc=NULL,U8 *fmt,...);
+extern U0 DocPrintPartial(CDoc *doc=NULL,U8 *fmt,...);
+extern CDocEntry *DocPutS(CDoc *doc,U8 *st);
+extern U8 *DocSave(CDoc *doc,I64 *_size=NULL);
+extern I64 EdLeftClickLink(CDoc *doc,CDocEntry *doc_e);
+extern I64 PopUpPickLst(U8 *lst);
+extern I64 TermRightClickLink(CDoc *doc,CDocEntry *doc_e);
+extern U0 DocDel(CDoc *);
+extern I64 DocSize(CDoc *);
+extern U8 *Doc2PlainText(CDoc*,CDocEntry*);
+extern CDoc *DocNew(U8*f=NULL,CTask* t=NULL);
+extern Bool DocUnlock(CDoc *);
+extern Bool DocLock(CDoc *);
+extern U8 *DC2Sprite(CDC *tmpb);
+extern U0 DocUpdateTaskDocs(CTask *task);
+extern CDocEntry *DocPrint(CDoc *doc=NULL,U8 *fmt,...);
+extern U0 DocBinDel(CDoc *doc,CDocBin *b);
+extern U0 DocBinsValidate(CDoc *doc);
+extern Bool DocHighlightCursor(Bool show=OFF,CDoc *doc=NULL);
+extern U0 DocDataFmt(CDoc *doc,CDocEntry *doc_e,I64 d=DOCM_CANCEL);
+extern U8 *EdSprite(I64 bin_num);
+extern Bool DocRecalc(CDoc *doc,I64 recalc_flags=RECALCt_NORMAL);
+extern U0 DocEntryDel(CDoc *doc,CDocEntry *doc_e);
+extern U0 ClipDel();
+extern CDoc *DocRead(U8 *name=NULL,I64 flags=0);
+extern U0 DocCenter(CDoc *doc=NULL,I64 recalc_flags=RECALCt_NORMAL);
+extern Bool Ed(U8 *link_st,I64 edf_dof_flags=0);
+extern U0 EdCodeTools(CDoc *doc);
+public extern U0 InGetStr(U8 *st);
+public extern U0 InPrint(I64 mS=100,U8 *fmt,...);
+public extern U0 InGetKey(I64 scan_code,I64 sc_mask=0xFF|SCF_SHIFT|SCF_CTRL|SCF_ALT);
+public extern I64 InGetChar(...);
+public extern U0 InUntilKey(I64 scan_code,I64 sc_mask=0xFF|SCF_SHIFT|SCF_CTRL|SCF_ALT);
+public extern I64 InUntilChar(...);
+public extern Bool InView();
+public extern U0 InSetMs(I64 mS=7,I64 x=I64_MAX,I64 y=I64_MAX,I64 z=I64_MAX,
+		I64 l=I64_MAX,I64 r=I64_MAX);

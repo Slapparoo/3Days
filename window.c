@@ -3,6 +3,9 @@
 #include <X11/Xutil.h>
 #include <X11/Xresource.h>
 #include <X11/keysymdef.h>
+#include <sys/types.h>
+#include <sys/shm.h>
+#include <X11/extensions/XShm.h>
 typedef struct CDrawWindow {
     Window window;
     Display *disp;
@@ -10,6 +13,8 @@ typedef struct CDrawWindow {
     Atom clip3days;
     Cursor empty_cursor;
     int64_t sz_x,sz_y;
+    XShmSegmentInfo shm_info;
+    XImage *shm_image;
 } CDrawWindow;
 static int32_t gr_palette_std[]={
 0x000000,0x0000AA,0x000AA00,0x00AAAA,
@@ -63,6 +68,11 @@ CDrawWindow *NewDrawWindow() {
 		white=WhitePixel(dw->disp,screen);
 		XSetBackground(dw->disp,dw->gc,white);
 		XSetForeground(dw->disp,dw->gc,black);
+		dw->shm_image=XShmCreateImage(dw->disp,XDefaultVisual(dw->disp,screen),24,ZPixmap,0,&dw->shm_info,640,480);
+	    dw->shm_info.shmid=shmget(IPC_PRIVATE,640*480*4,IPC_CREAT|0777);
+	    dw->shm_info.readOnly=False;
+	    dw->shm_info.shmaddr=dw->shm_image->data=shmat(dw->shm_info.shmid,0,0);
+	    XShmAttach(dw->disp,&dw->shm_info);
 		XMapWindow(dw->disp,dw->window);
 		XEvent e;
 		while(XNextEvent(dw->disp,&e))
@@ -97,30 +107,15 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	int dplanes=DisplayPlanes(dw->disp,screen);
 	wx=win->sz_x>480?win->sz_x:480;
 	wy=win->sz_y>640?win->sz_y:640;
-	static int64_t old_wx,old_wy;
-	static uint32_t *old_scrn;
-	uint32_t *scrn;
 	//We dont want to be shutdown while writing to the window
 	sigemptyset(&set);
 	sigaddset(&set,SIGUSR1);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
-	if(old_wx!=wx||old_wy!=wy) {
-		if(old_scrn) free(old_scrn);
-		old_scrn=calloc(4,wx*wy);
-		old_wx=wx;
-		old_wy=wy;
-	}
-	scrn=old_scrn;
-	XImage *img=XCreateImage(dw->disp,vis,dplanes,ZPixmap,0,scrn,wx,wy,8,0);
 	CenterImage(dw,&cx,&cy);
-	for(y=cy;y!=cy+h;y++)
-		for(x=cx;x!=cx+internal_width;x++) {
-			b2=x+y*wx;
-			((uint32_t*)img->data)[b2]=palette[*colors++];
-		}
-	XPutImage(dw->disp,dw->window,dw->gc,img,0,0,0,0,wx,wy);
+	for(b2=0;b2!=640*480;b2++)
+		((uint32_t*)dw->shm_image->data)[b2]=palette[*colors++];
+	XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,cx,cy,640,480,False);
 	XFlush(dw->disp);
-	XFree(img);
 	XUnlockDisplay(dw->disp);
 	sigprocmask(SIG_SETMASK,&old_set,NULL);
 }

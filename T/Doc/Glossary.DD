@@ -216,29 +216,29 @@ $FG,2$STI$FG$ enable interrupts.
 $FG,2$PUSHFD$FG$ pushes the CPU flags.
 $FG,2$POPFD$FG$ pops the CPU flags.
 $ID,-2$$TR,"Filename Extention Types"$
-$ID,2$$FG,5$*.???.Z$FG$
+$ID,2$$FG,5$*.???$FG$
   These files are automatically compressed or uncompresses files when read or written.
 $FG,5$*.???.C$FG$
   Contiguous files--NOT compressed.
-$FG,5$*.DD.Z;*.DD$FG$
+$FG,5$*.DD;*.DD$FG$
   Text Files
-$FG,5$*.HC.Z;*.HC$FG$
-  HolyC src files.  The default HolyC compiler type is $FG,2$.HC.Z$FG$.
-$FG,5$*.PRJ.Z;*.PRJ$FG$
+$FG,5$*.HC;*.HC$FG$
+  HolyC src files.  The default HolyC compiler type is $FG,2$.HC$FG$.
+$FG,5$*.PRJ;*.PRJ$FG$
   HolyC src files to be compiled $FG,2$AOT$FG$.
-$FG,5$*.HH.Z;*.HH$FG$
+$FG,5$*.HH;*.HH$FG$
   HolyC src header files.
-$FG,5$*.MAP.Z;*.MAP$FG$
+$FG,5$*.MAP;*.MAP$FG$
   Compiler "map" files
-$FG,5$*.BIN.Z;*.BIN.C;*.BIN$FG$
+$FG,5$*.BIN;*.BIN.C;*.BIN$FG$
   Binary executable files, created by $LK,"Cmp",A="MN:Cmp"$() and read by $LK,"Load",A="MN:Load"$().
-$FG,5$*.DATA.Z;*.DATA$FG$
+$FG,5$*.DATA;*.DATA$FG$
   Data files
 $FG,5$*.ISO$FG$
   CD/DVD image file.
-$FG,5$*.IN.Z;*.IN$FG$
+$FG,5$*.IN;*.IN$FG$
   $FG,2$InFile$FG$ Basically a HolyC program whose stdout goes to the input of a task when $LK,"InFile",A="MN:InFile"$() is called.
-$FG,5$*.GR.Z;*.GR$FG$
+$FG,5$*.GR;*.GR$FG$
   Graphics file
 
 $LK,"FILEMASK_TXT",A="MN:FILEMASK_TXT"$

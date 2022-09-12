@@ -35,11 +35,11 @@ asm {
 };
 U0 LoadImps() {
   ExePrint2("#define FPTRS\n;;");
-  ExePutS2(KERNELA_BIN);
+  ExePutS2(KERNELA_BIN,"/KERNELA.HH");
   __BootstrapForeachSymbol(&BootstrapImportSymbol);
 //Load asm externs second
   ExePrint2("#define BOOT_3DAYS\n;;");
-  ExePutS2(KERNELB_BIN);
+  ExePutS2(KERNELB_BIN,"/KERNELB.HH");
 }
 static U0 StartUpCore1(I64) {
   ACInit("/KERNEL*.HH*");
