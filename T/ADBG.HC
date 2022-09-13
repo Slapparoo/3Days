@@ -1,6 +1,6 @@
 #help_index "Debugging/Dump"
 Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
-	I64 depth,I64 max_depth,Bool dynamic,I64 types=HTT_CLASS,I64 offset=0)
+	I64 depth,I64 max_depth,Bool dynamic,I64 types=HTT_CLASS,I64 offset=0,Bool include_regs=FALSE)
 {//See $LK,"::/Demo/LastClass.HC"$.
   I64 i,j,stars,*ptr;
   CMemberLst *ml;
@@ -21,14 +21,19 @@ Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
   while (ml) {
     tmpc2=ml->member_class;
     ptr=_d(U8 *)+ml->offset;
-    DocPrint(doc,"%08X ",ptr(U8 *)+offset);
+    //GP Registers range from 0-15
+    if(0<=ml->reg<=0xf)
+      DocPrint(doc,"%08Z ",ml->reg,"ST_U64_REGS");
+    else
+      DocPrint(doc,"%08X ",ptr(U8 *)+offset);
     stars=tmpc2->ptr_stars_cnt;
     tmpc2=OptClassFwd(tmpc2);
     tmpc2-=tmpc2->ptr_stars_cnt;
     if (tmpc2->type & HTT_INTERNAL_TYPE) {
       DocPrint(doc,"$$GREEN$$%-20ts:$$FG$$",ml->str);
-      if(!IsInValidBlk(ptr)) {
-        "(Uunreadable)\n";
+      //ml->reg is lesser or equal to 0xf as there are 16 gp registers including 0
+      if(!IsInValidBlk(ptr)||(0<=ml->reg<=0xf&&!include_regs)) { //if is a register and we dont want registers
+        "(Unreadable)\n";
       } else if (stars==1 && (tmpc2->raw_type==RT_I8 || tmpc2->raw_type==RT_U8)) {
         ptr=*ptr;
         if (1) {
@@ -163,7 +168,7 @@ Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
 }
 
 public U0 ClassRep(U8 *_d,U8 *class_name=lastclass,
-	I64 max_depth=2,Bool fun=FALSE,I64 offset=0)
+	I64 max_depth=2,Bool fun=FALSE,I64 offset=0,Bool include_regs=FALSE)
 {//Displays members of a record by using the compiler's info.
   CDoc *doc;
   if (0)
@@ -173,9 +178,9 @@ public U0 ClassRep(U8 *_d,U8 *class_name=lastclass,
     doc=DocPut;
   }
   if (fun)
-    ClassRep2(doc,_d,class_name,0,max_depth,FALSE,HTT_FUN,offset);
+    ClassRep2(doc,_d,class_name,0,max_depth,FALSE,HTT_FUN,offset,include_regs);
   else
-    ClassRep2(doc,_d,class_name,0,max_depth,FALSE,HTT_CLASS,offset);
+    ClassRep2(doc,_d,class_name,0,max_depth,FALSE,HTT_CLASS,offset,include_regs);
   DocPrint(doc,"\n");
   DocRecalc(doc);
   if (0) {
@@ -237,7 +242,7 @@ U0 UpdateRegVarImg(CHashFun *tmpf,U8 *_b,CTask *task)
     ml=ml->next;
   }
 }
-public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL)
+public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL,Bool include_regs=FALSE)
 {//Shows names and vals of a fun's local vars using compiler's info.
   I64 size;
   U8 *img;
@@ -248,12 +253,12 @@ public U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL)
       if (task) {
 //tmpf->size is negative.It's the bottom
 	//of the fun local var space relative to RBP .
-	size=tmpf->arg_cnt*8-tmpf->size+16;
+	size=tmpf->arg_cnt*8-tmpf->size+16;
 
 	img=MAlloc(size);
 	MemCpy(img,rbp+tmpf->size,size);
 	UpdateRegVarImg(tmpf,img-tmpf->size,task);
-	ClassRep(img-tmpf->size,st,max_depth,TRUE,rbp-img+tmpf->size);
+	ClassRep(img-tmpf->size,st,max_depth,TRUE,rbp-img+tmpf->size,include_regs);
 	Free(img);
       } else
 	ClassRep(rbp,st,max_depth,TRUE);

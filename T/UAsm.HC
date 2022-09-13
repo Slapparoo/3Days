@@ -270,12 +270,11 @@ U0 Ui(U8 *buf,U8 **_rip,I64 seg_size=64,I64 *_jmp_dst=NULL,Bool just_ins=FALSE)
   }
   *arg1_st=0;
   *arg2_st=0;
-  /*if (!0 && PutSrcLink(rip,1,line1)) TODO RESTORE
+  if (!0 && PutSrcLink(rip,1,line1))
     CatPrint(line1,"\n");
-  else*/
+  else
     *line1=0;
-
-  StrPrint(line1+StrLen(line1),"%24tp ",rip);
+  StrPrint(line1+StrLen(line1),"%24tp ",rip);
   bin_data_area1=line1+StrLen(line1);
   for (i=0;i<6;i++)
     CatPrint(line1,"%02X",rip[i]);

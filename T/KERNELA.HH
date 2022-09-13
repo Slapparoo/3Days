@@ -2810,7 +2810,7 @@ public class CDirEntry
 //See \dLK,"ST_FILE_UTIL_FLAGS",A="MN:ST_FILE_UTIL_FLAGS"\d
 #define FUf_RECURSE		0
 #define FUf_DIFF		1
-#define FUf_DEL			1
+#define FUf_DEL			1
 #define FUf_IGNORE		2
 #define FUf_ALL			3
 #define FUf_CANCEL		4
@@ -3511,7 +3511,7 @@ class CTaskDying
   I64	wake_jiffy;
 };
 
-public class CTask //The Fs segment reg points to current CTask.
+public class CTask //The Fs segment reg points to current CTask.
 {
   CTask *addr; //Self-addressed ptr
   U32	task_signature,win_inhibit;
@@ -5957,16 +5957,17 @@ extern Bool E(U8 *addr,I64 cnt=512,I64 edf_dof_flags=0);
 extern Bool PutSrcLink(U8 *addr,I64 cnt=1,U8 *buf=NULL);
 extern U8 *U(U8 *rip,I64 cnt=20,I64 seg_size=64);
 public extern U0 Uf(U8 *st);
-public extern U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL);
+public extern U0 FunRep(U8 *st,U8 *rbp=NULL,I64 max_depth=2,CTask *task=NULL,Bool include_regs=FALSE);
 #define RSAC_REPLACE	0
 #define RSAC_SKIP	1
 #define RSAC_ALL	2
 public extern U0 ClassRepD(U8 *_d,U8 *class_name=lastclass,
 	I64 max_depth=2,Bool fun=FALSE,I64 offset=0);
+
 public extern U0 ClassRep(U8 *_d,U8 *class_name=lastclass,
-	I64 max_depth=2,Bool fun=FALSE,I64 offset=0);
+	I64 max_depth=2,Bool fun=FALSE,I64 offset=0,Bool include_regs=FALSE);
 extern Bool ClassRep2(CDoc *doc,U8 *_d,U8 *class_name=lastclass,
-	I64 depth,I64 max_depth,Bool dynamic,I64 types=HTT_CLASS,I64 offset=0);
+	I64 depth,I64 max_depth,Bool dynamic,I64 types=HTT_CLASS,I64 offset=0,Bool include_regs=FALSE);
 extern Bool Copy(U8 *src_files_find_mask,U8 *dst_files_find_mask=".");
 extern CTask *Fs();
 extern U0 Sleep(I64 ms);

@@ -180,8 +180,11 @@ U0 DebuggerLandWin(I64 sig,I64 *gps) {
   if(sig!=5) //SIGTRAP
     Exit;
 fin:
-  MemCpy(Fs,&clone,sizeof CTask);
+  //There  are 16 gps,and rip and rflags
+  MemCpy(&(Fs->rip),&clone.rip,(16+2)*8);
   MemCpy(Fs->fpu_mmx,gps[17],sizeof CFPU);
+  Fs->task_flags=clone.task_flags;
+  Fs->bpt_lst=clone.bpt_lst;
   CALL(_TASK_CONTEXT_RESTORE);
 }
 
@@ -226,7 +229,7 @@ U0 DebuggerLand(I64 sig,I64 *gps) {
       }
     } else {
 //ONLYCHECK IFBREAKPOINTSWEREN'tDISABLED
-      //If we SIGTRAP'ed,we probaly hit an IHT3
+      //If we SIGTRAP'ed,we probaly hit an IHT3
       if(bp=BptFind(_RIP-1,Fs)) {
         _RIP--;
         LBts(&(Fs->task_flags),TASKf_DISABLE_BPTS);
@@ -241,8 +244,10 @@ U0 DebuggerLand(I64 sig,I64 *gps) {
   if(sig!=5) //SIGTRAP
     Exit;
 fin:
-  MemCpy(Fs,&clone,sizeof CTask);
+  MemCpy(&(Fs->rip),&clone.rip,(16+2)*8);
   MemCpy(Fs->fpu_mmx,gps[17],sizeof CFPU);
+  Fs->task_flags=clone.task_flags;
+  Fs->bpt_lst=clone.bpt_lst;
   CALL(_TASK_CONTEXT_RESTORE);
 }
 CBpt *BptFind(U8 *needle_addr,CTask *haystack_task=NULL,Bool rem=FALSE)
@@ -308,7 +313,7 @@ Bool BptR(U8 *addr,CTask *task=NULL,Bool live=TRUE,Bool rem=TRUE)
     res=TRUE;
     if (rem)
       Free(tmpb);
-  }
+  }
   if(bl)
     BreakUnlock;
   POPFD
@@ -394,6 +399,7 @@ public Bool ViewFrameVars(I64 frame=0,I64 depth=2) {
   CTask *t=GetDebuggedProcess;
   CHash *fun;
   U8 *rip;
+  I64 oframe=frame;
   if(t==Fs) rbp=GetRBP,rip=NULL;
   else rbp=t->rbp,rip=t->rip;
   while(frame>0) {
@@ -404,7 +410,7 @@ public Bool ViewFrameVars(I64 frame=0,I64 depth=2) {
   }
   fun=FunSegFind(rip,NULL);
   if(!fun) return FALSE;
-  FunRep(fun->str,rbp,depth,t);
+  FunRep(fun->str,rbp,depth,t,!oframe);
   return TRUE;
 }
 
@@ -423,18 +429,17 @@ U0 DbgHelp()
         ">DFs->_rax=0x1234;\t\t\t//Set RAX to 0x1234.\n"
         ">DFs->_rip=&Break;\t\t//Set RIP.\n"
         ">I64 i;\t\t\t\t//Declare variable.\n"
-        ">i=_RCX+_RDX;\t\t\t//Assign to variable.\n"
+        ">i=DFs->rax+DFs->rbx;\t\t\t//Assign to variable.\n"
         ">U(&Print+0x8);\t\t\t//Unassemble Print.\n"
         ">Uf(\"Print\");\t\t\t//Unassembler function \"Print\".\n"
         ">Man(\"Print\");\t\t\t//Edit Src for \"Print\".\n"
-        ">E(_RIP);\t\t\t//Edit Src Code.\n"
-        ">Fix;\t\t\t\t//Edit Last Err Src Code.\n"
+        ">E(DFs->rip);\t\t\t//Edit Src Code.\n"
         ">B(&Main+0x20);\t\t\t//Toggle break point.\n"
         ">B2;\t\t\t\t//Clear all break points.\n"
         ">S;\t\t\t\t//Single step.\n"
         ">G;\t\t\t\t//Resume execution.\n"
         ">G2;\t\t\t\t//B2;VGAFlush;WinFocus;G;\n"
-        ">ViewFrameVars;\t\t\t\t//Examine the variables at a frame\n"
+        ">ViewFrameVars;\t\t\t//Examine the variables at a frame\n"
         ">Exit;\t\t\t\t//Exit debugger.\n\n";
 }
 public U0 S(U8 *ip=INVALID_PTR,CTask *task=NULL) //Single-step.

@@ -6,11 +6,9 @@ This contains a port of the TempleOS compiler from the original sources of Templ
 To get started,you will need `tcsh`,`libX11`, and `gcc` to build the stuff,which you can do by typing `make` on linux and `gmake` on FreeBSD.
 
 # Development
-This compiler has had a long history,it started out being written in C/yacc. I wasn't pleased with it so i rewrote it in HolyC. After I had a working HolyC compiler,I ported the TempleOS compiler to run under FreeBSD,which led to an easy port of the DolDoc engine
-All depencies (except for X11 and portaudio on unix) are included with this repo so building should not be a problem. 
+This compiler has had a long history,it started out being written in C/yacc. I wasn't pleased with it so i rewrote it in HolyC. After I had a working HolyC compiler,I ported the TempleOS compiler to run under FreeBSD,which led to an easy port of the DolDoc engine All depencies (except for X11 and portaudio on unix) are included with this repo so building should not be a problem. 
 
-To build the compiler binary `HCRT.BIN`,type `Cmp("FULL_PACKAGE.HC","HCRT.DBG.Z","HCRT.BIN");` in 3Days in the root directory of `T:`
-There is a booting process though, `KERNELA.HH` contains the functions that aren't linked to assembler symbols,but `KERNELB.HH` contains functions linked to assembler symbols. They are loaded in `FULL_PACKAGE.HC`
+To build the compiler binary `HCRT.BIN`,type `Cmp("FULL_PACKAGE.HC","HCRT.DBG.Z","HCRT.BIN");` in 3Days in the root directory of `T:` There is a booting process though, `KERNELA.HH` contains the functions that aren't linked to assembler symbols,but `KERNELB.HH` contains functions linked to assembler symbols. They are loaded in `FULL_PACKAGE.HC`
  
 
 # HolyC Caveats
@@ -693,7 +691,51 @@ en:
 }
 Du;
 ```
+## Debugging
+This is pretty bare bones,so you may want to know assembler before rocking out with the debugger.
+The debugger is called when somthing goes wrong on you hit an `INT3`(which you can put in your code).
 
+When in the debugger,you can look at your current frame's variables via `ViewFrameVars;`,or your parent's variables with `ViewFrameVars;`. Keep in mind that any variable stored in a register is only visible at the bottom frame,you may see that a register variable in a parent function will appear as "unreadable"
+
+Here is a basic example:
+```c
+//This one stores n in a register
+//Use "ViewFrameVars; to look at the task's registers,but they will only be avialble on the topmost frame
+I64 Fib(I64 n) {
+  if(n<2) {
+    INT3;
+    return n;
+  }
+  return Fib(n-1)+Fib(n-2);
+}
+Fib(4);
+//This one stores n on the stack,you can view the parent's varaibles with "ViewFrameVars(1);"
+I64 Fib2(I64 n) {
+  try { //try set's all variables to noreg
+    if(n<2) {
+      INT3;
+      return n;
+    }
+    return Fib2(n-1)+Fib2(n-2);
+  } catch 
+    PutExcept;
+}
+Fib2(4);
+```
+Once in the debugger,you can single-step with `S;`,and you can unassemble the current program address with `U(DFs->rip);`. What's `DFs`?. **In the 3Days debuger,DFs is the debugged task,not Fs(this is different than TempleOS).**,so if you want to change register `RAX`,do `DFs->rax=123;` This is because I wanted to implement things differntly than TempleOS. This way you can open up new windows,edit source code and other fun stuff while debugging. (Im not a fan of single-user mode and that annoying BEEP sound.). Type Exit to continue if you hit a breakpoint,or if you seg-fualted it will `Exit` the task for you.
+
+Here are some FUNctions for debugging!
+|Function|Meaning|
+|--|--|
+|B(&function+offset)|Toggle a breakpoint at a pointer for the current task|
+|S|single step the debugger|
+|Dr|Dump registers|
+|E|Edit the source code of a sym at a pointer|
+|Uf("Print")|Dissamble a function by name|
+|ViewFrameVars|View the frame variables at the current frame|
+|ViewFrameVars(1)|View the frame variables of the parent frame|
+|G|Basically the same as Exit|
+|G2|Delete all breakpoints and exit debugger|
 # Credits
  - https://github.com/rxi/map
  - https://github.com/rxi/vec
