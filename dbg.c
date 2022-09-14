@@ -2,6 +2,7 @@
 #ifndef TARGET_WIN32
 #include <signal.h>
 #include <ucontext.h>
+#ifndef REG_R8
 enum
 {
   REG_R8 = 0,
@@ -51,6 +52,7 @@ enum
   REG_CR2
 # define REG_CR2	REG_CR2
 };
+#endif
 static void routine(int sig,struct siginfo_t *info,ucontext_t *ctx) {
 	vec_CHash_t *d;
 	void *fun;
