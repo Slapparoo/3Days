@@ -45,7 +45,7 @@ $FG,2$Merge(\"C:/*\",\"D:/*\",\"+r+d\");$FG$ to check my changes.
 
 * If, for some strange reason, you wanted to reduce mem usage, make a smaller disk cache when you recompile the kernel; disabling $FG,2$AutoComplete$FG$; Specify smaller stk sizes when doing $LK,"Spawn",A="MN:Spawn"$(), chang $LK,"MEM_DFT_STK",A="MN:MEM_DFT_STK"$, and using $LK,"DocMax",A="MN:DocMax"$() to reduce the cmd line buffer size.
 
-* Filenames ending in "$FG,2$.Z$FG$" will be automatically compressed and uncompressed when read or written.  The compression method is not supported by other operating systems.  You can store files uncompressed by $LK,"Move",A="MN:Move"$()ing them to a filename not ending in "$FG,2$.Z$FG$".  See $LK,"::/Doc/TOSZ.DD"$ if you want to uncompress while in $FG,2$Linux$FG$.
+* Filenames ending in "$FG,2$$FG$" will be automatically compressed and uncompressed when read or written.  The compression method is not supported by other operating systems.  You can store files uncompressed by $LK,"Move",A="MN:Move"$()ing them to a filename not ending in "$FG,2$$FG$".  See $LK,"::/Doc/TOSZ.DD"$ if you want to uncompress while in $FG,2$Linux$FG$.
 
 * $LK,"Merge",A="MN:Merge"$() can be used to see what's changed.  The $FG,2$+d$FG$ flag will show differences of files which have changed and allow you to merge code.  (The $FG,2$+r$FG$ flag will recurse.)
 
@@ -119,7 +119,7 @@ $FG,2$Merge(\"C:/*\",\"D:/*\",\"+r+d\");$FG$ to check my changes.
 
 * Using a sub-int array, $FG,2$i.u8[3]$FG$, for example, will force a local var to non-reg.
 
-* You can delete the $FG,4$~/Registry.HC.Z$FG$ file.  The policy is that deleting it will restore defaults.  It is a text doc, if you want to edit it.  Be careful of tree indentations.
+* You can delete the $FG,4$~/Registry.HC$FG$ file.  The policy is that deleting it will restore defaults.  It is a text doc, if you want to edit it.  Be careful of tree indentations.
 
 * Study $LK,"::/Adam/Opt/Utils/MemRep.HC"$ and $LK,"WallPaper",A="MN:WallPaper"$() to learn how the system resources are put together.
 
@@ -139,7 +139,7 @@ $FG,2$Merge(\"C:/*\",\"D:/*\",\"+r+d\");$FG$ to check my changes.
 
 * You can use $FG,2$<CTRL-SHIFT-L>$FG$ to do a check for compile errors.
 
-* You can use $LK,"DocOpt",A="MN:DocOpt"$() to optimize links. (Mostly just removes .Z)
+* You can use $LK,"DocOpt",A="MN:DocOpt"$() to optimize links. (Mostly just removes )
 
 * $LK,"ZipRep",A="MN:ZipRep"$() can highlight src files with lots of redundancy.
 

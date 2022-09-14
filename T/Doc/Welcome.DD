@@ -77,9 +77,9 @@ Tasks have no priority and are never removed from the queue.  Instead, they ofte
 
 The $FG,2$FAT32$FG$ filesystem is supported to makes exchanging files with a dual booted other operating system easy and there is the simple, 64-bit TempleOS $LK,"RedSea",A="FI:::/Doc/RedSea.DD"$ filesystem.  The $LK,"RedSea",A="FI:::/Doc/RedSea.DD"$ has allocation bitmap for clus and all files are stored contiguously.  You can't grow files.
 
-TempleOS is geared toward reading and writing whole files.  Since whole files are processed, compression is possible.  Filenames ending in "$FG,2$.Z$FG$" are automatically compressed or uncompressed when stored and fetched.  TempleOS does support direct block random access into files, however -- $LK,"FBlkRead",A="MN:FBlkRead"$() and $LK,"FBlkWrite",A="MN:FBlkWrite"$().
+TempleOS is geared toward reading and writing whole files.  Since whole files are processed, compression is possible.  Filenames ending in "$FG,2$$FG$" are automatically compressed or uncompressed when stored and fetched.  TempleOS does support direct block random access into files, however -- $LK,"FBlkRead",A="MN:FBlkRead"$() and $LK,"FBlkWrite",A="MN:FBlkWrite"$().
 
-If a file is not found, "$FG,2$.Z$FG$" is added or removed and a search is done, again.  There is no $FG,2$PATH$FG$, but parent directories are searched when a file is not found.  This feature is especially useful for default account files.
+If a file is not found, "$FG,2$$FG$" is added or removed and a search is done, again.  There is no $FG,2$PATH$FG$, but parent directories are searched when a file is not found.  This feature is especially useful for default account files.
 
 The graphic resolution is poor, $FG,2$640x480 16 color$FG$, but God said it was a covenant like circumcision.  Also, that's all I feel comfortable with without GPU acceleration supported.  A $FG,2$1600x1200x24$FG$ bit scrn takes 37 times more memory, implying 37 times the CPU power.  Also, a fixed size keeps it simple with everybody machine having the same appearance.  Look on the bright-side -- you won't spend as much time twiddling pixels for your game art and you'll have tons of CPU power available, especially with multicore systems.
 
@@ -110,7 +110,7 @@ $FG,2$<CTRL-ALT-t>$FG$ new terminal window.
 $FG,2$<CTRL-ALT-n>$FG$ switches to the next window.
 $FG,2$<CTRL-ALT-x>$FG$ kills a window.
 
-$LK,"Find",A="MN:Find"$() is your best friend.  There's a wrapper function called $LK,"F",A="MN:F"$() in your $FG,2$~/HomeWrappers.HC.Z$FG$ file.  Feel free to make wrapper functions for functions you use often and customize the args.  By the way, $LK,"Find",A="MN:Find"$() or $LK,"R",A="MN:R"$() can be used to replace strings across multiple files.  You can access $LK,"Find",A="MN:Find"$() using $FG,2$<CTRL-SHIFT-f>$FG$.
+$LK,"Find",A="MN:Find"$() is your best friend.  There's a wrapper function called $LK,"F",A="MN:F"$() in your $FG,2$~/HomeWrappers.HC$FG$ file.  Feel free to make wrapper functions for functions you use often and customize the args.  By the way, $LK,"Find",A="MN:Find"$() or $LK,"R",A="MN:R"$() can be used to replace strings across multiple files.  You can access $LK,"Find",A="MN:Find"$() using $FG,2$<CTRL-SHIFT-f>$FG$.
 
 As you browse code, use the $FG,2$AutoComplete$FG$ window to look-up functions, etc.  $FG,2$<CTRL-SHIFT-F1>$FG$ (or whatever number) to follow a sym to it's source.  You can browse deeper and deeper.  You go back with $FG,2$<SHIFT-ESC>$FG$.
 
@@ -124,7 +124,7 @@ Ideally, do not install applications such as games onto your hard drive because 
 
 Create a $LK,"RedSea",A="FI:::/Doc/RedSea.DD"$ ISO file with $LK,"RedSeaISO",A="MN:RedSeaISO"$().  Send an email to $TX,"tdavis@templeos.org",HTML="mailto:tdavis@templeos.org"$ if you want me to post a link to your TempleOS code in the App Store.
 
-$MA-X+PU,"Take Tour",LM="User(\"Cd(\\\"::/Misc/Tour\\\");;InFile(\\\"Tour\\\");\n\");"$
+$MA-X+PU,"Take Tour",LM="User(\"Cd(\\\"::/Misc/Tour\\\");;InFile(\\\"Tour.IN\\\");\n\");"$
 
 $FG,8$
 * "Linux" is a trademark owned by Linus Torvalds.

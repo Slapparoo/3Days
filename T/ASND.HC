@@ -395,3 +395,6 @@ public CTask *Sweep(I64 mS,F64 ona1,F64 ona2)
   } else
     return NULL;
 }
+public U0 SndRst() {
+  SndFreq(0);
+}

@@ -527,3 +527,20 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 	}
 	return DefWindowProc(hwnd,msg,wParam,lParam);
 }
+static int32_t BGR48(uint16_t *c) {
+	int64_t r=c[2]*(255./0xffFF),g=c[1]*(255./0xffFF),b=c[0]*(255./0xffFF); //0xffFF is the highest 16bit value 
+	if(r>0xff) r=0xff;
+	if(g>0xff) g=0xff;
+	if(b>0xff) b=0xff;
+	return ((r&0xff)<<16)|((g&0xff)<<8)|(b&0xff);
+}
+void GrPalleteSet(int c,int64_t _color) { //B,G,R,PAD
+	  int16_t *color=&_color;
+	  memcpy(gr_pallete_BGR48,color,2*4);
+	  palette[c]=gr_palette_std[c]=BGR48(color);
+}
+char *GrPalleteGet(int64_t c) {
+	int64_t r=0;
+	memcpy(&r,&gr_pallete_BGR48[2*4*c],2*4);
+	return r;
+}

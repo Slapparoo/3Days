@@ -12,18 +12,6 @@ U0 GrPaletteIndicesSet()
   I64 i;
 }
 
-public U0 GrPaletteColorSet(I64 color_num,CBGR48 bgr48)
-{//VGA has 6-bits for blue, for green, and for red.
-  //TODO IMPLEMENT
-}
-
-public CBGR48 GrPaletteColorGet(I64 color_num)
-{//VGA has 6-bits for blue, for green, and for red.
-  CBGR48 res=0;
-  //TODO IMPLEMENT
-  return res;
-}
-
 public CBGR48 gr_palette_std[COLORS_NUM]={
 0x000000000000,0x00000000AAAA,0x0000AAAA0000,0x0000AAAAAAAA,
 0xAAAA00000000,0xAAAA0000AAAA,0xAAAA55550000,0xAAAAAAAAAAAA,

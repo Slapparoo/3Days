@@ -463,6 +463,12 @@ int64_t mp_cnt(int64_t *stk) {
 void SpawnCore(int64_t *stk) {
 	CreateCore(stk[0],stk[1]);
 }
+void STK_GrPalleteSet(int64_t *stk) {
+	GrPalleteSet(stk[0],stk[1]);
+}
+int64_t STK_GrPalleteGet(int64_t *stk) {
+	return GrPalleteGet(stk[0]);
+}
 int64_t STK_NewVirtualChunk(int64_t *stk) {
 	return NewVirtualChunk(stk[0],stk[1]);
 }
@@ -536,6 +542,8 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"DyadSetReadCallback",STK_DyadSetReadCallback,3);
     STK_RegisterFunctionPtr(&ffi_blob,"DyadSetOnListenCallback",STK_DyadSetOnListenCallback,3);
     #endif
+    STK_RegisterFunctionPtr(&ffi_blob,"GrPaletteColorSet",STK_GrPalleteSet,2);
+    STK_RegisterFunctionPtr(&ffi_blob,"GrPaletteColorGet",STK_GrPalleteGet,1);
     char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);

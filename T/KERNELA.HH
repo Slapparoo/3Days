@@ -201,6 +201,8 @@ import U8i ChDrv(U8i);
 import U0i SndFreq(I64i freq);
 import U0 __BootstrapForeachSymbol(U0 *fptr);
 extern C3DaysDrawWin;
+public import I64i GrPaletteColorGet(I64i color_num)
+public import U0 GrPaletteColorSet(I64i color_num,U8i *bgr48);
 import C3DaysDrawWin *DrawWindowNew();
 import U0i DrawWindowUpdate(C3DaysDrawWin *win,U8i *,I64i,I64i);
 import C3DaysDrawWin *DrawWindowDel(C3DaysDrawWin *);
@@ -224,6 +226,8 @@ import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 import U0i UnblockSignals();
 #else
+public extern I64i GrPaletteColorGet(I64i color_num)
+public extern U0 GrPaletteColorSet(I64i color_num,U8 *bgr48);
 extern U64i UnixNow();
 extern U0i UnblockSignals();
 extern U0i InteruptCore(I64i);
@@ -3511,7 +3515,7 @@ class CTaskDying
   I64	wake_jiffy;
 };
 
-public class CTask //The Fs segment reg points to current CTask.
+public class CTask //The Fs segment reg points to current CTask.
 {
   CTask *addr; //Self-addressed ptr
   U32	task_signature,win_inhibit;
@@ -4608,8 +4612,6 @@ public extern Bool ClipLine(I64 *_x1,I64 *_y1,I64 *_x2,I64 *_y2,
 	I64 left,I64 top,I64 right,I64 bottom);
 public extern I64 GR2MV(U8 *print_fmt="VID%03d.MV",
 	U8 *files_find_mask,U8 *fu_flags=NULL);
-public extern U0 GrPaletteColorSet(I64 color_num,CBGR48 bgr48);
-public extern CBGR48 GrPaletteColorGet(I64 color_num);
 public extern U0 GrPaletteGet(CBGR48 *bgr48);
 public extern U0 GrPaletteSet(CBGR48 *bgr48);
 public extern U0 PaletteSetStd();
@@ -6358,3 +6360,9 @@ public extern I64 InUntilChar(...);
 public extern Bool InView();
 public extern U0 InSetMs(I64 mS=7,I64 x=I64_MAX,I64 y=I64_MAX,I64 z=I64_MAX,
 		I64 l=I64_MAX,I64 r=I64_MAX);
+#define GR_SCALE1_BITS	24
+#define GR_SCALE2_BITS	8
+extern Bool GrLinePlot0(CDC *dc,I64 x,I64 y,I64 z);
+public extern CBGR48 gr_palette_gray[COLORS_NUM];
+public extern CBGR48 gr_palette_std[COLORS_NUM];
+public extern U0 SndRst();

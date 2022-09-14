@@ -86,7 +86,7 @@ U0 FaultCB(U8 **rbp,U8 *fptr) {
             TOSPrint("[%d] %s\n",bt,ln);
         Free(ln);
     }
-    Exit;
+    //Exit;
 }
 U0 GetDebuggedProcess() {
   CHashGlblVar *dtask=HashFind("DFs",Fs->hash_table,HTT_GLBL_VAR);
@@ -198,6 +198,7 @@ U0 DebuggerLand(I64 sig,I64 *gps) {
   CBpt*bp;
   CTask clone;
   UnblockSignals;
+  FaultCB(gps[5],gps[16]);
 //General purpose registers are in this order,16 is RIP
   //https://wiki.osdev.org/X86-64_Instruction_Encoding
   _RAX=gps[0];
@@ -309,11 +310,11 @@ Bool BptR(U8 *addr,CTask *task=NULL,Bool live=TRUE,Bool rem=TRUE)
   bl=BreakLock;
   if (tmpb=BptFind(addr,task,rem)) {
     if (task==GetDebuggedProcess && live)
-      *tmpb->addr=tmpb->val;
+      *tmpb->addr=tmpb->val;
     res=TRUE;
     if (rem)
       Free(tmpb);
-  }
+  }
   if(bl)
     BreakUnlock;
   POPFD
