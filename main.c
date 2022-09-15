@@ -106,7 +106,7 @@ int main(int argc,char **argv)
         exit(0);
     }
     if(TDriveArg->count) {
-		t_drive=TDriveArg->filename[0];
+		t_drive=strdup(TDriveArg->filename[0]);
 	} else  {
 		tmp=HostHomeDir();
 		t_drive=TD_MALLOC(1+1+strlen(tmp)+strlen(DFT_T_DRIVE));

@@ -678,7 +678,10 @@ void CreateTemplateBootDrv(char *to,char *template,int overwrite) {
 	char buffer[1024],drvl[16],buffer2[1024];
 	if(!overwrite)
 		if(__FExists(to)) {
-			if(!__FIsNewer(template,to)) {
+			if(!__FExists(template)) {
+				VFsMountDrive('T',to);
+				return;
+			} else if(!__FIsNewer(template,to)) {
 				VFsMountDrive('T',to);
 				return;
 			}

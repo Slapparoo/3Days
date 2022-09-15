@@ -23,6 +23,7 @@ static void CenterWindow(HWND win,int64_t *x,int64_t *y) {
 	if(x) *x=_x;
 	if(y) *y=_y;
 }
+static char gr_pallete_BGR48[2*4*16]; //2 bytes,4 channels,16 colors
 static int32_t gr_palette_std[]={
 0x000000,0x0000AA,0x000AA00,0x00AAAA,
 0xAA0000,0xAA00AA,0xAA5500,0xAAAAAA,
@@ -536,7 +537,7 @@ static int32_t BGR48(uint16_t *c) {
 }
 void GrPalleteSet(int c,int64_t _color) { //B,G,R,PAD
 	  int16_t *color=&_color;
-	  memcpy(gr_pallete_BGR48,color,2*4);
+	  memcpy(gr_pallete_BGR48+2*4*c,color,2*4); //2 bytes,4 channels
 	  palette[c]=gr_palette_std[c]=BGR48(color);
 }
 char *GrPalleteGet(int64_t c) {
