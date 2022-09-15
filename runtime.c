@@ -367,7 +367,14 @@ int64_t STK___GetTicks() {
     theTick += ts.tv_sec * 1000;
     return theTick;
     #else
-    return GetTickCount();
+    static int64_t freq;
+    int64_t cur;
+    if(!freq) {
+		QueryPerformanceFrequency(&freq);
+		freq/=1000;
+	}
+	QueryPerformanceCounter(&cur);
+    return cur/freq;
     #endif
 }
 int64_t STK_SetKBCallback(int64_t *stk) {
