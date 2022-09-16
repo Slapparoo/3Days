@@ -1770,8 +1770,8 @@ class CWinMgrTimingGlbls
   I64	calc_idle_cnt;
 };
 
-#define WINMGR_FPS	(30000.0/1001)
-#define WINMGR_PERIOD	(1001/30000.0)
+#define WINMGR_FPS	(60000.0/1001)
+#define WINMGR_PERIOD	(1001/60000.0)
 
 public class CWinMgrGlbls
 {
@@ -6365,4 +6365,6 @@ public extern U0 InSetMs(I64 mS=7,I64 x=I64_MAX,I64 y=I64_MAX,I64 z=I64_MAX,
 extern Bool GrLinePlot0(CDC *dc,I64 x,I64 y,I64 z);
 public extern CBGR48 gr_palette_gray[COLORS_NUM];
 public extern CBGR48 gr_palette_std[COLORS_NUM];
-public extern U0 SndRst();
+public extern U0 SndRst();
+
+extern Bool GrPlot1(CDC *dc=NULL,I64 x,I64 y);
