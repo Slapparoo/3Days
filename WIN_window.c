@@ -423,12 +423,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h) {
 	int64_t x,y,b,b2,mul=4;
 	WaitForSingleObject(mutex,INFINITE);
+	b2=479*internal_width;
 	for(y=0;y!=480;y++) {
-		b2=(480-y-1)*internal_width;
+		//Windows stores lines bottom to top
 		for(x=0;x!=640;x++) {
 			buf[b2++]=palette[*colors++];
 			//img->data[b*4+3]=0;
 		}
+		//Move 2 lines backwards(the current line and the pointer to the "next" line) see above note
+		b2-=internal_width<<1;
 	}
 	ReleaseMutex(mutex);
 	RedrawWindow(

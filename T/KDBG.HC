@@ -172,7 +172,9 @@ U0 DebuggerLandWin(I64 sig,I64 *gps) {
     if(bp=BptFind(_RIP,Fs)) {
         LBts(&(Fs->task_flags),TASKf_DISABLE_BPTS);
         Fs->rflags|=1<<RFLAGf_TRAP;
-      }
+    } else if(IsInValidBlk(_RIP))
+      if(_RIP(U8*)[0]==OC_BPT) //Advance if we hit a stray BPT
+        _RIP++;
   }
   MemCpy(&clone,Fs,sizeof CTask);
   CTask *task=Spawn(&DebuggerSpawn,&clone,"Debugger",0,Fs,,1<<JOBf_WAKE_MASTER|1<<JOBf_ADD_TO_QUE);
@@ -310,7 +312,7 @@ Bool BptR(U8 *addr,CTask *task=NULL,Bool live=TRUE,Bool rem=TRUE)
   bl=BreakLock;
   if (tmpb=BptFind(addr,task,rem)) {
     if (task==GetDebuggedProcess && live)
-      *tmpb->addr=tmpb->val;
+      *tmpb->addr=tmpb->val;
     res=TRUE;
     if (rem)
       Free(tmpb);
