@@ -39,7 +39,6 @@ U0 BinifyPx()
         cchunk->name=StrNew(n1);
         QueInit(cchunk);
         QueIns(cchunk,chunks->last);
-        "PARSEDCCHUNK(%s,size %d, w:%d, h:%d)\n",cchunk->name,cchunk->sz,cchunk->w,cchunk->h;
         total+=2*sizeof(I64)+StrLen(cchunk->name)+1+cchunk->sz;
       }
       Free(ln);
@@ -125,7 +124,6 @@ U0 BinifyLevels() {
             *poo=0;
             ptr2=MStrPrint("%s:IDX",n1);
             cur_chunk->px_data[cnt]=FramePtr(ptr2);           
-            TOSPrint("%s,%d\n",n1,cur_chunk->px_data[cnt]);
             Free(ptr2);
           } else{
             "%d,%c\n",dim,*ptr;
@@ -178,8 +176,6 @@ U0 BinifyLevels() {
         ptr=StrMatch("}};",ln);
         while(*ptr!='{') ptr--;
         StrScan(ptr,"{%d,%d}",&x,&y);
-        TOSPrint("SPAWNERS:%d\n",dim);
-        "PARSEDLEBVEL(%s)(%d,%d)%d(%d,%d)\n",cur_chunk->name,cur_chunk->w,cur_chunk->h,cur_chunk->sz,x,y;
         QueInit(cur_chunk);
         QueIns(cur_chunk,head->last);
         cur_chunk->spawn_x=x;
@@ -213,7 +209,7 @@ U0 BinifyLevels() {
     *ptr2(I64*)++=cur_chunk->spawn_x;
     *ptr2(I64*)++=cur_chunk->spawn_y;
   }
-  FileWrite("LEVELS.BIN.Z",ptr,total);
+  FileWrite("LEVELS.BIN.Z",ptr,total);
   Free(ptr);
 }
 U0 Binify() {

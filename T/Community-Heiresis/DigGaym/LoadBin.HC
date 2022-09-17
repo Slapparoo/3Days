@@ -5,7 +5,7 @@ U0 LoadBin() {
   PxData **pdata;
   CD2I32 *spawners;
   U8 *types,*hp,*flags;
-  if(!FileFind("PX.BIN.Z")||!FileFind("LEVELS.BIN.Z"))
+  if(!FileFind("PX.BIN.Z")||!FileFind("LEVELS.BIN.Z"))
     Binify;
   ptr=FileRead("PX.BIN.Z",&sz);
   cnt=0;
@@ -53,15 +53,12 @@ U0 LoadBin() {
     data=spawners=MAlloc(cnt*sizeof(CD2I32));
     MemCpy(spawners,ptr2,cnt*sizeof(CD2I32));
     ptr2+=cnt*sizeof(CD2I32);
-    "SPAWNERS:%d\n",cnt;
     ExePrint("CD2I32 *%sSpawners=%d;;\n",name,data);
     w=*ptr2(I64*)++;
     h=*ptr2(I64*)++;
     x=*ptr2(I64*)++;
     y=*ptr2(I64*)++;
     ExePrint("MapTemplate %s={%d,%d,%sPx,%sFlags,%sTypes,%sHP,%d,%sSpawners,{%d,%d}};;\n",name,w,h,name,name,name,name,cnt,name,x,y);
-    "PARSED %s\n",name;
-    TOSPrint("%s\n",name);
   }
   Free(ptr);
 }
