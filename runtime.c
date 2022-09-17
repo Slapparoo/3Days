@@ -38,7 +38,7 @@ void HolyFree(void *ptr) {
 void *HolyMAlloc(int64_t sz) {
 	static void *fptr;
 	if(!fptr) {
-		fptr=map_get(&TOSLoader,"CAlloc")->data->val;
+		fptr=map_get(&TOSLoader,"_MALLOC")->data->val;
 	}
 	return FFI_CALL_TOS_2(fptr,sz,NULL);
 }
@@ -145,6 +145,7 @@ void* FileRead(char *fn,int64_t *sz) {
     len-=ftell(f);
     void *data=HolyMAlloc(len+1);
     fread(data, 1, len, f);
+    ((char*)data)[len]=0;
     fclose(f);
     if(sz) *sz=len;
     return data;
@@ -278,6 +279,7 @@ int64_t STK_FileRead(int64_t *stk) {
     if(stk[1]) ((int64_t*)stk[1])[0]=sz;
 	r2=memcpy(HolyMAlloc(sz+1),r,sz);
     TD_FREE(r);
+    r2[sz]=0;
     return r2;
 }
 int64_t STK_FileWrite(int64_t *stk) {

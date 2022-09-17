@@ -49,7 +49,7 @@ public CDoc *DocRead(U8 *name=NULL,I64 flags=0)
     }
     Free(src);
   }
-  Free(name2);
+  Free(name2);
   return doc;
 }
 

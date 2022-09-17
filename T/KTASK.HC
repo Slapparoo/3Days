@@ -178,7 +178,12 @@ U0 SrvTaskCont()
     Yield;
   }
 }
-
+static I64 StrLenCapped(U8 *str,I64 cap) {
+  I64 l=0;
+  while(str[l]&&l<cap)
+    l++;
+  return l;
+}
 I64 ExeCmdLine(CCmpCtrl *cc)
 {//Terminal JIT-compile-and-execute loop for CCmpCtrl.
   I64 res=0,type,old_title_src=Fs->title_src;
@@ -214,7 +219,7 @@ I64 ExeCmdLine(CCmpCtrl *cc)
 	if (ptr2<ptr3) *ptr2=0;
       } else
 	if ((ptr=cc->lex_include_stk->line_start) && *ptr)
-	  MemCpy(ptr2,ptr,MinI64(StrLen(ptr),STR_LEN-1)+1);
+	  MemCpy(ptr2,ptr,StrLenCapped(ptr,STR_LEN-1)+1);
     }
     cc->flags&=~CCF_HAS_MISC_DATA;
     machine_code=LexStmt2Bin(cc,&type,CMPF_PRS_SEMICOLON);
@@ -333,7 +338,7 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
   task->title_src=TTS_TASK_NAME;
   //Insert the task into the QUE to avoid having despawn after it is spawned.
   task->stk=MAlloc(0x200000,task);
-  stack=task->stk+0x200000;
+  stack=task->stk+0x200000;
   stack[-1]=data;
   stack[-2]=&Exit;
   task->rsp=stack-2;

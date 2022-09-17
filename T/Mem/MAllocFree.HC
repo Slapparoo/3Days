@@ -245,14 +245,6 @@ MALLOC_ALMOST_DONE:
 	POP	R8
 	
 #endif
-	PUSH	RAX
-	MOV	RCX,U64 CMemUsed.size-CMemUsed.start[RAX]
-	SUB	RCX,CMemUsed.start
-	MOV	RDI,RAX
-	MOV	AL,0
-	REP_STOSB
-	POP	RAX
-
 MALLOC_FINAL_EXIT:
 	CMP	U32 CTask.task_signature[R8],TASK_SIGNATURE_VAL
 	JNE @@01
@@ -473,9 +465,12 @@ _extern _FREE U0 Free(U8 *addr); //Free $LK,"MAlloc",A="MN:MAlloc"$()ed memory c
 _extern _MSIZE I64 MSize(U8 *src); //Size of heap object.
 _extern _MSIZE2 I64 MSize2(U8 *src); //Internal size of heap object.
 _extern _MHEAP_CTRL CHeapCtrl *MHeapCtrl(U8 *src); //$LK,"CHeapCtrl",A="MN:CHeapCtrl"$ of object.
-_extern _MALLOC U8 *MAlloc(I64 size,CTask *mem_task=NULL); //Alloc memory chunk.
-//Accepts a $LK,"CTask",A="MN:CTask"$ or $LK,"CHeapCtrl",A="MN:CHeapCtrl"$. NULL allocs off current task's heap.
+_extern _MALLOC U8 *MAllocRaw(I64 size,CTask *mem_task=NULL); //Alloc memory chunk.
 
+//Accepts a $LK,"CTask",A="MN:CTask"$ or $LK,"CHeapCtrl",A="MN:CHeapCtrl"$. NULL allocs off current task's heap.
+U8 *MAlloc(I64 size,CTask *mem_task=NULL) {
+  return CAlloc(size,mem_task);
+}
 U8 *AMAlloc(I64 size)
 {//Alloc memory in Adam's heap.
   return MAlloc(size,adam_task);
@@ -483,7 +478,7 @@ U8 *AMAlloc(I64 size)
 
 U8 *CAlloc(I64 size,CTask *mem_task=NULL)
 {//Accepts a $LK,"CTask",A="MN:CTask"$ or $LK,"CHeapCtrl",A="MN:CHeapCtrl"$.  NULL allocs off current task's heap.
-  U8 *res=MAlloc(size,mem_task);
+  U8 *res=MAllocRaw(size,mem_task);
   MemSet(res,0,size);
   return res;
 }

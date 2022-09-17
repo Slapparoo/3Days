@@ -242,7 +242,7 @@ I64 HashDefineLstAdd(U8 *dname,I64 type,CHashTable *table)
         return 0;
 }
 
-I64 FramePtr(U8 *name,CTask *task=NULL)
+I64 FramePtr(U8 *name,CTask *task=NULL)
 {   //Find entry in task->hash_table, Return user_data.
     CHashGeneric *tmph;
     if(!task) task=Fs;
@@ -430,7 +430,7 @@ U0 DbgInfoRead(U8 *name) {
         }
       }
       ptr+=sizeof(U32)*(max-min+1+1);
-      if(tmph) tmph(CHashFun*)->size=ptr(I32*)[0];
+      if(tmph) tmph(CHashFun*)->size=ptr(I32*)[0];
       ptr+=sizeof(U32);
       max=ptr(U32*)[0];
       ptr+=sizeof(U32);

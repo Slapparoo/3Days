@@ -189,7 +189,7 @@ static Bool IsAtRoot() {
     Free(r);
     return ret; 
 }
-Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=FUF_Z_OR_NOT_Z)
+Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=FUF_Z_OR_NOT_Z)
 {//\dLK,"FUF_JUST_DIRS",A="MN:FUF_JUST_DIRS"\d, \dLK,"FUF_JUST_FILES",A="MN:FUF_JUST_FILES"\d, \dLK,"FUF_Z_OR_NOT_Z",A="MN:FUF_Z_OR_NOT_Z"\d, \dLK,"FUF_SCAN_PARENTS",A="MN:FUF_SCAN_PARENTS"\d
 //If you pass _de, you must Free(_de->full_name);
   I64 i,j,cur_dir_clus;

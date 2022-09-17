@@ -611,7 +611,7 @@ I64 Cmp(U8 *filename,U8 *dbg_file=NULL,U8 *out_name=NULL,U8 mapfile_drv_let=0)
         bfh->org=tmpaot->org;
         bfh->module_align_bits=tmpaot->max_align_bits;
         bfh->patch_table_offset=sizeof(CBinFile)+aot_U8s;
-        bfh->file_size=size;
+        bfh->file_size=size;
         MemCpy(bfh(U8 *)+sizeof(CBinFile),tmpaot->buf,aot_U8s);
         MemCpy(bfh(U8 *)+sizeof(CBinFile)+aot_U8s,patch_table,
                size-aot_U8s-sizeof(CBinFile));
@@ -672,7 +672,7 @@ I64 ExePutS(U8 *buf,U8 *filename=NULL,
     return res;
 }
 
-I64 ExePrint(U8 *fmt,...)
+I64 ExePrint(U8 *fmt,...)
 {   //JIT Compile and execute text from a printf().
     I64 res;
     U8 *buf=StrPrintJoin(NULL,fmt,argc,argv);

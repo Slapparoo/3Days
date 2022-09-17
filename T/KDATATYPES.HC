@@ -62,7 +62,7 @@ CQue *QueCopy(CQue *head,CTask *mem_task=NULL)
   return res;
 }
 
-I64 QueCnt(CQue *head)
+I64 QueCnt(CQue *head)
 {//Count of nodes in queue, not head.
   CQue *tmpq=head->next;
   I64 res=0;
@@ -278,7 +278,7 @@ Bool FifoI64Rem(CFifoI64 *f,I64 *_q)
   }
 }
 
-Bool FifoI64Peek(CFifoI64 *f,I64 *_q)
+Bool FifoI64Peek(CFifoI64 *f,I64 *_q)
 {//Peek at front of fifo and don't remove.
   PUSHFD
   if (f->in_ptr==f->out_ptr) {

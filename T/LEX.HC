@@ -449,29 +449,29 @@ I64 Lex(CCmpCtrl *cc)
 lex_cont:
     switch [ch=LexGetChar(cc)] {
       case 0:
-	return cc->token=TK_EOF;
+        return cc->token=TK_EOF;
       case TK_SUPERSCRIPT:
-	ch='>';
-	goto lex_ident;
+        ch='>';
+        goto lex_ident;
       case TK_SUBSCRIPT:
-	ch='<';
-	goto lex_ident;
+        ch='<';
+        goto lex_ident;
       case TK_NORMALSCRIPT:
-	ch='=';
-	goto lex_ident;
+        ch='=';
+        goto lex_ident;
       case '@':
-	if (cc->flags&CCF_KEEP_AT_SIGN) {
+        if (cc->flags&CCF_KEEP_AT_SIGN) {
 	  cc->token=ch;
 	  goto lex_end;
-	}
+        }
       case 'A'...'Z':
       case 'a'...'z':
       case '_':
       case 128...255:
 lex_ident:
-	i=0;
-	buf[i++]=ch;
-	while (TRUE) {
+        i=0;
+        buf[i++]=ch;
+        while (TRUE) {
 	  if (i>=STR_LEN)
 	    LexExcept(cc,"Ident limited to STR_LEN chars at ");
 	  else if (!(ch=LexGetChar(cc)))
@@ -488,43 +488,43 @@ lex_ident:
 	    cc->flags|=CCF_USE_LAST_U16;
 	    break;
 	  }
-	}
-	buf[i++]=0;
-	tmph=NULL;
-	if (cc->htc.local_var_lst)
+        }
+        buf[i++]=0;
+        tmph=NULL;
+        if (cc->htc.local_var_lst)
 	  cc->local_var_entry=MemberFind(buf,cc->htc.local_var_lst);
-	else
+        else
 	  cc->local_var_entry=NULL;
-	if (!cc->local_var_entry && cc->htc.hash_table_lst)
+        if (!cc->local_var_entry && cc->htc.hash_table_lst)
 	  tmph=HashFind(buf,cc->htc.hash_table_lst,cc->htc.hash_mask);
-	if (tmph)
+        if (tmph)
 	  j=tmph->type;
-	else
+        else
 	  j=0;
-	if (j & HTT_DEFINE_STR && !(cc->flags & CCF_NO_DEFINES)) {
+        if (j & HTT_DEFINE_STR && !(cc->flags & CCF_NO_DEFINES)) {
 	  LexIncludeStr(cc,
-		tmph->str,StrNew(tmph(CHashDefineStr *)->data),FALSE);
+	        tmph->str,StrNew(tmph(CHashDefineStr *)->data),FALSE);
 	  cc->lex_include_stk->flags|=LFSF_DEFINE;
-	} else {
+        } else {
 	  cc->hash_entry=tmph;
 	  Free(cc->cur_str);
 	  cc->cur_str=StrNew(buf);
 	  cc->cur_str_len=i;
 	  cc->token=TK_IDENT;
 	  goto lex_end;
-	}
-	break;
+        }
+        break;
       case '0'...'9':
-	i=ch-'0';
-	ch=ToUpper(LexGetChar(cc));
-	if (ch=='X') {
+        i=ch-'0';
+        ch=ToUpper(LexGetChar(cc));
+        if (ch=='X') {
 	  while (TRUE) {
 	    ch=ToUpper(LexGetChar(cc));
 	    if (Bt(char_bmp_hex_numeric,ch)) {
 	      if (ch<='9')
-		i=i<<4+ch-'0';
+	        i=i<<4+ch-'0';
 	      else
-		i=i<<4+ch-'A'+10;
+	        i=i<<4+ch-'A'+10;
 	    } else {
 	      cc->cur_i64=i;
 	      cc->flags|=CCF_USE_LAST_U16;
@@ -532,7 +532,7 @@ lex_ident:
 	      goto lex_end;
 	    }
 	  }
-	} else if (ch=='B') {
+        } else if (ch=='B') {
 	  while (TRUE) {
 	    ch=LexGetChar(cc);
 	    if (ch=='0')
@@ -546,8 +546,8 @@ lex_ident:
 	      goto lex_end;
 	    }
 	  }
-	}
-	while (TRUE) {
+        }
+        while (TRUE) {
 	  if (Bt(char_bmp_dec_numeric,ch))
 	    i=i*10+ch-'0';
 	  else {
@@ -559,17 +559,17 @@ lex_is_int:
 	    goto lex_end;
 	  }
 	  ch=LexGetChar(cc);
-	}
-	if (ch=='.') {
+        }
+        if (ch=='.') {
 	  ch=LexGetChar(cc);
 	  if (ch=='.') {
 	    cc->flags|=CCF_LAST_WAS_DOT;
 	    goto lex_is_int;
 	  }
-	}
+        }
 lex_float_start:
-	k=0;
-	while (TRUE) {
+        k=0;
+        while (TRUE) {
 	  if (Bt(char_bmp_dec_numeric,ch)) {
 	    i=i*10+ch-'0';
 	    k++;
@@ -582,15 +582,15 @@ lex_float_start:
 	    goto lex_end;
 	  }
 	  ch=LexGetChar(cc);
-	}
-	ch=LexGetChar(cc);
-	neg_e=FALSE;
-	if (ch=='-') {
+        }
+        ch=LexGetChar(cc);
+        neg_e=FALSE;
+        if (ch=='-') {
 	  neg_e=TRUE;
 	  ch=LexGetChar(cc);
-	}
-	j=0;
-	while (TRUE) {
+        }
+        j=0;
+        while (TRUE) {
 	  if (Bt(char_bmp_dec_numeric,ch))
 	    j=j*10+ch-'0';
 	  else {
@@ -603,13 +603,13 @@ lex_float_start:
 	    goto lex_end;
 	  }
 	  ch=LexGetChar(cc);
-	}
-	break;
+        }
+        break;
       case '"':
-	cc->flags|=CCF_IN_QUOTES;
-	buf2=NULL;
-	i=0;
-	do {
+        cc->flags|=CCF_IN_QUOTES;
+        buf2=NULL;
+        i=0;
+        do {
 	  j=LexInStr(cc,buf,STR_LEN,&str_done);
 	  buf3=MAlloc(i+j);
 	  if (buf2) {
@@ -622,20 +622,20 @@ lex_float_start:
 	    MemCpy(buf2,buf,j);
 	  }
 	  i+=j;
-	} while (!str_done);
-	Free(cc->cur_str);
-	cc->cur_str=MAlloc(i);
-	MemCpy(cc->cur_str,buf2,i);
-	Free(buf2);
-	cc->cur_str_len=i;
-	cc->flags&=~CCF_IN_QUOTES;
-	cc->token=TK_STR;
-	goto lex_end;
+        } while (!str_done);
+        Free(cc->cur_str);
+        cc->cur_str=MAlloc(i);
+        MemCpy(cc->cur_str,buf2,i);
+        Free(buf2);
+        cc->cur_str_len=i;
+        cc->flags&=~CCF_IN_QUOTES;
+        cc->token=TK_STR;
+        goto lex_end;
       case '\'':
-	if (cc->flags&CCF_NO_CHAR_CONST)
+        if (cc->flags&CCF_NO_CHAR_CONST)
 	  break;
-	k=0;
-	for (j=0;j<8;j++) {
+        k=0;
+        for (j=0;j<8;j++) {
 	  if (!(ch=LexGetChar(cc)) || ch=='\'')
 	    break;
 	  if (ch=='\\') {
@@ -651,8 +651,8 @@ lex_float_start:
 	      case 't':		k.u8[j]='\t';	break;
 	      case 'x':
 	      case 'X':
-		i=0;
-		for (l=0;l<2;l++) {
+	        i=0;
+	        for (l=0;l<2;l++) {
 		  ch=ToUpper(LexGetChar(cc));
 		  if (Bt(char_bmp_hex_numeric,ch)) {
 		    if (ch<='9')
@@ -663,12 +663,12 @@ lex_float_start:
 		    cc->flags|=CCF_USE_LAST_U16;
 		    break;
 		  }
-		}
-		k.u8[j]=i;
-		break;
+	        }
+	        k.u8[j]=i;
+	        break;
 	      default:
-		k.u8[j]='\\';
-		cc->flags|=CCF_USE_LAST_U16;
+	        k.u8[j]='\\';
+	        cc->flags|=CCF_USE_LAST_U16;
 	    }
 	  } else if (ch=='$$') {
 	    ch=LexGetChar(cc);
@@ -677,28 +677,28 @@ lex_float_start:
 	      cc->flags|=CCF_USE_LAST_U16;
 	  } else
 	    k.u8[j]=ch;
-	}
-	if (ch!='\'' && (ch=LexGetChar(cc)) && ch!='\'')
+        }
+        if (ch!='\'' && (ch=LexGetChar(cc)) && ch!='\'')
 	  LexExcept(cc,"Char const limited to 8 chars at ");
-	cc->cur_i64=k;
-	cc->token=TK_CHAR_CONST;
-	goto lex_end;
+        cc->cur_i64=k;
+        cc->token=TK_CHAR_CONST;
+        goto lex_end;
       case '#':
-	if (cc->flags&CCF_KEEP_SIGN_NUM) {
+        if (cc->flags&CCF_KEEP_SIGN_NUM) {
 	  cc->token=ch;
 	  goto lex_end;
-	}
-	if (Lex(cc)!=TK_IDENT)	//skip '#'
+        }
+        if (Lex(cc)!=TK_IDENT)	//skip '#'
 	  goto lex_end;
-	if (!(tmph=cc->hash_entry))
+        if (!(tmph=cc->hash_entry))
 	  goto lex_end;
-	if (!(tmph->type & HTT_KEYWORD))
+        if (!(tmph->type & HTT_KEYWORD))
 	  goto lex_end;
-	switch (i=tmph(CHashGeneric *)->user_data0) {
+        switch (i=tmph(CHashGeneric *)->user_data0) {
 	  case KW_INCLUDE:
 	    if (Lex(cc)!=TK_STR)
 	      goto lex_end;
-	    fbuf=ExtDft(cc->cur_str,"HC.Z");
+	    fbuf=ExtDft(cc->cur_str,"HC"); //3Days will check for .Z automatically
 	    buf2=FileNameAbs(fbuf);
 	    Free(fbuf);
 	    if (1)
@@ -722,15 +722,15 @@ lex_float_start:
 	      i=j=0;
 	      buf2=NULL;
 	      if (ch) {
-		in_str=FALSE;
-		do {
+	        in_str=FALSE;
+	        do {
 		  if (ch=='\\') {
 		    if (ch=LexGetChar(cc)) {
 		      if (ch!='\r' && ch!='\n') {
-			buf[j++]='\\';
-			buf[j++]=ch;
+		        buf[j++]='\\';
+		        buf[j++]=ch;
 		      } else if (ch=='\r' && LexGetChar(cc)!='\n')
-			cc->flags|=CCF_USE_LAST_U16;
+		        cc->flags|=CCF_USE_LAST_U16;
 		    } else {
 		      buf[j++]='\\';
 		      break;
@@ -745,27 +745,27 @@ lex_float_start:
 		    if (ch=='/') {
 		      ch=LexGetChar(cc);
 		      if (ch=='/' && !in_str) {
-			do ch=LexGetChar(cc);
-			while (Bt(char_bmp_non_eol,ch));
-			break;
+		        do ch=LexGetChar(cc);
+		        while (Bt(char_bmp_non_eol,ch));
+		        break;
 		      } else {
-			buf[j++]='/';
-			cc->flags|=CCF_USE_LAST_U16;
+		        buf[j++]='/';
+		        cc->flags|=CCF_USE_LAST_U16;
 		      }
 		    } else if (ch=='\\') {
 		      if (ch=LexGetChar(cc)) {
-			if (ch=='\"') {
+		        if (ch=='\"') {
 			  buf[j++]='\\';
 			  buf[j++]=ch;
-			} else {
+		        } else {
 			  cc->flags|=CCF_USE_LAST_U16;
 			  ch='\\';
 			  break;
-			}
+		        }
 		      }
 		    } else if (Bt(char_bmp_non_eol,ch)) {
 		      if (ch=='\"')
-			in_str=!in_str;
+		        in_str=!in_str;
 		      buf[j++]=ch;
 		    } else
 		      break;
@@ -773,30 +773,30 @@ lex_float_start:
 		      buf[j++]=0;
 		      buf3=MAlloc(i+j);
 		      if (buf2) {
-			MemCpy(buf3,buf2,i);
-			Free(buf2);
-			buf2=buf3;
-			MemCpy(buf2+i,buf,j);
+		        MemCpy(buf3,buf2,i);
+		        Free(buf2);
+		        buf2=buf3;
+		        MemCpy(buf2+i,buf,j);
 		      } else {
-			buf2=buf3;
-			MemCpy(buf2,buf,j);
+		        buf2=buf3;
+		        MemCpy(buf2,buf,j);
 		      }
 		      i+=j-1;
 		      j=0;
 		    }
 		  }
-		} while (ch=='\\');
+	        } while (ch=='\\');
 	      }
 	      buf[j++]=0;
 	      buf3=MAlloc(i+j);
 	      if (buf2) {
-		MemCpy(buf3,buf2,i);
-		Free(buf2);
-		buf2=buf3;
-		MemCpy(buf2+i,buf,j);
+	        MemCpy(buf3,buf2,i);
+	        Free(buf2);
+	        buf2=buf3;
+	        MemCpy(buf2+i,buf,j);
 	      } else {
-		buf2=buf3;
-		MemCpy(buf2,buf,j);
+	        buf2=buf3;
+	        MemCpy(buf2,buf,j);
 	      }
 	      tmph(CHashDefineStr *)->data=buf2;
 	      tmph(CHashDefineStr *)->cnt=-1;
@@ -813,19 +813,19 @@ lex_else:
 	    j=1;
 	    do {
 	      if (ch=LexGetChar(cc)) {
-		if (ch=='#') {
+	        if (ch=='#') {
 		  if (!Lex(cc))
 		    goto lex_end;
 		  i=PrsKeyWord(cc);
 		  if (i==KW_IF || i==KW_IFDEF || i==KW_IFNDEF ||
-			i==KW_IFAOT || i==KW_IFJIT)
+		        i==KW_IFAOT || i==KW_IFJIT)
 		    j++;
 		  else if (i==KW_ENDIF)
 		    j--;
-		}
+	        }
 	      } else {
-		cc->token=TK_EOF;
-		goto lex_end;
+	        cc->token=TK_EOF;
+	        goto lex_end;
 	      }
 	    } while (j);
 	    break;
@@ -844,43 +844,43 @@ lex_if:
 	    if (LexExpression(cc)) {
 	      cc->flags&=~CCF_IN_IF;
 	      switch (cc->token) {
-		case TK_IF:	goto lex_if;
-		case TK_IFDEF:	goto lex_ifdef;
-		case TK_IFNDEF:	goto lex_ifndef;
-		case TK_IFAOT:	goto lex_ifaot;
-		case TK_IFJIT:	goto lex_ifjit;
-		case TK_ELSE:	goto lex_else;
-		case TK_ENDIF:	goto lex_cont;
-		default:	goto lex_end;
+	        case TK_IF:	goto lex_if;
+	        case TK_IFDEF:	goto lex_ifdef;
+	        case TK_IFNDEF:	goto lex_ifndef;
+	        case TK_IFAOT:	goto lex_ifaot;
+	        case TK_IFJIT:	goto lex_ifjit;
+	        case TK_ELSE:	goto lex_else;
+	        case TK_ENDIF:	goto lex_cont;
+	        default:	goto lex_end;
 	      }
 	    } else {
 	      cc->flags&=~CCF_IN_IF;
 	      if (cc->token!=TK_ENDIF && cc->token!=TK_ELSE) {
-		if (cc->token==TK_IF || cc->token==TK_IFDEF ||
+	        if (cc->token==TK_IF || cc->token==TK_IFDEF ||
 		      cc->token==TK_IFNDEF || cc->token==TK_IFAOT ||
 		      cc->token==TK_IFJIT)
 		  j=2;
-		else
+	        else
 		  j=1;
-		do {
+	        do {
 		  if (ch=LexGetChar(cc)) {
 		    if (ch=='#') {
 		      if (!Lex(cc))
-			goto lex_end;
+		        goto lex_end;
 		      i=PrsKeyWord(cc);
 		      if (i==KW_IF || i==KW_IFDEF || i==KW_IFNDEF ||
 			    i==KW_IFAOT || i==KW_IFJIT)
-			j++;
+		        j++;
 		      else if (i==KW_ENDIF)
-			j--;
+		        j--;
 		      else if (i==KW_ELSE && j==1)
-			break;
+		        break;
 		    }
 		  } else {
 		    cc->token=TK_EOF;
 		    goto lex_end;
 		  }
-		} while (j);
+	        } while (j);
 	      }
 	    }
 	    break;
@@ -903,21 +903,21 @@ lex_ifdef:
 	    j=1;
 	    do {
 	      if (ch=LexGetChar(cc)) {
-		if (ch=='#') {
+	        if (ch=='#') {
 		  if (!Lex(cc))
 		    goto lex_end;
 		  i=PrsKeyWord(cc);
 		  if (i==KW_IF || i==KW_IFDEF || i==KW_IFNDEF ||
-			i==KW_IFAOT || i==KW_IFJIT)
+		        i==KW_IFAOT || i==KW_IFJIT)
 		    j++;
 		  else if (i==KW_ENDIF)
 		    j--;
 		  else if (i==KW_ELSE && j==1)
 		    break;
-		}
+	        }
 	      } else {
-		cc->token=TK_EOF;
-		goto lex_end;
+	        cc->token=TK_EOF;
+	        goto lex_end;
 	      }
 	    } while (j);
 	    break;
@@ -940,21 +940,21 @@ lex_ifndef:
 	    j=1;
 	    do {
 	      if (ch=LexGetChar(cc)) {
-		if (ch=='#') {
+	        if (ch=='#') {
 		  if (!Lex(cc))
 		    goto lex_end;
 		  i=PrsKeyWord(cc);
 		  if (i==KW_IF || i==KW_IFDEF || i==KW_IFNDEF ||
-			i==KW_IFAOT || i==KW_IFJIT)
+		        i==KW_IFAOT || i==KW_IFJIT)
 		    j++;
 		  else if (i==KW_ENDIF)
 		    j--;
 		  else if (i==KW_ELSE && j==1)
 		    break;
-		}
+	        }
 	      } else {
-		cc->token=TK_EOF;
-		goto lex_end;
+	        cc->token=TK_EOF;
+	        goto lex_end;
 	      }
 	    } while (j);
 	    break;
@@ -969,21 +969,21 @@ lex_ifaot:
 	    j=1;
 	    do {
 	      if (ch=LexGetChar(cc)) {
-		if (ch=='#') {
+	        if (ch=='#') {
 		  if (!Lex(cc))
 		    goto lex_end;
 		  i=PrsKeyWord(cc);
 		  if (i==KW_IF || i==KW_IFDEF || i==KW_IFNDEF ||
-			i==KW_IFAOT || i==KW_IFJIT)
+		        i==KW_IFAOT || i==KW_IFJIT)
 		    j++;
 		  else if (i==KW_ENDIF)
 		    j--;
 		  else if (i==KW_ELSE && j==1)
 		    break;
-		}
+	        }
 	      } else {
-		cc->token=TK_EOF;
-		goto lex_end;
+	        cc->token=TK_EOF;
+	        goto lex_end;
 	      }
 	    } while (j);
 	    break;
@@ -998,21 +998,21 @@ lex_ifjit:
 	    j=1;
 	    do {
 	      if (ch=LexGetChar(cc)) {
-		if (ch=='#') {
+	        if (ch=='#') {
 		  if (!Lex(cc))
 		    goto lex_end;
 		  i=PrsKeyWord(cc);
 		  if (i==KW_IF || i==KW_IFDEF || i==KW_IFNDEF ||
-			i==KW_IFAOT || i==KW_IFJIT)
+		        i==KW_IFAOT || i==KW_IFJIT)
 		    j++;
 		  else if (i==KW_ENDIF)
 		    j--;
 		  else if (i==KW_ELSE && j==1)
 		    break;
-		}
+	        }
 	      } else {
-		cc->token=TK_EOF;
-		goto lex_end;
+	        cc->token=TK_EOF;
+	        goto lex_end;
 	      }
 	    } while (j);
 	    break;
@@ -1050,29 +1050,29 @@ lex_ifjit:
 	    HashSrcFileSet(cc,tmph);
 	    HashAdd(tmph,cc->htc.glbl_hash_table);
 	    break;
-	}
-	break;
+        }
+        break;
       case '\n':
-	if (!(cc->flags&CCF_KEEP_NEW_LINES))
+        if (!(cc->flags&CCF_KEEP_NEW_LINES))
 	  break; //else fall through
       case TK_INS_BIN:
       case TK_INS_BIN_SIZE:
-	cc->token=ch;
-	goto lex_end;
+        cc->token=ch;
+        goto lex_end;
       case '.':
-	if (cc->flags&CCF_KEEP_DOT) {
+        if (cc->flags&CCF_KEEP_DOT) {
 	  cc->token=ch;
 	  goto lex_end;
-	}
-	if (cc->flags&CCF_LAST_WAS_DOT) {
+        }
+        if (cc->flags&CCF_LAST_WAS_DOT) {
 	  cc->flags&=~CCF_LAST_WAS_DOT;
 	  goto lex_dot_dot;
-	}
-	ch=LexGetChar(cc);
-	if ('0'<=ch<='9') {
+        }
+        ch=LexGetChar(cc);
+        if ('0'<=ch<='9') {
 	  i=0;
 	  goto lex_float_start;
-	} else if (ch=='.') {
+        } else if (ch=='.') {
 lex_dot_dot:
 	  cc->token=TK_DOT_DOT;
 	  if (LexGetChar(cc)=='.')
@@ -1080,10 +1080,10 @@ lex_dot_dot:
 	  else
 	    cc->flags|=CCF_USE_LAST_U16;
 	  goto lex_end;
-	}
-	cc->flags|=CCF_USE_LAST_U16;
-	cc->token='.';
-	goto lex_end;
+        }
+        cc->flags|=CCF_USE_LAST_U16;
+        cc->token='.';
+        goto lex_end;
       case '!':
       case '$$'...'&':
       case '('...'-':
@@ -1093,7 +1093,7 @@ lex_dot_dot:
       case ']'...'^':
       case '{'...'~':
       case '`':
-	if (!(i=cmp.dual_U16_tokens1[ch])) {
+        if (!(i=cmp.dual_U16_tokens1[ch])) {
 	  if (ch=='$$') {
 	    ch=LexGetChar(cc);
 	    if (ch=='$$') {
@@ -1103,10 +1103,10 @@ lex_dot_dot:
 	      do ch=LexGetChar(cc);
 	      while (ch && ch!='$$');
 	      if (!ch) {
-		cc->token=TK_EOF;
-		goto lex_end;
+	        cc->token=TK_EOF;
+	        goto lex_end;
 	      } else
-		goto lex_cont;
+	        goto lex_cont;
 	    } else {
 	      cc->flags|=CCF_USE_LAST_U16;
 	      cc->token='$$';
@@ -1116,31 +1116,31 @@ lex_dot_dot:
 	    cc->token=ch;
 	    goto lex_end;
 	  }
-	} else {
+        } else {
 	  j=LexGetChar(cc);
 	  if (i.u16[0]==j) {
 	    i>>=16;
 	    if (!i) {// "/*"
 	      j=1;
 	      do {
-		if (!(ch=LexGetChar(cc)))
+	        if (!(ch=LexGetChar(cc)))
 		  return cc->token=TK_EOF;
 lex_check_comment:
-		if (ch=='*') {
+	        if (ch=='*') {
 		  if (!(ch=LexGetChar(cc)))
 		    return cc->token=TK_EOF;
 		  if (ch=='/')
 		    j--;
 		  else
 		    goto lex_check_comment;
-		} else if (ch=='/') {
+	        } else if (ch=='/') {
 		  if (!(ch=LexGetChar(cc)))
 		    return cc->token=TK_EOF;
 		  if (ch=='*')
 		    j++;
 		  else
 		    goto lex_check_comment;
-		}
+	        }
 	      } while (j);
 	      goto lex_cont;
 	    } else {
@@ -1152,14 +1152,14 @@ lex_check_comment:
 	    if (i.u16[0]==j) {
 	      i>>=16;
 	      if (!i) {// "//"
-		LexSkipEol(cc);
-		if (cc->flags&CCF_KEEP_NEW_LINES) {
+	        LexSkipEol(cc);
+	        if (cc->flags&CCF_KEEP_NEW_LINES) {
 		  cc->token='\n';
 		  goto lex_end;
-		} else
+	        } else
 		  goto lex_cont;
 	      } else {
-		if (i==TK_SHL || i==TK_SHR) {
+	        if (i==TK_SHL || i==TK_SHR) {
 		  j=LexGetChar(cc);
 		  if (j=='=') {
 		    if (i==TK_SHL)
@@ -1168,24 +1168,24 @@ lex_check_comment:
 		      i=TK_SHR_EQU;
 		  } else
 		    cc->flags|=CCF_USE_LAST_U16;
-		}
-		cc->token=i;
-		goto lex_end;
+	        }
+	        cc->token=i;
+	        goto lex_end;
 	      }
 	    }
 	    if (i=cmp.dual_U16_tokens3[ch]) {
 	      if (i.u16[0]==j) {
-		cc->token=i.u16[1];
-		goto lex_end;
+	        cc->token=i.u16[1];
+	        goto lex_end;
 	      }
 	    }
 	  }
 	  cc->flags|=CCF_USE_LAST_U16;
 	  cc->token=ch;
 	  goto lex_end;
-	}
+        }
       case TK_TKS_NUM:
-	break;
+        break;
     }
   }
 lex_end:

@@ -437,7 +437,7 @@ public class CQueD3I32 //Que of three dimensional I32 pts
   CQueD3I32	*next,*last;
   CD3I32	p;
 };
-public class CD2I32 //Two dimensional I32 pt
+public class CD2I32 //Two dimensional I32 pt
 {
   I32	x,y;
 };
@@ -6367,4 +6367,5 @@ public extern CBGR48 gr_palette_gray[COLORS_NUM];
 public extern CBGR48 gr_palette_std[COLORS_NUM];
 public extern U0 SndRst();
 
-extern Bool GrPlot1(CDC *dc=NULL,I64 x,I64 y);
+extern Bool GrPlot1(CDC *dc=NULL,I64 x,I64 y);
+public extern U8 *MAlloc(I64 size,CTask *mem_task=NULL);

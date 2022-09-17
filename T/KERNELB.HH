@@ -110,11 +110,11 @@ public _extern _HASH_REM_DEL Bool HashRemDel(CHash *tmph,CHashTable *table,
 	I64 instance=1);//instance must match tmph's
 
 #ifdef BOOT_3DAYS
-_extern _SYS_WHINE_OOB U0 SYS_WHINE_OOB;
+_extern _SYS_WHINE_OOB U0 SYS_WHINE_OOB;
 _extern _HASH_ADD_AFTER U0 HashAddAfter(CHash *tmph,
         CHash *pred,CHashTable *table); //Add hash entry after entry.
 _extern _HASH_STR I64 HashStr(U8 *st); //Hash a string.
-_extern _HASH_FIND CHash *HashFind(U8 *needle_str,CHashTable *haystack_table,
+_extern _HASH_FIND CHash *HashFind(U8 *needle_str,CHashTable *haystack_table,
                                    I64 mask,I64 instance=1);//Find string in hash table.
 _extern _HASH_SINGLE_TABLE_FIND CHash *HashSingleTableFind(U8 *needle_str,
         CHashTable *haystack_table,
@@ -144,7 +144,7 @@ _extern _FREE U0 Free(U8 *addr); //Free $LK,"MAlloc",A="MN:MAlloc"$()ed memory c
 _extern _MSIZE I64 MSize(U8 *src); //Size of heap object.
 _extern _MSIZE2 I64 MSize2(U8 *src); //Internal size of heap object.
 _extern _MHEAP_CTRL CHeapCtrl *MHeapCtrl(U8 *src); //$LK,"CHeapCtrl",A="MN:CHeapCtrl"$ of object.
-_extern _MALLOC U8 *MAlloc(I64 size,CTask *mem_task=NULL); //Alloc memory chunk.
+//_extern _MALLOC U8 *MAlloc(I64 size,CTask *mem_task=NULL); //Alloc memory chunk.
 _extern _BREAK U0 Break();
 
 public _extern SYS_PROGRESS1 I64 progress1; //Current progress 1.

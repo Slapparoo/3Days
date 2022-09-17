@@ -118,7 +118,7 @@ U0 LoadPass1(U8 *src,U8 *module_base,I64 ld_flags)
 	  for (j=0;j<cnt;j++) {
 	    ptr2=module_base+*src(U32 *)++;
 	    *ptr2(U32 *)+=module_base;
-	  }
+	  }
 	}
 	break;
 
