@@ -107,7 +107,7 @@ CTask *adam_task=Fs;
 #include "DISPLAY.HC"
 #include "MAlloc2.HC"
 #ifdef COMPONET_COMPILER
-#include "CMP_PRJ.HC"
+#include "CMP_PRJ.HC"
 CInit;
 #endif
 #include "AMATH.HC"
@@ -186,7 +186,7 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 #include "Sched.HC"
 #include "Diff.HC"
 #include "KeyDev.HC"
-#include "FILEMGR.HC"
+#include "FILEMGR.HC"
 #include "Training.HC.Z"
 #include "InFile.HC";
 #endif

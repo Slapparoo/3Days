@@ -566,9 +566,10 @@ int64_t VFsFileRead(char *name,int64_t *len) {
         fseek(f,0,SEEK_END);
         e=ftell(f);
         fseek(f,0,SEEK_SET);
-        fread(data=TD_MALLOC(e-s+1),1,e-s,f);
+        fread(data=HolyMAlloc(e-s+1),1,e-s,f);
         fclose(f);
         if(len) *len=e-s;
+        ((char*)data)[e-s]=0;
     }
     end:
     TD_FREE(name);

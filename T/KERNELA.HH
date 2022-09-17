@@ -437,7 +437,7 @@ public class CQueD3I32 //Que of three dimensional I32 pts
   CQueD3I32	*next,*last;
   CD3I32	p;
 };
-public class CD2I32 //Two dimensional I32 pt
+public class CD2I32 //Two dimensional I32 pt
 {
   I32	x,y;
 };
@@ -1770,8 +1770,8 @@ class CWinMgrTimingGlbls
   I64	calc_idle_cnt;
 };
 
-#define WINMGR_FPS	(60000.0/1001)
-#define WINMGR_PERIOD	(1001/60000.0)
+#define WINMGR_FPS	(30000.0/1001)
+#define WINMGR_PERIOD	(1001/30000.0)
 
 public class CWinMgrGlbls
 {
@@ -3515,7 +3515,7 @@ class CTaskDying
   I64	wake_jiffy;
 };
 
-public class CTask //The Fs segment reg points to current CTask.
+public class CTask //The Fs segment reg points to current CTask.
 {
   CTask *addr; //Self-addressed ptr
   U32	task_signature,win_inhibit;

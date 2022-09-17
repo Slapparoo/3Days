@@ -275,12 +275,9 @@ static void STK_RegisterFunctionPtr(vec_char_t *blob,char *name,void *fptr,int64
 }
 int64_t STK_FileRead(int64_t *stk) {
 	int64_t sz;
-    char *r=VFsFileRead(stk[0],&sz),*r2=NULL;
+    char *r=VFsFileRead(stk[0],&sz);
     if(stk[1]) ((int64_t*)stk[1])[0]=sz;
-	r2=memcpy(HolyMAlloc(sz+1),r,sz);
-    TD_FREE(r);
-    r2[sz]=0;
-    return r2;
+    return r;
 }
 int64_t STK_FileWrite(int64_t *stk) {
     return VFsFileWrite(stk[0],stk[1],stk[2]);
