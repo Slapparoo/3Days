@@ -383,7 +383,11 @@ int64_t STK_SetMSCallback(int64_t *stk) {
     SetMSCallback(stk[0]);    
 }
 int64_t STK_Sleep(int64_t *stk) {
+	#ifndef TARGET_WIN32
 	usleep(1000*stk[0]);
+	#else
+	Sleep(stk[0]);
+	#endif
 }
 int64_t STK_GetFs(int64_t *stk) {
     return GetFs();

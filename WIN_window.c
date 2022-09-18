@@ -421,27 +421,42 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 	return 0;
 }
 void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h) {
-	int64_t x,y,b,b2,mul=4;
-	WaitForSingleObject(mutex,INFINITE);
-	b2=479*internal_width;
+	int64_t x,y,b,b2,mul=4,cx,cy;
+	HBITMAP bmp;
+	HBRUSH brush,obrush;
+	HDC dc,dc2;
+	RECT rct;
 	for(y=0;y!=480;y++) {
-		//Windows stores lines bottom to top
+		b2=(480-y-1)*internal_width;
 		for(x=0;x!=640;x++) {
 			buf[b2++]=palette[*colors++];
 			//img->data[b*4+3]=0;
 		}
-		//Move 2 lines backwards(the current line and the pointer to the "next" line) see above note
-		b2-=internal_width<<1;
 	}
+	WaitForSingleObject(mutex,INFINITE);
+	dc=GetDC(win->win);
+	GetClientRect(win->win,&rct);
+	CenterWindow(win->win,&cx,&cy);
+	dc2=CreateCompatibleDC(dc);
+	bmp=CreateCompatibleBitmap(dc,rct.right,rct.bottom);
+	obrush=SelectObject(dc2,GetStockObject(BLACK_BRUSH));
+	SelectObject(dc2,bmp);
+	BITMAPINFO  binfo;
+	memset(&binfo,0,sizeof(binfo));
+	binfo.bmiHeader.biSize=sizeof(binfo);
+	binfo.bmiHeader.biWidth=640;
+	binfo.bmiHeader.biHeight=480;
+	binfo.bmiHeader.biPlanes=1;
+	binfo.bmiHeader.biBitCount=32;
+	binfo.bmiHeader.biCompression=BI_RGB;
+	Rectangle(dc2,0,0,rct.right,rct.bottom);
+	SetDIBitsToDevice(dc2,cx,cy,640,480,0,0,0,480,buf,&binfo,DIB_RGB_COLORS);
+	BitBlt(dc,0,0,rct.right,rct.bottom,dc2,0,0,SRCCOPY);
+	SelectObject(dc2,obrush);
+	DeleteDC(dc2);
+    DeleteObject(bmp);
 	ReleaseMutex(mutex);
-	RedrawWindow(
-		win->win,
-		NULL,
-		NULL,
-		RDW_INVALIDATE|
-		RDW_UPDATENOW|
-		RDW_NOCHILDREN
-	);
+	ReleaseDC(win->win,dc);
 }
 char *ClipboardText() {
 	char *ret;
@@ -469,10 +484,6 @@ void SetClipboard(char *text) {
 }
 LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 	PAINTSTRUCT ps;
-	HBITMAP bmp;
-	HBRUSH brush,obrush;
-	HDC dc,dc2;
-	RECT rct;
 	int64_t cx,cy;
 	switch(msg) {
 		case WM_KILLFOCUS:
@@ -501,29 +512,9 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 			break;
 		case WM_PAINT:
 			WaitForSingleObject(mutex,INFINITE);
-			GetClientRect(hwnd,&rct);
-			CenterWindow(hwnd,&cx,&cy);
-			dc=BeginPaint(hwnd,&ps);
-			dc2=CreateCompatibleDC(dc2);
-			bmp=CreateCompatibleBitmap(dc,rct.right,rct.bottom);
-			obrush=SelectObject(dc2,GetStockObject(BLACK_BRUSH));
-			SelectObject(dc2,bmp);
-			BITMAPINFO  binfo;
-			memset(&binfo,0,sizeof(binfo));
-			binfo.bmiHeader.biSize=sizeof(binfo);
-			binfo.bmiHeader.biWidth=640;
-			binfo.bmiHeader.biHeight=480;
-			binfo.bmiHeader.biPlanes=1;
-			binfo.bmiHeader.biBitCount=32;
-			binfo.bmiHeader.biCompression=BI_RGB;
-			Rectangle(dc2,0,0,rct.right,rct.bottom);
-			SetDIBitsToDevice(dc2,cx,cy,640,480,0,0,0,480,buf,&binfo,DIB_RGB_COLORS);
-			BitBlt(dc,0,0,rct.right,rct.bottom,dc2,0,0,SRCCOPY);
-			SelectObject(dc2,obrush);
+			BeginPaint(hwnd,&ps);
 			EndPaint(hwnd,&ps);
 			ReleaseMutex(mutex);
-			DeleteDC(dc2);
-			DeleteObject(bmp);
 			break;
 		case WM_DESTROY:
 			PostQuitMessage(0);
