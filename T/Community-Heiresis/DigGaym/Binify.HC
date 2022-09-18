@@ -181,7 +181,7 @@ U0 BinifyLevels() {
         cur_chunk->spawn_x=x;
         cur_chunk->spawn_y=y;
         //tiles are 2 bytes,hp+flags+types(2+1+1+1)
-        total+=StrLen(cur_chunk->name)+1+cur_chunk->sz*(2+1+1+1)+8+8+8+8;
+        total+=StrLen(cur_chunk->name)+1+cur_chunk->sz*(2+1+1+1)+8+8+8+8+8+8+dim*sizeof(CD2I32);
       }
       Free(ln);
     }
@@ -208,10 +208,11 @@ U0 BinifyLevels() {
     *ptr2(I64*)++=cur_chunk->h;
     *ptr2(I64*)++=cur_chunk->spawn_x;
     *ptr2(I64*)++=cur_chunk->spawn_y;
+    "WROTE %s,%d\n",cur_chunk->name,dim;
   }
   FileWrite("LEVELS.BIN.Z",ptr,total);
   Free(ptr);
-}
+}
 U0 Binify() {
   BinifyPx;
   BinifyLevels;
