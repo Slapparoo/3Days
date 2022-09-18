@@ -6,7 +6,7 @@
 
 !define APP_NAME "3Days"
 !define COMP_NAME "nrootconauto@gmail.com"
-!define VERSION "00.03.00.00"
+!define VERSION "00.04.00.00"
 !define COPYRIGHT "None"
 !define DESCRIPTION "A HolyC Compiler"
 !define INSTALLER_NAME "3d_setup.exe"
@@ -84,6 +84,7 @@ SetOverwrite ifnewer
 SetOutPath "$INSTDIR"
 File "3d_loader.exe"
 File "HCRT.BIN"
+File "HCRT_BC.BIN"
 SetOutPath "$INSTDIR\T"
 File /r "T\T\*"
 SectionEnd
@@ -138,6 +139,7 @@ Section Uninstall
 ${INSTALL_TYPE}
 Delete "$INSTDIR\${MAIN_APP_EXE}"
 Delete "$INSTDIR\HCRT.BIN"
+Delete "$INSTDIR\HCRT_BC.BIN"
 RmDir /r "$INSTDIR\T"
 
 Delete "$INSTDIR\uninstall.exe"
