@@ -191,7 +191,7 @@ U0 focus_popup_list() {
   while (1) {
     task = adam_task->next_child_task;
     while (task) {
-      if (task->next_child_task) {
+      if (IsInValidBlk(task->next_child_task)) { //He checked for NULL by almost NULL's are lurking around.
         child_task = task->next_child_task;
         if (!MemCmp(child_task->task_name, "Servant", 7) &&
             child_task->win_left == 0x01 && child_task->win_right == 0x16) {
@@ -328,7 +328,7 @@ U0 SataniaBuddy() {
         update = TRUE;
       }
       if (rnd > 256 && rnd < 384 && !satania.is_talking) {
-        rand_ticks = __GetTicks;
+        rand_ticks = __GetTicks;
         goto satania_talk_random;
         break;
       }
@@ -336,9 +336,10 @@ U0 SataniaBuddy() {
     }
     if (satania.snap_to_window)
       satania.sprite_index = 4;
+    if(TaskValidate(sys_focus_task))
     if (satania.snap_to_window &&
         ((satania.window.task != sys_focus_task) ||
-         (satania.window.left != sys_focus_task->win_left ||
+         (satania.window.left != sys_focus_task->win_left ||
           satania.window.top != sys_focus_task->win_top))) {
       satania.window.task = sys_focus_task;
       satania.window.left = sys_focus_task->win_left;
@@ -382,3 +383,4 @@ U0 SataniaBuddy() {
   }
 }
 Spawn(&SataniaBuddy, , "SataniaBuddy",,Fs);
+
