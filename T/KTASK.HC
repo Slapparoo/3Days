@@ -35,19 +35,12 @@ U0 TaskQueInsChild(CTask *task)
     PAUSE;
   }
   pred=task->parent_task->last_child_task;
-  //I reworked this 
-  if(!pred) {
-    task->parent_task->last_child_task=task;
-    task->parent_task->next_child_task=task;
-    pred=task;
-  }
   last=pred->last_sibling_task;
   last->next_sibling_task=pred->last_sibling_task=task;
   task->last_sibling_task=last;
   task->next_sibling_task=pred;
   LBtr(&tq_lock,0);
 }
-/* TODO ???
 I64 TaskEnd()
 {//Called with irq's off.
   CTask *task=Fs,*tmpt,*tmpt1;
@@ -55,15 +48,16 @@ I64 TaskEnd()
     LBts(&task->task_flags,TASKf_KILL_TASK);
     return task->next_task;
   }
-  if (task->task_end_cb) {
+  /*if (task->task_end_cb) {
     task->wake_jiffy=0;
     LBtr(&task->task_flags,TASKf_KILL_TASK);
     TaskRstAwaitingMsg(task);
     Suspend(task,FALSE);
-    task->rip=task->task_end_cb;
+    task->rip=;
     task->task_end_cb=NULL;
     return task;
-  }
+  } */
+  if (task->task_end_cb) Call(task->task_end_cb);
   if (task->parent_task && task->parent_task->popup_task==task) {
     task->parent_task->popup_task=NULL;
     Kill(task->parent_task);
@@ -121,45 +115,6 @@ I64 TaskEnd()
 
   task->wake_jiffy=__GetTicks+DYING_JIFFIES;
   return tmpt;
-}*/
-CTask *TaskEnd() {
-	CTask *child,*last,*next,*tmpt;
-    U8 *cb;
-    if(Fs->task_end_cb) {
-        cb=Fs->task_end_cb;
-        Fs->task_end_cb=NULL;
-        Call(cb);
-    }
-    
-    next=Fs->next_sibling_task;
-    last=Fs->last_sibling_task;
-    next->last_sibling_task=last;
-    last->next_sibling_task=next;
-    if(Fs->parent_task) {
-		Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=next;
-		if(Fs->parent_task->last_child_task==Fs)
-			Fs->parent_task->next_child_task=Fs->parent_task->last_child_task=NULL;
-    }
-    for(;child=Fs->last_child_task;) {
-		Kill(child);
-		DeathWait(child);
-	}
-    LBts(&(Fs->task_flags),TASKf_KILL_TASK);
-    Fs->task_signature=0;
-    tmpt=Fs->next_task;
-    TaskQueRem(Fs);
-    WinZBufUpdate;
-    if(sys_focus_task==Fs) {
-		sys_focus_task=NULL;
-		if(Fs->parent_task)
-			WinFocus(Fs->parent_task);
-    }
-    LBts(&(Fs->task_flags),TASKf_KILL_TASK);
-    while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
-		PAUSE;
-	QueIns(Fs,Gs->last_dying);
-    LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);
-    return tmpt;
 }
 U0 Exit() {
 	LBts(&(Fs->task_flags),TASKf_KILL_TASK);
@@ -219,7 +174,7 @@ I64 ExeCmdLine(CCmpCtrl *cc)
 	if (ptr2<ptr3) *ptr2=0;
       } else
 	if ((ptr=cc->lex_include_stk->line_start) && *ptr)
-	  MemCpy(ptr2,ptr,StrLenCapped(ptr,STR_LEN-1)+1);
+	  MemCpy(ptr2,ptr,StrLenCapped(ptr,STR_LEN-1)+1);
     }
     cc->flags&=~CCF_HAS_MISC_DATA;
     machine_code=LexStmt2Bin(cc,&type,CMPF_PRS_SEMICOLON);
@@ -276,8 +231,8 @@ I64 TaskInit(CTask *task,I64 stk_size)
   task->rflags=RFLAGG_NORMAL;
   task->win_inhibit=WIG_TASK_DFT;
 
-  //I reworked this
-  task->next_child_task=task->last_child_task=NULL;
+  task->next_child_task=task->last_child_task=
+	(&task->next_child_task)(U8 *)-offset(CTask.next_sibling_task);
 
 
   JobCtrlInit(&task->srv_ctrl);

@@ -147,7 +147,7 @@ U0 @set_initial_values() {
   mouse.rb = ms.rb;
 }
 
-Bool @mouse_is_hovered() {
+	Bool @mouse_is_hovered() {
   return (
       ms.pos.x >= satania.pos.x &&
       ms.pos.x <= satania.pos.x + satania.frame[satania.sprite_index]->width &&
@@ -226,9 +226,13 @@ U8 *format_str(U8 *str) {
   return res;
 }
 
+U0 Finalize() {
+  DCFill;
+}
 U0 SataniaBuddy() {
   @load_frames;
   @set_initial_values;
+  Fs->task_end_cb=&Finalize;
   I64 lbtn, rbtn;
   I64 res;
   I64 rand_ticks;
@@ -324,7 +328,7 @@ U0 SataniaBuddy() {
         update = TRUE;
       }
       if (rnd > 256 && rnd < 384 && !satania.is_talking) {
-        rand_ticks = __GetTicks;
+        rand_ticks = __GetTicks;
         goto satania_talk_random;
         break;
       }
@@ -377,5 +381,4 @@ U0 SataniaBuddy() {
     Sleep(1);
   }
 }
-
-Spawn(&SataniaBuddy, , "SataniaBuddy");
+Spawn(&SataniaBuddy, , "SataniaBuddy",,Fs);
