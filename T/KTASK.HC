@@ -61,7 +61,7 @@ I64 TaskEnd()
   if (task->task_end_cb) {
     end_cb=task->task_end_cb;
     task->task_end_cb=NULL;
-    Suspend(task,FALSE);
+    Suspend(task,FALSE);
     Call(end_cb);
   }
   if (task->parent_task && task->parent_task->popup_task==task) {
@@ -92,14 +92,8 @@ I64 TaskEnd()
   JobQueDel(&task->srv_ctrl.next_waiting);
   JobQueDel(&task->srv_ctrl.next_done);
 
-  /*if (sys_focus_task==task) {
-    if (!Gs->num)
-      SingleUser(OFF);
+  if (sys_focus_task==task)
     sys_focus_task=NULL;
-    if (fp_set_std_palette)
-      (*fp_set_std_palette)();
-  }*/
-
   //QueRem
   task->task_signature(I64)=0;
 

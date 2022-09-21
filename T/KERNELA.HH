@@ -143,6 +143,7 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U8i *GetCipherPasswd();
 import U64i UnixNow();
 import U0i InteruptCore(I64i);
 import U8i *NewVirtualChunk(I64i,I64i low32);
@@ -226,6 +227,7 @@ import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 import U0i UnblockSignals();
 #else
+extern U8i *GetCipherPasswd();
 public extern I64i GrPaletteColorGet(I64i color_num)
 public extern U0 GrPaletteColorSet(I64i color_num,U8 *bgr48);
 extern U64i UnixNow();
@@ -1772,7 +1774,7 @@ class CWinMgrTimingGlbls
 extern F64 target_fps;
 #define WINMGR_FPS	(target_fps)
 #define WINMGR_PERIOD	(1./target_fps)
-public extern F64 SetFPS(F64 target);
+public extern F64 SetFPS(F64 target);
 public class CWinMgrGlbls
 {
   I64	updates;
@@ -6369,3 +6371,5 @@ public extern U8 *MAlloc(I64 size,CTask *mem_task=NULL);
 #define SPBM_UNDO		25
 #define SPBM_SAVE_GR		26
 extern U8 *PopUpGetStr2(U8 *header,CTask *mem_task);
+extern U0 Decrypt(U8 *ciphertext=NULL,U8 *decryptedtext=NULL,U64 textlen=0,U8 *key=NULL,U64 keylen=0);
+extern U0 Decrypt(U8 *ciphertext=NULL,U8 *decryptedtext=NULL,U64 textlen=0,U8 *key=NULL,U64 keylen=0);

@@ -33,55 +33,6 @@ CTask *Fs() {
 }
 TaskInit(Fs,0);
 #include "KGLBLS.HC"
-U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
-  I64 len2;
-//CHANGE,TempleOS grabs loaded files from RAM,some functions use
-  //blkdev.tmp_filename as a "defualt" file,so im going to assume its loaded
-  if(fn==blkdev.tmp_filename) {
-    return StrNew("");
-  }
-  U8 *fn2=FileNameAbs(fn),*data=NULL,*exp;
-  if(!__FExists(fn2)) {
-    exp=MStrPrint("%s.Z",fn2);
-    if(!__FExists(exp)) {
-      Free(fn2),Free(exp);
-      PrintErr("File \"%s\" not found!",fn);
-      throw('FILE');
-    }
-    Free(fn2);
-    fn2=exp;
-  }
-  if(!t) t=Fs;
-  Yield;
-  data=__FileRead(fn2,&len2,t);
-  if(IsDotZ(fn2)) {
-    exp=ExpandBuf(data,t);
-    if(len)
-      *len=data(CArcCompress*)->expanded_size;
-    Free(data);
-    data=exp;
-  } else {
-    if(len)
-      *len=len2;
-  }
-  Free(fn2);
-  return data;
-}
-I64i FileWrite(U8i *fn,U8i *buf,I64i len) {
-  I64 len2,r;
-  U8 *fn2=FileNameAbs(fn),*data=NULL;
-  CArcCompress *cmp;
-  if(!fn2) return 0;
-  if(IsDotZ(fn2)) {
-    if(!buf) buf="";
-    cmp=CompressBuf(buf,len,Fs);
-    r=__FileWrite(fn2,cmp,cmp->compressed_size);
-    Free(cmp);
-  } else
-    r=__FileWrite(fn2,buf,len);
-  Free(fn2);
-  return r;
-}
 #include "DOLDOC/DocExt.HC"
 #include "GR/Gr.HH"
 public extern I64 ExeCmdLine(CCmpCtrl *cc);
@@ -107,7 +58,7 @@ CTask *adam_task=Fs;
 #include "DISPLAY.HC"
 #include "MAlloc2.HC"
 #ifdef COMPONET_COMPILER
-#include "CMP_PRJ.HC"
+#include "CMP_PRJ.HC"
 CInit;
 #endif
 #include "AMATH.HC"
@@ -188,5 +139,80 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 #include "KeyDev.HC"
 #include "FILEMGR.HC"
 #include "Training.HC.Z"
-#include "InFile.HC";
+#include "InFile.HC"
+#include"Community-Heiresis/HolyCipher/CIPHER.HC";
+U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
+  I64 len2;
+  U8 *tmp,*buf2;
+//CHANGE,TempleOS grabs loaded files from RAM,some functions use
+  //blkdev.tmp_filename as a "defualt" file,so im going to assume its loaded
+  if(fn==blkdev.tmp_filename) {
+    return StrNew("");
+  }
+  U8 *fn2=FileNameAbs(fn),*data=NULL,*exp;
+  if(!__FExists(fn2)) {
+    exp=MStrPrint("%s.Z",fn2);
+    if(!__FExists(exp)) {
+      Free(fn2),Free(exp);
+      PrintErr("File \"%s\" not found!",fn);
+      throw('FILE');
+    }
+    Free(fn2);
+    fn2=exp;
+  }
+  if(!t) t=Fs;
+  Yield;
+  data=__FileRead(fn2,&len2,t);
+  if(IsDotZ(fn2)) {
+    exp=ExpandBuf(data,t);
+    len2=data(CArcCompress*)->expanded_size;
+    if(len)
+      *len=data(CArcCompress*)->expanded_size;
+    Free(data);
+    data=exp;
+  } else {
+    if(len)
+      *len=len2;
+  }
+  tmp=FileExtDot(fn2);
+  if(!StrNCmp(tmp,".ENC",4)) {
+    tmp=GetCipherPasswd;
+    if(!tmp) throw('NoPasswd');
+    buf2=MAlloc(len2);
+    Decrypt(data,buf2,len2,tmp,StrLen(tmp));
+    Free(data);
+    data=buf2;
+    Free(tmp);
+  }
+  Free(fn2);
+  return data;
+}
+I64i FileWrite(U8i *fn,U8i *buf,I64i len) {
+  I64 len2,r;
+  Bool fr=FALSE;;
+  U8 *fn2=FileNameAbs(fn),*data=NULL,*tmp;
+  CArcCompress *cmp;
+  if(!fn2) return 0;
+  tmp=FileExtDot(fn2);
+  if(!StrNCmp(tmp,".ENC",4)) {
+    data=MAlloc(len);
+    tmp=GetCipherPasswd;
+    if(!tmp) throw('NoPasswd');
+    Encrypt(data,buf,len,tmp,StrLen(tmp));
+    Free(tmp);
+    fr=TRUE;
+    buf=data;
+  }
+  if(IsDotZ(fn2)) {
+    if(!buf) buf="";
+    cmp=CompressBuf(buf,len,Fs);
+    r=__FileWrite(fn2,cmp,cmp->compressed_size);
+    Free(cmp);
+  } else
+    r=__FileWrite(fn2,buf,len);
+  Free(fn2);
+  if(fr) Free(buf);
+  return r;
+}
+
 #endif

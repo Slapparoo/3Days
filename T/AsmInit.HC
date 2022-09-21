@@ -46,7 +46,11 @@ U0 AsmPrsInsFlags(CCmpCtrl *cc,CInst *tmpins)
     Lex(cc);
   }
 }
-
+asm {
+  OPCODES_DD::
+  BINFILE"/OpCodes.DD";
+  DU8 0;
+};
 U0 AsmHashLoad()
 {//See $LK,"::/Compiler/OpCodes.DD"$.
   I64 i,j,size,size_max;
@@ -68,7 +72,7 @@ U0 AsmHashLoad()
   size_max=offset(CHashOpcode.ins)+sizeof(CInst)<<5;
   tmpo_max=MAlloc(size_max);
 
-  cc=CmpCtrlNew(FileRead("OpCodes.DD"),,"OpCodes.DD.Z");
+  cc=CmpCtrlNew(StrNew(OPCODES_DD),,"OpCodes.DD.Z");
   cc->htc.hash_table_lst=NULL;
   Lex(cc);
   while (cc->token) {

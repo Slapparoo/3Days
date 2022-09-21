@@ -34,6 +34,7 @@ static void Core0Exit(int sig) {
 	#endif
 } 
 static struct arg_lit *helpArg;
+static struct arg_str *encPasswdArg;
 static struct arg_file *TDriveArg;
 static struct arg_lit *sixty_fps;
 static struct arg_file *cmdLineFiles;
@@ -91,6 +92,7 @@ int main(int argc,char **argv)
     VFsGlobalInit();
     void *argtable[]= {
         helpArg=arg_lit0("h", "help", "Display this help message."),
+        encPasswdArg=arg_str0(NULL,"enc_passwd","<encription password>","The encription password for .ENC[,Z] files."),
         sixty_fps=arg_lit0("6", "60fps", "Run in 60 fps mode."),
         commandLineArg=arg_lit0("c", "com", "Start in command line mode,mount drive '/' at /."),
         TDriveArg=arg_file0("t",NULL,"T(boot) Drive","This tells 3days where to use(or create) the boot drive folder."),
@@ -101,6 +103,8 @@ int main(int argc,char **argv)
     };
     int errs=arg_parse(argc, argv, argtable);
     int run=1;
+    if(encPasswdArg->count)
+       cipher_passwd=encPasswdArg->sval;
     if(helpArg->count||errs) {
         printf("Usage is: 3d");
         arg_print_syntaxv(stdout, argtable, "\n");
@@ -227,3 +231,4 @@ void __Shutdown() {
 	_shutdown=1;
 	__ShutdownCore(0);
 }
+char *cipher_passwd;

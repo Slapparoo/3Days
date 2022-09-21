@@ -198,6 +198,11 @@ static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
     }
   }
 }
+static char *GetCipherPasswd() {
+	if(!cipher_passwd)
+		return NULL;
+	return HolyStrDup(cipher_passwd);
+}
 static void STK_RegisterFunctionPtr(vec_char_t *blob,char *name,void *fptr,int64_t arity) {
 	int64_t blob_off=blob->length,i;
     #ifndef TARGET_WIN32
@@ -554,6 +559,7 @@ void TOS_RegisterFuncPtrs() {
     #endif
     STK_RegisterFunctionPtr(&ffi_blob,"GrPaletteColorSet",STK_GrPalleteSet,2);
     STK_RegisterFunctionPtr(&ffi_blob,"GrPaletteColorGet",STK_GrPalleteGet,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"GetCipherPasswd",GetCipherPasswd,0);
     char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);
