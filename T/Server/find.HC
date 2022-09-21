@@ -250,7 +250,7 @@ loop:
   WriteLn(stream,len_ptr,"</FORM>");
   if(search_for) {
     head=FindIndexedStr(search_for,_search_root);
-    if(head)
+    if(head)
       for(ent=head->next;ent!=head;ent=ent->next) {
         ftxt=FileRead(ent->filename);
         if(StrIMatch(search_for,ftxt)) {
@@ -290,7 +290,8 @@ loop:
     Free(ftxt);
     WriteLn(stream,len_ptr,"</P>");
     WriteLn(stream,len_ptr,"</ARITCLE>");
-
+   //Here we cap the number of matches to save time/bandwidth
+   if(mat>5) break;
   }
   WikiFooter(stream,len_ptr,url);
   if(len_ptr) {
@@ -306,5 +307,5 @@ loop:
 }
 U0 ReIndex() {
   TaskExe(index_task,Fs,"ResetFileIndex;;\n",0);
-}
+}
 ReIndex;

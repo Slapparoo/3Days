@@ -1,4 +1,7 @@
 DyadInit;
+U0 CloseConnectionCB() {
+  DyadEnd(Fs->user_data);
+}
 class CConnection:CQue {
 	//These occupy .u8[0]
 	#define CON_S_METHOD 1
@@ -149,6 +152,8 @@ U8 *Trim(U8 *buf) {
 	return SkipWhitespace(buf);
 }
 U0 ParseRequest(CConnection *con) {
+        Fs->user_data=con->stream;
+        Fs->task_end_cb=&CloseConnectionCB;
         CDyadStream *stream=con->stream;
 	U8 *http2,*t1,buf[STR_LEN],buf2[STR_LEN],*t2,*ptr,*optr;
 	CHashGeneric *hash;
@@ -160,12 +165,10 @@ U0 ParseRequest(CConnection *con) {
 	switch(con->method) {
 		case HTTP_GET:
 		(*con->server->get)(con->server,stream,url,&req);
-		DyadEnd(stream);
 		break;
 		case HTTP_POST:
 		(*con->server->post)(con->server,stream,url,&req,con->post_data);
 		DyadWrite(stream,"\x0d\n",2);
-		DyadEnd(stream);
 		break;
 	}
 }
@@ -288,7 +291,6 @@ found:
 	WriteLn(s,,"Content-Type: text/html");
 	WriteLn(s,,"");
 	R404(s,NULL,"Unimplemented method for server!");
-	DyadEnd(s);
   } else if(!StrNCmp(data,"Content-Length",StrLen("Content-Length"))) {
     data=SkipWhitespace(StrFirstOcc(data,":")+1);
     con->fbuffer=MAlloc(Str2I64(data));
@@ -423,7 +425,7 @@ process:
     Free(con->fbuffer);
   Free(con);
 }
-U0 ListenCallback(CDyadStream *s,CServer *srv) {
+U0 ListenCallback(CDyadStream *s,CServer *srv) {
 	DyadSetReadCallback(s,&SReadLine,srv);
 }
 U0 Serve(CServer *srv) {
