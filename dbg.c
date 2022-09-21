@@ -2,6 +2,7 @@
 #ifndef TARGET_WIN32
 #include <signal.h>
 #include <ucontext.h>
+#ifndef __FreeBSD__ 
 #ifndef REG_R8
 enum
 {
@@ -83,6 +84,39 @@ static void routine(int sig,struct siginfo_t *info,ucontext_t *ctx) {
 	} else 
 		abort();
 }
+#else
+static void routine(int sig,struct siginfo_t *info,ucontext_t *ctx) {
+	vec_CHash_t *d;
+	void *fun;
+	int64_t regs[16+3];
+	if(d=map_get(&TOSLoader,"DebuggerLand")) {
+		fun=d->data[0].val;
+		regs[0]=ctx->uc_mcontext.mc_rax;
+		regs[1]=ctx->uc_mcontext.mc_rcx;
+		regs[2]=ctx->uc_mcontext.mc_rdx;
+		regs[3]=ctx->uc_mcontext.mc_rbx;
+		regs[4]=ctx->uc_mcontext.mc_rsp;
+		regs[5]=ctx->uc_mcontext.mc_rbp;
+		regs[6]=ctx->uc_mcontext.mc_rsi;
+		regs[7]=ctx->uc_mcontext.mc_rdi;
+		regs[8]=ctx->uc_mcontext.mc_r8;
+		regs[9]=ctx->uc_mcontext.mc_r9;
+		regs[10]=ctx->uc_mcontext.mc_r10;
+		regs[11]=ctx->uc_mcontext.mc_r11;
+		regs[12]=ctx->uc_mcontext.mc_r12;
+		regs[13]=ctx->uc_mcontext.mc_r13;
+		regs[14]=ctx->uc_mcontext.mc_r14;
+		regs[15]=ctx->uc_mcontext.mc_r15;
+		//I added these
+		regs[16]=ctx->uc_mcontext.mc_rip;
+		regs[17]=&ctx->uc_mcontext.mc_fpstate;
+		regs[18]=ctx->uc_mcontext.mc_flags;
+		FFI_CALL_TOS_2(fun,sig,regs);
+	} else 
+		abort();
+}
+
+#endif
 void SetupDebugger() {
 	struct sigaction inf;
 	inf.sa_flags=SA_SIGINFO|SA_NODEFER;
