@@ -141,13 +141,16 @@ U8 *MAllocIdent(U8 *s,CTask *t=0) {
 #include "Training.HC.Z"
 #include "InFile.HC"
 #include"Community-Heiresis/HolyCipher/CIPHER.HC";
+//
+// $BK,1$Enc files will contain a extra 8 bytes that contain a checksum$BK,0$
+//
 U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
   I64 len2;
   U8 *tmp,*buf2;
 //CHANGE,TempleOS grabs loaded files from RAM,some functions use
   //blkdev.tmp_filename as a "defualt" file,so im going to assume its loaded
   if(fn==blkdev.tmp_filename) {
-    return StrNew("");
+    return StrNew("");
   }
   U8 *fn2=FileNameAbs(fn),*data=NULL,*exp;
   if(!__FExists(fn2)) {
@@ -178,8 +181,13 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
   if(!StrNCmp(tmp,".ENC",4)) {
     tmp=GetCipherPasswd;
     if(!tmp) throw('NoPasswd');
-    buf2=MAlloc(len2);
-    Decrypt(data,buf2,len2,tmp,StrLen(tmp));
+    buf2=MAlloc(len2-8+1);//+1 for NULL byte
+    buf2[len2-8]=0;
+    Decrypt(data,buf2,len2-8,tmp,StrLen(tmp)); //See above blinking note
+    if(data[len2-8](U64)!=HashStr(buf2))
+      throw('BadEnc');
+    len2-=8;
+    if(len) *len=len2;
     Free(data);
     data=buf2;
     Free(tmp);
@@ -195,10 +203,13 @@ I64i FileWrite(U8i *fn,U8i *buf,I64i len) {
   if(!fn2) return 0;
   tmp=FileExtDot(fn2);
   if(!StrNCmp(tmp,".ENC",4)) {
-    data=MAlloc(len);
+    data=CAlloc(len+8);
+    MemCpy(data,buf,len);
     tmp=GetCipherPasswd;
     if(!tmp) throw('NoPasswd');
     Encrypt(data,buf,len,tmp,StrLen(tmp));
+    data[len](U64)=HashStr(buf);
+    len+=8;
     Free(tmp);
     fr=TRUE;
     buf=data;

@@ -743,3 +743,8 @@ Here are some FUNctions for debugging!
  - https://github.com/argtable/argtable3
  - https://github.com/futurist/CommandLineToArgvA
  - https://github.com/rxi/dyad
+ - https://git.envs.net/sachi/HolyCipher
+ - https://gitgud.io/CrunkLord420/blazeitfgt2
+ - https://gitgud.io/CrunkLord420/diggaym 
+ - https://git.checksum.fail/alec/satania-buddy
+ - 
