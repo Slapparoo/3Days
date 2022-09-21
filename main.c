@@ -164,9 +164,8 @@ int main(int argc,char **argv)
 		}
 		vec_push(&boot_str,0);
 		cmd_ln_boot_txt=boot_str.data;
-	} else {
-		InitSound();
 	}
+	InitSound();
 	if(1) {
 		//Create the Window,there is 1 screen God willing.
 		if(!is_cmd_line) {

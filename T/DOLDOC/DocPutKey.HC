@@ -306,7 +306,7 @@ public U0 DocPutKey(CDoc *doc,I64 ch=0,I64 sc=0)
 			DocWrite(doc);
 			st=StrNew(doc->filename.name);
 		      }
-		      if (st2=DirFile(st,"Run","HC.Z")) {
+		      if (st2=DirFile(st,"Run","HC")) {
 			if (FileFind(st2)) {
 			  Free(st);
 			  st=st2;
