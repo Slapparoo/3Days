@@ -1,4 +1,4 @@
-// Main TempleOS header
+// Main TempleOS header
 //
 // These are modified for 3Days; they dont take CTask * as an argument
 //
@@ -1769,10 +1769,10 @@ class CWinMgrTimingGlbls
   F64	last_calc_idle_time,calc_idle_delta_time;
   I64	calc_idle_cnt;
 };
-
-#define WINMGR_FPS	(30000.0/1001)
-#define WINMGR_PERIOD	(1001/30000.0)
-
+extern F64 target_fps;
+#define WINMGR_FPS	(target_fps)
+#define WINMGR_PERIOD	(1./target_fps)
+public extern F64 SetFPS(F64 target);
 public class CWinMgrGlbls
 {
   I64	updates;
@@ -3515,7 +3515,7 @@ class CTaskDying
   I64	wake_jiffy;
 };
 
-public class CTask //The Fs segment reg points to current CTask.
+public class CTask //The Fs segment reg points to current CTask.
 {
   CTask *addr; //Self-addressed ptr
   U32	task_signature,win_inhibit;

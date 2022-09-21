@@ -50,7 +50,7 @@ U0 ReleasePackage(U8 *to,...) {
   Free(argv2);
 }
 ChDrv('T');
-ReleasePackage("T","Offical","Greek","TempleOS.ISO");
+ReleasePackage("T","Offical","Greek","SmallTalk","TempleOS.ISO");
 Cd("/");
 Cmp("FULL_PACKAGE_BC.HC","HCRT_BC.DBG.Z","HCRT_BC.BIN");
 Exit;

@@ -39,7 +39,7 @@ U0 LoadImps() {
   __BootstrapForeachSymbol(&BootstrapImportSymbol);
 //Load asm externs second
   ExePrint2("#define BOOT_3DAYS\n;;");
-  ExePutS2(KERNELB_BIN,"/KERNELB.HH");
+  ExePutS2(KERNELB_BIN,"/KERNELB.HH");
 }
 static U0 StartUpCore1(I64) {
   ACInit("/KERNEL*.HH*");
@@ -74,6 +74,8 @@ U0 Adam(U8 *) {
     if(FileFind("HCRT_BC.DBG.Z"))
 		DbgInfoRead("HCRT_BC.DBG.Z");
 #endif
+        if(__CmdLineBootText)
+          ExePrint2("%s;\n",__CmdLineBootText);
 	if(!__IsCmdLine) {
 		sys_winmgr_task=Spawn(&WinMgrTask);
 		//Grab pointer

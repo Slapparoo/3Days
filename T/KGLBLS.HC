@@ -23,6 +23,7 @@ CMsHardStateGlbls ms_hard;
 CMsHardStateGlbls ms_hard_last;
 CAutoCompleteDictGlbls acd;
 CAutoCompleteGlbls ac;
+F64 target_fps=30.;
 public CWinMgrGlbls winmgr={0,0,0,WINMGR_FPS,__GetTicks,__GetTicks,NULL,FALSE,FALSE,FALSE};
 winmgr.t=CAlloc(sizeof(CWinMgrTimingGlbls));
 winmgr.t->last_calc_idle_time=tS;

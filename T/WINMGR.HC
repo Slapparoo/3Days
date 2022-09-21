@@ -189,7 +189,7 @@ U0 WinCalcIdles()
   CWinMgrTimingGlbls *t=winmgr.t;
   winmgr.ideal_refresh_tS=tS;
   if ((t->calc_idle_delta_time=
-	(calc_idle_time=tS)-t->last_calc_idle_time)>.5) {
+	(calc_idle_time=tS)-t->last_calc_idle_time)>.5) {
     total_jiffies=__GetTicks;
     for (i=0;i<mp_cnt;i++)
       idle_pt_hits[i]=cpu_structs[i]->idle_pt_hits;
@@ -847,4 +847,10 @@ wmt_start:
       task=Fs;
     }
   }
+}
+public F64 SetFPS(F64 target) {
+  F64 ret=target_fps;
+  if(target>100.) target=99.;
+  target_fps=target;
+  return ret;
 }

@@ -35,6 +35,7 @@ static void Core0Exit(int sig) {
 } 
 static struct arg_lit *helpArg;
 static struct arg_file *TDriveArg;
+static struct arg_lit *sixty_fps;
 static struct arg_file *cmdLineFiles;
 static struct arg_lit *OverwriteBootDrvArg;
 static struct arg_lit *commandLineArg;
@@ -90,6 +91,7 @@ int main(int argc,char **argv)
     VFsGlobalInit();
     void *argtable[]= {
         helpArg=arg_lit0("h", "help", "Display this help message."),
+        sixty_fps=arg_lit0("6", "60fps", "Run in 60 fps mode."),
         commandLineArg=arg_lit0("c", "com", "Start in command line mode,mount drive '/' at /."),
         TDriveArg=arg_file0("t",NULL,"T(boot) Drive","This tells 3days where to use(or create) the boot drive folder."),
         OverwriteBootDrvArg=arg_lit0("O", "overwrite", "Create a fresh version of the boot drive folder."),
@@ -133,26 +135,32 @@ int main(int argc,char **argv)
     CreateTemplateBootDrv(t_drive,template,OverwriteBootDrvArg->count);
     //IMPORTANT,init thread VFs after we make drive T
     VFsThrdInit();
-    if(commandLineArg->count) {
+    if(commandLineArg->count||sixty_fps->count) {
 		char buf[1024];
-		VFsMountDrive('R',"/");
-		is_cmd_line=1;
 		vec_char_t boot_str;
 		vec_init(&boot_str);
-		strcpy(buf,"ChDrv('R');\nCd(\"");
-		vec_pusharr(&boot_str,buf,strlen(buf));
-		#ifndef TARGET_WIN32
-		getcwd(buf,sizeof(buf));
-		#else
-		_getcwd(buf,sizeof(buf));
-		#endif
-		vec_pusharr(&boot_str,buf,strlen(buf));
-		strcpy(buf,"\");\n");
-		vec_pusharr(&boot_str,buf,strlen(buf));
-		int64_t i;
-		for(i=0;i!=cmdLineFiles->count;i++) {
-			sprintf(buf,"#include \"%s\";\n",cmdLineFiles->filename[i]);
+		if(commandLineArg->count) {
+			VFsMountDrive('R',"/");
+			is_cmd_line=1;
+			strcpy(buf,"ChDrv('R');;\nCd(\"");
 			vec_pusharr(&boot_str,buf,strlen(buf));
+			#ifndef TARGET_WIN32
+			getcwd(buf,sizeof(buf));
+			#else
+			_getcwd(buf,sizeof(buf));
+			#endif
+			vec_pusharr(&boot_str,buf,strlen(buf));
+			strcpy(buf,"\");;\n");
+			vec_pusharr(&boot_str,buf,strlen(buf));
+			int64_t i;
+			for(i=0;i!=cmdLineFiles->count;i++) {
+				sprintf(buf,"#include \"%s\";\n",cmdLineFiles->filename[i]);
+				vec_pusharr(&boot_str,buf,strlen(buf));
+			}
+		}
+		if(sixty_fps->count) {
+			char *set="SetFPS(60.);;\n";
+			vec_pusharr(&boot_str,set,strlen(set));
 		}
 		vec_push(&boot_str,0);
 		cmd_ln_boot_txt=boot_str.data;
