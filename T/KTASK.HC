@@ -44,6 +44,7 @@ U0 TaskQueInsChild(CTask *task)
 I64 TaskEnd()
 {//Called with irq's off.
   CTask *task=Fs,*tmpt,*tmpt1;
+  U8 *end_cb;
   if (task==sys_task_being_scrn_updated) {
     LBts(&task->task_flags,TASKf_KILL_TASK);
     return task->next_task;
@@ -57,7 +58,12 @@ I64 TaskEnd()
     task->task_end_cb=NULL;
     return task;
   } */
-  if (task->task_end_cb) Call(task->task_end_cb);
+  if (task->task_end_cb) {
+    end_cb=task->task_end_cb;
+    task->task_end_cb=NULL;
+    Suspend(task,FALSE);
+    Call(end_cb);
+  }
   if (task->parent_task && task->parent_task->popup_task==task) {
     task->parent_task->popup_task=NULL;
     Kill(task->parent_task);
