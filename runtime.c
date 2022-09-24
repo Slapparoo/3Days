@@ -391,7 +391,7 @@ int64_t STK_SetMSCallback(int64_t *stk) {
 //https://stackoverflow.com/questions/85122/how-to-make-thread-sleep-less-than-a-millisecond-on-windows
 static void SleepShort(float milliseconds) {
     static int once = 1;
-    static NTSTATUS (*ntdelay)(int,int64_t *);
+	static NTSTATUS (*ntdelay)(int,int64_t *);
 	static NTSTATUS (*zwtimer)(int,int,int64_t *);
     if (once) {
         ULONG actualResolution;
@@ -400,10 +400,9 @@ static void SleepShort(float milliseconds) {
 		zwtimer(1, 1, &actualResolution);
         once = 0;
     }
-
     LARGE_INTEGER interval;
     interval.QuadPart = -1 * (int)(milliseconds * 10000.0f);
-    ntdelay(0, &interval);
+    ntdelay(0,&interval);
 }
 #endif
 int64_t STK_Sleep(int64_t *stk) {
