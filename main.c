@@ -113,6 +113,7 @@ int main(int argc,char **argv)
     }
     if(TDriveArg->count) {
 		t_drive=strdup(TDriveArg->filename[0]);
+		VFsMountDrive('T',t_drive);
 	} else  {
 		tmp=HostHomeDir();
 		t_drive=TD_MALLOC(1+1+strlen(tmp)+strlen(DFT_T_DRIVE));
@@ -123,22 +124,22 @@ int main(int argc,char **argv)
 		#else
 		strcat(t_drive,"/" DFT_T_DRIVE);
 		#endif
+		#ifdef TARGET_WIN32
+		char template[MAX_PATH];
+		GetModuleFileNameA(NULL,template,sizeof(template));
+		dirname(template);
+		strcat(template,DFT_TEMPLATE);
+		#endif
+		#ifndef TARGET_WIN32 
+		char *template=DFT_TEMPLATE;
+		#endif
+		//CreateTemplateBootDrv Checks if exists too
+		//DFT_TEMPLATE IS RELATIVE TO PROGRAM IN WINDOWS
+		CreateTemplateBootDrv(t_drive,template,OverwriteBootDrvArg->count);
 	}
+	//IMPORTANT,init thread VFs after we make drive T
+	VFsThrdInit();
     TOS_RegisterFuncPtrs();
-    #ifdef TARGET_WIN32
-    char template[MAX_PATH];
-    GetModuleFileNameA(NULL,template,sizeof(template));
-    dirname(template);
-    strcat(template,DFT_TEMPLATE);
-    #endif
-    #ifndef TARGET_WIN32 
-    char *template=DFT_TEMPLATE;
-    #endif
-    //CreateTemplateBootDrv Checks if exists too
-    //DFT_TEMPLATE IS RELATIVE TO PROGRAM IN WINDOWS
-    CreateTemplateBootDrv(t_drive,template,OverwriteBootDrvArg->count);
-    //IMPORTANT,init thread VFs after we make drive T
-    VFsThrdInit();
     if(commandLineArg->count||sixty_fps->count) {
 		char buf[1024];
 		vec_char_t boot_str;
