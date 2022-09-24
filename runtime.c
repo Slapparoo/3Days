@@ -387,11 +387,30 @@ int64_t STK_SetKBCallback(int64_t *stk) {
 int64_t STK_SetMSCallback(int64_t *stk) {
     SetMSCallback(stk[0]);    
 }
+#ifdef TARGET_WIN32
+//https://stackoverflow.com/questions/85122/how-to-make-thread-sleep-less-than-a-millisecond-on-windows
+static void SleepShort(int64_t ms) {
+	static int once;
+	static NTSTATUS (*ntdelay)(int,int64_t *);
+	static NTSTATUS (*zwtimer)(int,int,int64_t *);
+	if(!once) {
+		ULONG reso;
+		zwtimer=GetProcAddress(GetModuleHandle("ntdll.dll"), "ZwSetTimerResolution");
+		ntdelay=GetProcAddress(GetModuleHandle("ntdll.dll"), "NtDelayExecution");
+		once=1;
+		zwtimer(10000,1,&reso);
+	}
+    int64_t interval=-1*ms;
+    ntdelay(0,&interval);
+    interval++;
+}
+
+#endif
 int64_t STK_Sleep(int64_t *stk) {
 	#ifndef TARGET_WIN32
 	usleep(1000*stk[0]);
 	#else
-	Sleep(stk[0]);
+	SleepShort(stk[0]);
 	#endif
 }
 int64_t STK_GetFs(int64_t *stk) {
