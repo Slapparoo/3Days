@@ -183,21 +183,22 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
     if(len)
       *len=len2;
   }
-  tmp=FileExtDot(fn2);
-  if(!StrNCmp(tmp,".ENC",4)) {
-    tmp=GetCipherPasswd;
-    if(!tmp) throw('NoPasswd');
-    buf2=MAlloc(len2-8+1);//+1 for NULL byte
-    buf2[len2-8]=0;
-    Decrypt(data,buf2,len2-8,tmp,StrLen(tmp)); //See above blinking note
-    if(data[len2-8](U64)!=CheckSum(buf2,len2-8))
-      throw('BadEnc');
-    len2-=8;
-    if(len) *len=len2;
-    Free(data);
-    data=buf2;
-    Free(tmp);
-  }
+  tmp=FileExtDot(fn2);
+  if(tmp)
+    if(!StrNCmp(tmp,".ENC",4)) {
+      tmp=GetCipherPasswd;
+      if(!tmp) throw('NoPasswd');
+      buf2=MAlloc(len2-8+1);//+1 for NULL byte
+      buf2[len2-8]=0;
+      Decrypt(data,buf2,len2-8,tmp,StrLen(tmp)); //See above blinking note
+      if(data[len2-8](U64)!=CheckSum(buf2,len2-8))
+        throw('BadEnc');
+      len2-=8;
+      if(len) *len=len2;
+      Free(data);
+      data=buf2;
+      Free(tmp);
+    }
   Free(fn2);
   return data;
 }
@@ -208,18 +209,19 @@ I64i FileWrite(U8i *fn,U8i *buf,I64i len) {
   CArcCompress *cmp;
   if(!fn2) return 0;
   tmp=FileExtDot(fn2);
-  if(!StrNCmp(tmp,".ENC",4)) {
-    data=CAlloc(len+8);
-    MemCpy(data,buf,len);
-    tmp=GetCipherPasswd;
-    if(!tmp) throw('NoPasswd');
-    Encrypt(data,buf,len,tmp,StrLen(tmp));
-    data[len](U64)=CheckSum(buf,len);
-    len+=8;
-    Free(tmp);
-    fr=TRUE;
-    buf=data;
-  }
+  if(tmp)
+    if(!StrNCmp(tmp,".ENC",4)) {
+      data=CAlloc(len+8);
+      MemCpy(data,buf,len);
+      tmp=GetCipherPasswd;
+      if(!tmp) throw('NoPasswd');
+      Encrypt(data,buf,len,tmp,StrLen(tmp));
+      data[len](U64)=CheckSum(buf,len);
+      len+=8;
+      Free(tmp);
+      fr=TRUE;
+      buf=data;
+    }
   if(IsDotZ(fn2)) {
     if(!buf) buf="";
     cmp=CompressBuf(buf,len,Fs);
