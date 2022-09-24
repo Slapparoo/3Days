@@ -117,7 +117,7 @@ satania_text[1] =
 
 U0 @load_frames() {
   I64 i = 0;
-  CDirEntry *de = FilesFind("assets/*.GR");
+  CDirEntry *de = FilesFind("assets/*.GR*");
   CDirEntry *de2 = de;
   while (de2) {
     i++;
@@ -339,7 +339,7 @@ U0 SataniaBuddy() {
     if(TaskValidate(sys_focus_task))
     if (satania.snap_to_window &&
         ((satania.window.task != sys_focus_task) ||
-         (satania.window.left != sys_focus_task->win_left ||
+         (satania.window.left != sys_focus_task->win_left ||
           satania.window.top != sys_focus_task->win_top))) {
       satania.window.task = sys_focus_task;
       satania.window.left = sys_focus_task->win_left;
@@ -379,7 +379,7 @@ U0 SataniaBuddy() {
       satania.is_talking = FALSE;
       update = TRUE;
     }
-    Sleep(1);
+    Refresh;
   }
 }
 Spawn(&SataniaBuddy, , "SataniaBuddy",,Fs);
