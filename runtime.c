@@ -402,7 +402,6 @@ static void SleepShort(int64_t ms) {
 	}
     int64_t interval=-1*ms;
     ntdelay(0,&interval);
-    interval++;
 }
 
 #endif

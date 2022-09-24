@@ -90,8 +90,9 @@ void InteruptCore(int core) {
 	#else
 	vec_CHash_t *hash;
 	CONTEXT ctx;
-	if(hash=map_get(&TOSLoader," __InteruptCoreRoutine")) {
-		memset(&ctx,0,sizeof ctx);
+	hash=map_get(&TOSLoader,"__InteruptCoreRoutine");
+	if(hash) {
+		memset(&ctx,0 ,sizeof ctx);
 		ctx.ContextFlags=CONTEXT_FULL; 
 		SuspendThread(cores[core].thread);
 		GetThreadContext(cores[core].thread,&ctx);
@@ -99,6 +100,7 @@ void InteruptCore(int core) {
 		SetThreadContext(cores[core].thread,&ctx);
 		ResumeThread(cores[core].thread);
 	}
+	assert(hash);
 	#endif
 }
 void LaunchCore0(void *fp) {
