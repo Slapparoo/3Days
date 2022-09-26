@@ -143,6 +143,7 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U8i __IsValidPtr(U8i *ptr);
 import U8i *GetCipherPasswd();
 import U64i UnixNow();
 import U0i InteruptCore(I64i);
@@ -230,6 +231,7 @@ import U0i UnblockSignals();
 extern U8i *GetCipherPasswd();
 public extern I64i GrPaletteColorGet(I64i color_num)
 public extern U0 GrPaletteColorSet(I64i color_num,U8 *bgr48);
+extern U8i __IsValidPtr(U8i *ptr);
 extern U64i UnixNow();
 extern U0i UnblockSignals();
 extern U0i InteruptCore(I64i);
@@ -6000,7 +6002,6 @@ extern U8 *MAlloc32(I64 size,CTask *task=NULL);
 extern U8 *CAlloc(I64 size,CTask *mem_task=NULL);
 extern U8 *AMAlloc(I64 size);
 //This dude will whine on OOB by printinng a bracktrace to the console
-extern U0 IsValidPtr(U8 *ptr,I64 sz=1);
 extern U0 EdCharIns(I64 ch,I64 sc,CDoc *doc);
 extern CTask *adam_task;
 extern Bool YorN();
@@ -6372,4 +6373,6 @@ public extern U8 *MAlloc(I64 size,CTask *mem_task=NULL);
 #define SPBM_SAVE_GR		26
 extern U8 *PopUpGetStr2(U8 *header,CTask *mem_task);
 extern U0 Decrypt(U8 *ciphertext=NULL,U8 *decryptedtext=NULL,U64 textlen=0,U8 *key=NULL,U64 keylen=0);
-extern U0 Decrypt(U8 *ciphertext=NULL,U8 *decryptedtext=NULL,U64 textlen=0,U8 *key=NULL,U64 keylen=0);
+extern U0 Decrypt(U8 *ciphertext=NULL,U8 *decryptedtext=NULL,U64 textlen=0,U8 *key=NULL,U64 keylen=0);
+extern U8i IsValidPtr(U8i *ptr,I64 sz=1);
+extern Bool IsEncryptedRight(U8 *file);

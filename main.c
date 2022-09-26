@@ -104,7 +104,7 @@ int main(int argc,char **argv)
     int errs=arg_parse(argc, argv, argtable);
     int run=1;
     if(encPasswdArg->count)
-       cipher_passwd=encPasswdArg->sval;
+       cipher_passwd=encPasswdArg->sval[0];
     if(helpArg->count||errs) {
         printf("Usage is: 3d");
         arg_print_syntaxv(stdout, argtable, "\n");

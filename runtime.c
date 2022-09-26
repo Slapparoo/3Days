@@ -20,6 +20,7 @@ extern void HCLongJmp(void *ptr);
 #include <fileapi.h>
 #include <shlwapi.h>
 #include <memoryapi.h>
+#include <winbase.h>
 #include "ext/wineditline-2.206/include/editline/readline.h"
 #else
 #include <sys/mman.h>
@@ -110,6 +111,19 @@ static int64_t BCLZ(int64_t v) {
 }
 static void *MemNCpy(void *d,void *s,long sz) {
     return memcpy(d,s,sz);
+}
+static int64_t IsValidPtr(int64_t *stk) {
+	#ifdef TARGET_WIN32
+	return !IsBadReadPtr(stk[0],8);
+	#else
+	static int64_t ps;
+	if(!ps)
+		ps=getpagesize();
+	stk[0]/=ps;
+	stk[0]*=ps;
+	//https://renatocunha.com/2015/12/msync-pointer-validity/
+	return -1!=msync(stk[0],ps,MS_ASYNC);
+	#endif
 }
 static int64_t __Move(char *old,char *new) {
 	int ret=0;
@@ -578,6 +592,7 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"GrPaletteColorSet",STK_GrPalleteSet,2);
     STK_RegisterFunctionPtr(&ffi_blob,"GrPaletteColorGet",STK_GrPalleteGet,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetCipherPasswd",GetCipherPasswd,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"__IsValidPtr",IsValidPtr,1);
     char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);

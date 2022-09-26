@@ -147,6 +147,15 @@ I64 CheckSum(U8 *data,I64 len) {
   while(--len>=0) sum+=data[len];
   return sum;
 }
+Bool IsEncryptedRight(U8 *file) {
+  I64 len,ret;
+  U8 *data=__FileRead(file,&len),*tmp,*buf2=CAlloc(len);
+  tmp=GetCipherPasswd;
+  Decrypt(data,buf2,len-8,tmp,StrLen(tmp)); //See above blinking note
+  ret=data[len-8](U64)==CheckSum(buf2,len-8);
+  Free(data),Free(tmp);
+  return ret;
+}
 //
 // $BK,1$Enc files will contain a extra 8 bytes that contain a checksum$BK,0$
 //
@@ -191,8 +200,11 @@ U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) {
       buf2=MAlloc(len2-8+1);//+1 for NULL byte
       buf2[len2-8]=0;
       Decrypt(data,buf2,len2-8,tmp,StrLen(tmp)); //See above blinking note
-      if(data[len2-8](U64)!=CheckSum(buf2,len2-8))
-        throw('BadEnc');
+      if(data[len2-8](U64)!=CheckSum(buf2,len2-8)) {
+        Free(buf2);
+        buf2=StrNew("");
+        len2=8;
+      }
       len2-=8;
       if(len) *len=len2;
       Free(data);
@@ -211,6 +223,12 @@ I64i FileWrite(U8i *fn,U8i *buf,I64i len) {
   tmp=FileExtDot(fn2);
   if(tmp)
     if(!StrNCmp(tmp,".ENC",4)) {
+      if(FileFind(fn2)) {
+        if(!IsEncryptedRight(fn2)) {
+          Free(fn2);
+          return;
+        }
+      }
       data=CAlloc(len+8);
       MemCpy(data,buf,len);
       tmp=GetCipherPasswd;

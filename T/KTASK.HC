@@ -92,7 +92,7 @@ I64 TaskEnd()
   JobQueDel(&task->srv_ctrl.next_waiting);
   JobQueDel(&task->srv_ctrl.next_done);
 
-  if (sys_focus_task==task)
+  if (sys_focus_task==task)
     sys_focus_task=NULL;
   //QueRem
   task->task_signature(I64)=0;
@@ -207,9 +207,9 @@ I64 ExeCmdLine(CCmpCtrl *cc)
 }
 Bool TaskValidate(CTask *task)
 {//return TRUE if task looks valid.
-  if(!task)
+  if(!__IsValidPtr(&task->task_signature))
 	return FALSE;
-  if(task->task_signature!=TASK_SIGNATURE_VAL)
+  if(task->task_signature!=TASK_SIGNATURE_VAL)
     return FALSE;
   else
     return ToBool(task);

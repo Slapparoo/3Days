@@ -1,10 +1,8 @@
 CQue valid_blks;
-CQue recycle32;
 I64 mem_blks_lock;
 U0 InitHeaps() {
   mem_blks_lock=0;
   QueInit(&valid_blks);
-  QueInit(&recycle32);
 }
 U0 SysBadFree(I64 *ptr)
 {
@@ -155,19 +153,6 @@ Return: NULL if out of memory.
   Bool old;
   PUSHFD
   old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
-  if(!bp) {
-	//Look for recylceable 32bit pages
-	while(LBts(&mem_blks_lock,0))
-	  PAUSE;
-	for(m=recycle32.next;m!=&recycle32;m=m->next)
-	  if(m->pags>=pags) {
-	     res=m;
-	     QueRem(res);
-	     LBtr(&mem_blks_lock,0);
-	     goto ins;
-	  }
-	LBtr(&mem_blks_lock,0);
-  }
   res=NewVirtualChunk(pags<<MEM_PAG_BITS,!bp);
   ins:
   QueInit(res);
@@ -267,15 +252,7 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
       QueRem(&m->next2);
       LBtr(&mem_blks_lock,0);
       hc->alloced_u8s-=m->pags<<MEM_PAG_BITS;
-      if(!(0<=m<=U32_MAX))
-	MemPagFree(m,NULL);
-      else {
-        while(LBts(&mem_blks_lock,0))
-          PAUSE;
-        QueInit(m);
-        QueIns(m,recycle32.last);
-        LBtr(&mem_blks_lock,0);
-      }
+      MemPagFree(m,NULL);
     }
     if(old)
 	  BreakUnlock;
@@ -301,7 +278,7 @@ Bool IsInValidBlk(U8 *ptr) {
   while(LBts(&mem_blks_lock,0))
     PAUSE;
   while(blks!=&valid_blks) {
-    blks=blks(U8*)-CMemBlk.next2;  
+    blks=blks(U8*)-CMemBlk.next2;  
     if(blks(U8*)<=ptr<blks(U8*)+blks->pags<<MEM_PAG_BITS) {
       ret=TRUE;
       break;

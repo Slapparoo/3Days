@@ -114,8 +114,8 @@ _extern _SYS_WHINE_OOB U0 SYS_WHINE_OOB;
 _extern _HASH_ADD_AFTER U0 HashAddAfter(CHash *tmph,
         CHash *pred,CHashTable *table); //Add hash entry after entry.
 _extern _HASH_STR I64 HashStr(U8 *st); //Hash a string.
-_extern _HASH_FIND CHash *HashFind(U8 *needle_str,CHashTable *haystack_table,
-                                   I64 mask,I64 instance=1);//Find string in hash table.
+_extern _HASH_FIND CHash *HashFind(U8 *needle_str,CHashTable *haystack_table,
+                                   I64 mask,I64 instance=1);//Find string in hash table.
 _extern _HASH_SINGLE_TABLE_FIND CHash *HashSingleTableFind(U8 *needle_str,
         CHashTable *haystack_table,
         I64 mask,I64 instance=1);//Find string in single hash table.

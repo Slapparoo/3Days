@@ -483,8 +483,8 @@ U8 *CAlloc(I64 size,CTask *mem_task=NULL)
   return res;
 }
 U8 *MAlloc32(I64 size,CTask *task=NULL) {
-	if(!task) task=Fs;
-	return CAlloc(size,task->code_heap);
+  if(!task) task=Fs;
+  return CAlloc(size,task->code_heap);
 }
 
 U8 *ACAlloc(I64 size)
