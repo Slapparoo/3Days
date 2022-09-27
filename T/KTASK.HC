@@ -49,15 +49,15 @@ I64 TaskEnd()
     LBts(&task->task_flags,TASKf_KILL_TASK);
     return task->next_task;
   }
-  /*if (task->task_end_cb) {
-    task->wake_jiffy=0;
-    LBtr(&task->task_flags,TASKf_KILL_TASK);
-    TaskRstAwaitingMsg(task);
-    Suspend(task,FALSE);
-    task->rip=;
-    task->task_end_cb=NULL;
-    return task;
-  } */
+/*if (task->task_end_cb) {
+task->wake_jiffy=0;
+LBtr(&task->task_flags,TASKf_KILL_TASK);
+TaskRstAwaitingMsg(task);
+Suspend(task,FALSE);
+task->rip=;
+task->task_end_cb=NULL;
+return task;
+} */
   if (task->task_end_cb) {
     end_cb=task->task_end_cb;
     task->task_end_cb=NULL;
@@ -94,7 +94,7 @@ I64 TaskEnd()
 
   if (sys_focus_task==task)
     sys_focus_task=NULL;
-  //QueRem
+//QueRem
   task->task_signature(I64)=0;
 
   tmpt =task->next_input_filter_task;
@@ -114,6 +114,10 @@ I64 TaskEnd()
   LBtr(&task->task_flags,TASKf_TASK_LOCK);
 
   task->wake_jiffy=__GetTicks+DYING_JIFFIES;
+  while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
+    PAUSE
+  QueIns(task,Gs->last_dying);
+  LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);
   return tmpt;
 }
 U0 Exit() {
@@ -209,7 +213,7 @@ Bool TaskValidate(CTask *task)
 {//return TRUE if task looks valid.
   if(!__IsValidPtr(&task->task_signature))
 	return FALSE;
-  if(task->task_signature!=TASK_SIGNATURE_VAL)
+  if(task->task_signature!=TASK_SIGNATURE_VAL)
     return FALSE;
   else
     return ToBool(task);
@@ -315,7 +319,7 @@ U0 UserTaskCont()
     try {
       Lex(cc);
       ExeCmdLine(cc);
-      cont=Bt(&cc->flags,CCf_PMT);
+      cont=Bt(&cc->flags,CCf_PMT);
       QueRem(cc);
       CmpCtrlDel(cc);
     } catch {
