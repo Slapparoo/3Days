@@ -21,6 +21,7 @@ U8 *__CallerBP(U8 **rbp,I64 num=1)
 //or the caller of the caller, etc.
   U8 **ptr;
   while (num--) {
+    if(!__IsValidPtr(rbp)) return NULL;
     if (rbp>=*rbp)
       return NULL;
     rbp=*rbp;
@@ -28,6 +29,7 @@ U8 *__CallerBP(U8 **rbp,I64 num=1)
       return NULL;
   }
   ptr=rbp+1;
+  if(!__IsValidPtr(ptr)) return NULL;
   return *ptr;
 }
 U8 *TaskCaller(CTask *task=NULL,I64 num=0,Bool saved_context=FALSE)
@@ -173,12 +175,12 @@ U0 DebuggerLandWin(I64 sig,I64 *gps) {
         LBts(&(Fs->task_flags),TASKf_DISABLE_BPTS);
         Fs->rflags|=1<<RFLAGf_TRAP;
     } else if(IsInValidBlk(_RIP))
-      if(_RIP(U8*)[0]==OC_BPT) //Advance if we hit a stray BPT
+      if(_RIP(U8*)[0]==OC_BPT) //Advance if we hit a stray BPT
         _RIP++;
   }
   MemCpy(&clone,Fs,sizeof CTask);
   CTask *task=Spawn(&DebuggerSpawn,&clone,"Debugger",0,Fs,,1<<JOBf_WAKE_MASTER|1<<JOBf_ADD_TO_QUE);
-  DeathWait(task);
+  DeathWait(&task);
   if(sig!=5) //SIGTRAP
     Exit;
 fin:
@@ -243,7 +245,7 @@ U0 DebuggerLand(I64 sig,I64 *gps) {
   }
   MemCpy(&clone,Fs,sizeof CTask);
   CTask *task=Spawn(&DebuggerSpawn,&clone,"Debugger",0,Fs,,1<<JOBf_WAKE_MASTER|1<<JOBf_ADD_TO_QUE);
-  DeathWait(task);
+  DeathWait(&task);
   if(sig!=5) //SIGTRAP
     Exit;
 fin:
@@ -333,7 +335,7 @@ Bool B(U8 *addr,CTask *task=NULL,Bool live=TRUE)
     BptR(addr,task,live,TRUE);
     res=TRUE;
   } else
-    BptS(addr,task,live);
+    BptS(addr,task,live);
   if(bl)
     BreakUnlock;
   POPFD

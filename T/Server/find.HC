@@ -19,7 +19,7 @@ CHeapCtrl *_search_tree_hc=HeapCtrlInit(,Fs,NULL),*_search_tree_hc2;
 CUkkonen *_search_root=CAlloc(sizeof(CUkkonen),_search_tree_hc),*_search_root2;
 QueInit(&_search_root->head);
 //This dude will re-index  files on request
-CTask *index_task=Spawn(&SrvTaskCont,0,"Indexer",0,Fs);
+CTask *index_task=Spawn(&SrvTaskCont,0,"IndexerD",0,Fs);
 CDate last_index_time=0;
 CUkkonen *UkkonenFind(U8 *str,I64 cap=-1,CUkkonen *search_root) {
   CUkkonen *root=search_root,*old;
@@ -129,7 +129,7 @@ enter:
     dot=FileExtDot(cur->full_name);
     if(dot)
       if(!StrICmp(dot,".WIKI")||!StrICmp(dot,".WIKI.Z")) {
-        wait_for[c]=Spawn(&IndexFile,cur->full_name,"Indexer",c);
+        wait_for[c]=Spawn(&IndexFile,cur->full_name,"Indexer",c,Fs);
         c=(c+1)%mp_cnt; 
       }
 wait:
@@ -152,7 +152,7 @@ wait:
   for(c=0;c!=mp_cnt;c++) {
     if(wait_for[c])
       if(TaskValidate(wait_for[c]))
-        DeathWait(wait_for[c]);
+        DeathWait(&wait_for[c]);
   }
   DirEntryDel(first);
   while(LBts(&index_lock,0))
@@ -307,5 +307,5 @@ loop:
 }
 U0 ReIndex() {
   TaskExe(index_task,Fs,"ResetFileIndex;;\n",0);
-}
+}
 ReIndex;

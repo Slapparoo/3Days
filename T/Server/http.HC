@@ -416,7 +416,8 @@ en:
   return;
 process:
   con->buffer[con->b_ptr]=0;
-  DeathWait(Spawn(&ParseRequest,con));
+  CTask *t=Spawn(&ParseRequest,con);
+  DeathWait(&t);
   if(con->post_data)
     HashTableDel(con->post_data);
   QueRem(con);
@@ -425,7 +426,7 @@ process:
     Free(con->fbuffer);
   Free(con);
 }
-U0 ListenCallback(CDyadStream *s,CServer *srv) {
+U0 ListenCallback(CDyadStream *s,CServer *srv) {
 	DyadSetReadCallback(s,&SReadLine,srv);
 }
 U0 Serve(CServer *srv) {
@@ -436,5 +437,5 @@ U0 Serve(CServer *srv) {
 		Sleep(10);
 		DyadUpdate;
 	}
-	DyadShutdown;
+	DyadShutdown;
 }

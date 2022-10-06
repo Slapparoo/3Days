@@ -211,8 +211,8 @@ I64 ExeCmdLine(CCmpCtrl *cc)
 }
 Bool TaskValidate(CTask *task)
 {//return TRUE if task looks valid.
-  if(!__IsValidPtr(&task->task_signature))
-	return FALSE;
+  if(!__IsValidPtr(&task->task_signature)||!task)
+    return FALSE;
   if(task->task_signature!=TASK_SIGNATURE_VAL)
     return FALSE;
   else
@@ -319,7 +319,7 @@ U0 UserTaskCont()
     try {
       Lex(cc);
       ExeCmdLine(cc);
-      cont=Bt(&cc->flags,CCf_PMT);
+      cont=Bt(&cc->flags,CCf_PMT);
       QueRem(cc);
       CmpCtrlDel(cc);
     } catch {
