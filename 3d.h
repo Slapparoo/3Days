@@ -189,3 +189,5 @@ void SetupDebugger();
 void GrPalleteSet(int c,int64_t colors);
 char *GrPalleteGet(int64_t c);
 extern char *cipher_passwd;
+char **VFsDir(char *fn);
+FILE *VFsFOpen(char *path,char*);

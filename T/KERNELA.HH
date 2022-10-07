@@ -143,6 +143,23 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U8i *VFsFOpenR(U8i*);
+import U8i *VFsFOpenW(U8i*);
+import U0 VFsFClose(U8i*);
+import U0 VFsFBlkRead(U8i*,I64i,I64i,U8i*);
+import U0 VFsFBlkWrite(U8i*,I64i,I64i,U8i*);
+import U0 VFsFSeek(I64i,U8i*);
+
+import U0 VFsSetPwd(U8i*);
+import Bool VFsExists(U8i*);
+import Bool VFsIsDir(U8i*);
+import I64i VFsFSize(U8i*);
+import U8i *VFsFRead(U8i*,I64i*);
+import U8i *VFsDirMk(U8i*);
+import U8i *VFsFWrite(U8i*,U8i*,I64i);
+import Bool VFsDel(U8i*);
+import U8i **VFsDir();
+
 import U8i __IsValidPtr(U8i *ptr);
 import U8i *GetCipherPasswd();
 import U64i UnixNow();
@@ -180,26 +197,11 @@ import I64i FSize(U8i *);
 import I64i FUnixTime(U8i *);
 import U8i *GetClipboardText();
 import U8i *SetClipboardText(U8i *);
-public import Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
-public import Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
-public import U0 FClose(CFile *f);
-public import CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
 //public import I64i MSize(U8i *src);   //size of heap object
 //public import I64i MSize2(U8i *src); //Internal size
 public import U8i *CAlloc(I64i size,CTask *t=0);
 public import U0i TOSPrint(U8i *,...);
-public import U8i *__FileRead(U8i *filename,I64i *_size=0,CTask *t=0);
-public import I64i __FileWrite(U8i *filename,
-	U8i *fbuf,I64i size);
-public import U8 *DirNameAbs(U8i *dirname);
-public import U8 *FileNameAbs(U8i *dirname);
-public import Bool Cd(U8i *dirname=0);
-public import Bool IsDir(U8i *dir_name); //TODO
-public import Bool DirMk(U8i *filename); //TODO
-public import U8 **__Dir(U8i *); //TODO
-public import U8 *DirCur();
 public import U8 *__GetStr(U8 *pmt="");
-import U8i ChDrv(U8i);
 import U0i SndFreq(I64i freq);
 import U0 __BootstrapForeachSymbol(U0 *fptr);
 extern C3DaysDrawWin;
@@ -272,19 +274,8 @@ extern I64i FSize(U8i *);
 extern I64i FUnixTime(U8i *);
 extern U8i *GetClipboardText();
 extern U8i *SetClipboardText(U8i *);
-extern U0 __Del(U8 *);
-public extern U8 *DirCur();
 public extern U8i *CAlloc(I64i size,CTask *t=0);
 public extern U0i TOSPrint(U8i *,...);
-public extern U8i *__FileRead(U8i *filename,I64i *_size=0,CTask *t=0);
-public extern I64i __FileWrite(U8i *filename,
-	U8i *fbuf,I64i size);
-public extern U8 *DirNameAbs(U8i *dirname);
-public extern U8 *FileNameAbs(U8i *dirname);
-public extern Bool Cd(U8i *dirname=0);
-public extern Bool IsDir(U8i *dir_name); //TODO
-public extern Bool DirMk(U8i *filename); //TODO
-public extern U8 **__Dir(U8i *); //TODO
 public extern U0 Exit();
 public extern U8 *__GetStr(U8 *pmt="");
 extern U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
@@ -2799,7 +2790,7 @@ class CISOPriDesc
 #define MT_DVD		2
 
 //CDirEntry flags (Used by \dLK,"FileMgr",A="MN:FileMgr"\d())
-#define CDIR_FILENAME_LEN	2048 //Must include terminator zero
+#define CDIR_FILENAME_LEN	38 //Must include terminator zero
 public class CDirEntry
 {
   CDirEntry *next,*parent,*sub;
@@ -2885,7 +2876,8 @@ public class CDirEntry
 #define BDT_ISO_FILE_READ	3
 #define BDT_ISO_FILE_WRITE	4
 #define BDT_ATAPI		5
-#define BDT_TYPES_NUM		6
+#define BDT_VIRT		6
+#define BDT_TYPES_NUM		7
 
 #define BDF_REMOVABLE		0x001
 #define BDF_INITIALIZED		0x002
@@ -2943,6 +2935,7 @@ public class CBlkDev
 #define FSt_NTFS	4 //Not Supported
 #define FSt_UNKNOWN	5
 #define FSt_TYPES_NUM	6
+#define FSt_VIRT	7
 #define FSG_TYPE_MASK	0x7FFF
 //File system type flags
 #define FStf_DISABLE	15
@@ -3045,6 +3038,7 @@ public class CFile //See \dLK,"::/Demo/Dsk/DataBase.HC"\d.
   CDrv	*dv;
   I64	fblk_num,clus,file_clus_num,max_blk;
   U8	*clus_buf;
+  U8	*_3days_virt; //points to FILE * from C
 };
 
 #define _CFG_HEAP_DBG FALSE
@@ -4258,8 +4252,6 @@ extern I64 PopUpColor(U8 *header=NULL,
 	Bool allow_transparent=TRUE,Bool allow_dft=TRUE);
 extern I64 PopUpColorLighting(U8 *header=NULL);
 extern I64 PopUpColorDither(U8 *header=NULL);
-extern U8 *FileRead(U8 *fn,I64 *len=NULL,CTask *t=NULL) ;
-extern U8 *FileWrite(U8 *fn,I64 *len=NULL,CTask *t=NULL) ;
 extern Bool IsDotZ(U8 *filename);
 extern Bool IsDotC(U8 *filename);
 extern U8 *ExpandBuf(CArcCompress *arc,CTask*);
@@ -6007,7 +5999,6 @@ extern CTask *adam_task;
 extern Bool YorN();
 extern I64 PressAKey();
 extern Bool AreYouSure();
-public extern Bool Del(U8 *f1);
 public extern U32 char_bmp_alpha[16],char_bmp_alpha_numeric[16],
 char_bmp_alpha_numeric_no_at[16],	char_bmp_word[16],
 char_bmp_dec_numeric[16],		char_bmp_hex_numeric[16],
@@ -6375,4 +6366,157 @@ extern U8 *PopUpGetStr2(U8 *header,CTask *mem_task);
 extern U0 Decrypt(U8 *ciphertext=NULL,U8 *decryptedtext=NULL,U64 textlen=0,U8 *key=NULL,U64 keylen=0);
 extern U0 Decrypt(U8 *ciphertext=NULL,U8 *decryptedtext=NULL,U64 textlen=0,U8 *key=NULL,U64 keylen=0);
 extern U8i IsValidPtr(U8i *ptr,I64 sz=1);
-extern Bool IsEncryptedRight(U8 *file);
+extern Bool IsEncryptedRight(U8 *file);
+extern U8 Drv2Let(CDrv *dv=NULL);
+extern CBlkDev *BlkDevChk(CBlkDev *bd,Bool except=TRUE);
+extern CDrv *Let2Drv(U8 drv_let=0,Bool except=TRUE);
+extern Bool RedSeaValidate(U8 drv_let);
+extern U0 RedSeaInit(CDrv *dv);
+extern U0 RedSeaFmt(U8 drv_let,Bool quick=TRUE);
+extern U0 DskCacheInvalidate(CDrv *dv);
+extern U0 DskCacheInit(I64 size_in_U8s);
+extern I64 DskCacheHash(I64 blk);
+extern U0 DskCacheQueRem(CCacheBlk *tmpc);
+extern U0 DskCacheQueIns(CCacheBlk *tmpc);
+extern CCacheBlk *DskCacheFind(CDrv *dv,I64 blk);
+extern U0 DskCacheAdd(CDrv *dv,U8 *buf, I64 blk, I64 cnt);
+extern I64 Let2BlkDevType(U8 drv_let);
+extern U0 DrvBlkDevDel(CBlkDev *bd);
+extern CDrv *DrvChk(CDrv *dv,Bool except=TRUE);
+extern U8 Let2Let(U8 drv_let=0);
+extern U0 RedSeaFreeFreeLst(CDrv *dv);
+extern Bool BlkRead(CDrv *dv,U8 *buf, I64 blk, I64 cnt);
+extern Bool BlkWrite(CDrv *dv,U8 *buf, I64 blk, I64 cnt);
+extern Bool ISOInit(CDrv *dv,I64 blk);
+extern Bool Drv(U8 drv_let);
+extern I64 RedSeaAllocClus(CDrv *dv,I64 cnt);
+extern I64 FAT32AllocContiguousClus(CDrv *dv,I64 cnt);
+extern I64 FAT32AllocClus(CDrv *dv,I64 c,I64 cnt);
+extern Bool CFileNameTo(U8 *dst,U8 *src);
+#help_index "File/Cmd Line (Typically);Cmd Line (Typically)"
+public extern Bool Cd(U8 *dirname=NULL,Bool make_dirs=FALSE);
+public extern I64 Del(U8 *files_find_mask,Bool make_mask=FALSE,
+	Bool del_dir=FALSE,Bool print_msg=TRUE);
+public extern I64 Dir(U8 *files_find_mask="*",Bool full=FALSE);
+public extern Bool DirMk(U8 *filename,I64 entry_cnt=0);
+public extern Bool Drv(U8 drv_let);
+public extern U0 DskChg(U8 drv_let=0);
+public extern U0 HomeSet(U8 *dirname);
+
+#help_index "File/Cmd Line (Typically);Cmd Line (Typically);Install"
+public extern Bool DrvMap(U8 drv_let,CDrv *dv);
+
+#help_index "File/FileNames"
+extern CDirEntry *Cd2DirEntry(CDirEntry *tmpde,U8 *abs_name);
+public extern U8 *DirCur(CTask *task=NULL,CTask *mem_task=NULL);
+public extern U8 *DirFile(U8 *dirname,U8 *name=NULL,U8 *_extension=NULL);
+public extern U8 *DirNameAbs(U8 *dirname);
+public extern CBlkDev *DrvIsWritable(U8 drv_let=0,Bool except=FALSE);
+public extern U8 *ExtChg(U8 *filename,U8 *extension);
+public extern U8 *ExtDft(U8 *filename,U8 *extension);
+public extern U8 *FileExtDot(U8 *src);
+public extern U8 *FileExtRem(U8 *src,U8 *dst=NULL);
+public extern U8 *FileNameAbs(U8 *filename,I64 fuf_flags=0);
+public extern Bool FileNameChk(U8 *filename);
+public extern Bool FilesFindMatch(U8 *_test_name,
+	U8 *files_find_mask,I64 fuf_flags=0);
+public extern Bool IsDir(U8 *dir_name);
+public extern Bool IsDotC(U8 *filename);
+public extern Bool IsDotZ(U8 *filename);
+public extern U0 PutDirLink(U8 *dirname,U8 *full_name=NULL);
+public extern U0 PutFileLink(U8 *filename,U8 *full_name=NULL,
+	I64 line=0,Bool plain_text=FALSE);
+public extern U0 ToFileLine(U8 *_fl_file_line,U8 **_filename,I64 *_linenum);
+public extern U8 *ToggleZorNotZ(U8 *name);
+
+#help_index "File/FileNames;Misc"
+public extern U8 *FileNameTmpTxt();
+
+#help_index "File/Internal"
+public extern U0 DirContextDel(CDirContext *dirc,Bool restore=TRUE);
+public extern CDirContext *DirContextNew(U8 *mask,
+	Bool make_mask=FALSE,Bool make_dirs=FALSE,Bool no_mask=FALSE);
+public extern Bool DirNew(CDrv *dv,U8 *cur_dir,
+	CDirEntry *tmpde,Bool free_old_chain=TRUE);
+extern I64 FileAttr(U8 *name,I64 old_attr=0);
+
+#help_index "File/Low Level"
+#help_file "::/Doc/FileLowLevel"
+public extern CBlkDev *BlkDevChk(CBlkDev *bd,Bool except=TRUE);
+public extern U0 BlkDevDel(CBlkDev *bd);
+public extern Bool BlkDevLock(CBlkDev *bd);
+public extern CBlkDev *BlkDevNextFreeSlot(U8 first_drv_let,I64 type);
+public extern Bool BlkDevUnlock(CBlkDev *bd,Bool rst=FALSE);
+public extern U0 BlkDevsRelease();
+public extern Bool BlkRead(CDrv *dv,U8 *buf, I64 blk, I64 cnt);
+public extern Bool BlkWrite(CDrv *dv,U8 *buf, I64 blk, I64 cnt);
+public extern U0 BlkWriteZero(CDrv *dv,I64 blk,I64 cnt);
+public extern I64 Clus2Blk(CDrv *dv,I64 c);
+public extern I64 ClusAlloc(CDrv *dv,I64 c=0,
+	I64 cnt=1,Bool contiguous=FALSE);
+public extern I64 ClusBlkRead(CDrv *dv,U8 *buf,I64 c,I64 blks);
+public extern I64 ClusBlkWrite(CDrv *dv,U8 *buf,I64 c,I64 blks);
+public extern I64 ClusNumNext(CDrv *dv,I64 c,I64 cnt=1);
+public extern I64 ClusRead(CDrv *dv,U8 *buf,I64 c,I64 cnt);
+public extern I64 ClusWrite(CDrv *dv,U8 *buf,I64 c,I64 cnt);
+extern Bool CopySingle(U8 *f1,U8 *f2); //Just one file
+public extern U8 Drv2Let(CDrv *dv=NULL);
+public extern CDrv *DrvChk(CDrv *dv,Bool except=TRUE);
+public extern U0 DrvDel(CDrv *dv);
+public extern Bool DrvLock(CDrv *dv);
+public extern CDrv *DrvMakeFreeSlot(U8 drv_let);
+public extern U8 *DrvModelNum(U8 drv_let=0);
+public extern U8 DrvNextFreeLet(U8 first_drv_let='C');
+public extern U8 *DrvSerialNum(U8 drv_let=0);
+public extern U8 DrvTextAttrGet(U8 drv_let=0);
+public extern Bool DrvUnlock(CDrv *dv,Bool rst=FALSE);
+public extern U0 DrvsRelease();
+extern U0 FAT32FreeClus(CDrv *dv,I64 c);
+public extern CBlkDev *Let2BlkDev(U8 drv_let=0,Bool except=TRUE);
+public extern I64 Let2BlkDevType(U8 drv_let);
+public extern CDrv *Let2Drv(U8 drv_let=0,Bool except=TRUE);
+public extern U8 Let2Let(U8 drv_let=0);
+extern I64 Name2DirClus(CDrv *dv,U8 *dirname);
+extern I64 Name2ParentDirClus(CDrv *dv,U8 *dirname);
+extern U0 RedSeaFreeClus(CDrv *dv,I64 c,I64 cnt);
+public extern U0 DVDImageRead(U8 dvd_drv_let,U8 *out_name);
+public extern U0 DVDImageWrite(U8 dvd_drv_let,
+	U8 *in_name=NULL,I64 media_type=MT_DVD);
+public extern Bool FBlkRead(CFile *f,U8 *buf,I64 blk=FFB_NEXT_BLK,I64 cnt=1);
+public extern Bool FBlkWrite(CFile *f,U8 *buf,I64 blk=FFB_NEXT_BLK,I64 cnt=1);
+public extern U0 FClose(CFile *f);
+public extern CFile *FOpen(U8 *filename,U8 *flags,I64 cnt=0);
+public extern I64 FSize(CFile *f);
+
+extern I64 RedSeaAllocClus(CDrv *dv,I64 cnt);
+extern Bool RedSeaDirNew(CDrv *dv,U8 *cur_dir,CDirEntry *tmpde,
+	Bool free_old_chain);
+extern Bool RedSeaFileFind(CDrv *dv,I64 cur_dir_clus,U8 *name,
+	CDirEntry *_res,I64 fuf_flags=0);
+extern U0 RedSeaFmt(U8 drv_let,Bool quick=TRUE);
+extern U0 RedSeaFreeFreeLst(CDrv *dv);
+extern U0 RedSeaInit(CDrv *dv);
+extern Bool RedSeaValidate(U8 drv_let);
+extern I64 FAT32AllocClus(CDrv *dv,I64 c,I64 cnt);
+extern I64 FAT32AllocContiguousClus(CDrv *dv,I64 cnt);
+extern Bool FAT32DirNew(CDrv *dv,U8 *cur_dir,CDirEntry *tmpde,
+	Bool free_old_chain);
+extern Bool FAT32FileFind(CDrv *dv,I64 cur_dir_clus,U8 *name,
+	CDirEntry *_res,I64 fuf_flags=0);
+extern U0 FAT32Init(CDrv *dv);
+extern U8 Drv2Let(CDrv *dv=NULL);
+extern U0 DrvBlkDevDel(CBlkDev *bd);
+extern CDrv *DrvChk(CDrv *dv,Bool except=TRUE);
+extern U8 DrvTextAttrGet(U8 drv_let=0);
+extern Bool DrvTypeSet(U8 drv_let,I64 type=FSt_REDSEA);
+extern U0 DrvsRelease();
+extern U0 DskCacheInvalidate(CDrv *dv);
+extern U8 *FileExtRem(U8 *src,U8 *dst=NULL);
+extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0);
+extern U8 *FileNameAbs(U8 *_filename,I64 fuf_flags=0);
+extern U8 *FileRead(U8 *filename,I64 *_size=NULL,I64 *_attr=NULL);
+extern I64 FileWrite(U8 *filename,U8 *fbuf,I64 size,CDate cdt=0,I64 attr=0);
+extern CDirEntry *VirtFilesFind(U8 *files_find_mask,I64 fuf_flags,
+	CDirEntry *parent=NULL);
+public extern U8 MountFile(U8 *filename);
+public extern U0 Unmount(U8 drv_let=0);

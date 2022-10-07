@@ -11,8 +11,6 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <time.h>
-extern int64_t HCSetJmp(void *ptr);
-extern void HCLongJmp(void *ptr);
 #include <stddef.h>
 #include <stdalign.h>
 #ifdef TARGET_WIN32
@@ -164,28 +162,6 @@ void* FileRead(char *fn,int64_t *sz) {
     if(sz) *sz=len;
     return data;
 }
-static char **__Dir(char *fn) {
-	int64_t sz;
-	char **ret;
-    fn=__VFsFileNameAbs(fn);
-    DIR *dir=opendir(fn);
-    if(!dir) {
-        TD_FREE(fn);
-        return NULL;
-    }
-    struct dirent *ent;
-    vec_str_t items;
-    vec_init(&items);
-    while(ent=readdir(dir))
-        vec_push(&items,HolyStrDup(ent->d_name));
-    vec_push(&items,NULL);
-    TD_FREE(fn);
-    sz=items.length*sizeof(char*);
-    ret=memcpy(HolyMAlloc(sz),items.data,sz);
-    vec_deinit(&items);
-    closedir(dir);
-    return ret;
-}
 static void STK_InteruptCore(int64_t *stk) {
 	InteruptCore(stk[0]);
 }
@@ -307,59 +283,6 @@ int64_t STK_ForeachFunc(int64_t *stk) {
 int64_t STK_TOSPrint(int64_t *stk) {
     TOSPrint(stk[0],stk[1],stk+2);
 }
- int64_t STK_Del(int64_t *stk) {
-	return VFsDel(stk[0]);
-}
-int64_t STK_FOpen(int64_t *stk) {
-	char *fn=__VFsFileNameAbs(stk[0]);
-    FILE *f=fopen(fn,stk[1]);
-    TD_FREE(fn);
-    return f;
-}
-int64_t STK_FClose(int64_t *stk) {
-    return fclose(stk[0]);
-}
-#define NEXT_BLK 0x7FFFFFFFFFFFFFFFll
-int64_t STK_FBlkRead(int64_t *stk) {
-    if(NEXT_BLK!=stk[2]) {
-        fseek(stk[0],stk[2]*(1<<9),SEEK_SET);
-    }
-    return fread(stk[1],1<<9,stk[3],stk[0]);
-}
-int64_t STK_FBlkWrite(int64_t *stk) {
-    if(NEXT_BLK!=stk[2]) {
-        fseek(stk[0],stk[2]*(1<<9),SEEK_SET);
-    }
-    return fwrite(stk[1],1<<9,stk[3],stk[0]);
-}
-int64_t STK___Move(int64_t *stk) {
-	return __Move(stk[0],stk[1]);
-}
-int64_t STK_Cd(int64_t *stk) {
-    return VFsCd(stk[0],0);
-}
-int64_t STK_DirCur(int64_t *stk) {
-    char *d=VFsDirCur(),*r;
-    r=HolyStrDup(d);
-    TD_FREE(d);
-    return r;
-}
-int64_t STK_DirMk(int64_t *stk) {
-	char *d=VFsDirCur();
-    int r=VFsCd(stk[0],VFS_CDF_MAKE);
-    VFsCd(d,0);
-    TD_FREE(d);
-    return r;
-}
-int64_t STK_FileNameAbs(int64_t *stk) {
-    char *a=VFsFileNameAbs(stk[0]),*r;
-    r=HolyStrDup(a);
-    TD_FREE(a);
-    return r;
-}
-int64_t STK___Dir(int64_t *stk) {
-    return __Dir(stk[0]);
-}
 int64_t STK_memset(int64_t *stk) {
     return memset(stk[0],stk[1],stk[2]);
 }
@@ -473,9 +396,6 @@ int64_t STK_FUnixTime(int64_t *stk) {
 int64_t STK___FExists(int64_t *stk) {
 	return VFsFileExists(stk[0]);
 }
-int64_t STK_ChDrv(int64_t *stk) {
-	return VFsChDrv(stk[0]);
-}
 #ifndef TARGET_WIN32
 #include <time.h>
 int64_t STK_Now(int64_t *stk) {
@@ -522,6 +442,52 @@ int64_t STK_NewVirtualChunk(int64_t *stk) {
 int64_t STK_FreeVirtualChunk(int64_t *stk) {
 	FreeVirtualChunk(stk[0],stk[1]);
 }
+int64_t STK_VFsSetPwd(int64_t *stk) {
+    VFsSetPwd(stk[0]);
+    return 1;
+}
+int64_t STK_VFsExists(int64_t *stk) {
+	return VFsFileExists(stk[0]);
+}
+int64_t STK_VFsIsDir(int64_t *stk) {
+	return VFsIsDir(stk[0]);
+}
+int64_t STK_VFsFileSize(int64_t *stk) {
+	return VFsFSize(stk[0]);
+}
+int64_t STK_VFsFRead(int64_t *stk) {
+	return VFsFileRead(stk[0],stk[1]);
+}
+int64_t STK_VFsFWrite(int64_t *stk) {
+	return VFsFileWrite(stk[0],stk[1],stk[2]);
+}
+int64_t STK_VFsDirMk(int64_t *stk) {
+	return VFsCd(stk[0],VFS_CDF_MAKE);
+}
+int64_t STK_VFsDir(int64_t *stk) {
+	return VFsDir(stk[0]);
+}
+int64_t STK_VFsDel(int64_t *stk) {
+	return VFsDel(stk[0]);
+}
+int64_t STK_VFsFOpenW(int64_t *stk) {
+	return VFsFOpen(stk[0],"wb+");
+}
+int64_t STK_VFsFOpenR(int64_t *stk) {
+	return VFsFOpen(stk[0],"rb");
+}
+int64_t STK_VFsFClose(int64_t *stk) {
+	fclose(stk[0]);
+}
+int64_t STK_VFsFBlkRead(int64_t *stk) {
+	fread(stk[0],stk[1],stk[2],stk[3]);
+}
+int64_t STK_VFsFBlkWrite(int64_t *stk) {
+	fwrite(stk[0],stk[1],stk[2],stk[3]);
+}
+int64_t STK_VFsFSeek(int64_t *stk) {
+	fseek(stk[1],stk[0],SEEK_SET);
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
@@ -534,7 +500,6 @@ void TOS_RegisterFuncPtrs() {
 	STK_RegisterFunctionPtr(&ffi_blob,"FreeVirtualChunk",STK_FreeVirtualChunk,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CmdLineBootText",CmdLineBootText,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"Exit3Days",__Shutdown,0);
-	STK_RegisterFunctionPtr(&ffi_blob,"ChDrv",STK_ChDrv,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"__GetStr",STK___GetStr,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"__IsCmdLine",IsCmdLine,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"__FExists",STK___FExists,1);
@@ -547,10 +512,6 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"__SleepUntilValue",STK___SleepUntilValue,3);
     STK_RegisterFunctionPtr(&ffi_blob,"SetClipboardText",STK_SetClipboardText,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetClipboardText",STK_GetClipboardText,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"FOpen",STK_FOpen,3);
-    STK_RegisterFunctionPtr(&ffi_blob,"FClose",STK_FClose,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"FBlkRead",STK_FBlkRead,4);
-    STK_RegisterFunctionPtr(&ffi_blob,"FBlkWrite",STK_FBlkWrite,4);
     STK_RegisterFunctionPtr(&ffi_blob,"SndFreq",STK_SndFreq,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__Sleep",&STK_Sleep,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetFs",STK_GetFs,0);
@@ -559,8 +520,6 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"SetMSCallback",STK_SetMSCallback,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__GetTicks",STK___GetTicks,0);
     STK_RegisterFunctionPtr(&ffi_blob,"__BootstrapForeachSymbol",STK_ForeachFunc,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__FileRead",STK_FileRead,3);
-    STK_RegisterFunctionPtr(&ffi_blob,"__FileWrite",STK_FileWrite,3);
     STK_RegisterFunctionPtr(&ffi_blob,"IsDir",STK_IsDir,1);
     STK_RegisterFunctionPtr(&ffi_blob,"DrawWindowDel",STK_DrawWindowDel,1);
     STK_RegisterFunctionPtr(&ffi_blob,"DrawWindowUpdate",STK_DrawWindowUpdate,4);
@@ -568,13 +527,6 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"UnblockSignals",UnblockSignals,0);
     //SPECIAL
     STK_RegisterFunctionPtr(&ffi_blob,"TOSPrint",STK_TOSPrint,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"FileNameAbs",STK_FileNameAbs,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"DirNameAbs",STK_FileNameAbs,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__Dir",STK___Dir,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"Cd",STK_Cd,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"DirCur",STK_DirCur,0);
-    STK_RegisterFunctionPtr(&ffi_blob,"DirMk",STK_DirMk,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__Del",STK_Del,1);
     #ifdef USE_NETWORKING
     STK_RegisterFunctionPtr(&ffi_blob,"DyadInit",&STK_DyadInit,0);
     STK_RegisterFunctionPtr(&ffi_blob,"DyadUpdate",&STK_DyadUpdate,0);
@@ -589,10 +541,25 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"DyadSetReadCallback",STK_DyadSetReadCallback,3);
     STK_RegisterFunctionPtr(&ffi_blob,"DyadSetOnListenCallback",STK_DyadSetOnListenCallback,3);
     #endif
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsSetPwd",STK_VFsSetPwd,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsExists",STK_VFsExists,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsIsDir",STK_VFsIsDir,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsFSize",STK_VFsFileSize,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsFRead",STK_VFsFRead,2);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsFWrite",STK_VFsFWrite,3);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsDel",STK_VFsDel,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsDir",STK_VFsDir,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsDirMk",STK_VFsDirMk,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GrPaletteColorSet",STK_GrPalleteSet,2);
     STK_RegisterFunctionPtr(&ffi_blob,"GrPaletteColorGet",STK_GrPalleteGet,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetCipherPasswd",GetCipherPasswd,0);
     STK_RegisterFunctionPtr(&ffi_blob,"__IsValidPtr",IsValidPtr,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsFBlkRead",STK_VFsFBlkRead,4);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsFBlkWrite",STK_VFsFBlkWrite,4);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsFOpenW",STK_VFsFOpenW,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsFOpenR",STK_VFsFOpenR,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsFClose",STK_VFsFClose,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsFSeek",STK_VFsFSeek,2);
     char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);

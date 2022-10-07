@@ -541,20 +541,22 @@ U0 CoreAPSethTask()
       do PAUSE
       while (LBts(&ctrl->flags,JOBCf_LOCKED));
     } while (ctrl->next_waiting!=ctrl && JobRunOne(GetRFlags,ctrl));
-    //LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
+//LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
     LBtr(&ctrl->flags,JOBCf_LOCKED);
     LBts(&(Fs->task_flags),TASKf_IDLE);
     ms=100,t=__GetTicks;
     for(task=Fs->next_task;task!=task1;task=task->next_task) {
-		if(Bt(&task->task_flags,TASKf_SUSPENDED)||Bt(&task->task_flags,TASKf_AWAITING_MSG))
-			goto next;
-		if(task->wake_jiffy&&task->wake_jiffy-t<ms)
-			ms=task->wake_jiffy-t;
-		next:
+      if(Bt(&task->task_flags,TASKf_SUSPENDED)||Bt(&task->task_flags,TASKf_AWAITING_MSG))
+        goto next;
+      if(!task->wake_jiffy)
+        ms=0;
+      else if(task->wake_jiffy-t<ms)
+        ms=task->wake_jiffy-t;
+next:
     }
     if(ms>=0) {
-	Gs->idle_pt_hits+=ms;
-	__Sleep(ms);
+      Gs->idle_pt_hits+=ms;
+      __Sleep(ms);
     }
     Yield;
     LBtr(&(Fs->task_flags),TASKf_IDLE);

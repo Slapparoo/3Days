@@ -213,10 +213,10 @@ U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode)
   }
   DocPrint(doc,"$$LTBLUE$$");
   od=DirCur;
-  for (i=0;i<'Z'-'A';i++) {
-    st=MStrPrint("%C:/",i+'A');
-    if(Cd(st))
-      tmpde=FMRebuildDocDrv(i+'A',doc,_head,TRUE);
+  for (i=0;i<DRVS_NUM;i++) {
+    dv=&blkdev.drvs[i];
+    if (dv->fs_type==FSt_REDSEA || dv->fs_type==FSt_FAT32 || dv->fs_type==FSt_VIRT)
+      FMRebuildDocDrv(Drv2Let(dv),doc,_head,TRUE);
   }
   Cd(od);
   Free(od);
@@ -338,12 +338,11 @@ U0 FMMountISO(CDoc *doc)
   CDocEntry *doc_ce=doc->cur_entry;
   CDirEntry *tmpde;
   if (doc_ce->type_u8==DOCT_MENU_VAL && (tmpde=doc_ce->user_data))
-    ;//MountFile(tmpde->full_name);
+    MountFile(tmpde->full_name);
 }
 
 U0 FMUnmount(CDoc *doc)
 {
-  /*
   CDocEntry *doc_ce=doc->cur_entry;
   CDirEntry *tmpde;
   I64 drv_let;
@@ -356,9 +355,8 @@ U0 FMUnmount(CDoc *doc)
       tmpde=tmpde->parent;
     drv_let=*tmpde->full_name;
     if (Let2BlkDev(drv_let)!=Let2BlkDev(':'))
-      ;//Unmount(drv_let);
+      Unmount(drv_let);
   }
-  */
 }
 
 U0 FMFmtDrv(CDoc *doc)

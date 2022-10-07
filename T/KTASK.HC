@@ -70,6 +70,9 @@ return task;
     return task->parent_task;
   }
 
+  DrvsRelease;
+  BlkDevsRelease;
+
   tmpt1=(&task->next_child_task)(U8 *)-offset(CTask.next_sibling_task);
   tmpt=tmpt1->next_sibling_task;
   if (tmpt!=tmpt1) {
@@ -211,7 +214,7 @@ I64 ExeCmdLine(CCmpCtrl *cc)
 }
 Bool TaskValidate(CTask *task)
 {//return TRUE if task looks valid.
-  if(!__IsValidPtr(&task->task_signature)||!task)
+  if(!__IsValidPtr(&task->task_signature)||!task)
     return FALSE;
   if(task->task_signature!=TASK_SIGNATURE_VAL)
     return FALSE;
@@ -260,16 +263,15 @@ I64 TaskInit(CTask *task,I64 stk_size)
   task->win_right	=text.cols-2;
   task->win_top		=13;
   task->win_bottom	=text.rows-2;
-
-    /*
+/*
   if (blkdev.home_dir) {//Beware Adam \dLK,"TaskInit",A="FF:::/Kernel/KStart64.HC,TaskInit"\d. I guess ok until \dLK,"DskChg",A="FF:::/Kernel/KMain.HC,DskChg"\d().
     task->cur_dv=blkdev.let_to_drv[*blkdev.home_dir-'A'];
     task->cur_dir=StrNew(blkdev.home_dir+2,task);
   } else
     task->cur_dir=StrNew("/Home",task);
-    */
-    //TODO Restore
-    task->cur_dir=StrNew(Fs->cur_dir,task);
+*/
+  task->cur_dv=Fs->cur_dv;
+  task->cur_dir=StrNew(Fs->cur_dir,task);
   return task;
 }
 CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
@@ -345,7 +347,7 @@ U0 UserCmdLine(I64 dummy=0)
   UserStartUp;
   UserTaskCont;
 }
-
+
 CTask *User(U8 *fmt=NULL,...)
 {//Create user term task.
   U8 *st;

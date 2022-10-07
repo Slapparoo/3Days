@@ -34,15 +34,19 @@ asm {
 
 };
 U0 LoadImps() {
-  ExePrint2("#define FPTRS\n;;");
-  ExePutS2(KERNELA_BIN,"/KERNELA.HH");
-  __BootstrapForeachSymbol(&BootstrapImportSymbol);
+  try {
+    ExePutS2("#define FPTRS\n;;");
+    ExePutS2(KERNELA_BIN,"/KERNELA.HH");
+    __BootstrapForeachSymbol(&BootstrapImportSymbol);
 //Load asm externs second
-  ExePrint2("#define BOOT_3DAYS\n;;");
-  ExePutS2(KERNELB_BIN,"/KERNELB.HH");
+    ExePrint2("#define BOOT_3DAYS\n;;");
+    ExePutS2(KERNELB_BIN,"/KERNELB.HH");
+  } catch {
+    TOSPrint("FDSF:%s\n",&(Fs->except_ch));
+    Fs->catch_except=TRUE;
+  };
 }
 static U0 StartUpCore1(I64) {
-  ACInit("/KERNEL*.HH*");
 }
 U0 StartUpTasks()
 {
@@ -55,7 +59,8 @@ U0 StartUpTasks()
     ExeFile("/WallPaper.HC.Z");
     ExePrint("WallPaperInit;;");
   } catch
-    PutExcept;
+    PutExcept;
+  ACInit("/KERNEL*.HH*");
   AutoComplete(ON);
 }
 U0 Adam(U8 *) {
@@ -75,7 +80,7 @@ U0 Adam(U8 *) {
 		DbgInfoRead("HCRT_BC.DBG.Z");
 #endif
         if(__CmdLineBootText)
-          ExePrint2("%s;\n",__CmdLineBootText);
+          ExePrint2("%s;\n",__CmdLineBootText);
 	if(!__IsCmdLine) {
 		sys_winmgr_task=Spawn(&WinMgrTask);
 		//Grab pointer
@@ -94,4 +99,4 @@ Gs->seth_task=Spawn(&CoreAPSethTask,NULL,"Seth");
 //Our entering thread doesnt have a cur_thrd,so spawn one
 adam_task=Spawn(&Adam,NULL,"Adam",,);
 //Dont Exit
-DeathWait(adam_task);
+DeathWait(&adam_task);
