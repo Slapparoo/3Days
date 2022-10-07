@@ -123,7 +123,7 @@ return task;
   LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);
   return tmpt;
 }
-U0 Exit() {
+U0 Exit() {
 	LBts(&(Fs->task_flags),TASKf_KILL_TASK);
 	Yield();
 }
@@ -347,7 +347,7 @@ U0 UserCmdLine(I64 dummy=0)
   UserStartUp;
   UserTaskCont;
 }
-
+
 CTask *User(U8 *fmt=NULL,...)
 {//Create user term task.
   U8 *st;

@@ -159,7 +159,7 @@ U8 *idx=NULL,CDoc *doc=NULL)
   I64 cnt,i,j,k,f=0;
   U8 buf[512],*last_idx=StrNew(""),*cur_idx,*comment;
   Bool recurse,publics,map;
-  CTask *task;
+  CTask *task,*ofocus;
 
   ScanFlags(&f,Define("ST_FILE_UTIL_FLAGS"),"+r");
   ScanFlags(&f,Define("ST_FILE_UTIL_FLAGS"),fu_flags);
@@ -172,9 +172,14 @@ U8 *idx=NULL,CDoc *doc=NULL)
   if (!h) h=Fs->hash_table;
 
   if (idx) {
+    ofocus=sys_focus_task;
     task=User;
     TaskWait(task);
     LBtr(&task->display_flags,DISPLAYf_SHOW);
+//We spawn an invisilbe window,but we to keep it alive to avoid it's memory running away
+//So we focus to the next window and make it so you cant accidently select it
+    LBts(&task->win_inhibit,WIf_SELF_FOCUS);
+    sys_focus_task=ofocus;
   } else
     task=NULL;
 
@@ -276,7 +281,7 @@ U8 *idx=NULL,CDoc *doc=NULL)
 	  StrPrint(buf,"%010X   ",ptr(CHashGlblVar *)->data_addr);
 	else
 	  StrPrint(buf,"%010X   ",HashVal(ptr));
-	j=MSize(ptr);
+	j=MSize(ptr);
 	if (j==-1)
 	  CatPrint(buf," %04X            ",ptr->use_cnt);
 	else

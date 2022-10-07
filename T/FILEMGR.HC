@@ -2,7 +2,7 @@
 U0 DirFileDoc(CDoc *doc,CDirEntry *tmpde)
 {
   while (tmpde) {
-    if (IsDir(tmpde->full_name)) {
+    if (tmpde->attr & RS_ATTR_DIR) {
       tmpde->user_data=DocPrint(doc,"$$TR,\"%s\",U=0x%X$$",tmpde->name,tmpde);
       DocPrint(doc,"\n$$ID,+2$$");
       if (tmpde->sub)
@@ -18,6 +18,9 @@ U0 DirFileDoc(CDoc *doc,CDirEntry *tmpde)
 
 #help_index "File/Cmd Line (Typically);Cmd Line (Typically)"
 
+#define FM_NORMAL	0
+#define FM_PICK_FILE	1
+#define FM_PICK_DIR	2
 
 class CFMUncollapsedLst
 {
@@ -138,13 +141,16 @@ CDirEntry *FMRebuildDocDrv(U8 drv_let,CDoc *doc,CDirEntry **_head,Bool init)
   return tmpde;
 }
 
+#define DEF2_PROCESSED		1
+#define DEF2_NOT_INITIALIZED	2
+
 U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode)
 {
   CDrv *dv;
   I64 i;
-  CDoc *doc=*_doc,*doc2=NULL,*parent_doc;
+  CDoc *doc=*_doc,*doc2=sys_clip_doc,*parent_doc;
   CFMUncollapsedLst *tmpc=NULL;
-  U8 *cur_entry=NULL,*next_entry=NULL,*st,*od;
+  U8 *cur_entry=NULL,*next_entry=NULL;
   CDocEntry *doc_ce;
   CDirEntry *tmpde,*tmpde1,*cur_tree_entry;
   if (!doc)
@@ -212,17 +218,15 @@ U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode)
       break;
   }
   DocPrint(doc,"$$LTBLUE$$");
-  od=DirCur;
   for (i=0;i<DRVS_NUM;i++) {
     dv=&blkdev.drvs[i];
     if (dv->fs_type==FSt_REDSEA || dv->fs_type==FSt_FAT32 || dv->fs_type==FSt_VIRT)
-      FMRebuildDocDrv(Drv2Let(dv),doc,_head,TRUE);
+      FMRebuildDocDrv(Drv2Let(dv),doc,_head,TRUE);
   }
-  Cd(od);
-  Free(od);
   DocTop(doc);
   FMMarkUncollapsed(doc,tmpc,cur_entry,next_entry);
   DocCenter(doc);
+  DocRst(doc2,TRUE);
   FMDelUncollapsedLst(tmpc);
   Free(cur_entry);
   Free(next_entry);
@@ -327,8 +331,7 @@ U0 FMChgDsk(CDoc *doc)
     while (tmpde->parent)
       tmpde=tmpde->parent;
     Silent;
-    Cd(*tmpde->full_name);
-    Cd("/");
+    DskChg(*tmpde->full_name);
     Silent(OFF);
   }
 }
@@ -361,7 +364,6 @@ U0 FMUnmount(CDoc *doc)
 
 U0 FMFmtDrv(CDoc *doc)
 {
-  /*
   CDocEntry *doc_ce=doc->cur_entry;
   CDirEntry *tmpde;
   U8 *st=NULL;
@@ -380,7 +382,6 @@ U0 FMFmtDrv(CDoc *doc)
     }
   }
   Free(st);
-  */
 }
 
 U0 FMMakeISO(CDoc *doc)
@@ -396,7 +397,7 @@ U0 FMMakeISO(CDoc *doc)
       tmpde=tmpde->parent;
     if (tmpde && *tmpde->full_name) {
       Silent;
-      //RedSeaISO(,tmpde->full_name);
+      //RedSeaISO(,tmpde->full_name); TODO restroe
       Silent(OFF);
     }
   }
@@ -404,7 +405,6 @@ U0 FMMakeISO(CDoc *doc)
 
 U0 FMBurnISO(CDoc *doc)
 {
-  /*
   CDocEntry *doc_ce=doc->cur_entry;
   CDirEntry *tmpde;
   if (doc_ce->type_u8==DOCT_TREE || doc_ce->type_u8==DOCT_MENU_VAL)
@@ -418,12 +418,11 @@ U0 FMBurnISO(CDoc *doc)
     DVDImageWrite(*tmpde->full_name);
     Silent(OFF);
   }
-  */
 }
 
 U0 FMCopy(CDoc *doc)
 {
-  CDoc *doc2=DocNew;
+  CDoc *doc2=sys_clip_doc;
   U8 *st;
   CDocEntry *doc_ce=doc->cur_entry,*doc_e;
   CDirEntry *tmpde,*tmpde1=NULL,*tmpde2;
@@ -466,11 +465,22 @@ U0 FMCopy(CDoc *doc)
   }
   if (unlock_doc2)
     DocUnlock(doc2);
-  SetClipboardText(st=DocSave(doc2));
-  Free(st);
-  DocDel(doc2);
 }
 
+#define FMR_INCLUDE		0
+#define FMR_ADAM_INCLUDE	1
+#define FMR_DELETE		2
+#define FMR_RENAME		3
+#define FMR_MKDIR		4
+#define FMR_PLAIN		5
+#define FMR_PASTE		6
+#define FMR_CHG_DSK		7
+#define FMR_FORMAT		8
+#define FMR_MOUNT_REDSEA_ISO_C	9
+#define FMR_UNMOUNT		10
+#define FMR_MAKE_REDSEA_ISO_C	11
+#define FMR_BURN_ISO		12
+#define FMR_HELP		13
 
 I64 PopUpFMRight(U8 *header=NULL,U8 *footer=NULL)
 {
@@ -558,6 +568,7 @@ U0 FMFinalScrnUpdate(CDC *dc)
   }
   (*fp_old_final_scrn_update)(dc);
 }
+
 public U8 *FileMgr(I64 mode=FM_NORMAL,CTask *mem_task=NULL)
 {//File manager. Also, used to choose files and dirs.
   CDirEntry *head=NULL,*tmpde,*tmpde1,*tmpde2;
@@ -574,7 +585,7 @@ public U8 *FileMgr(I64 mode=FM_NORMAL,CTask *mem_task=NULL)
   if (tmpde1=Cd2DirEntry(head,old_cur_dir))
     doc->cur_entry=tmpde1->user_data;
   while (tmpde1) {
-    if (IsDir(tmpde1->full_name))
+    if (tmpde1->attr&RS_ATTR_DIR)
       tmpde1->user_data(CDocEntry *)->de_flags&=~DOCEF_CHECKED_COLLAPSED;
     tmpde1=tmpde1->parent;
   }

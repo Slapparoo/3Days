@@ -248,20 +248,20 @@ U0 TaskWait(CTask *task=NULL,Bool cmd_line_pmt=FALSE)
 {//Wait for idle.
   CTask *task1;
   CJob *tmpc1;
+  Bool unlock;
   if (!task) task=Fs;
-  if (TaskValidate(task)) {
-    PUSHFD
-    while (TRUE) {
-      task1=task->last_input_filter_task;
-      tmpc1=&task1->srv_ctrl.next_waiting;
-      if (task1==Fs || !TaskValidate(task1) ||
-	    tmpc1==tmpc1->next && Bt(&task1->task_flags,TASKf_IDLE) &&
-	    (!cmd_line_pmt || Bt(&task1->task_flags,TASKf_CMD_LINE_PMT)))
-	break;
-      Sleep(10);
-    }
-    POPFD
+  \unlock=BreakLock;
+  while (TaskValidate(task)) {
+    task1=task->last_input_filter_task;
+    tmpc1=&task1->srv_ctrl.next_waiting;
+    if (task1==Fs || !TaskValidate(task1) ||
+	  tmpc1==tmpc1->next && Bt(&task1->task_flags,TASKf_IDLE) &&
+	  (!cmd_line_pmt || Bt(&task1->task_flags,TASKf_CMD_LINE_PMT)))
+      break;
+    Yield;
   }
+  if(unlock)
+    BreakUnlock;
 }
 
 U0 PostMsg(CTask *task,I64 msg_code,I64 arg1,I64 arg2,I64 flags=0)
@@ -550,7 +550,7 @@ U0 CoreAPSethTask()
         goto next;
       if(!task->wake_jiffy)
         ms=0;
-      else if(task->wake_jiffy-t<ms)
+      else if(task->wake_jiffy-t<ms)
         ms=task->wake_jiffy-t;
 next:
     }

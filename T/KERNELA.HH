@@ -2790,7 +2790,7 @@ class CISOPriDesc
 #define MT_DVD		2
 
 //CDirEntry flags (Used by \dLK,"FileMgr",A="MN:FileMgr"\d())
-#define CDIR_FILENAME_LEN	38 //Must include terminator zero
+#define CDIR_FILENAME_LEN	38 //Must include terminator zero
 public class CDirEntry
 {
   CDirEntry *next,*parent,*sub;
@@ -6520,3 +6520,5 @@ extern CDirEntry *VirtFilesFind(U8 *files_find_mask,I64 fuf_flags,
 	CDirEntry *parent=NULL);
 public extern U8 MountFile(U8 *filename);
 public extern U0 Unmount(U8 drv_let=0);
+extern CDirEntry *FMRebuildDocDrv(U8 drv_let,CDoc *doc,CDirEntry **_head,Bool init);
+extern U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode);
