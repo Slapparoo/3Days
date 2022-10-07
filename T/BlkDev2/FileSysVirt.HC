@@ -109,7 +109,7 @@ I64 VirtFilesDel(CDrv *dv,U8 *cur_dir,U8 *files_find_mask,I64 fuf_flags,
     for(i=0;dirs[i];i++) {
 	  VirtFileFind(dv,cur_dir,dirs[i],ptr,);
 	  VFsSetPwd(cur_dir);
-	  if(del_dir||!VFsIsDir(dirs[i])&&dirs[i][0]!='.'&&
+	  if((del_dir||!VFsIsDir(dirs[i]))&&dirs[i][0]!='.'&&
 	    FilesFindMatch(ptr->name,files_find_mask,fuf_flags)) {
 	    if (print_msg)
 	      "Del %s\n",ptr->name;
