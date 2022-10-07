@@ -112,7 +112,17 @@ static void *MemNCpy(void *d,void *s,long sz) {
 }
 static int64_t IsValidPtr(int64_t *stk) {
 	#ifdef TARGET_WIN32
-	return !IsBadReadPtr(stk[0],8);
+	//Wine doesnt like the IsBadReadPtr,so use a polyfill
+	//return !IsBadReadPtr(stk[0],8);
+    MEMORY_BASIC_INFORMATION mbi;
+    memset(&mbi,0,sizeof mbi);
+    if(VirtualQuery(stk[0], &mbi, sizeof(mbi))) {
+		//https://stackoverflow.com/questions/496034/most-efficient-replacement-for-isbadreadptr
+        DWORD mask=(PAGE_READONLY|PAGE_READWRITE|PAGE_WRITECOPY|PAGE_EXECUTE_READ|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY);
+        int64_t b=!!(mbi.Protect&mask);
+        return b;
+    }
+    return 0;
 	#else
 	static int64_t ps;
 	if(!ps)
