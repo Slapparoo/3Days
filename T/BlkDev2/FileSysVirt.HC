@@ -30,6 +30,7 @@ Bool VirtFileFind(CDrv *dv,U8 *cur_dir,U8 *name,
   else
     try {
       unlock=DrvLock(dv);
+      VFsSetDrv(dv->drv_let);
       VFsSetPwd(cur_dir);
       at=name;
       if(VFsExists(at)) {
@@ -70,6 +71,7 @@ U8 *VirtFileRead(CDrv *dv,U8 *cur_dir,U8 *filename,I64 *_size,I64 *_attr)
       if (VirtFileFind(dv,cur_dir,filename,&de,FUF_JUST_FILES)) {
 	blk_cnt=(de.size+BLK_SIZE-1)>>BLK_SIZE_BITS;
 	buf=MAlloc(blk_cnt<<BLK_SIZE_BITS+1);
+        VFsSetDrv(dv->drv_let);
 	VFsSetPwd(cur_dir);
 	buf=VFsFRead(de.name,&de.size);
 	buf[de.size]=0; //Terminate
@@ -104,12 +106,14 @@ I64 VirtFilesDel(CDrv *dv,U8 *cur_dir,U8 *files_find_mask,I64 fuf_flags,
   try {
     unlock_break=BreakLock;
     DrvLock(dv);
+    VFsSetDrv(dv->drv_let);
     VFsSetPwd(cur_dir);
     dirs=VFsDir;
     for(i=0;dirs[i];i++) {
 	  VirtFileFind(dv,cur_dir,dirs[i],ptr,);
+          VFsSetDrv(dv->drv_let);
 	  VFsSetPwd(cur_dir);
-	  if((del_dir||!VFsIsDir(dirs[i]))&&dirs[i][0]!='.'&&
+	  if((del_dir||!VFsIsDir(dirs[i]))&&dirs[i][0]!='.'&&
 	    FilesFindMatch(ptr->name,files_find_mask,fuf_flags)) {
 	    if (print_msg)
 	      "Del %s\n",ptr->name;
@@ -143,6 +147,7 @@ I64 VirtFileWrite(CDrv *dv,U8 *cur_dir,U8 *name,U8 *buf,I64 size,
     PrintErr("Invalid FileName: \"%s\".\n",name);
   else {
     VirtFilesDel(dv,cur_dir,de.name,0,FALSE,FALSE);
+    VFsSetDrv(dv->drv_let);
     VFsSetPwd(cur_dir);
     c=VFsFWrite(name,buf,size);
   }
@@ -160,6 +165,7 @@ CDirEntry *VirtFilesFind(U8 *files_find_mask,I64 fuf_flags,
     throw('FUF');
   try {
     DrvLock(dv);
+    VFsSetDrv(dv->drv_let);
     VFsSetPwd(Fs->cur_dir);
     dirs=VFsDir;
     for (i=0;dirs[i];i++) {
@@ -205,6 +211,7 @@ Bool VirtMkDir(CDrv *dv,U8 *cur_dir,U8 *name,I64 entry_cnt)
   Bool unlock_break;
   try {
     unlock_break=BreakLock;
+    VFsSetDrv(dv->drv_let);
     VFsSetPwd(cur_dir);
     VFsDirMk(name);
     if (unlock_break)

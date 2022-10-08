@@ -191,3 +191,4 @@ char *GrPalleteGet(int64_t c);
 extern char *cipher_passwd;
 char **VFsDir(char *fn);
 FILE *VFsFOpen(char *path,char*);
+void VFsSetDrv(char d);

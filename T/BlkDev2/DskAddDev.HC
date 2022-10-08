@@ -203,6 +203,12 @@ U0 BlkDevsInitAll()
   Fs->cur_dv=Let2Drv('T');
   Fs->cur_dir=StrNew("/");
   blkdev.boot_drv_let='T';
+  if(__IsCmdLine) {
+    bd=BlkDevNextFreeSlot('Z',BDT_VIRT);bd->unit=0;
+    BlkDevAdd(bd,0,0,0);
+    blkdev.boot_drv_let='Z';
+  }
+
 /*  #exe {
     if (kernel_cfg->opts[CFG_MOUNT_IDE_AUTO])
       StreamPrint("MountIDEAuto;");

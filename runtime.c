@@ -488,6 +488,9 @@ int64_t STK_VFsFBlkWrite(int64_t *stk) {
 int64_t STK_VFsFSeek(int64_t *stk) {
 	fseek(stk[1],stk[0],SEEK_SET);
 }
+int64_t STK_VFsDrv(int64_t *stk) {
+	VFsSetDrv(stk[0]);
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
@@ -560,6 +563,7 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"VFsFOpenR",STK_VFsFOpenR,1);
     STK_RegisterFunctionPtr(&ffi_blob,"VFsFClose",STK_VFsFClose,1);
     STK_RegisterFunctionPtr(&ffi_blob,"VFsFSeek",STK_VFsFSeek,2);
+    STK_RegisterFunctionPtr(&ffi_blob,"VFsSetDrv",STK_VFsDrv,1);
     char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);

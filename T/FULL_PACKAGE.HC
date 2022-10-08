@@ -66,6 +66,7 @@ U0 StartUpTasks()
 U0 Adam(U8 *) {
 	I64 idx;
 	LoadImps;
+	CTask *user;
 	cpu_structs[Gs->num=__CoreNum]=Gs;//It should be 0
 	for(idx=Gs->num+1;idx<mp_cnt;idx++) {
 		__SpawnCore(idx,&CoreAPSethTask);
@@ -86,7 +87,8 @@ U0 Adam(U8 *) {
 		//Grab pointer
 		ExePrint("#include \"AMOUSE.HC.Z\";;");
 	} else {
-		DeathWait(User);
+		user=User;
+		DeathWait(&user);
 		Exit3Days;
 	}
         Spawn(&StartUpCore1,NULL,,mp_cnt-1);
@@ -99,4 +101,5 @@ Gs->seth_task=Spawn(&CoreAPSethTask,NULL,"Seth");
 //Our entering thread doesnt have a cur_thrd,so spawn one
 adam_task=Spawn(&Adam,NULL,"Adam",,);
 //Dont Exit
+BirthWait(&adam_task);
 DeathWait(&adam_task);

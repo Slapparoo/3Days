@@ -145,9 +145,9 @@ int main(int argc,char **argv)
 		vec_char_t boot_str;
 		vec_init(&boot_str);
 		if(commandLineArg->count) {
-			VFsMountDrive('R',"/");
+			VFsMountDrive('Z',"/");
 			is_cmd_line=1;
-			strcpy(buf,"ChDrv('R');;\nCd(\"");
+			strcpy(buf,"Cd(\"Z:/\");;\nCd(\"");
 			vec_pusharr(&boot_str,buf,strlen(buf));
 			#ifndef TARGET_WIN32
 			getcwd(buf,sizeof(buf));

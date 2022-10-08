@@ -1,5 +1,5 @@
 #include "3d.h"
-static  int RootPathLen();
+static int RootPathLen();
 //I dislike this file. Windows uses '\\' as a delimeter ,but TempleOS uses '/'
 //So key an eye out for delim/TOS_delim
 
@@ -59,8 +59,14 @@ static char *VFsInplaceRemoveRepeatSlashes(char *p) {
 	return o;
 }
 __thread char thrd_pwd[1024];
+__thread char thrd_drv;
 void VFsThrdInit() {
 	strcpy(thrd_pwd,"/");
+	thrd_drv='T';
+}
+void VFsSetDrv(char d) {
+	if(!isalpha(d)) return;
+	thrd_drv=toupper(d);
 }
 void VFsSetPwd(char *pwd) {
 	if(!pwd) pwd="/";
@@ -179,11 +185,11 @@ int64_t VFsDel(char *p) {
 	TD_FREE(p);
 	return r;
 }
+static char *mount_points['z'-'a'+1];
 //Returns Host OS location of file
 char *__VFsFileNameAbs(char *name) {
 	char computed[1024];
-	//TODO
-	strcpy(computed,"T");
+	strcpy(computed,mount_points[toupper(thrd_drv)-'A']);
 	computed[strlen(computed)+1]=0;
 	computed[strlen(computed)]=delim;
 	strcat(computed,thrd_pwd);
@@ -320,7 +326,7 @@ char *HostHomeDir() {
 	struct passwd *result;
 	getpwuid_r(getuid(),&pwd,buf,0x2000,&result);
 	if(result) {
-			return strdup(result->pw_dir);
+		return strdup(result->pw_dir);
 	}
 	return NULL;
 }
@@ -461,9 +467,12 @@ int VFsFileExists(char *path) {
 	TD_FREE(path);
 	return e;
 }
-
 int VFsMountDrive(char let,char *path) {
-	//TODO
+	int idx=toupper(let)-'A';
+	if(mount_points[idx])
+	  TD_FREE(mount_points[idx]);
+	mount_points[idx]=malloc(strlen(path)+1);
+	strcpy(mount_points[idx],path);
 }
 FILE *VFsFOpen(char *path,char *m) {
 	path=__VFsFileNameAbs(path);
