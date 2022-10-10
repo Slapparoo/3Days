@@ -489,7 +489,8 @@ static U0 _Exit() {
 static U0 KBCb(I64 c,I64 s) {
   U8 *old_rip;
   while(LBts(&kb_mtx,0))
-    PAUSE;
+    PAUSE;
+  SetFs(adam_task);
   kbd.last_down_scan_code=s;
   kbd.scan_code=s;
   BEqu(&kbd.down_bitmap,s&0x7f,!(s&SCF_KEY_UP));
@@ -507,7 +508,7 @@ static U0 KBCb(I64 c,I64 s) {
          InteruptCore(0);
        }
     } else if(c=='x') {
-      if(!Bt(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_X)) {
+      if(!Bt(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_X)) {
         LBts(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_X);
         InteruptCore(0);
       }
