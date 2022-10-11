@@ -53,7 +53,7 @@ I64 TermRightClickLink(CDoc *doc,CDocEntry *doc_e)
 	      send_new_line=TRUE;
 	    break;
 	  case RIGHT_DELETE:
-	    res=ToBool(__Del(st));
+	    res=ToBool(Del(st));
 	    break;
 	  case RIGHT_TYPE:
 	    res=Type(st);

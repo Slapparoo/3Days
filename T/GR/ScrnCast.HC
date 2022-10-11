@@ -27,7 +27,7 @@ public I64 GR2MV(U8 *print_fmt="VID%03d.MV",
 	Free(st);
 	dst=base;
 
-	cdt=dc->cdt;
+	cdt=dc->cdt;
 	dc=DCCopy(dc_base);
 	dc->cdt=cdt;
       }
@@ -38,7 +38,7 @@ public I64 GR2MV(U8 *print_fmt="VID%03d.MV",
       Free(src);
       if (fuf_flags&FUF_DEL) {
 	old_silent=Silent;
-	__Del(tmpde->full_name);
+	Del(tmpde->full_name);
 	Silent(old_silent);
       }
       progress1++;

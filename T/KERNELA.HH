@@ -151,6 +151,7 @@ import U0 VFsFBlkWrite(U8i*,I64i,I64i,U8i*);
 import U0 VFsFSeek(I64i,U8i*);
 
 import U0 VFsSetPwd(U8i*);
+import U0 VFsSetDrv(U8i);
 import Bool VFsExists(U8i*);
 import Bool VFsIsDir(U8i*);
 import I64i VFsFSize(U8i*);
@@ -224,8 +225,7 @@ import U0i __AwaitThread(U8i *thr);
 import U0i __KillThread(U8i *thr);
 import U0i SetMSCallback(U8i *fp);
 public import U0i __Sleep(I64i mS);
-import U0 __Del(U8 *);
-import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
+import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 import U0i UnblockSignals();
@@ -6521,4 +6521,4 @@ extern CDirEntry *VirtFilesFind(U8 *files_find_mask,I64 fuf_flags,
 public extern U8 MountFile(U8 *filename);
 public extern U0 Unmount(U8 drv_let=0);
 extern CDirEntry *FMRebuildDocDrv(U8 drv_let,CDoc *doc,CDirEntry **_head,Bool init);
-extern U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode);
+extern U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode);

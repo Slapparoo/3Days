@@ -99,26 +99,26 @@ CFile *FOpen(U8 *filename,U8 *flags,I64 cnt=0)
 U0 FClose(CFile *f)
 {//Close CFile, updating directory.
   CDirContext *dirc;
-  if(f->_3days_virt) {
-    VFsFClose(f->_3days_virt);
-    return;
-  }
   if (f) {
+    if(f->_3days_virt) {
+      VFsFClose(f->_3days_virt);
+      return;
+    }
     if (f->flags & FF_BUF_DIRTY) {
       ClusWrite(f->dv,f->clus_buf,f->clus,1);
       f->flags&=~FF_BUF_DIRTY;
     }
     if (f->flags & FF_NEEDS_WRITE) {
       if (dirc=DirContextNew(f->de.full_name)) {
-	if (!(f->flags & FF_USE_OLD_DATETIME))
+        if (!(f->flags & FF_USE_OLD_DATETIME))
 	  f->de.datetime=Now;
-	if (f->flags & FF_NEW_FILE)
+        if (f->flags & FF_NEW_FILE)
 	  DirNew(dirc->dv,Fs->cur_dir,&f->de,TRUE);
-	else
+        else
 	  DirNew(dirc->dv,Fs->cur_dir,&f->de,FALSE);
-	DirContextDel(dirc);
+        DirContextDel(dirc);
       } else
-	throw('File');
+        throw('File');
     }
     Free(f->clus_buf);
     Free(f->de.full_name);
@@ -218,7 +218,7 @@ Bool FBlkWrite(CFile *f,U8 *buf,I64 blk=FFB_NEXT_BLK,I64 cnt=1)
   if(f->_3days_virt) {
     if(blk!=FFB_NEXT_BLK)
       VFsFSeek(blk<<BLK_SIZE_BITS,f->_3days_virt);
-    VFsFBlkWrite(buf,1<<BLK_SIZE_BITS,cnt,f->_3days_virt);
+    VFsFBlkWrite(buf,1<<BLK_SIZE_BITS,cnt,f->_3days_virt);
     return TRUE;
   }
   CDrv *dv=f->dv;
