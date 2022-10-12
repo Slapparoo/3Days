@@ -2,7 +2,7 @@
 
 I64 DocCharDist(CDoc *doc,I64 x,I64 y)
 {
-#assert FONT_WIDTH==FONT_HEIGHT
+  //#assert FONT_WIDTH==FONT_HEIGHT
   return (SqrI64(doc->x-x)+SqrI64(doc->y-y))*FONT_WIDTH*FONT_WIDTH;
 }
 
@@ -133,7 +133,7 @@ public U0 DocClear(CDoc *doc=NULL,Bool clear_holds=FALSE)
     DocUnlock(doc);
 }
 
-public Bool DocCursor(Bool show=OFF,CDoc *doc=NULL)
+public Bool DocCursor(Bool show=OFF,CDoc *doc=NULL)
 {//Show or hide cursor.
   if (!doc && !(doc=DocPut))
     return FALSE;

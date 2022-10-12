@@ -180,7 +180,7 @@ U0 DrawMenu(CDC *dc)
     return;
   }
   dc->color=m->attr>>4;
-  GrRect(dc,0,0,640,8);
+  GrRect(dc,0,0,GR_WIDTH,8);
   x0=0;
   tmpme=m->sub;
   while (tmpme) {

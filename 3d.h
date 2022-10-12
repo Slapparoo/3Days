@@ -192,3 +192,4 @@ extern char *cipher_passwd;
 char **VFsDir(char *fn);
 FILE *VFsFOpen(char *path,char*);
 void VFsSetDrv(char d);
+void _3DaysSetResolution(int64_t w,int64_t h);

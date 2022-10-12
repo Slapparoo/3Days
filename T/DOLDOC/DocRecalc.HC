@@ -551,7 +551,7 @@ public Bool DocRecalc(CDoc *doc,I64 recalc_flags=RECALCt_NORMAL)
 	  i_jif=ToI64(cur_time*FONT_WIDTH*DOC_SCROLL_SPEED)%(j*FONT_WIDTH);
 	  tmp_u32_attr=tmp_u32_attr & 0xFFE0FF00|
 		(FONT_WIDTH-1-i_jif&(FONT_WIDTH-1))<<16;
-#assert FONT_WIDTH==8
+//#assert FONT_WIDTH==8
 	  i_jif>>=3;
 	  for (k=0;k<doc_e->scroll_len;k++) {
 	    ch=ptr[(i_jif+k)%j];

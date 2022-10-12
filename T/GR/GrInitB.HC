@@ -165,22 +165,41 @@ public U0 WinZBufUpdate()
 #help_index "Graphics"
 U0 GrInit2()
 {
-  MemSet(&gr,0,sizeof(CGrGlbls));
-  gr.sprite_hash=HashTableNew(512);
-  HashDefineLstAdd("ST_SPRITE_ELEM_CODES",SPHT_ELEM_CODE,gr.sprite_hash);
+  TOSPrint("REMOVE:%d,%d\n",GR_WIDTH,GR_HEIGHT);
+  U8 *old_h=gr.sprite_hash;
+  //We dont need to regerate these
+  //Free(gr.to_8_bits),Free(gr.to_8_colors);
+  //Free(gr.win_uncovered_bitmap);
+  Free(gr.text_base),Free(gr.vga_text_cache);
+  Free(gr.win_z_buf);
+  Free(text.raw_scrn_image);
+  if(gr.dc2) DCDel(gr.dc2);
+  if(gr.dc) DCDel(gr.dc);
+  if(gr.dc1) DCDel(gr.dc1);
+  if(gr.zoomed_dc) DCDel(gr.zoomed_dc);
+  if(gr.scrn_image) DCDel(gr.scrn_image);
+  //Changed by nroot,we call GrInit2 from SetResolution,so we want to keep our good values like gr.fp_final_scrn_update
+  //MemSet(&gr,0,sizeof(CGrGlbls));
+  if(old_h)
+    gr.sprite_hash=old_h;
+  else {
+    gr.sprite_hash=HashTableNew(512);
+    HashDefineLstAdd("ST_SPRITE_ELEM_CODES",SPHT_ELEM_CODE,gr.sprite_hash);
+  }
   gr.scrn_zoom=1;
 
   PaletteSetStd;
   fp_set_std_palette=&PaletteSetStd;
   GrPaletteIndicesSet;
-
-  gr.to_8_bits	=MAlloc(256*sizeof(I64));
-  gr.to_8_colors=MAlloc(256*sizeof(I64));
-
+  
+  if(!old_h) {
+    gr.to_8_bits	=MAlloc(256*sizeof(I64));
+    gr.to_8_colors=MAlloc(256*sizeof(I64));
+    gr.win_uncovered_bitmap=CAlloc(65536/8);
+    gr.highest_uncovered=0;
+  }
   gr.text_base=CAlloc(TEXT_ROWS*TEXT_COLS*sizeof(U32));
   gr.vga_text_cache=MAlloc(TEXT_ROWS*TEXT_COLS*sizeof(U16));
-  gr.win_uncovered_bitmap=CAlloc(65536/8);
-  gr.highest_uncovered=0;
   gr.win_z_buf=MAlloc(TEXT_ROWS*TEXT_COLS*sizeof(U16));
 
   gr.dc2=DCNew(GR_WIDTH,GR_HEIGHT);
@@ -197,6 +216,11 @@ U0 GrInit2()
   gr.scrn_image=DCNew(GR_WIDTH,GR_HEIGHT); //4-bit
   gr.zoomed_dc	 =DCNew(GR_WIDTH,GR_HEIGHT); //4-bit
   gr.zoomed_dc->flags|=DCF_SCRN_BITMAP;
+
+  text.cols=GR_WIDTH/FONT_WIDTH;
+  text.rows=GR_HEIGHT/FONT_HEIGHT;
+  text.raw_scrn_image=CAlloc(GR_WIDTH*GR_HEIGHT/8);
 }
 
-GrInit2;
+
+

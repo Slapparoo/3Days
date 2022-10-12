@@ -1,5 +1,5 @@
 #help_index "Graphics/Misc"
-asm {
+asm {
 //************************************
 _DC_BLOT_COLOR4::
 	PUSH	RBP
@@ -149,13 +149,12 @@ _DC_BLOT_COLOR4::
 _IS_PIX_COVERED0::
 	PUSH	RBP
 	MOV	RBP,RSP
-#assert FONT_WIDTH==FONT_HEIGHT==8
 	MOV	RCX,U64 SF_ARG3[RBP]
 	SAR	RCX,3
 	MOV	RAX,U64 SF_ARG2[RBP]
 	SAR	RAX,3
 	MOV	RDX,U64 SF_ARG1[RBP]
-	IMUL2	RCX,TEXT_COLS
+	IMUL2	RCX,U64 [&TEXT_COLS]
 	MOV	RBX,U64 [&gr.win_z_buf]
 	MOV	DX,U16 CTask.win_z_num[RDX]
 	ADD	RCX,RAX

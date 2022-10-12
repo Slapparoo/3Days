@@ -143,6 +143,7 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U0 _3DaysSetResolution(I64i w,I64i h);
 import U8i *VFsFOpenR(U8i*);
 import U8i *VFsFOpenW(U8i*);
 import U0 VFsFClose(U8i*);
@@ -225,7 +226,7 @@ import U0i __AwaitThread(U8i *thr);
 import U0i __KillThread(U8i *thr);
 import U0i SetMSCallback(U8i *fp);
 public import U0i __Sleep(I64i mS);
-import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
+import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 import U0i UnblockSignals();
@@ -3451,7 +3452,7 @@ public class CTaskSettings
   CBGR48 palette[COLORS_NUM];
   U32	win_inhibit;
   U8	text_attr,title_src,
-	border_attr,border_src,
+	border_attr,border_src,
 	task_title[STR_LEN];
   Bool	border,hide_cursor,highlight_cursor,scroll,autocomplete,pad[3];
 };
@@ -3782,10 +3783,12 @@ public class CTextGlbls
   U8	border_chars[16];
 };
 
-#define FONT_WIDTH	8
-#define FONT_HEIGHT	8
-#define GR_WIDTH	640
-#define GR_HEIGHT	480
+extern I64 FONT_WIDTH;
+extern I64 FONT_HEIGHT;
+extern I64 GR_WIDTH;
+extern I64 GR_HEIGHT;
+extern I64 TEXT_ROWS;
+extern I64 TEXT_COLS;
 
 //z-vals less than zero are in front of scrn and not drawn.
 //we want to shift all Z-vals into a drawable range.
@@ -5763,11 +5766,6 @@ class CEdMenuSprite
 #define SPED_MAIN_MENU		14
 #define SPED_EXIT		15
 
-#define GR_WIDTH 640
-#define GR_HEIGHT 480
-
-#define TEXT_ROWS (GR_HEIGHT/8)
-#define TEXT_COLS (GR_WIDTH/8)
 
 extern U0 BibleInit();
 extern U8 *BibleLine2Verse(I64 line,I64 separate_ch=CH_SPACE);
@@ -6522,3 +6520,4 @@ public extern U8 MountFile(U8 *filename);
 public extern U0 Unmount(U8 drv_let=0);
 extern CDirEntry *FMRebuildDocDrv(U8 drv_let,CDoc *doc,CDirEntry **_head,Bool init);
 extern U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode);
+extern U0 SetResolution(I64 w,I64 h); 

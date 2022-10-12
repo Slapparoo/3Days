@@ -762,7 +762,7 @@ if(!dc) dc=gr.dc;
     font_ptr=&text.font(U8 *)[FONT_HEIGHT*ch+h1];
     if (color.c0.rop==ROPB_COLLISION) {
       m=w1&(FONT_WIDTH-1);
-#assert FONT_WIDTH==8
+//#assert FONT_WIDTH==8
       color =dc->bkcolor.c0.color;
       for (i=w1;i<w2;i++,m++) {
 	k1=(h1+y)*dc->width_internal+x;
