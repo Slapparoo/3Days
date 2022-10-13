@@ -158,7 +158,7 @@ public U0 WinZBufUpdate()
     MemSet(gr.win_uncovered_bitmap,0,(gr.highest_uncovered+7)>>3+1);
     gr.highest_uncovered=z-1;
     for (ptr=gr.win_z_buf,i=TEXT_ROWS*TEXT_COLS;i;i--)
-      Bts(gr.win_uncovered_bitmap,*ptr++);
+      Bts(gr.win_uncovered_bitmap,*ptr++);
   }
 }
 
@@ -183,7 +183,7 @@ U0 GrInit2()
   if(old_h)
     gr.sprite_hash=old_h;
   else {
-    gr.sprite_hash=HashTableNew(512);
+    gr.sprite_hash=HashTableNew(512,adam_task);
     HashDefineLstAdd("ST_SPRITE_ELEM_CODES",SPHT_ELEM_CODE,gr.sprite_hash);
   }
   gr.scrn_zoom=1;
@@ -193,33 +193,33 @@ U0 GrInit2()
   GrPaletteIndicesSet;
   
   if(!old_h) {
-    gr.to_8_bits	=MAlloc(256*sizeof(I64));
-    gr.to_8_colors=MAlloc(256*sizeof(I64));
-    gr.win_uncovered_bitmap=CAlloc(65536/8);
+    gr.to_8_bits	=MAlloc(256*sizeof(I64),adam_task);
+    gr.to_8_colors=MAlloc(256*sizeof(I64),adam_task);
+    gr.win_uncovered_bitmap=CAlloc(65536/8,adam_task);
     gr.highest_uncovered=0;
   }
-  gr.text_base=CAlloc(TEXT_ROWS*TEXT_COLS*sizeof(U32));
-  gr.vga_text_cache=MAlloc(TEXT_ROWS*TEXT_COLS*sizeof(U16));
-  gr.win_z_buf=MAlloc(TEXT_ROWS*TEXT_COLS*sizeof(U16));
+  gr.text_base=CAlloc(TEXT_ROWS*TEXT_COLS*sizeof(U32),adam_task);
+  gr.vga_text_cache=MAlloc(TEXT_ROWS*TEXT_COLS*sizeof(U16),adam_task);
+  gr.win_z_buf=MAlloc(TEXT_ROWS*TEXT_COLS*sizeof(U16),adam_task);
 
-  gr.dc2=DCNew(GR_WIDTH,GR_HEIGHT);
+  gr.dc2=DCNew(GR_WIDTH,GR_HEIGHT,adam_task);
   gr.dc2->flags|=DCF_SCRN_BITMAP;
-  gr.dc_cache=DCNew(GR_WIDTH,GR_HEIGHT);
+  gr.dc_cache=DCNew(GR_WIDTH,GR_HEIGHT,adam_task);
 
-  gr.dc=DCNew(GR_WIDTH,GR_HEIGHT);
+  gr.dc=DCNew(GR_WIDTH,GR_HEIGHT,adam_task);
   gr.dc->flags|=DCF_SCRN_BITMAP|DCF_ON_TOP;
   DCFill;
 
-  gr.dc1=DCNew(GR_WIDTH,GR_HEIGHT);
+  gr.dc1=DCNew(GR_WIDTH,GR_HEIGHT,adam_task);
   gr.dc1->flags|=DCF_SCRN_BITMAP;
 
-  gr.scrn_image=DCNew(GR_WIDTH,GR_HEIGHT); //4-bit
-  gr.zoomed_dc	 =DCNew(GR_WIDTH,GR_HEIGHT); //4-bit
+  gr.scrn_image=DCNew(GR_WIDTH,GR_HEIGHT,adam_task); //4-bit
+  gr.zoomed_dc	 =DCNew(GR_WIDTH,GR_HEIGHT,adam_task); //4-bit
   gr.zoomed_dc->flags|=DCF_SCRN_BITMAP;
 
   text.cols=GR_WIDTH/FONT_WIDTH;
   text.rows=GR_HEIGHT/FONT_HEIGHT;
-  text.raw_scrn_image=CAlloc(GR_WIDTH*GR_HEIGHT/8);
+  text.raw_scrn_image=CAlloc(GR_WIDTH*GR_HEIGHT/8,adam_task);
 }
 
 

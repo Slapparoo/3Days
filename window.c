@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/shm.h>
 #include <X11/extensions/XShm.h>
+#include <pthread.h>
 typedef struct CDrawWindow {
     Window window;
     Display *disp;
@@ -17,6 +18,8 @@ typedef struct CDrawWindow {
     int64_t sz_x,sz_y,disp_w,disp_h;
     XShmSegmentInfo shm_info;
     XImage *shm_image;
+    pthread_mutex_t pt;
+    int64_t reso_changed;
 } CDrawWindow;
 static char gr_pallete_BGR48[2*4*16];
 static int32_t gr_palette_std[]={
@@ -88,6 +91,7 @@ CDrawWindow *NewDrawWindow() {
 		XSetWMProtocols(dw->disp,dw->window,&wmclose,1);
 		dw->disp_h=480;
 		dw->disp_w=640;
+		pthread_mutex_init(&dw->pt,NULL);
 	}
 	return dw;
 }
@@ -106,6 +110,7 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	uint8_t *colors=_colors;
 	int64_t x,y,cx,cy,b,black,white,wx,wy,b2,to,to2;
 	XLockDisplay(dw->disp);
+	pthread_mutex_lock(&dw->pt);
 	long screen=DefaultScreen(dw->disp);
 	Visual *vis=XDefaultVisual(dw->disp,screen);
 	int dplanes=DisplayPlanes(dw->disp,screen);
@@ -128,7 +133,14 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	}
 	XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,cx,cy,dw->disp_w,dw->disp_h,False);
 	XFlush(dw->disp);
+	pthread_mutex_unlock(&dw->pt);
 	XUnlockDisplay(dw->disp);
+	if(dw->reso_changed) {
+		if(map_get(&TOSLoader,"SetScaleResolution")) {
+			FFI_CALL_TOS_2(map_get(&TOSLoader,"SetScaleResolution")->data[0].val,dw->sz_x,dw->sz_y);
+			dw->reso_changed=0;
+		}
+	}
 	sigprocmask(SIG_SETMASK,&old_set,NULL);
 }
 void DrawWindowDel(CDrawWindow *win) {
@@ -607,6 +619,8 @@ static void __InputLoop(void *ul,int64_t clip_only) {
 			DrawWindowDel(dw);
 			break;
 		} else if(e.type==ConfigureNotify&&dw) {
+			if(dw->sz_x!=e.xconfigure.width||dw->sz_y!=e.xconfigure.height)
+				dw->reso_changed=1;
 			dw->sz_x=e.xconfigure.width;
 			dw->sz_y=e.xconfigure.height;
 		} else if(e.type==SelectionRequest) {
@@ -710,6 +724,7 @@ char *GrPalleteGet(int64_t c) {
 //Expected HCRT.BIN to be loaded
 void _3DaysSetResolution(int64_t w,int64_t h) {
 	XLockDisplay(dw->disp);
+	pthread_mutex_lock(&dw->pt);
 	dw->disp_h=h;
 	dw->disp_w=w;
 	XShmDetach(dw->disp,&dw->shm_info);
@@ -720,5 +735,6 @@ void _3DaysSetResolution(int64_t w,int64_t h) {
 	dw->shm_info.readOnly=False;
 	dw->shm_info.shmaddr=dw->shm_image->data=shmat(dw->shm_info.shmid,0,0);
 	XShmAttach(dw->disp,&dw->shm_info);
+	pthread_mutex_unlock(&dw->pt);
 	XUnlockDisplay(dw->disp);
 }

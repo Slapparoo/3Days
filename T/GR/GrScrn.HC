@@ -351,7 +351,26 @@ U0 GrUpdateVGAGraphics()
 }
 U8 *_3days_screen=NULL;
 if(!__IsCmdLine)
-	_3days_screen=DrawWindowNew;
+  _3days_screen=DrawWindowNew;
+CDC *scale_scrn=DCNew(GR_WIDTH,GR_HEIGHT);
+I64 scale_scrn_xoff=0;
+I64 scale_scrn_yoff=0;
+I64 scale_w;
+I64 scale_h;
+#include "Scale.HC";
+U0 SetScaleResolution(I64 w,I64 h) {
+  w=MaxI64(GR_WIDTH,w);
+  h=MaxI64(GR_HEIGHT,h);
+  if(scale_scrn) DCDel(scale_scrn);
+  scale_scrn=DCNew(w,h,adam_task);
+  scale_w=ToF64(h)/480.*640.;
+  scale_h=h;
+  scale_w=MinI64(w,scale_w);
+  scale_scrn_yoff=0;
+  scale_scrn_xoff=(w-scale_w)/2;
+  _3DaysSetResolution(w,h);
+  TOSPrint("%d,%d,%d,%d\n",scale_scrn->width_internal,scale_scrn->height,scale_scrn_xoff,scale_scrn_yoff);
+}
 U0 GrUpdateScrn()
 {//Called by the Window Manager \dLK,"HERE",A="FF:::/Adam/WinMgr.HC,GrUpdateScrn"\d, 30 times a second.
   CDC *dc;
@@ -366,11 +385,12 @@ U0 GrUpdateScrn()
     (*gr.fp_final_scrn_update)(dc);
   DCDel(dc);
   if(gr.scrn_zoom==1) {
-    DrawWindowUpdate(_3days_screen,gr.dc2->body,gr.dc2->width_internal,gr.dc2->height);
+    Scale(gr.dc2,scale_w,scale_h,scale_scrn,scale_scrn_xoff,scale_scrn_yoff);
   } else {
     GrZoomInScrn;
-    DrawWindowUpdate(_3days_screen,gr.zoomed_dc->body,gr.zoomed_dc->width_internal,gr.zoomed_dc->height);
+    Scale(gr.zoomed_dc,scale_w,scale_h,scale_scrn,scale_scrn_xoff,scale_scrn_yoff);
   }
+  DrawWindowUpdate(scale_scrn,scale_scrn->body,scale_scrn->width_internal,scale_scrn->height);
   //God willing they are the same size
   MemCpy(gr.scrn_image->body,gr.dc2->body,MSize(gr.scrn_image->body));
 }

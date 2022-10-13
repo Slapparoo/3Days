@@ -282,7 +282,7 @@ public extern U8 *__GetStr(U8 *pmt="");
 extern U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 extern U0 __BootstrapForeachSymbol(U0 *fptr);
 extern C3DaysDrawWin *DrawWindowNew();
-extern U0i DrawWindowUpdate(C3DaysDrawWin *win,U8i *,I64i,I64i);
+extern U0i DrawWindowUpdate(C3DaysDrawWin *win,U8i *,I64i,I64i);
 extern C3DaysDrawWin *DrawWindowDel(C3DaysDrawWin *);
 extern I64i __ScanKey(I64i *ch,I64i *sc);
 extern I64i __WaitKey(I64i *ch,I64i *sc);
@@ -3452,7 +3452,7 @@ public class CTaskSettings
   CBGR48 palette[COLORS_NUM];
   U32	win_inhibit;
   U8	text_attr,title_src,
-	border_attr,border_src,
+	border_attr,border_src,
 	task_title[STR_LEN];
   Bool	border,hide_cursor,highlight_cursor,scroll,autocomplete,pad[3];
 };
@@ -6521,3 +6521,4 @@ public extern U0 Unmount(U8 drv_let=0);
 extern CDirEntry *FMRebuildDocDrv(U8 drv_let,CDoc *doc,CDirEntry **_head,Bool init);
 extern U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode);
 extern U0 SetResolution(I64 w,I64 h); 
+extern U0 SetScaleResolution(I64 w,I64 h); 
