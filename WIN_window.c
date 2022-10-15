@@ -10,8 +10,8 @@ HANDLE *mutex;
 LPSTR* WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int* numargs);
 typedef struct CDrawWindow {
     int64_t sz_x,sz_y;
-    int64_t scroll_x,scroll_y;
-    void *buffer;
+    int64_t scroll_x,scroll_y,changed_reso;
+    void *fb_addr;
     HWND win;
 } CDrawWindow;
 static char gr_pallete_BGR48[2*4*16]; //2 bytes,4 channels,16 colors
@@ -414,7 +414,6 @@ void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_wi
 	WaitForSingleObject(mutex,INFINITE);
 	dc=GetDC(win->win);
 	GetClientRect(win->win,&rct);
-	CenterWindow(win->win,&cx,&cy);
 	BITMAPINFO  binfo;
 	memset(&binfo,0,sizeof(binfo));
 	binfo.bmiHeader.biSize=sizeof(binfo);
@@ -425,9 +424,15 @@ void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_wi
 	binfo.bmiHeader.biPlanes=1;
 	binfo.bmiHeader.biBitCount=32;
 	binfo.bmiHeader.biCompression=BI_RGB;
-	SetDIBitsToDevice(dc,cx,cy,dw->sz_x,dw->sz_y,0,0,0,dw->sz_y,buf,&binfo,DIB_RGB_COLORS);
+	SetDIBitsToDevice(dc,cx,cy,dw->sz_x,dw->sz_y,0,0,0,dw->sz_y,dw->fb_addr,&binfo,DIB_RGB_COLORS);
 	ReleaseMutex(mutex);
 	ReleaseDC(win->win,dc);
+	if(dw->changed_reso) {
+		if(map_get(&TOSLoader,"SetScaleResolution")) {
+			FFI_CALL_TOS_2(map_get(&TOSLoader,"SetScaleResolution")->data[0].val,rct.left-rct.right,rct.top-rct.bottom);
+			dw->changed_reso=0;
+		}
+	}
 }
 char *ClipboardText() {
 	char *ret;
@@ -456,7 +461,11 @@ void SetClipboard(char *text) {
 LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 	PAINTSTRUCT ps;
 	int64_t cx,cy;
+	RECT *lr;
 	switch(msg) {
+		case WM_SIZING:
+			dw->changed_reso=1;
+			break;
 		case WM_KILLFOCUS:
 			if(persist_mod&SCF_ALT)
 				FFI_CALL_TOS_2(kb_cb,' ',SC_ALT|SCF_KEY_UP);
@@ -509,4 +518,14 @@ char *GrPalleteGet(int64_t c) {
 	int64_t r=0;
 	memcpy(&r,&gr_pallete_BGR48[2*4*c],2*4);
 	return r;
+}
+void *_3DaysSetResolution(int64_t w,int64_t h) {
+	WaitForSingleObject(mutex,INFINITE);
+	dw->sz_x=w;
+	dw->sz_y=h;
+        if(dw->fb_addr)
+        	free(dw->fb_addr);
+	dw->fb_addr=calloc(4,w*h);
+	ReleaseMutex(mutex);
+	return dw->fb_addr;
 }
