@@ -96,6 +96,8 @@ void InteruptCore(int core) {
 		ctx.ContextFlags=CONTEXT_FULL; 
 		SuspendThread(cores[core].thread);
 		GetThreadContext(cores[core].thread,&ctx);
+		ctx.Rsp-=8;
+		((int64_t*)ctx.Rsp)[0]=ctx.Rip;
 		ctx.Rip=hash->data[0].val;
 		SetThreadContext(cores[core].thread,&ctx);
 		ResumeThread(cores[core].thread);

@@ -405,31 +405,30 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 	}
 	return 0;
 }
-void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_width,int64_t h) {
-	int64_t x,y,b,b2,mul=4,cx,cy;
+void DrawWindowUpdate(struct CDrawWindow *ul,int8_t *colors,int64_t internal_width,int64_t h) {
+	int64_t x,y,b,b2,mul=4;
 	HBITMAP bmp;
 	HBRUSH brush,obrush;
-	HDC dc;
 	RECT rct;
 	WaitForSingleObject(mutex,INFINITE);
-	dc=GetDC(win->win);
-	GetClientRect(win->win,&rct);
+	HDC dc=GetDC(dw->win),dc2;
+	GetClientRect(dw->win,&rct);
 	BITMAPINFO  binfo;
 	memset(&binfo,0,sizeof(binfo));
 	binfo.bmiHeader.biSize=sizeof(binfo);
-	binfo.bmiHeader.biWidth=640;
+	binfo.bmiHeader.biWidth=dw->sz_x;
 	//See https://learn.microsoft.com/en-us/windows/win32/wmdm/-bitmapinfoheader
 	//We want a top down DIB
-	binfo.bmiHeader.biHeight=-480;
+	binfo.bmiHeader.biHeight=-dw->sz_y;
 	binfo.bmiHeader.biPlanes=1;
 	binfo.bmiHeader.biBitCount=32;
 	binfo.bmiHeader.biCompression=BI_RGB;
-	SetDIBitsToDevice(dc,cx,cy,dw->sz_x,dw->sz_y,0,0,0,dw->sz_y,dw->fb_addr,&binfo,DIB_RGB_COLORS);
+	SetDIBitsToDevice(dc,0,0,dw->sz_x,dw->sz_y,0,0,0,dw->sz_y,dw->fb_addr,&binfo,DIB_RGB_COLORS);
 	ReleaseMutex(mutex);
-	ReleaseDC(win->win,dc);
+	ReleaseDC(dw->win,dc);
 	if(dw->changed_reso) {
 		if(map_get(&TOSLoader,"SetScaleResolution")) {
-			FFI_CALL_TOS_2(map_get(&TOSLoader,"SetScaleResolution")->data[0].val,rct.left-rct.right,rct.top-rct.bottom);
+			FFI_CALL_TOS_2(map_get(&TOSLoader,"SetScaleResolution")->data[0].val,rct.right-rct.left,rct.bottom-rct.top);
 			dw->changed_reso=0;
 		}
 	}
@@ -463,8 +462,10 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 	int64_t cx,cy;
 	RECT *lr;
 	switch(msg) {
+		case WM_SIZE:
 		case WM_SIZING:
-			dw->changed_reso=1;
+			if(dw)
+				dw->changed_reso=1;
 			break;
 		case WM_KILLFOCUS:
 			if(persist_mod&SCF_ALT)

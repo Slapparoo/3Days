@@ -1,15 +1,15 @@
-CC=gcc
+CC=x86_64-w64-mingw32-gcc
 CFLAGS=-DUSE_NETWORKING -DTARGET_WIN32 -Ofast -g3 -lm -m64 -fno-omit-frame-pointer -static 
-CFILES=WIN_sound.c main.c ext\vec\src\vec.c ext\map\src\map.c TOSPrint.c ext\C_Unescaper\escaper.c ext\argtable3\argtable3.c runtime.c poopalloc.c tos_aot.c WIN_window.c multic.c vfs.c  CommandLineToArgvA.c ext\dyad\src\dyad.c dbg.c
+CFILES=WIN_sound.c main.c ext/vec/src/vec.c ext/map/src/map.c TOSPrint.c ext/C_Unescaper/escaper.c ext/argtable3/argtable3.c runtime.c poopalloc.c tos_aot.c WIN_window.c multic.c vfs.c  CommandLineToArgvA.c ext/dyad/src/dyad.c dbg.c
 AFILES=FFI_WIN64.yasm  swapctxWIN.yasm
 COBJS=$(foreach o,$(CFILES),$(o).obj)
 AOBJS=$(foreach o,$(AFILES),$(o).obj) 
 OBJS=$(COBJS) $(AOBJS)
-LIBS=ext\wineditline-2.206\lib64\libedit_static.a  -lm -lshlwapi -ldbghelp  -lSynchronization -lShcore -lws2_32 -lWinmm -Ofast -o 3d_loader.exe
+LIBS=ext/wineditline-2.206/lib64/libedit_static.a  -lm -lshlwapi -ldbghelp  -lsynchronization -lshcore -lws2_32 -lwinmm -Ofast -o 3d_loader.exe
 all: $(OBJS)
-	$(CC) -mwindows $(OBJS) $(LIBS)  -o .\3d_loader.exe
+	$(CC) -mwindows $(OBJS) $(LIBS)  -o ./3d_loader.exe
 clean:
-	del $(OBJS)
+	rm $(OBJS)
 %.c.obj: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 %.yasm.obj: %.yasm
