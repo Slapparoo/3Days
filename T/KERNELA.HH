@@ -207,8 +207,6 @@ public import U8 *__GetStr(U8 *pmt="");
 import U0i SndFreq(I64i freq);
 import U0 __BootstrapForeachSymbol(U0 *fptr);
 extern C3DaysDrawWin;
-public import I64i GrPaletteColorGet(I64i color_num)
-public import U0 GrPaletteColorSet(I64i color_num,U8i *bgr48);
 import C3DaysDrawWin *DrawWindowNew();
 import U0i DrawWindowUpdate(C3DaysDrawWin *win,U8i *,I64i,I64i);
 import C3DaysDrawWin *DrawWindowDel(C3DaysDrawWin *);
@@ -232,8 +230,6 @@ import U8i *__CmdLineBootText();
 import U0i UnblockSignals();
 #else
 extern U8i *GetCipherPasswd();
-public extern I64i GrPaletteColorGet(I64i color_num)
-public extern U0 GrPaletteColorSet(I64i color_num,U8 *bgr48);
 extern U8i __IsValidPtr(U8i *ptr);
 extern U64i UnixNow();
 extern U0i UnblockSignals();
@@ -6524,3 +6520,5 @@ extern U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode);
 extern U0 SetResolution(I64 w,I64 h); 
 extern U0 SetScaleResolution(I64 w,I64 h); 
 extern U0 ScaleMouseCords(I64 *x,I64 *y);
+public extern I64i GrPaletteColorGet(I64i color_num);
+public extern U0 GrPaletteColorSet(I64i color_num,CBGR48 gr48);

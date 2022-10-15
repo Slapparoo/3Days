@@ -5,7 +5,35 @@ U32 pal[16]={
 (0xFF5555),(0xFF55FF),(0xFFFF55),(0xFFFFFF)
 };
 //We store the lower 4 bits in byte 1,upper 4 bits at byte 2 
-U32 *pal_mixed=CAlloc(0x1000*4,adam_task);
+U32 *pal_mixed;
+U0 AvTabGen() {
+  if(!pal_mixed) pal_mixed=CAlloc(0x1000*4,adam_task);
+  I64 a,b;
+  U32 c,c2;
+  for(a=0;a!=0x100;a++) {
+     b=(a&0xf0)>>4;
+     c=pal[a&0xf],c2=pal[a>>4];
+     //https://www.compuphase.com/graphic/scale3.htm
+     pal_mixed[(a&0xf)|b<<8]=((c^c2)&0xfffefefe)>>1+(c&c2);
+  }
+}
+AvTabGen;
+U0 GrPaletteColorSet(I64 i,CBGR48 v){
+  U32 c;
+  c.u8[0]=v.b/ToF64(0xffff)*0xff;
+  c.u8[1]=v.g/ToF64(0xffff)*0xff;
+  c.u8[2]=v.r/ToF64(0xffff)*0xff;
+  pal[i]=c;
+  AvTabGen;
+}
+U0 GrPaletteColorGet(I64 i) {
+  CBGR48 r;
+  U32 c=pal[i];
+  r.b=c.u8[0]*(ToF64(0xffff)/0xff);
+  r.g=c.u8[1]*(ToF64(0xffff)/0xff);
+  r.r=c.u8[2]*(ToF64(0xffff)/0xff);
+  return r;
+}
 U32 *grx_offs=CAlloc(641*4,adam_task);
 U32 *gry_offs=CAlloc(481*4,adam_task);
 U0 UpdateGROffs(I64 x,I64 y) {
@@ -22,23 +50,13 @@ U0 UpdateGROffs(I64 x,I64 y) {
          gry_offs[cnt]=Round(yspacing*cnt);
    }
 }
-U0 AvTabGen() {
-  I64 a,b;
-  U32 c,c2;
-  for(a=0;a!=0x100;a++) {
-     b=(a&0xf0)>>4;
-     c=pal[a&0xf],c2=pal[a>>4];
-     //https://www.compuphase.com/graphic/scale3.htm
-     pal_mixed[(a&0xf)|b<<8]=((c^c2)&0xfffefefe)>>1+(c&c2);
-  }
-}
-AvTabGen;
 U0 Scale(CDC *data,I64 sx,I64 sy,CDC *result,I64 xoff,I64 yoff) {
   I64 y_next_px;
 asm {
   IMPORT grx_offs;
   IMPORT gry_offs;
   IMPORT pal_mixed;
+  IMPORTpal;
   PUSH_REGS
   PUSH RAX
   FSTCW U16[RSP]
@@ -102,7 +120,7 @@ asm {
 xloop:
   MOVZX EAX,U8[RSI+R11]
   AND AL,0xf;
-  MOV EAX,U32 gr_palette_std32[RAX*4]
+  MOV EAX,U32 pal[RAX*4]
   MOV R14,U64 [grx_offs]
   MOV EBX,U32 4[R14+R11*4] //next pixel
   MOV R14u32,U32 [R14+R11*4]
@@ -179,12 +197,6 @@ next3:
   POP_REGS
   LEAVE
   RET1 6*8
-gr_palette_std32::
-DU32
-(0x000000),(0x0000AA),(0x000AA00),(0x00AAAA),
-(0xAA0000),(0xAA00AA),(0xAA5500),(0xAAAAAA),
-(0x555555),(0x5555FF),(0x55FF55),(0x55ffff),
-(0xFF5555),(0xFF55FF),(0xFFFF55),(0xFFFFFF);
 //Avg2Lines(U8 *avg_tab,u8 *line1,U8 *line2,u32 *to,U64 sx)
 AVG_2_LINES:
     PUSH RBP

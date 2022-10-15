@@ -115,7 +115,7 @@ _extern _HASH_ADD_AFTER U0 HashAddAfter(CHash *tmph,
         CHash *pred,CHashTable *table); //Add hash entry after entry.
 _extern _HASH_STR I64 HashStr(U8 *st); //Hash a string.
 _extern _HASH_FIND CHash *HashFind(U8 *needle_str,CHashTable *haystack_table,
-                                   I64 mask,I64 instance=1);//Find string in hash table.
+                                   I64 mask,I64 instance=1);//Find string in hash table.
 _extern _HASH_SINGLE_TABLE_FIND CHash *HashSingleTableFind(U8 *needle_str,
         CHashTable *haystack_table,
         I64 mask,I64 instance=1);//Find string in single hash table.
@@ -174,3 +174,4 @@ public _extern SYS_PROGRESS4_TF F64 progress4_tf; //Progress 4 end time.
 public _extern SYS_PROGRESSES
 	CProgress sys_progresses[PROGRESS_BARS_NUM]; //All progress bars.
 #endif
+
