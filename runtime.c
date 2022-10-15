@@ -306,7 +306,7 @@ int64_t STK_DrawWindowUpdate(int64_t *stk) {
     DrawWindowUpdate(stk[0],stk[1],stk[2],stk[3]);
 }
 int64_t STK_DrawWindowDel(int64_t *stk) {
-    DrawWindowDel(stk[0]);
+    DrawWindowDel();
 }
 int64_t STK___GetTicks() {
 	#ifndef TARGET_WIN32

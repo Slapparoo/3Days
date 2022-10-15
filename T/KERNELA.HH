@@ -143,7 +143,7 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
-import U0 _3DaysSetResolution(I64i w,I64i h);
+import U8i *_3DaysSetResolution(I64i w,I64i h);
 import U8i *VFsFOpenR(U8i*);
 import U8i *VFsFOpenW(U8i*);
 import U0 VFsFClose(U8i*);
@@ -282,7 +282,7 @@ public extern U8 *__GetStr(U8 *pmt="");
 extern U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 extern U0 __BootstrapForeachSymbol(U0 *fptr);
 extern C3DaysDrawWin *DrawWindowNew();
-extern U0i DrawWindowUpdate(C3DaysDrawWin *win,U8i *,I64i,I64i);
+extern U0i DrawWindowUpdate(C3DaysDrawWin *win,U8i *,I64i,I64i);
 extern C3DaysDrawWin *DrawWindowDel(C3DaysDrawWin *);
 extern I64i __ScanKey(I64i *ch,I64i *sc);
 extern I64i __WaitKey(I64i *ch,I64i *sc);
@@ -3783,12 +3783,13 @@ public class CTextGlbls
   U8	border_chars[16];
 };
 
-extern I64 FONT_WIDTH;
-extern I64 FONT_HEIGHT;
-extern I64 GR_WIDTH;
-extern I64 GR_HEIGHT;
-extern I64 TEXT_ROWS;
-extern I64 TEXT_COLS;
+#define GR_WIDTH 640
+#define GR_HEIGHT 480
+#define FONT_WIDTH 8
+#define FONT_HEIGHT 8
+#define TEXT_COLS (GR_WIDTH/FONT_WIDTH)
+#define TEXT_ROWS (GR_HEIGHT/FONT_HEIGHT)
+
 
 //z-vals less than zero are in front of scrn and not drawn.
 //we want to shift all Z-vals into a drawable range.
@@ -6522,3 +6523,4 @@ extern CDirEntry *FMRebuildDocDrv(U8 drv_let,CDoc *doc,CDirEntry **_head,Bool in
 extern U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode);
 extern U0 SetResolution(I64 w,I64 h); 
 extern U0 SetScaleResolution(I64 w,I64 h); 
+extern U0 ScaleMouseCords(I64 *x,I64 *y);

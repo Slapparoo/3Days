@@ -11,18 +11,9 @@ LPSTR* WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int* numargs);
 typedef struct CDrawWindow {
     int64_t sz_x,sz_y;
     int64_t scroll_x,scroll_y;
+    void *buffer;
     HWND win;
 } CDrawWindow;
-static void CenterWindow(HWND win,int64_t *x,int64_t *y) {
-	RECT rct;
-	GetClientRect(win,&rct);
-	int64_t _x,_y;
-	_x=(rct.right-640)/2,_y=(rct.bottom-480)/2;
-	if(_y<0) _y=0;
-	if(_x<0) _x=0;
-	if(x) *x=_x;
-	if(y) *y=_y;
-}
 static char gr_pallete_BGR48[2*4*16]; //2 bytes,4 channels,16 colors
 static int32_t gr_palette_std[]={
 0x000000,0x0000AA,0x000AA00,0x00AAAA,
@@ -330,8 +321,7 @@ void SetKBCallback(void *fptr,void *data) {
 //x,y,z,(l<<1)|r
 static void(*ms_cb)();
 static int MSCallback(HWND hwnd,void *d,UINT msg,WPARAM w,LPARAM e) {
-    static int64_t x,y,cx,cy;
-    CenterWindow(hwnd,&cx,&cy);
+    static int64_t x,y;
     static int state;
     static int z;
     RECT rect;
@@ -359,12 +349,7 @@ static int MSCallback(HWND hwnd,void *d,UINT msg,WPARAM w,LPARAM e) {
             case WM_MOUSEMOVE:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
             ent:;
-            int x2=x-cx,y2=y-cy;
-            if(x2>=640) x2=640;
-            if(y2>=480) y2=480;
-            if(y2<0) y2=0;
-            if(x2<0) x2=0;
-            FFI_CALL_TOS_4(ms_cb,x2,y2,z,state);
+            FFI_CALL_TOS_4(ms_cb,x,y,z,state);
         }
     }
     return 0;
@@ -424,37 +409,23 @@ void DrawWindowUpdate(struct CDrawWindow *win,int8_t *colors,int64_t internal_wi
 	int64_t x,y,b,b2,mul=4,cx,cy;
 	HBITMAP bmp;
 	HBRUSH brush,obrush;
-	HDC dc,dc2;
+	HDC dc;
 	RECT rct;
-	for(y=0;y!=480;y++) {
-		b2=(480-y-1)*internal_width;
-		for(x=0;x!=640;x++) {
-			buf[b2++]=palette[*colors++];
-			//img->data[b*4+3]=0;
-		}
-	}
 	WaitForSingleObject(mutex,INFINITE);
 	dc=GetDC(win->win);
 	GetClientRect(win->win,&rct);
 	CenterWindow(win->win,&cx,&cy);
-	dc2=CreateCompatibleDC(dc);
-	bmp=CreateCompatibleBitmap(dc,rct.right,rct.bottom);
-	obrush=SelectObject(dc2,GetStockObject(BLACK_BRUSH));
-	SelectObject(dc2,bmp);
 	BITMAPINFO  binfo;
 	memset(&binfo,0,sizeof(binfo));
 	binfo.bmiHeader.biSize=sizeof(binfo);
 	binfo.bmiHeader.biWidth=640;
-	binfo.bmiHeader.biHeight=480;
+	//See https://learn.microsoft.com/en-us/windows/win32/wmdm/-bitmapinfoheader
+	//We want a top down DIB
+	binfo.bmiHeader.biHeight=-480;
 	binfo.bmiHeader.biPlanes=1;
 	binfo.bmiHeader.biBitCount=32;
 	binfo.bmiHeader.biCompression=BI_RGB;
-	Rectangle(dc2,0,0,rct.right,rct.bottom);
-	SetDIBitsToDevice(dc2,cx,cy,640,480,0,0,0,480,buf,&binfo,DIB_RGB_COLORS);
-	BitBlt(dc,0,0,rct.right,rct.bottom,dc2,0,0,SRCCOPY);
-	SelectObject(dc2,obrush);
-	DeleteDC(dc2);
-    DeleteObject(bmp);
+	SetDIBitsToDevice(dc,cx,cy,dw->sz_x,dw->sz_y,0,0,0,dw->sz_y,buf,&binfo,DIB_RGB_COLORS);
 	ReleaseMutex(mutex);
 	ReleaseDC(win->win,dc);
 }

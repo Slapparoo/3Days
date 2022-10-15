@@ -352,24 +352,43 @@ U0 GrUpdateVGAGraphics()
 U8 *_3days_screen=NULL;
 if(!__IsCmdLine)
   _3days_screen=DrawWindowNew;
-CDC *scale_scrn=DCNew(GR_WIDTH,GR_HEIGHT);
 I64 scale_scrn_xoff=0;
 I64 scale_scrn_yoff=0;
 I64 scale_w;
 I64 scale_h;
+I64 scale_lock=0;
 #include "Scale.HC";
+CDC *scale_scrn;
 U0 SetScaleResolution(I64 w,I64 h) {
+  while(LBts(&scale_lock,0))
+    PAUSE;
+  if(!scale_scrn) {
+    scale_scrn=DCNew(GR_WIDTH,GR_HEIGHT,adam_task);
+    Free(scale_scrn->body);
+  }
   w=MaxI64(GR_WIDTH,w);
   h=MaxI64(GR_HEIGHT,h);
-  if(scale_scrn) DCDel(scale_scrn);
-  scale_scrn=DCNew(w,h,adam_task);
   scale_w=ToF64(h)/480.*640.;
   scale_h=h;
   scale_w=MinI64(w,scale_w);
-  scale_scrn_yoff=0;
+  scale_scrn_yoff=(h-scale_h)/2;
   scale_scrn_xoff=(w-scale_w)/2;
-  _3DaysSetResolution(w,h);
-  TOSPrint("%d,%d,%d,%d\n",scale_scrn->width_internal,scale_scrn->height,scale_scrn_xoff,scale_scrn_yoff);
+  scale_scrn->body=_3DaysSetResolution(w,h);
+  scale_scrn->height=h;
+  scale_scrn->width=scale_scrn->width_internal=w;
+  //MemSetU32(scale_scrn->body,0,w*h);
+  LBtr(&scale_lock,0);
+}
+U0 ScaleMouseCords(I64 *x,I64 *y) {
+  I64 x2=*x,y2=*y;
+  x2-=scale_scrn_xoff;
+  y2-=scale_scrn_yoff;
+  x2=(ToF64(x2)/scale_w*640.);
+  y2=(ToF64(y2)/scale_h*480.);
+  x2=ClampI64(x2,0,640);
+  y2=ClampI64(y2,0,480);
+  *x=x2;
+  *y=y2;
 }
 U0 GrUpdateScrn()
 {//Called by the Window Manager \dLK,"HERE",A="FF:::/Adam/WinMgr.HC,GrUpdateScrn"\d, 30 times a second.
@@ -385,11 +404,15 @@ U0 GrUpdateScrn()
     (*gr.fp_final_scrn_update)(dc);
   DCDel(dc);
   if(gr.scrn_zoom==1) {
-    Scale(gr.dc2,scale_w,scale_h,scale_scrn,scale_scrn_xoff,scale_scrn_yoff);
+    dc=gr.dc2;
   } else {
     GrZoomInScrn;
-    Scale(gr.zoomed_dc,scale_w,scale_h,scale_scrn,scale_scrn_xoff,scale_scrn_yoff);
+    dc=gr.zoomed_dc;
   }
+  while(LBts(&scale_lock,0))
+    PAUSE;
+  Scale(dc,scale_w,scale_h,scale_scrn,scale_scrn_xoff,scale_scrn_yoff);
+  LBtr(&scale_lock,0);
   DrawWindowUpdate(scale_scrn,scale_scrn->body,scale_scrn->width_internal,scale_scrn->height);
   //God willing they are the same size
   MemCpy(gr.scrn_image->body,gr.dc2->body,MSize(gr.scrn_image->body));

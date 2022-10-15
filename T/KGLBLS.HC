@@ -1,9 +1,3 @@
-I64 FONT_WIDTH=8;
-I64 FONT_HEIGHT=8;
-I64 GR_WIDTH;
-I64 GR_HEIGHT;
-I64 TEXT_ROWS;
-I64 TEXT_COLS;
 extern U0 GrInit2();
 F64	*pow10_I64,
 	sys_os_version=5.030;
@@ -92,13 +86,5 @@ CGodGlbls god;
 CKeyDevGlbls keydev;
 CCPU *cpu_structs[64];
 U0 SetResolution(I64 w,I64 h) {
-  GR_HEIGHT=h;
-  GR_WIDTH=w;
-  TEXT_ROWS=(GR_HEIGHT/FONT_HEIGHT);
-  TEXT_COLS=(GR_WIDTH/FONT_WIDTH);
   GrInit2;
-  _3DaysSetResolution(w,h);
-  WinHorz(0,TEXT_COLS-1,sys_winmgr_task);
-  WinVert(0,TEXT_ROWS-1,sys_winmgr_task);
-
 }

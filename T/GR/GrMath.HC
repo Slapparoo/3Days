@@ -174,7 +174,7 @@ public U0 DCThickScale(CDC *dc=NULL)
   }
 }
 
-public I64 *Mat4x4TranslationEqu(I64 *r,I64 x,I64 y,I64 z)
+public I64 *Mat4x4TranslationEqu(I64 *r,I64 x,I64 y,I64 z)
 {//Set translation values in 4x4 matrix. Uses $LK,"fixed-point",A="FI:::/Demo/Lectures/FixedPoint.HC"$.
   r[0*4+3]=x<<32;
   r[1*4+3]=y<<32;

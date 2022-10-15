@@ -37,6 +37,7 @@ utf8_prop(Display *dpy, XEvent ev);
 static Atom wmclose;
 CDrawWindow *NewDrawWindow() {
 	if(!dw) {
+		atexit(&DrawWindowDel);
 		XInitThreads();
 		dw=TD_MALLOC(sizeof(*dw));
 		dw->disp=XOpenDisplay(NULL);
@@ -79,6 +80,7 @@ CDrawWindow *NewDrawWindow() {
 	    dw->shm_info.readOnly=False;
 	    dw->shm_info.shmaddr=dw->shm_image->data=shmat(dw->shm_info.shmid,0,0);
 	    XShmAttach(dw->disp,&dw->shm_info);
+	    XFlush(dw->disp);
 		XMapWindow(dw->disp,dw->window);
 		XEvent e;
 		while(XNextEvent(dw->disp,&e))
@@ -95,43 +97,14 @@ CDrawWindow *NewDrawWindow() {
 	}
 	return dw;
 }
-static void CenterImage(CDrawWindow *win,int64_t *x_off,int64_t *y_off) {
-	if(win->sz_x>dw->disp_w) {
-		*x_off=(win->sz_x-dw->disp_w)/2;
-	} else 
-		*x_off=0;
-	if(win->sz_y>dw->disp_h) {
-		*y_off=(win->sz_y-dw->disp_h)/2;
-	} else 
-		*y_off=0;
-}
 void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,int64_t h) {
-	sigset_t set,old_set;
-	uint8_t *colors=_colors;
-	int64_t x,y,cx,cy,b,black,white,wx,wy,b2,to,to2;
+	sigset_t old_set,set;
 	XLockDisplay(dw->disp);
 	pthread_mutex_lock(&dw->pt);
-	long screen=DefaultScreen(dw->disp);
-	Visual *vis=XDefaultVisual(dw->disp,screen);
-	int dplanes=DisplayPlanes(dw->disp,screen);
-	wx=win->sz_x>dw->disp_h?win->sz_x:dw->disp_h;
-	wy=win->sz_y>dw->disp_w?win->sz_y:dw->disp_w;
-	//We dont want to be shutdown while writing to the window
 	sigemptyset(&set);
 	sigaddset(&set,SIGUSR1);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
-	CenterImage(dw,&cx,&cy);
-	to=dw->disp_h*dw->disp_w;
-	to2=dw->disp_w;
-	int64_t off=0;
-	int64_t pad=internal_width-dw->disp_w;
-	for(b2=0;b2<to;) {
-		for(b=0;b!=to2;b++) {
-		    ((uint32_t*)dw->shm_image->data)[b2++]=palette[*colors++];
-		 }
-		 colors+=pad;
-	}
-	XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,cx,cy,dw->disp_w,dw->disp_h,False);
+	XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,0,0,dw->disp_w,dw->disp_h,False);
 	XFlush(dw->disp);
 	pthread_mutex_unlock(&dw->pt);
 	XUnlockDisplay(dw->disp);
@@ -143,11 +116,19 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	}
 	sigprocmask(SIG_SETMASK,&old_set,NULL);
 }
-void DrawWindowDel(CDrawWindow *win) {
-	XLockDisplay(dw->disp);
-	XFreeGC(dw->disp,win->gc);
-	XDestroyWindow(dw->disp,win->window);
-	XCloseDisplay(dw->disp);
+void DrawWindowDel() {
+	if(dw) {
+		XLockDisplay(dw->disp);
+		XShmDetach(dw->disp,&dw->shm_info);
+		XDestroyImage(dw->shm_image);
+		shmdt(dw->shm_info.shmaddr);
+		shmctl(dw->shm_info.shmid,IPC_RMID,NULL);
+		XFlush(dw->disp);
+		XFreeGC(dw->disp,dw->gc);
+		XDestroyWindow(dw->disp,dw->window);
+		XCloseDisplay(dw->disp);
+		dw=NULL;
+	}
 }
 #define CH_CTRLA	0x01
 #define CH_CTRLB	0x02
@@ -533,14 +514,7 @@ static int MSCallback(void *d,XEvent *e) {
             case MotionNotify:
             x=e->xmotion.x,y=e->xmotion.y;
             ent:
-            CenterImage(dw,&cx,&cy);
-            cx=x-cx;
-            cy=y-cy;
-            if(cx<0) cx=0;
-            if(cy<0) cy=0;
-            if(cx>dw->disp_w) cx=dw->disp_w;
-            if(cy>dw->disp_h) cy=dw->disp_h;
-            FFI_CALL_TOS_4(ms_cb,cx,cy,z,state);
+            FFI_CALL_TOS_4(ms_cb,x,y,z,state);
         }
     return 0;
 }
@@ -612,11 +586,11 @@ static void __InputLoop(void *ul,int64_t clip_only) {
 		if(e.type==ClientMessage) {
 			if(e.xclient.data.l[0]==wmclose) {
 				__ShutdownCores();
-				DrawWindowDel(dw);
+				DrawWindowDel();
 				exit(0);
 			}
 		} else if(e.type==DestroyNotify){
-			DrawWindowDel(dw);
+			DrawWindowDel();
 			break;
 		} else if(e.type==ConfigureNotify&&dw) {
 			if(dw->sz_x!=e.xconfigure.width||dw->sz_y!=e.xconfigure.height)
@@ -722,19 +696,24 @@ char *GrPalleteGet(int64_t c) {
 	return r;
 }
 //Expected HCRT.BIN to be loaded
-void _3DaysSetResolution(int64_t w,int64_t h) {
+void *_3DaysSetResolution(int64_t w,int64_t h) {
+	if(!dw) return calloc(4,w*h);
 	XLockDisplay(dw->disp);
 	pthread_mutex_lock(&dw->pt);
 	dw->disp_h=h;
 	dw->disp_w=w;
 	XShmDetach(dw->disp,&dw->shm_info);
-	XFree(dw->shm_image);
+	XDestroyImage(dw->shm_image);
 	shmdt(dw->shm_info.shmaddr);
+	shmctl(dw->shm_info.shmid,IPC_RMID,NULL);
+	XFlush(dw->disp);
 	dw->shm_image=XShmCreateImage(dw->disp,XDefaultVisual(dw->disp,DefaultScreen(dw->disp)),24,ZPixmap,0,&dw->shm_info,w,h);
 	dw->shm_info.shmid=shmget(IPC_PRIVATE,w*h*4,IPC_CREAT|0777);
 	dw->shm_info.readOnly=False;
 	dw->shm_info.shmaddr=dw->shm_image->data=shmat(dw->shm_info.shmid,0,0);
 	XShmAttach(dw->disp,&dw->shm_info);
+	XFlush(dw->disp);
 	pthread_mutex_unlock(&dw->pt);
 	XUnlockDisplay(dw->disp);
+	return dw->shm_info.shmaddr;
 }
