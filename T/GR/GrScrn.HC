@@ -355,22 +355,42 @@ if(!__IsCmdLine)
 asm {
   IMPORT pal;
   IMPORT scale_scrn;
+  IMPORT scale_scrn_xoff;
+  IMPORT scale_scrn_yoff;
   _NO_SCALE::
   PUSH RBP
-  MOVRBP,RSP
+  MOV RBP,RSP
   PUSH RDI
   PUSH RSI
+  PUSH R15
+  MOV RDI,U64 [scale_scrn]
+  MOV R15u32,U32 CDC.width_internal [RDI]
+  MOV RBX,R15 //save for later
+  IMUL2 R15,U64 [scale_scrn_yoff]
+  ADD R15,U64 [scale_scrn_xoff]
+  LEA R15,U64[R15*4]
+  LEA RBX,U64[RBX*4]
+  
   MOV RSI,U64 SF_ARG1[RBP]
   MOV RSI,U64 CDC.body[RSI]
-  MOV RDI,U64 [scale_scrn]
   MOV RDI,U64 CDC.body[RDI]
-  MOV RCX,GR_WIDTH*GR_HEIGHT
-@@loop:
+  ADD RDI,R15
+  
+  MOV RCX,GR_HEIGHT
+@@loopy:
+  MOV RDX,RCX
+  MOV RCX,GR_WIDTH  
+@@loopx:
   LODSB
-  ANDRAX,0xf
+  AND RAX,0xf
   MOV EAX,U32 pal[RAX*4]
   STOSD
-  LOOP @@loop
+  LOOP @@loopx
+  MOV RCX,RDX
+  SUB RDI,GR_WIDTH*4
+  ADD RDI,RBX //has internal_width*4
+  LOOP @@loopy
+  POP R15
   POP RSI
   POP RDI
   LEAVE
@@ -380,6 +400,7 @@ I64 scale_scrn_xoff=0;
 I64 scale_scrn_yoff=0;
 I64 scale_w;
 I64 scale_h;
+I64 scale_enable=1;
 I64 scale_lock=0;
 #include "Scale.HC";
 CDC *scale_scrn;
@@ -390,17 +411,33 @@ U0 SetScaleResolution(I64 w,I64 h) {
     scale_scrn=DCNew(GR_WIDTH,GR_HEIGHT,adam_task);
     Free(scale_scrn->body);
   }
-  w=MaxI64(GR_WIDTH,w);
-  h=MaxI64(GR_HEIGHT,h);
-  scale_w=ToF64(h)/480.*640.;
-  scale_h=h;
-  scale_w=MinI64(w,scale_w);
-  scale_scrn_yoff=(h-scale_h)/2;
-  scale_scrn_xoff=(w-scale_w)/2;
-  scale_scrn->body=_3DaysSetResolution(w,h);
+  w=MaxI64(w,GR_WIDTH);
+  h=MaxI64(h,GR_HEIGHT);
+  
   scale_scrn->height=h;
   scale_scrn->width=scale_scrn->width_internal=w;
-  //MemSetU32(scale_scrn->body,0,w*h);
+  scale_scrn->body=_3DaysSetResolution(w,h);
+  if(scale_enable) {
+    w=MaxI64(GR_WIDTH,w);
+    h=MaxI64(GR_HEIGHT,h);
+    scale_w=ToF64(h)/480.*640.;
+    scale_h=h;
+    scale_h=MinI64(h,scale_h);
+    if(scale_w>w) {
+      //If we cant scale across,decrease height
+      scale_h=ToF64(w)/640.*480;
+      scale_w=MinI64(w,scale_w);
+    }
+    scale_scrn_yoff=(h-scale_h)/2;
+    scale_scrn_xoff=(w-scale_w)/2;
+    //MemSetU32(scale_scrn->body,0,w*h);
+  } else {
+    MemSet(scale_scrn->body,BLACK,scale_scrn->height*scale_scrn->width*4);
+    scale_scrn_yoff=(scale_scrn->height-GR_HEIGHT)/2;
+    scale_scrn_xoff=(scale_scrn->width-GR_WIDTH)/2;
+    scale_h=GR_HEIGHT;
+    scale_w=GR_WIDTH;
+  }
   LBtr(&scale_lock,0);
 }
 U0 ScaleMouseCords(I64 *x,I64 *y) {
@@ -436,7 +473,7 @@ U0 GrUpdateScrn()
   }
   while(LBts(&scale_lock,0))
     Yield;
-  if(scale_w==GR_WIDTH&&scale_h==GR_HEIGHT) {
+  if(scale_w==GR_WIDTH&&scale_h==GR_HEIGHT||!scale_enable) {
     NoScale(dc);
   } else
     Scale(dc,scale_w,scale_h,scale_scrn,scale_scrn_xoff,scale_scrn_yoff);
@@ -444,4 +481,17 @@ U0 GrUpdateScrn()
   DrawWindowUpdate(scale_scrn,scale_scrn->body,scale_scrn->width_internal,scale_scrn->height);
   //God willing they are the same size
   MemCpy(gr.scrn_image->body,gr.dc2->body,MSize(gr.scrn_image->body));
+}
+U0 EnableScaling(Bool on=FALSE) {
+  if(!on) {
+    while(LBts(&scale_lock,0))
+      Yield;
+    MemSet(scale_scrn->body,BLACK,scale_scrn->height*scale_scrn->width*4);
+    scale_scrn_yoff=(scale_scrn->height-GR_HEIGHT)/2;
+    scale_scrn_xoff=(scale_scrn->width-GR_WIDTH)/2;
+    scale_h=GR_HEIGHT;
+    scale_w=GR_WIDTH;
+    LBtr(&scale_lock,0);
+  }
+  return LBEqu(&scale_enable,0,on);
 }

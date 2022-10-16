@@ -6520,5 +6520,6 @@ extern U0 FMRebuildDoc(CDoc **_doc,CDirEntry **_head,I64 mode);
 extern U0 SetResolution(I64 w,I64 h); 
 extern U0 SetScaleResolution(I64 w,I64 h); 
 extern U0 ScaleMouseCords(I64 *x,I64 *y);
-public extern I64i GrPaletteColorGet(I64i color_num);
+public extern I64i GrPaletteColorGet(I64i color_num);
 public extern U0 GrPaletteColorSet(I64i color_num,CBGR48 gr48);
+extern U0 EnableScaling(Bool on=FALSE);

@@ -7,7 +7,7 @@ U32 pal[16]={
 //We store the lower 4 bits in byte 1,upper 4 bits at byte 2 
 U32 *pal_mixed;
 U0 AvTabGen() {
-  if(!pal_mixed) pal_mixed=CAlloc(0x1000*4,adam_task);
+  if(!pal_mixed) pal_mixed=CAlloc(0x1000*4,adam_task);
   I64 a,b;
   U32 c,c2;
   for(a=0;a!=0x100;a++) {
@@ -167,13 +167,12 @@ yloop2:
 //we will repeat until the next line
   MOV RCX,RBX
   SUB RCX,RDI
-//get scanliune start
+//get scanline start
   MOV R10u32,U32 CDC.width_internal[R9]
   IMUL2 RDI,R10
   LEA RDI,U64 [RDI*4]
   ADD RDI,R15
   LEA RSI,U64 [RDI+R10*4] 
-row_loop: 
   //push repeat_cnt
   PUSH RCX
   PUSH U64 SF_ARG2[RBP] //sx
@@ -184,7 +183,26 @@ row_loop:
   PUSH R14
   PUSH R8
   CALL AVG_2_LINES
+  MOV RDI,RSI
+  MOV RBX,RSI //RBX(from RSI) has source of merged stuff(no need to merge agian,just copy what we have)
 //Pop the repeat count
+  POP RCX
+  DEC RCX
+  CMP RCX,0
+  JNG next3
+  MOV RDI,RSI
+  LEA RDI,[RDI+R10*4] //r10 has scanline width
+row_loop:
+  PUSH RCX
+  //RBX has start of already computed row
+  MOV RSI,RBX
+  PUSH RDI //Store RDI at start of scanline
+  //RDI has destination
+  MOV RCX,SF_ARG2[RBP]
+  LEA RCX,U64[RCX*4]
+  REP_MOVSD
+  POP RDI //pop to get start of scanline
+  LEA RDI,U64 [RDI+R10*4] //r10 has scanline width
   POP RCX
   LOOP row_loop
 next3:

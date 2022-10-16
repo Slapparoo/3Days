@@ -80,12 +80,7 @@ CDrawWindow *NewDrawWindow() {
 	    dw->shm_info.readOnly=False;
 	    dw->shm_info.shmaddr=dw->shm_image->data=shmat(dw->shm_info.shmid,0,0);
 	    XShmAttach(dw->disp,&dw->shm_info);
-	    XFlush(dw->disp);
 		XMapWindow(dw->disp,dw->window);
-		XEvent e;
-		while(XNextEvent(dw->disp,&e))
-			if(e.type==Expose)
-				break;
 		//https://stackoverflow.com/questions/10792361/how-do-i-gracefully-exit-an-x11-event-loop
 		//Here's the deal,I dont know why they made X11 like this.
 		//Send a prayer to the dude who awnsered this question.
@@ -94,6 +89,7 @@ CDrawWindow *NewDrawWindow() {
 		dw->disp_h=480;
 		dw->disp_w=640;
 		pthread_mutex_init(&dw->pt,NULL);
+		_3DaysSetResolution(640,480);
 	}
 	return dw;
 }
@@ -104,16 +100,16 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	sigemptyset(&set);
 	sigaddset(&set,SIGUSR1);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
-	XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,0,0,dw->disp_w,dw->disp_h,False);
-	XFlush(dw->disp);
+	XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,0,0,dw->disp_w,dw->disp_h,True);
 	pthread_mutex_unlock(&dw->pt);
-	XUnlockDisplay(dw->disp);
 	if(dw->reso_changed) {
 		if(map_get(&TOSLoader,"SetScaleResolution")) {
 			FFI_CALL_TOS_2(map_get(&TOSLoader,"SetScaleResolution")->data[0].val,dw->sz_x,dw->sz_y);
 			dw->reso_changed=0;
 		}
 	}
+	XFlush(dw->disp);
+	XUnlockDisplay(dw->disp);
 	sigprocmask(SIG_SETMASK,&old_set,NULL);
 }
 void DrawWindowDel() {
@@ -697,7 +693,8 @@ char *GrPalleteGet(int64_t c) {
 }
 //Expected HCRT.BIN to be loaded
 void *_3DaysSetResolution(int64_t w,int64_t h) {
-	if(!dw) return calloc(4,w*h);
+	if(!dw) return; 
+	XEvent e;
 	XLockDisplay(dw->disp);
 	pthread_mutex_lock(&dw->pt);
 	dw->disp_h=h;
@@ -706,13 +703,18 @@ void *_3DaysSetResolution(int64_t w,int64_t h) {
 	XDestroyImage(dw->shm_image);
 	shmdt(dw->shm_info.shmaddr);
 	shmctl(dw->shm_info.shmid,IPC_RMID,NULL);
-	XFlush(dw->disp);
-	dw->shm_image=XShmCreateImage(dw->disp,XDefaultVisual(dw->disp,DefaultScreen(dw->disp)),24,ZPixmap,0,&dw->shm_info,w,h);
+	memset(&dw->shm_info,0,sizeof(dw->shm_info));
 	dw->shm_info.shmid=shmget(IPC_PRIVATE,w*h*4,IPC_CREAT|0777);
 	dw->shm_info.readOnly=False;
-	dw->shm_info.shmaddr=dw->shm_image->data=shmat(dw->shm_info.shmid,0,0);
+	dw->shm_info.shmaddr=shmat(dw->shm_info.shmid,0,0);
 	XShmAttach(dw->disp,&dw->shm_info);
-	XFlush(dw->disp);
+	dw->shm_image=XShmCreateImage(dw->disp,XDefaultVisual(dw->disp,DefaultScreen(dw->disp)),24,ZPixmap,0,&dw->shm_info,w,h);
+	dw->shm_image->data=dw->shm_info.shmaddr;
+	//Wait for event to sync with server to avoid nasty stuff(push a dummy event for XSync to not hang for a next event)
+	memset(&e,0,sizeof e);
+	e.type=Expose;
+	XSendEvent(dw->disp,dw->window,False,0,&e);
+	XSync(dw->disp,False);
 	pthread_mutex_unlock(&dw->pt);
 	XUnlockDisplay(dw->disp);
 	return dw->shm_info.shmaddr;
