@@ -1,4 +1,4 @@
-Cd('T:/');; //We are not serving from RootFS
+Cd("T:/");; //We are not serving from RootFS
 Cd("/Server");;
 //This dude will refresh the search index for find.hC
 extern U0 ReIndex();
