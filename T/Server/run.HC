@@ -1,16 +1,16 @@
-Cd("T:/");; //We are not serving from RootFS
+Cd("T:/");; //We are not serving from RootFS
 Cd("/Server");;
 //This dude will refresh the search index for find.hC
 extern U0 ReIndex();
-#define WIKI_EDIT"/EDIT"
-#define WIKI_ROOT "/Wiki/"
+#define WIKI_EDIT "/EDIT"
+#define WIKI_ROOT "/Wiki"
 #define WIKI_NAME "TempleOS Tiki"
 #define WIKI_HOME "/"
 #define WIKI_INDEX "/INDEX"
 #define WIKI_SEARCH "/FIND"
 #define WIKI_PREVIEW "/Wiki/Preview"
 #define WIKI_UPLOAD "/UPLOAD"
-#define WIKI_BACKUP "/WikiBackups/"
+#define WIKI_BACKUP "/WikiBackups"
 #define WIKI_CHANGES "/CHANGES"
 #define WIKI_CHANGES_FOR_FILE "/FCHANGE"
 #define WIKI_RESTORE "/RESTORE" //Takes FILE and REVISION 
