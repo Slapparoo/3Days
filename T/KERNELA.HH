@@ -143,6 +143,7 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U0i _3DaysScaleScrn();
 import U8i *_3DaysSetResolution(I64i w,I64i h);
 import U8i *VFsFOpenR(U8i*);
 import U8i *VFsFOpenW(U8i*);
@@ -293,7 +294,7 @@ extern U0i __Exit();
 extern U0i __AwaitThread(U8i *thr);
 extern U0i __KillThread(U8i *thr);
 extern U0i SetMSCallback(U8i *fp);
-public extern U0i __Sleep(I64i mS);
+public extern U0i __Sleep(I64i mS);
 extern U0i SndFreq(I64i freq);
 public extern Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public extern Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
@@ -2787,7 +2788,7 @@ class CISOPriDesc
 
 //CDirEntry flags (Used by \dLK,"FileMgr",A="MN:FileMgr"\d())
 #define CDIR_FILENAME_LEN	38 //Must include terminator zero
-public class CDirEntry
+public class CDirEntry
 {
   CDirEntry *next,*parent,*sub;
   U8	*full_name;

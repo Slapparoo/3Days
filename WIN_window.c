@@ -530,3 +530,24 @@ void *_3DaysSetResolution(int64_t w,int64_t h) {
 	ReleaseMutex(mutex);
 	return dw->fb_addr;
 }
+static void LaunchScaler(void *c) {
+	void *fp=map_get(&TOSLoader,"ScalerMP")->data[0].val;
+	FFI_CALL_TOS_1(fp,c);
+	return 0;
+}
+void _3DaysScaleScrn(){
+	static int64_t mp_cnt;
+	//See T/GR/Scale
+	if(!mp_cnt) {
+		SYSTEM_INFO info;
+		GetSystemInfo(&info);
+		mp_cnt=info.dwNumberOfProcessors;
+	}
+	HANDLE scalers[mp_cnt];
+	int64_t i;
+	for(i=0;i!=mp_cnt;i++)
+		scalers[i]=CreateThread(NULL,0,&LaunchScaler,i,0,NULL);	
+	WaitForMultipleObjects(mp_cnt,scalers,1,INFINITE);
+	for(i=0;i!=mp_cnt;i++)
+		CloseHandle(scalers[i]);
+}

@@ -7,6 +7,7 @@
 #include <sys/shm.h>
 #include <X11/extensions/XShm.h>
 #include <pthread.h>
+#include <unistd.h>
 typedef struct CDrawWindow {
     Window window;
     Display *disp;
@@ -718,4 +719,22 @@ void *_3DaysSetResolution(int64_t w,int64_t h) {
 	pthread_mutex_unlock(&dw->pt);
 	XUnlockDisplay(dw->disp);
 	return dw->shm_info.shmaddr;
+}
+static void LaunchScaler(void *c) {
+	void *fp=map_get(&TOSLoader,"ScalerMP")->data[0].val;
+	FFI_CALL_TOS_1(fp,c);
+	pthread_exit(0);
+}
+void _3DaysScaleScrn(){
+	static int64_t mp_cnt;
+	//See T/GR/Scale
+	if(!mp_cnt) {
+		mp_cnt=sysconf(_SC_NPROCESSORS_ONLN);
+	}
+	pthread_t scalers[mp_cnt];
+	int64_t i;
+	for(i=0;i!=mp_cnt;i++)
+		pthread_create(&scalers[i],NULL,&LaunchScaler,i);	
+	for(i=0;i!=mp_cnt;i++)
+		pthread_join(scalers[i],NULL);
 }

@@ -343,8 +343,11 @@ char **VFsDir(char *fn) {
     struct dirent *ent;
     vec_str_t items;
     vec_init(&items);
-    while(ent=readdir(dir))
-		vec_push(&items,HolyStrDup(ent->d_name));
+    while(ent=readdir(dir)) {
+		//CDIR_FILENAME_LEN  is 38(includes nul terminator)
+		if(strlen(ent->d_name)<=37)
+		  vec_push(&items,HolyStrDup(ent->d_name));
+	}
     vec_push(&items,NULL);
     TD_FREE(fn);
     sz=items.length*sizeof(char*);

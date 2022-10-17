@@ -504,6 +504,9 @@ int64_t STK_VFsDrv(int64_t *stk) {
 int64_t STK__3DaysSetResolution(int64_t *stk) {
 	_3DaysSetResolution(stk[0],stk[1]);
 }
+int64_t STK__3DaysScaleScrn(int64_t *stk) {
+	_3DaysScaleScrn();
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
@@ -578,6 +581,7 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"VFsFSeek",STK_VFsFSeek,2);
     STK_RegisterFunctionPtr(&ffi_blob,"VFsSetDrv",STK_VFsDrv,1);
     STK_RegisterFunctionPtr(&ffi_blob,"_3DaysSetResolution",STK__3DaysSetResolution,2);
+    STK_RegisterFunctionPtr(&ffi_blob,"_3DaysScaleScrn",STK__3DaysScaleScrn,0);
     char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);

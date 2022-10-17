@@ -36,27 +36,34 @@ U0 GrPaletteColorGet(I64 i) {
 }
 U32 *grx_offs=CAlloc(641*4,adam_task);
 U32 *gry_offs=CAlloc(481*4,adam_task);
+//64 cores maxmimum?
+I64 *scale_mp_starts=NULL;
 U0 UpdateGROffs(I64 x,I64 y) {
-   static I64 x2,y2;
-   F64 idx;
-   I64 cnt;
-   F64 yspacing=ToF64(y)/480;
-   F64 xspacing=ToF64(x)/640;
-   if(x!=x2||y2!=y) {
-      x2=x,y2=y;
-      for(cnt=0;cnt<641;cnt++)
-         grx_offs[cnt]=Round(xspacing*cnt);
-      for(cnt=0;cnt<481;cnt++)
-         gry_offs[cnt]=Round(yspacing*cnt);
-   }
+  static I64 x2,y2;
+  F64 idx;
+  I64 cnt;
+  F64 yspacing=ToF64(y)/480;
+  F64 xspacing=ToF64(x)/640;
+  if(x!=x2||y2!=y) {
+    if(!scale_mp_starts) scale_mp_starts=CAlloc((mp_cnt+1)*sizeof(I64),adam_task);
+    for(idx=0;idx!=mp_cnt;idx++)
+      scale_mp_starts[idx]=idx*(GR_HEIGHT/mp_cnt);
+    scale_mp_starts[idx]=GR_HEIGHT;
+    x2=x,y2=y;
+    for(cnt=0;cnt<641;cnt++)
+      grx_offs[cnt]=Round(xspacing*cnt);
+    for(cnt=0;cnt<481;cnt++)
+      gry_offs[cnt]=Round(yspacing*cnt);
+  }
 }
-U0 Scale(CDC *data,I64 sx,I64 sy,CDC *result,I64 xoff,I64 yoff) {
-  I64 y_next_px;
+U0 Scale(CDC *data,I64 sx,I64 sy,CDC *result,I64 xoff,I64 yoff,I64 core) {
+  I64 noreg y_next_px;
 asm {
   IMPORT grx_offs;
   IMPORT gry_offs;
   IMPORT pal_mixed;
   IMPORTpal;
+  IMPORT scale_mp_starts;
   PUSH_REGS
   PUSH RAX
   FSTCW U16[RSP]
@@ -94,8 +101,10 @@ asm {
   LEA R15,U64 [R15*4]
   ADD R15,U64 CDC.body[R9]
   MOV RDI,R15
-//y=0
-  MOV R12,0
+//y=scale_mp_stars[Gs->num]
+  MOV RAX,U64 &core[RBP]
+  MOV RBX,U64 [scale_mp_starts]
+  MOV R12,U64 [RBX+RAX*8]
   yloop:
 //data_ptr=data->body+data->width_internal*(y/yper_px1)
   MOV ECX,U32 CDC.width_internal[R10]
@@ -152,11 +161,24 @@ next:
   MOV RCX,I64 &y_next_px[RBP] 
 next2:
   INC R12
-  CMP R12,480
+////Get start of next core's start line,loop until then
+  MOV RAX,U64 &core[RBP]
+  INC RAX
+  MOV RBX,U64 [scale_mp_starts]
+  CMP R12,U64 [RBX+RAX*8]
   JNE U32 yloop
 //
   MOV R14,U64 CDC.body[R10]
-  MOV R12,0
+////Get start of next core's start line,loop until then
+  MOV RAX,U64 &core[RBP]
+  MOV RBX,U64 [scale_mp_starts]
+  MOV R12,U64 [RBX+RAX*8]
+  INC RAX
+  MOV R13,U64 [RBX+RAX*8]
+  //Make R14 point to current scan line(R12)
+  MOV EBX,U32 CDC.width_internal[R10]
+  IMUL2 RBX,R12
+  ADD R14,RBX
 yloop2:
   MOV RDI,U64 [gry_offs]
   MOV EBX,U32 4[RDI+R12*4]
@@ -208,13 +230,13 @@ row_loop:
 next3:
   ADD R14,640
   INC R12
-  CMP R12,480
+  CMP R12,R13
   JNE U32 yloop2
   FLDCW U16[RSP]
   POP RAX
   POP_REGS
   LEAVE
-  RET1 6*8
+  RET1 7*8
 //Avg2Lines(U8 *avg_tab,u8 *line1,U8 *line2,u32 *to,U64 sx)
 AVG_2_LINES:
     PUSH RBP
@@ -262,4 +284,20 @@ AVG_2_LINES:
     RET1 5*8
   };
 }
-
+I64 scale_mp_completed=0;
+class CScalerThreadArgs {
+  CDC *data,*scrn;
+  I64 sx,sy,xoff,yoff;
+} scale_mp_args;
+//Called from window.c/WIN_window.c from ScaleScrn(int64_t core)
+U0 ScalerMP(I64 idx) {
+  Scale(
+    scale_mp_args.data,
+    scale_mp_args.sx,
+    scale_mp_args.sy,
+    scale_mp_args.scrn,
+    scale_mp_args.xoff,
+    scale_mp_args.yoff,
+    idx
+    );
+}

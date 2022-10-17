@@ -403,7 +403,7 @@ I64 scale_h;
 I64 scale_enable=1;
 I64 scale_lock=0;
 #include "Scale.HC";
-CDC *scale_scrn;
+CDC *scale_scrn=NULL;
 U0 SetScaleResolution(I64 w,I64 h) {
   while(LBts(&scale_lock,0))
     Yield;
@@ -454,6 +454,7 @@ U0 ScaleMouseCords(I64 *x,I64 *y) {
 _extern _NO_SCALE U0 NoScale(CDC *src);
 U0 GrUpdateScrn()
 {//Called by the Window Manager \dLK,"HERE",A="FF:::/Adam/WinMgr.HC,GrUpdateScrn"\d, 30 times a second.
+  I64 idx;
   CDC *dc;
     GrUpdateTextBG;
     GrUpdateTextFG;
@@ -471,12 +472,22 @@ U0 GrUpdateScrn()
     GrZoomInScrn;
     dc=gr.zoomed_dc;
   }
+  if(!scale_scrn)
+     SetScaleResolution(640,480);
   while(LBts(&scale_lock,0))
     Yield;
   if(scale_w==GR_WIDTH&&scale_h==GR_HEIGHT||!scale_enable) {
     NoScale(dc);
-  } else
-    Scale(dc,scale_w,scale_h,scale_scrn,scale_scrn_xoff,scale_scrn_yoff);
+  } else {
+    //Scale(dc,scale_w,scale_h,scale_scrn,scale_scrn_xoff,scale_scrn_yoff)
+    scale_mp_args.data=dc;
+    scale_mp_args.sx=scale_w;
+    scale_mp_args.sy=scale_h;
+    scale_mp_args.scrn=scale_scrn;
+    scale_mp_args.xoff=scale_scrn_xoff;
+    scale_mp_args.yoff=scale_scrn_yoff;
+    _3DaysScaleScrn();
+  }
   LBtr(&scale_lock,0);
   DrawWindowUpdate(scale_scrn,scale_scrn->body,scale_scrn->width_internal,scale_scrn->height);
   //God willing they are the same size
