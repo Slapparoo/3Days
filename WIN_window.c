@@ -426,7 +426,7 @@ void DrawWindowUpdate(struct CDrawWindow *ul,int8_t *colors,int64_t internal_wid
 	SetDIBitsToDevice(dc,0,0,dw->sz_x,dw->sz_y,0,0,0,dw->sz_y,dw->fb_addr,&binfo,DIB_RGB_COLORS);
 	ReleaseMutex(mutex);
 	ReleaseDC(dw->win,dc);
-	if(dw->changed_reso) {
+	if(dw->changed_reso&&rct.right-rct.left!=dw->sz_x&&rct.bottom-rct.top!=dw->sz_y) {
 		if(map_get(&TOSLoader,"SetScaleResolution")) {
 			FFI_CALL_TOS_2(map_get(&TOSLoader,"SetScaleResolution")->data[0].val,rct.right-rct.left,rct.bottom-rct.top);
 			dw->changed_reso=0;
