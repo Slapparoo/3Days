@@ -694,7 +694,7 @@ char *GrPalleteGet(int64_t c) {
 }
 //Expected HCRT.BIN to be loaded
 void *_3DaysSetResolution(int64_t w,int64_t h) {
-	if(!dw) return; 
+	if(!dw) return NULL; 
 	XEvent e;
 	XLockDisplay(dw->disp);
 	pthread_mutex_lock(&dw->pt);

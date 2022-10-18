@@ -1,4 +1,4 @@
-CC=gcc
+CC=clang
 CFLAGS=$(shell pkg-config --cflags portaudio-2.0) -Ofast -g3 -lm -m64 -fno-omit-frame-pointer -DUSE_NETWORKING 
 CFILES=ext/ln/linenoise.c sound.c main.c ext/dyad/src/dyad.c ext/vec/src/vec.c ext/map/src/map.c TOSPrint.c ext/C_Unescaper/escaper.c ext/argtable3/argtable3.c runtime.c poopalloc.c tos_aot.c window.c multic.c vfs.c dbg.c
 AFILES=FFI_SYSV.yasm

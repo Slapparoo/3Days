@@ -273,10 +273,9 @@ static char *BackTrace(void *ptr) {
 	}
 	void **rbp=__builtin_frame_address(0);
 	void *oldp;
+	ptr=__builtin_return_address(1);
 	while(rbp) {
-		ptr=*(rbp+1);
 		oldp=NULL;
-		rbp=*rbp;
 		last="UNKOWN";
 		for(idx=0;idx!=sz;idx++) {
 			void *curp=map_get(&TOSLoader,sorted[idx])->data[0].val; 
@@ -291,6 +290,8 @@ static char *BackTrace(void *ptr) {
 			last=sorted[idx];
 		}
 		next:;
+		ptr=*(rbp+1);
+		rbp=*rbp;
     }
 }
 void FualtCB() {

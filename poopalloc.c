@@ -34,6 +34,7 @@ void *NewVirtualChunk(int64_t sz,int64_t low32) {
         ret=mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_32BIT,-1,0);
     else
         ret=mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+    printf("%p,%p\n",ret,sz);
     return ret;
 	#else
     if(low32) {
