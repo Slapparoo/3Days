@@ -15,10 +15,11 @@ U0 InitFX() {
 InitFX;
 extern U0 InitHeaps();
 InitHeaps;
-CHeapCtrl ahc;
+CHeapCtrl ahc,ahd;
 HeapCtrlInit(&ahc,Fs,0);
+HeapCtrlInit(&ahd,Fs,1);
 SetFs(MAlloc(sizeof(CTask),&ahc));
-Fs->data_heap=&ahc;
+Fs->data_heap=&ahd;
 Fs->code_heap=&ahc;
 Fs->cur_dir=StrNew("T:/",&ahc);
 U32 SYS_CTRL_ALT_FLAGS=0;

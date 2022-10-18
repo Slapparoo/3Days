@@ -18,11 +18,13 @@
 #include <sysinfoapi.h>
 #include <winnt.h>
 #endif
+static void *min32;
 void *NewVirtualChunk(int64_t sz,int64_t low32) {
 	#ifndef TARGET_WIN32
 	static int64_t ps;
 	if(!ps) {
 			ps=sysconf(_SC_PAGE_SIZE);
+			min32=ps;
 	}
 	int64_t pad=ps;
 	void *ret;
@@ -30,9 +32,17 @@ void *NewVirtualChunk(int64_t sz,int64_t low32) {
 	pad=sz%ps;
 	if(pad)
 		pad=ps;
-    if(low32)
-        ret=mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_32BIT,-1,0);
-    else
+    if(low32) {
+		for(;min32<(1ll<<31);min32+=ps) {
+			//if(VirtIsAvail(min32,sz/ps*ps+pad)) {
+				ret=mmap(min32,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_FIXED,-1,0);
+				if(ret!=MAP_FAILED) {
+					min32+=sz/ps*ps+pad;
+					break;
+				}
+			//}
+		}
+    } else
         ret=mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
     return ret;
 	#else
@@ -75,6 +85,8 @@ void FreeVirtualChunk(void *ptr,size_t s) {
 	pad=s%ps;
 	if(pad)
 		pad=ps;
+	if(ptr<min32)
+		min32=ptr;
 	munmap(ptr,s/ps*ps+pad);
 	#endif
 }
