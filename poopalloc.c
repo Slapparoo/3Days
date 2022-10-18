@@ -18,6 +18,9 @@
 #include <sysinfoapi.h>
 #include <winnt.h>
 #endif
+static int64_t VirtIsAvail(void *ptr,int64_t sz) {
+	return 0!=msync(ptr,sz,MS_ASYNC);
+}
 static void *min32;
 void *NewVirtualChunk(int64_t sz,int64_t low32) {
 	#ifndef TARGET_WIN32
@@ -34,13 +37,13 @@ void *NewVirtualChunk(int64_t sz,int64_t low32) {
 		pad=ps;
     if(low32) {
 		for(;min32<(1ll<<31);min32+=ps) {
-			//if(VirtIsAvail(min32,sz/ps*ps+pad)) {
+			if(VirtIsAvail(min32,sz/ps*ps+pad)) {
 				ret=mmap(min32,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_FIXED,-1,0);
 				if(ret!=MAP_FAILED) {
 					min32+=sz/ps*ps+pad;
 					break;
 				}
-			//}
+			}
 		}
     } else
         ret=mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
