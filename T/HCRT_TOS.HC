@@ -19,7 +19,7 @@ CHeapCtrl ahc,ahd;
 HeapCtrlInit(&ahc,Fs,0);
 HeapCtrlInit(&ahd,Fs,1);
 SetFs(MAlloc(sizeof(CTask),&ahc));
-Fs->data_heap=&ahd;
+Fs->data_heap=&ahd;
 Fs->code_heap=&ahc;
 Fs->cur_dir=StrNew("T:/",&ahc);
 U32 SYS_CTRL_ALT_FLAGS=0;
@@ -117,17 +117,7 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "AutoComplete/MakeAC.HC"
 #include "God/MakeGod.HC"
 #include "Find.HC"
-U8 *StrNew(U8 *s,CTask *t=0) {
-	U8 *r;
-	StrCpy(r=MAlloc(StrLen(s)+2,t),s);
-	return r;
-} 
-U8 *MAllocIdent(U8 *s,CTask *t=0) {
-	U8 *r;
-	MemCpy(r=MAlloc(MSize(s),t),s,MSize(s));
-	return r;
-} 
-#include "ARegistry.HC"
+#include "ARegistry.HC"
 #include "AHash.HC"
 #include "ADskA.HC"
 #include "ADskB.HC"

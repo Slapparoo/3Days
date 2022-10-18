@@ -18,10 +18,20 @@
 #include <sysinfoapi.h>
 #include <winnt.h>
 #endif
-static int64_t VirtIsAvail(void *ptr,int64_t sz) {
-	return 0!=msync(ptr,sz,MS_ASYNC);
-}
 static void *min32;
+static int64_t Hex2I64(char *ptr,char **_res) {
+	int64_t res=0;
+	while(isxdigit(*ptr)) {
+		res<<=4;
+		if(isalpha(*ptr))
+			res+=toupper(*ptr)-'A'+10;
+		else
+			res+=*ptr-'0';
+		ptr++;
+	}
+	if(_res) *_res=ptr;
+	return res;
+}
 void *NewVirtualChunk(int64_t sz,int64_t low32) {
 	#ifndef TARGET_WIN32
 	static int64_t ps;
@@ -31,19 +41,38 @@ void *NewVirtualChunk(int64_t sz,int64_t low32) {
 	}
 	int64_t pad=ps;
 	void *ret;
-	sz+=ps;
 	pad=sz%ps;
 	if(pad)
 		pad=ps;
     if(low32) {
-		for(;min32<(1ll<<31);min32+=ps) {
-			if(VirtIsAvail(min32,sz/ps*ps+pad)) {
-				ret=mmap(min32,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_FIXED,-1,0);
-				if(ret!=MAP_FAILED) {
-					min32+=sz/ps*ps+pad;
-					break;
+		ret=mmap(min32,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_32BIT,-1,0);
+		//Ok Linus Torvalds,im going to have to look at the /proc/self/maps to find some of that 32bit jazz
+		char buffer[1<<16];
+		char *ptr;
+		//I hear that poo poo linux doesn't like addresses within the first 16bits 
+		void *down=(void*)0x11000;
+		FILE *map;
+		if(ret==MAP_FAILED) {
+			map=fopen("/proc/self/maps","r");
+			int64_t len;
+			buffer[fread(buffer,1,1<<16,map)]=0;
+			ptr=buffer;
+			while(1) {
+				void *lower=Hex2I64(ptr,&ptr);
+				if((lower-down)>=(sz/ps*ps+pad)&&lower>down) {
+					goto found;
 				}
+				//Ignore '-'
+				ptr++;
+				void *upper=Hex2I64(ptr,&ptr);
+				down=upper;
+				ptr=strchr(ptr,'\n');
+				if(!ptr) break;
+				ptr++;
 			}
+			found:
+			fclose(map);
+			return ret=mmap(down,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_FIXED|MAP_32BIT,-1,0);
 		}
     } else
         ret=mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
@@ -84,7 +113,6 @@ void FreeVirtualChunk(void *ptr,size_t s) {
 			ps=sysconf(_SC_PAGE_SIZE);
 	}
 	int64_t pad;
-	s+=ps;
 	pad=s%ps;
 	if(pad)
 		pad=ps;

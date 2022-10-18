@@ -97,8 +97,7 @@ Return: NULL if out of memory.
   PUSHFD
   old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   res=NewVirtualChunk(pags<<MEM_PAG_BITS,!bp);
-  TOSPrint("%p,%p,%p,%p\n",res,pags,pags<<MEM_PAG_BITS,bp);  
-  ins:
+  ins:
   QueInit(res);
   QueInit(&res->next2);
   res->pags=pags;
