@@ -55,6 +55,7 @@ enum
 };
 #endif
 static void routine(int sig,struct siginfo_t *info,ucontext_t *ctx) {
+	FualtCB();
 	vec_CHash_t *d;
 	void *fun;
 	int64_t regs[16+3];

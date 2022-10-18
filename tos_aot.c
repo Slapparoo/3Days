@@ -251,11 +251,45 @@ void *Load(char *fn,int64_t ld_flags) {
     //Stuff may still be using data once we exit
     //PoopFree(bfh_addr);
 }
-#ifdef TARGET_WIN32
-void FualtCB() {
-	vec_CHash_t *FualtCB=map_get(&TOSLoader,"FualtRoutine");
-	if(FualtCB)
-		FFI_CALL_TOS_0(FualtCB->data[0].val);
-    exit(1);
+static int CmpPtr(void *a,void *b) {
+	return map_get(&TOSLoader,*(char**)a)->data[0].val>map_get(&TOSLoader,*(char**)b)->data[0].val;
 }
-#endif
+static char *BackTrace(void *ptr) {
+	static char **sorted;
+	static int64_t sz;
+	int64_t idx;
+	char *cur;
+	char *last;
+	if(!sz) {
+		map_iter_t iter=map_iter(&TOSLoader);
+		while(map_next(&TOSLoader,&iter))
+			sz++;
+		sorted=calloc(sz,8);
+		idx=0;
+		iter=map_iter(&TOSLoader);
+		while(cur=map_next(&TOSLoader,&iter))
+			sorted[idx++]=cur;
+		qsort(sorted,sz,8,&CmpPtr);
+	}
+	void **rbp=__builtin_frame_address(0);
+	while(rbp) {
+		ptr=*(rbp+1);
+		rbp=*rbp;
+		last="UNKOWN";
+		for(idx=0;idx!=sz;idx++) {
+			void *curp=map_get(&TOSLoader,sorted[idx])->data[0].val; 
+			if(curp==ptr) {
+				puts(sorted[idx]);
+			} else
+				last=sorted[idx];
+			if(curp>ptr) {
+				puts(last);
+				goto next;
+			}
+		}
+		next:;
+    }
+}
+void FualtCB() {
+	BackTrace(NULL);
+}
