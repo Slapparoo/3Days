@@ -272,8 +272,10 @@ static char *BackTrace(void *ptr) {
 		qsort(sorted,sz,8,&CmpPtr);
 	}
 	void **rbp=__builtin_frame_address(0);
+	void *oldp;
 	while(rbp) {
 		ptr=*(rbp+1);
+		oldp=NULL;
 		rbp=*rbp;
 		last="UNKOWN";
 		for(idx=0;idx!=sz;idx++) {
@@ -282,9 +284,10 @@ static char *BackTrace(void *ptr) {
 				puts(sorted[idx]);
 			} 
 			if(curp>ptr) {
-				puts(last);
+				printf("%s[%p+%p]\n",last,ptr,ptr-oldp);
 				goto next;
 			}
+			oldp=curp;
 			last=sorted[idx];
 		}
 		next:;

@@ -26,6 +26,7 @@ void *NewVirtualChunk(int64_t sz,int64_t low32) {
 	}
 	int64_t pad=ps;
 	void *ret;
+	sz+=ps;
 	pad=sz%ps;
 	if(pad)
 		pad=ps;
@@ -33,7 +34,6 @@ void *NewVirtualChunk(int64_t sz,int64_t low32) {
         ret=mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_32BIT,-1,0);
     else
         ret=mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
-    printf("%p,%d\n",ret,ps);
     return ret;
 	#else
     if(low32) {
@@ -71,6 +71,7 @@ void FreeVirtualChunk(void *ptr,size_t s) {
 			ps=sysconf(_SC_PAGE_SIZE);
 	}
 	int64_t pad;
+	s+=ps;
 	pad=s%ps;
 	if(pad)
 		pad=ps;
