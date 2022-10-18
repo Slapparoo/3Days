@@ -280,12 +280,12 @@ static char *BackTrace(void *ptr) {
 			void *curp=map_get(&TOSLoader,sorted[idx])->data[0].val; 
 			if(curp==ptr) {
 				puts(sorted[idx]);
-			} else
-				last=sorted[idx];
+			} 
 			if(curp>ptr) {
 				puts(last);
 				goto next;
 			}
+			last=sorted[idx];
 		}
 		next:;
     }
