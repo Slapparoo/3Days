@@ -1,9 +1,3 @@
-CQue valid_blks;
-I64 mem_blks_lock;
-U0 InitHeaps() {
-  mem_blks_lock=0;
-  QueInit(&valid_blks);
-}
 U0 SysBadFree(I64 *ptr)
 {
    "AT:%p\n",ptr;
@@ -84,57 +78,6 @@ U0 MemBlkCacheRemove(CBlkCache *cache,CMemBlk *blk) {
     LBtr(&cache->spin_lock,0);
   }
 }
-Bool IsValidPtr(U8 *ptr,I64 sz=1) {
-  CMemBlk *blk;
-  I64 addr,k;
-  U8 *src;
-  if(blk=GetMemBlkFromCache(&blk_cache,ptr)) {
-  } else {
-    while(LBts(&mem_blks_lock,0))
-      PAUSE;
-    blk=valid_blks.next;
-    while(blk!=&valid_blks) {
-      blk=blk(U8*)-CMemBlk.next2;
-      if(blk(U8*)<=ptr<blk(U8*)+blk->pags<<MEM_PAG_BITS) {
-        MemBlkCacheAdd(&blk_cache,blk);
-        LBtr(&mem_blks_lock,0);
-        goto en;
-      }
-      blk=blk(U8*)+CMemBlk.next2;
-      blk=blk->next;
-    }
-    LBtr(&mem_blks_lock,0);
-//TODO
-//Could be allocated outside of holyC heap(from 3d_loader?)
-    return FALSE; 
-f:
-    for(k=0;TRUE;k++) {
-      //IsValidPtr+1
-      //_SYS_WHINE_OOB+2
-      if(!Caller(k+2)) break;
-      src=SrcEdLink(Caller(k+2));
-      if(src)
-        TOSPrint("[%d] %s\n",k+1,src);
-      else
-        TOSPrint("[%d] ???\n",k+1);
-      Free(src);
-    }
-    return FALSE;
-  }
-en:
-  //https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/37752.pdf
-  //Here the deal,the allocator provides rounded to 8-byte sizes,with 8-byte "useless" room
-  //So we only need to check for an 8-byte  practically
-  addr=(ptr-blk(U8*))>>3;
-  /*
-  k=blk->shadow[addr];
-  if(k&&(addr&7)+sz>k)
-    return TRUE;
-  */
-  if(!blk->shadow[addr])
-    goto f;
-  return TRUE;
-}
 #else
 Bool IsValidPtr(U8 *ptr,I64 sz=1) {
   "Use '-b' on 3d_loader to enable bounds-checker.\n";
@@ -154,13 +97,10 @@ Return: NULL if out of memory.
   PUSHFD
   old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   res=NewVirtualChunk(pags<<MEM_PAG_BITS,!bp);
+  TOSPrint("%p\n",res);  
   ins:
   QueInit(res);
   QueInit(&res->next2);
-  while(LBts(&mem_blks_lock,0))
-    PAUSE;
-  QueIns(&res->next2,valid_blks.last);
-  LBtr(&mem_blks_lock,0);
   res->pags=pags;
   res->mb_signature=MBS_UNUSED_SIGNATURE_VAL;
 #ifdef BC_ENABLE
@@ -247,12 +187,8 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
       SysBadFree(m);
     else {
       QueRem(m);
-      while(LBts(&mem_blks_lock,0))
-        PAUSE;
-      QueRem(&m->next2);
-      LBtr(&mem_blks_lock,0);
-      hc->alloced_u8s-=m->pags<<MEM_PAG_BITS;
-      MemPagFree(m,NULL);
+      hc->alloced_u8s-=m->pags<<MEM_PAG_BITS;
+      MemPagFree(m,NULL);
     }
     if(old)
 	  BreakUnlock;
@@ -272,20 +208,3 @@ asm {
 	LEAVE
 	RET1	16
 };
-Bool IsInValidBlk(U8 *ptr) {
-  Bool ret=FALSE;
-  CMemBlk *blks=valid_blks.next;
-  while(LBts(&mem_blks_lock,0))
-    PAUSE;
-  while(blks!=&valid_blks) {
-    blks=blks(U8*)-CMemBlk.next2;  
-    if(blks(U8*)<=ptr<blks(U8*)+blks->pags<<MEM_PAG_BITS) {
-      ret=TRUE;
-      break;
-    }
-    blks=blks(U8*)+CMemBlk.next2;
-    blks=blks->next;
-  }
-  LBtr(&mem_blks_lock,0);
-  return ret;
-}
