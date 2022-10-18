@@ -97,7 +97,7 @@ Return: NULL if out of memory.
   PUSHFD
   old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   res=NewVirtualChunk(pags<<MEM_PAG_BITS,!bp);
-  TOSPrint("%p\n",res);  
+  TOSPrint("%p,%p,%p,%p\n",res,pags,pags<<MEM_PAG_BITS,bp);  
   ins:
   QueInit(res);
   QueInit(&res->next2);
@@ -187,7 +187,7 @@ U0 MemPagTaskFree(CMemBlk *m,CHeapCtrl *hc)
       SysBadFree(m);
     else {
       QueRem(m);
-      hc->alloced_u8s-=m->pags<<MEM_PAG_BITS;
+      hc->alloced_u8s-=m->pags<<MEM_PAG_BITS;
       MemPagFree(m,NULL);
     }
     if(old)
