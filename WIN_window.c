@@ -328,7 +328,10 @@ static int MSCallback(HWND hwnd,void *d,UINT msg,WPARAM w,LPARAM e) {
     if(ms_cb) {
 		switch(msg) {
 			case WM_MOUSEWHEEL:
-			z+=GET_WHEEL_DELTA_WPARAM(w);
+			if(GET_WHEEL_DELTA_WPARAM(w)>1)
+				z-=1;
+			else
+				z+=1;
 			goto ent;
             case WM_LBUTTONDOWN:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
