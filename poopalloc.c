@@ -72,10 +72,11 @@ void *NewVirtualChunk(int64_t sz,int64_t low32) {
 			}
 			found:
 			fclose(map);
-			return ret=mmap(down,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_FIXED|MAP_32BIT,-1,0);
+			ret=mmap(down,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON|MAP_FIXED|MAP_32BIT,-1,0);
 		}
     } else
         ret=mmap(NULL,sz/ps*ps+pad,PROT_EXEC|PROT_WRITE|PROT_READ,MAP_PRIVATE|MAP_ANON,-1,0);
+    if(ret==MAP_FAILED) return NULL;
     return ret;
 	#else
     if(low32) {

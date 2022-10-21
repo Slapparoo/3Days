@@ -464,6 +464,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 	PAINTSTRUCT ps;
 	int64_t cx,cy;
 	RECT *lr;
+	if(_shutdown) goto kill;
 	switch(msg) {
 		case WM_SIZE:
 		case WM_SIZING:
@@ -501,6 +502,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 			ReleaseMutex(mutex);
 			break;
 		case WM_DESTROY:
+kill:
 			PostQuitMessage(0);
 			return 0;
 	}

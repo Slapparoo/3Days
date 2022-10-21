@@ -136,12 +136,20 @@ void __ShutdownCore(int core) {
 	pthread_kill(cores[core].thread,SIGUSR1);
 	pthread_join(cores[core].thread,NULL);
 	#else
-	TerminateThread(cores[core].thread,0);
-	WaitForMultipleObjects(1,&cores[core].thread,TRUE,INFINITE);
+	CONTEXT ctx;
+	SuspendThread(cores[core].thread);
+	GetThreadContext(cores[core].thread,&ctx);
+	ctx.Rip=&ExitCore;
+	SetThreadContext(cores[core].thread,&ctx);
+	ResumeThread(cores[core].thread);
+	WaitForSingleObject(cores[core].thread,INFINITE);
 	#endif
 }
 void __ShutdownCores() {
 	int c;
-	for(c=0;c!=mp_cnt(NULL);c++)
-	  __ShutdownCore(c);
+	for(c=0;c<mp_cnt(NULL);c++) {
+	   if(c!=__core_num)
+	   	  __ShutdownCore(c);
+	}
+	__ShutdownCore(__core_num);
 }

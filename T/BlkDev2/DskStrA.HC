@@ -339,5 +339,7 @@ returns default.
   }
   Free(st);
   Free(ext);
+  if(!dft) dft=DirNameAbs(dirname);
   return dft;
 }
+

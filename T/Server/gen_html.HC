@@ -6,7 +6,7 @@ U0 FileGet(CServer *srv,CDyadStream*stream,CURL *url,CHTTPRequest *req) {
   U8 *link=ChrootFile(url->abs_path);
   U8 *f,*mime,*dot=FileExtDot(link);
   I64 len;
-  if(dot&&FileFind(link)){
+  if(dot&&FileFind(link,,FUF_Z_OR_NOT_Z)){
     if(!StrICmp(dot,".GIF")||!StrICmp(dot,".GIF.Z")) mime="image/gif";
     else if(!StrICmp(dot,".JPEG")||!StrICmp(dot,".JPEG.Z")) mime="image/jpeg";
     else if(!StrICmp(dot,".JPG")||!StrICmp(dot,".JPG.Z")) mime="image/jpg";
@@ -375,7 +375,7 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
   QueInit(markup);
   QueInit(headers);
   cheader=headers;
-  last=markup;
+  last=markup;
   if(!StrLen(url->abs_path)||!StrCmp(url->abs_path,"/")) {
     path=StrNew(WIKI_ROOT"/WikiHome");
     //Copy into URL to "redirect"
@@ -387,7 +387,7 @@ U0 WikiGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
     Free(path);
     path=t1;
   }
-  if(FileFind(path)&&!IsDir(path)) {
+  if(FileFind(path,,FUF_Z_OR_NOT_Z)&&!IsDir(path)) {
 //dummy write an index to compute its length
     WriteLn(stream,,"HTTP/1.1 200 OK");
     WriteLn(stream,,"Server: Bungis");

@@ -73,7 +73,7 @@ static pthread_t core0;
 static HANDLE core0;
 #endif
 static int is_cmd_line=0;
-static int64_t _shutdown=0;
+int64_t _shutdown=0;
 int64_t IsCmdLine() {
 	return is_cmd_line;
 }
@@ -230,6 +230,7 @@ int main(int argc,char **argv)
 CLoader Loader;
 void __Shutdown() {
 	_shutdown=1;
-	__ShutdownCore(0);
+	__ShutdownCores();
+	exit(0);
 }
 char *cipher_passwd;

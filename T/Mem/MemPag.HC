@@ -82,7 +82,7 @@ U0 MemBlkCacheRemove(CBlkCache *cache,CMemBlk *blk) {
 Bool IsValidPtr(U8 *ptr,I64 sz=1) {
   "Use '-b' on 3d_loader to enable bounds-checker.\n";
   throw('UseBC');
-};
+};
 #endif
 U8 *MemPagAlloc(I64 pags,CBlkPool *bp=NULL)
 {/*Alloc pags from BlkPool. Don't link to task.
@@ -97,7 +97,8 @@ Return: NULL if out of memory.
   PUSHFD
   old=!Bts(&(Fs->task_flags),TASKf_BREAK_LOCKED); 
   res=NewVirtualChunk(pags<<MEM_PAG_BITS,!bp);
-  ins:
+  if(!res) return NULL;
+  ins:
   QueInit(res);
   QueInit(&res->next2);
   res->pags=pags;
