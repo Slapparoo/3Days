@@ -140,6 +140,11 @@ U0 DebuggerLandWin(I64 sig,I64 *gps) {
   CBpt *bp;
   CTask clone;
   UnblockSignals;
+  if(Fs==sys_winmgr_task) {
+    //Oh no,you crashed the window manager
+    TOSPrint("You crashed the window manager,aborting\n");
+    Exit3Days;
+  }
   Bool b=FALSE;
 //General purpose registers are in this order,16 is RIP
   //https://wiki.osdev.org/X86-64_Instruction_Encoding
@@ -203,6 +208,11 @@ U0 DebuggerLand(I64 sig,I64 *gps) {
   CTask clone;
   UnblockSignals;
   FaultCB(gps[5],gps[16]);
+  if(Fs==sys_winmgr_task) {
+    //Oh no,you crashed the window manager
+    TOSPrint("You crashed the window manager,aborting\n");
+    Exit3Days;
+  }
 //General purpose registers are in this order,16 is RIP
   //https://wiki.osdev.org/X86-64_Instruction_Encoding
   _RAX=gps[0];
@@ -335,7 +345,7 @@ Bool B(U8 *addr,CTask *task=NULL,Bool live=TRUE)
     BptR(addr,task,live,TRUE);
     res=TRUE;
   } else
-    BptS(addr,task,live);
+    BptS(addr,task,live);
   if(bl)
     BreakUnlock;
   POPFD

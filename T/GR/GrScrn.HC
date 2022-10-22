@@ -404,9 +404,14 @@ I64 scale_enable=1;
 I64 scale_lock=0;
 #include "Scale.HC";
 CDC *scale_scrn=NULL;
+CTask *scale_lock_task=NULL;
 U0 SetScaleResolution(I64 w,I64 h) {
-  while(LBts(&scale_lock,0))
+  while(LBts(&scale_lock,0)) {
+    if(scale_lock_task==Fs)
+      break;
     Yield;
+  }
+  scale_lock_task=Fs;
   if(!scale_scrn) {
     scale_scrn=DCNew(GR_WIDTH,GR_HEIGHT,adam_task);
     Free(scale_scrn->body);
@@ -438,6 +443,7 @@ U0 SetScaleResolution(I64 w,I64 h) {
     scale_h=GR_HEIGHT;
     scale_w=GR_WIDTH;
   }
+  scale_lock_task=NULL;
   LBtr(&scale_lock,0);
 }
 U0 ScaleMouseCords(I64 *x,I64 *y) {
@@ -474,8 +480,12 @@ U0 GrUpdateScrn()
   }
   if(!scale_scrn)
      SetScaleResolution(640,480);
-  while(LBts(&scale_lock,0))
+  while(LBts(&scale_lock,0)) {
+    if(scale_lock_task==Fs)
+      break;
     Yield;
+  }
+  scale_lock_task=Fs;
   if(scale_w==GR_WIDTH&&scale_h==GR_HEIGHT||!scale_enable) {
     NoScale(dc);
   } else {
@@ -488,8 +498,9 @@ U0 GrUpdateScrn()
     scale_mp_args.yoff=scale_scrn_yoff;
     _3DaysScaleScrn();
   }
-  LBtr(&scale_lock,0);
   DrawWindowUpdate(scale_scrn,scale_scrn->body,scale_scrn->width_internal,scale_scrn->height);
+  scale_lock_task=NULL;
+  LBtr(&scale_lock,0);
   //God willing they are the same size
   MemCpy(gr.scrn_image->body,gr.dc2->body,MSize(gr.scrn_image->body));
 }

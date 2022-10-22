@@ -726,7 +726,11 @@ static void LaunchScaler(void *c) {
 	pthread_exit(0);
 }
 void _3DaysScaleScrn(){
+	sigset_t set,old_set;
 	static int64_t mp_cnt;
+	sigemptyset(&set);
+	sigaddset(&set,SIGUSR1);
+	sigprocmask(SIG_BLOCK,&set,&old_set);
 	//See T/GR/Scale
 	if(!mp_cnt) {
 		mp_cnt=sysconf(_SC_NPROCESSORS_ONLN);
@@ -737,4 +741,5 @@ void _3DaysScaleScrn(){
 		pthread_create(&scalers[i],NULL,&LaunchScaler,i);	
 	for(i=0;i!=mp_cnt;i++)
 		pthread_join(scalers[i],NULL);
+	sigprocmask(SIG_SETMASK,&old_set,NULL);
 }

@@ -1,3 +1,23 @@
+/**
+ * Heres the deal,this is code written by nroot for scaling the screen to higher resolutions
+ * There are 2 mixing tables,one takes 2 pixels and the other takes 4 pixels
+ * The 2 pixel table goes across the x-axis and is used for "inbetween" pixels 
+ *   [x+0]<--mixed-->[x+1]
+ * The 4 pixel table will across the y-axis,but takes account for the x-axises mixed pixels
+ *  [x+0]<--mixef-->[x+1] //Y+0
+ *  /\     /\        /\
+ *  ||     ||        ||
+ *  \/     \/        \/
+ *  [x+0]<--mixed-->[x+1] //Y+1
+ *  [x+0] is mixed  with ([x,y],[x,y],[x,y+1],[x,y+1])
+ *  The Inbetween is mixed  with ([x,y],[x+1,y],[x,y+1],[x+1,y+1])
+ *
+*
+ * The internal resolution is still 640/480,but we use the grx/gry_offs tables
+ * to map the cordnates to the scaled screen. The inbetween pixels are mixed (see above) 
+ * 
+ * In window.c and WIN_window.c, the ScalerMP is called in multiple threads. It's pretty epic
+ */
 U32 pal[16]={
 (0x000000),(0x0000AA),(0x000AA00),(0x00AAAA),
 (0xAA0000),(0xAA00AA),(0xAA5500),(0xAAAAAA),
@@ -5,17 +25,30 @@ U32 pal[16]={
 (0xFF5555),(0xFF55FF),(0xFFFF55),(0xFFFFFF)
 };
 //We store the lower 4 bits in byte 1,upper 4 bits at byte 2 
-U32 *pal_mixed;
+U32 *pal_mixed,*pal_mixed2;
 U0 AvTabGen() {
   if(!pal_mixed) pal_mixed=CAlloc(0x1000*4,adam_task);
+  if(!pal_mixed2) pal_mixed2=CAlloc(0x10000*4,adam_task);
   I64 a,b;
   U32 c,c2;
+  U32 mixed,mixed2;
   for(a=0;a!=0x100;a++) {
      b=(a&0xf0)>>4;
      c=pal[a&0xf],c2=pal[a>>4];
      //https://www.compuphase.com/graphic/scale3.htm
      pal_mixed[(a&0xf)|b<<8]=((c^c2)&0xfffefefe)>>1+(c&c2);
   }
+  for(b=0;b!=0x100;b++)
+    for(a=0;a!=0x100;a++) {
+       c=pal[a&0xf],c2=pal[a>>4];
+       //https://www.compuphase.com/graphic/scale3.htm
+       mixed=((c^c2)&0xfffefefe)>>1+(c&c2);
+       c=pal[b&0xf],c2=pal[b>>4];
+       mixed2=((c^c2)&0xfffefefe)>>1+(c&c2);
+       c=mixed,c2=mixed2;
+       pal_mixed2[a|b<<8]=((c^c2)&0xfffefefe)>>1+(c&c2);
+       
+    }
 }
 AvTabGen;
 U0 GrPaletteColorSet(I64 i,CBGR48 v){
@@ -54,15 +87,22 @@ U0 UpdateGROffs(I64 x,I64 y) {
       grx_offs[cnt]=Round(xspacing*cnt);
     for(cnt=0;cnt<481;cnt++)
       gry_offs[cnt]=Round(yspacing*cnt);
+    //Remove "big" gaps
+    for(cnt=1;cnt<640;cnt++)
+      grx_offs[cnt]=(ToF64(grx_offs[cnt])+ToF64(grx_offs[cnt+1]))/2.;   
+    for(cnt=0;cnt<480;cnt++)
+      gry_offs[cnt]=(ToF64(gry_offs[cnt])+ToF64(gry_offs[cnt+1]))/2.;   
   }
 }
 U0 Scale(CDC *data,I64 sx,I64 sy,CDC *result,I64 xoff,I64 yoff,I64 core) {
   I64 noreg y_next_px;
 asm {
+  IMPORT scale_mp_first_row_completed;
   IMPORT grx_offs;
   IMPORT gry_offs;
   IMPORT pal_mixed;
-  IMPORTpal;
+  IMPORT pal_mixed2;
+  IMPORT pal;
   IMPORT scale_mp_starts;
   PUSH_REGS
   PUSH RAX
@@ -135,10 +175,10 @@ xloop:
   MOV R14u32,U32 [R14+R11*4]
   MOV U32 [RDI+R14*4],EAX
   CMP RBX,R14
-  JE next
+  JE I32 next
   //Dont go past next pixel
   CMP R11,639
-  JE next
+  JE I32 next
   MOV RCX,RBX
   SUB RCX,R14
   //Avg between 2 color bytes
@@ -163,8 +203,12 @@ next2:
   INC R12
 ////Get start of next core's start line,loop until then
   MOV RAX,U64 &core[RBP]
-  INC RAX
   MOV RBX,U64 [scale_mp_starts]
+  CMP R12,U64[RBX+RAX*8] //First row
+  JNE skip_bt
+  LOCK BTS U64 [scale_mp_first_row_completed],RAX
+skip_bt:
+  INC RAX
   CMP R12,U64 [RBX+RAX*8]
   JNE U32 yloop
 //
@@ -185,7 +229,23 @@ yloop2:
   MOV EDI,U32 [RDI+R12*4]
   DEC RBX
   CMP RBX,RDI
-  JNG next3
+  JNG I32 next3
+//
+// Because this routine is called parallel,we must wait for the first row of the
+// next core's row to be complete when we merge at the last line(if not a 480) 
+//
+  CMP R12,479
+  JE I32 skip_first_row_check
+  LEA RAX,U64 1[R12]
+  CMP RAX,R13
+  JNE I32 skip_first_row_check
+  MOV RAX,U64 &core[RBP]
+  INC RAX
+wait_next_core:
+  BT U64[scale_mp_first_row_completed],RAX
+  JNC I32 wait_next_core
+  LOCK BTR U64[scale_mp_first_row_completed],RAX
+skip_first_row_check:
 //we will repeat until the next line
   MOV RCX,RBX
   SUB RCX,RDI
@@ -194,7 +254,7 @@ yloop2:
   IMUL2 RDI,R10
   LEA RDI,U64 [RDI*4]
   ADD RDI,R15
-  LEA RSI,U64 [RDI+R10*4] 
+  LEA RSI,U64 [RDI+R10*4]
   //push repeat_cnt
   PUSH RCX
   PUSH U64 SF_ARG2[RBP] //sx
@@ -211,7 +271,7 @@ yloop2:
   POP RCX
   DEC RCX
   CMP RCX,0
-  JNG next3
+  JNG I32 next3
   MOV RDI,RSI
   LEA RDI,[RDI+R10*4] //r10 has scanline width
 row_loop:
@@ -257,6 +317,8 @@ AVG_2_LINES:
 @@loop:
     MOV R12u32,U32 4[R14+R8*4] //NExt scaled x pixel
     MOV R13u32,U32 [R14+R8*4]
+   
+    //Mix orthodox pixels
     //Form 16bit color color code to avergage
     MOV CL,U8[R9+R8]
     MOV AL,U8[R10+R8] //REX promotes AH to SPL
@@ -265,11 +327,25 @@ AVG_2_LINES:
     //Only want first 4 bits of each byte
     AND EAX,0xf0f 
     MOV EAX,U32 [RBX+EAX*4]
+    STOSD
     //
     MOV RCX,R12
     SUB RCX,R13
+    DEC RCX
+    CMPRCX,0
+    JNG @@skip
+    MOV DX,U16[R9+R8]
+    AND EDX,0xf0f
+    MOV AX,U16[R10+R8] //REX promotes AH to SPL
+    AND EAX,0xf0f
+    MOVZX EAX,AX
+    SHL EAX,4
+    OR EAX,EDX
+    MOV RDX,U64 [pal_mixed2]
+    MOV EAX,U32 [RDX+RAX*4]
     REP_STOSD
     //
+@@skip:
     INC R8
     CMP R8,640
     JNE @@loop
@@ -282,9 +358,9 @@ AVG_2_LINES:
     POP R8
     LEAVE 
     RET1 5*8
-  };
+   };
 }
-I64 scale_mp_completed=0;
+I64 scale_mp_first_row_completed=0;
 class CScalerThreadArgs {
   CDC *data,*scrn;
   I64 sx,sy,xoff,yoff;
