@@ -77,7 +77,7 @@ I64 TermRightClickLink(CDoc *doc,CDocEntry *doc_e)
 	    }
 	    "MountFile(\"%s\");\n\dPT\d\dFG\d\dBG\d",st;
 	    WinZBufUpdate;
-	    //MountFile(st); TODO RESTORE
+	    MountFile(st);
 	    res=TRUE;
 	    break;
 	  case RIGHT_PLAIN:
