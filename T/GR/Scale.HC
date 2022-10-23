@@ -123,12 +123,7 @@ asm {
    R15 is result body pointer(translated to [xoff,yoff])
    RSI is data pointer
    RDI is result pointer
-  */
-
-  PUSH SF_ARG3[RBP]
-  PUSH SF_ARG2[RBP]
-  CALL &UpdateGROffs
-  
+  */
   MOV R13,SF_ARG2[RBP]
   MOV R14,SF_ARG3[RBP]
   MOV R9,SF_ARG4[RBP]
@@ -237,7 +232,7 @@ yloop2:
   CMP R12,479
   JE I32 skip_first_row_check
   LEA RAX,U64 1[R12]
-  CMP RAX,R13
+  CMP RAX,R13
   JNE I32 skip_first_row_check
   MOV RAX,U64 &core[RBP]
   INC RAX

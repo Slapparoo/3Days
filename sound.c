@@ -4,6 +4,13 @@
 #define SAMPLE_RATE (24000)
 static PaStream *pa_stream;
 static int64_t freq=0,sample=0;
+static double vol=0.1;
+void SetVolume(double v) {
+	vol=v;
+}
+double GetVolume() {
+	return vol;
+}
 static int paCallback(const void *inp,void *_out,unsigned long fpb,const PaStreamCallbackTimeInfo* timeInfo,
                            PaStreamCallbackFlags statusFlags,
                            void *userData ) {
@@ -13,6 +20,7 @@ static int paCallback(const void *inp,void *_out,unsigned long fpb,const PaStrea
 		double t=(double)++sample/SAMPLE_RATE;
 		double amp=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
 		char maxed=(amp>0)?127:-127;
+		maxed*=vol;
 		if(!freq) maxed=0;
 		out[2*i]=maxed;
 		out[2*i+1]=maxed;

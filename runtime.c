@@ -507,6 +507,17 @@ int64_t STK__3DaysSetResolution(int64_t *stk) {
 int64_t STK__3DaysScaleScrn(int64_t *stk) {
 	_3DaysScaleScrn();
 }
+int64_t STK_SetVolume(int64_t *stk) {
+	SetVolume(*(double*)stk);
+}
+int64_t STK_GetVolume(int64_t *stk) {
+	union {
+		double flt;
+		int64_t i;
+	} un;
+	un.flt=GetVolume();
+	return un.i;
+}
 void TOS_RegisterFuncPtrs() {
 	map_iter_t miter;
 	const char *key;
@@ -582,6 +593,8 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"VFsSetDrv",STK_VFsDrv,1);
     STK_RegisterFunctionPtr(&ffi_blob,"_3DaysSetResolution",STK__3DaysSetResolution,2);
     STK_RegisterFunctionPtr(&ffi_blob,"_3DaysScaleScrn",STK__3DaysScaleScrn,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"GetVolume",STK_GetVolume,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"SetVolume",STK_SetVolume,1);
     char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);

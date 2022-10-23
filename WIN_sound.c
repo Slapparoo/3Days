@@ -9,6 +9,13 @@ static HWAVEOUT wout;
 static HANDLE sema;
 static WAVEHDR hdr;
 static int64_t freq=0,sample=0;
+static double vol=0.1;
+void SetVolume(double v) {
+	vol=v;
+}
+double GetVolume() {
+	return vol;
+}
 static int wCB(char *_out) {
 	char *out = (char*)_out;
     unsigned int i;
@@ -17,6 +24,7 @@ static int wCB(char *_out) {
 		double amp=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
 		char maxed=(amp>0)?255:0;
 		if(!freq) maxed=127;
+		maxed*=vol;
 		out[i]=maxed;
 		//out[2*i+1]=maxed;
 	}

@@ -443,6 +443,7 @@ U0 SetScaleResolution(I64 w,I64 h) {
     scale_h=GR_HEIGHT;
     scale_w=GR_WIDTH;
   }
+  UpdateGROffs(scale_w,scale_h);
   scale_lock_task=NULL;
   LBtr(&scale_lock,0);
 }
@@ -485,7 +486,7 @@ U0 GrUpdateScrn()
       break;
     Yield;
   }
-  scale_lock_task=Fs;
+  scale_lock_task=Fs;
   if(scale_w==GR_WIDTH&&scale_h==GR_HEIGHT||!scale_enable) {
     NoScale(dc);
   } else {

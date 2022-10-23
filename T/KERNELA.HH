@@ -143,6 +143,8 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U0 SetVolume(F64);
+import F64 GetVolume();
 import U0i _3DaysScaleScrn();
 import U8i *_3DaysSetResolution(I64i w,I64i h);
 import U8i *VFsFOpenR(U8i*);
@@ -2788,7 +2790,7 @@ class CISOPriDesc
 
 //CDirEntry flags (Used by \dLK,"FileMgr",A="MN:FileMgr"\d())
 #define CDIR_FILENAME_LEN	38 //Must include terminator zero
-public class CDirEntry
+public class CDirEntry
 {
   CDirEntry *next,*parent,*sub;
   U8	*full_name;
@@ -6523,3 +6525,5 @@ extern U0 ScaleMouseCords(I64 *x,I64 *y);
 public extern I64i GrPaletteColorGet(I64i color_num);
 public extern U0 GrPaletteColorSet(I64i color_num,CBGR48 gr48);
 extern U0 EnableScaling(Bool on=FALSE);
+extern U0 SetVolume(F64);
+extern F64 GetVolume();
