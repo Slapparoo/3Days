@@ -200,7 +200,6 @@ next:
   MOV EDI,U32 [RDI+R12*4]
   MOV RCX,I64 &y_next_px[RBP] 
 next2:
-  INC R12
 ////Get start of next core's start line,loop until then
   MOV RAX,U64 &core[RBP]
   MOV RBX,U64 [scale_mp_starts]
@@ -208,6 +207,7 @@ next2:
   JNE skip_bt
   LOCK BTS U64 [scale_mp_first_row_completed],RAX
 skip_bt:
+  INC R12
   INC RAX
   CMP R12,U64 [RBX+RAX*8]
   JNE U32 yloop
