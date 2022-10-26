@@ -22,10 +22,10 @@ static int wCB(char *_out) {
     for( i=0; i<BUF_SZ; i++ ) {
 		double t=(double)++sample/SAMPLE_RATE;
 		double amp=-1.0+2.0*round(fmod(2.0*t*freq,1.0));
-		char maxed=(amp>0)?255:0;
-		if(!freq) maxed=127;
+		int64_t maxed=(amp>0)?255:0;
 		maxed*=vol;
-		out[i]=maxed;
+		if(!freq) maxed=0;
+		out[i]=maxed+0x7f;
 		//out[2*i+1]=maxed;
 	}
 	return 0;
