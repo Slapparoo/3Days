@@ -91,7 +91,7 @@ static STK_DyadSetOnListenCallback(int64_t *stk) {
 	dyad_addListener(stk[0],DYAD_EVENT_ACCEPT,&DyadListenCB,stk[1],stk[2]);
 }
 #endif
-static void UnblockSignals() {
+void UnblockSignals() {
 	#ifndef TARGET_WIN32
 	sigset_t all;
 	sigfillset(&all);

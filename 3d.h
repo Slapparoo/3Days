@@ -198,3 +198,4 @@ extern void SetVolume(double v);
 extern double GetVolume();
 void multicAwaken(int64_t core);
 void multicSleep(int64_t ms);
+void UnblockSignals();

@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <stdatomic.h>
 #include <unistd.h>
+#include <setjmp.h>
 #ifndef TARGET_WIN32
 #include <errno.h>
 #include <pthread.h>
@@ -57,7 +58,8 @@ void *GetGs() {
 typedef struct {
 	#ifndef TARGET_WIN32
 	pthread_t thread;
-	int is_sleeping;
+	int64_t is_sleeping;
+	jmp_buf jmp_to;
 	#else
 	HANDLE thread;
 	CRITICAL_SECTION sleep_CS;
@@ -162,14 +164,25 @@ void __ShutdownCores() {
 }
 void multicAwaken(int64_t core) {
 	#ifndef TARGET_WIN32
-	cores[core].is_sleeping=0;
+	if(__atomic_load_n(&cores[core].is_sleeping,__ATOMIC_RELAXED))
+		pthread_kill(cores[core].thread,SIGPWR);
 	#else
 	WakeConditionVariable(&cores[core].sleep_cond);
 	#endif
 }
+static void  Awaken(int sig) {
+	longjmp(cores[__core_num].jmp_to,1);
+}
 void multicSleep(int64_t ms) {
 	#ifndef TARGET_WIN32
-	usleep(ms*1000);
+	if(!setjmp(cores[__core_num].jmp_to)) {
+		__atomic_store_n(&cores[__core_num].is_sleeping,1,__ATOMIC_RELAXED);
+		signal(SIGPWR,&Awaken);
+		usleep(ms*1000);
+	} else {
+		UnblockSignals();
+	}
+	__atomic_store_n(&cores[__core_num].is_sleeping,0,__ATOMIC_RELAXED)	;
 	#else
 	EnterCriticalSection(&cores[__core_num].sleep_CS);
 	SleepConditionVariableCS(&cores[__core_num].sleep_cond,&cores[__core_num].sleep_CS,ms);
