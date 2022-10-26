@@ -57,8 +57,11 @@ void *GetGs() {
 typedef struct {
 	#ifndef TARGET_WIN32
 	pthread_t thread;
+	int is_sleeping;
 	#else
 	HANDLE thread;
+	CRITICAL_SECTION sleep_CS;
+	CONDITION_VARIABLE sleep_cond;
 	#endif
 	int core_num;
 	void (*fp)();
@@ -113,6 +116,8 @@ void LaunchCore0(void *fp) {
 	pthread_create(&cores[core].thread,NULL,FFI_CALL_TOS_0_ZERO_BP,fp);
 	#else
 	cores[core].thread=CreateThread(NULL,0,FFI_CALL_TOS_0_ZERO_BP,fp,0,NULL);
+	InitializeConditionVariable(&cores[core].sleep_cond);
+	InitializeCriticalSection(&cores[core].sleep_CS);
 	#endif
 }
 void WaitForCore0() {
@@ -129,6 +134,8 @@ void CreateCore(int core,void *fp) {
 	pthread_create(&cores[core].thread,NULL,LaunchCore,core);
 	#else
 	cores[core].thread=CreateThread(NULL,0,LaunchCore,core,0,NULL);
+	InitializeConditionVariable(&cores[core].sleep_cond);
+	InitializeCriticalSection(&cores[core].sleep_CS);
 	#endif
 }
 void __ShutdownCore(int core) {
@@ -152,4 +159,20 @@ void __ShutdownCores() {
 	   	  __ShutdownCore(c);
 	}
 	__ShutdownCore(__core_num);
+}
+void multicAwaken(int64_t core) {
+	#ifndef TARGET_WIN32
+	cores[core].is_sleeping=0;
+	#else
+	WakeConditionVariable(&cores[core].sleep_cond);
+	#endif
+}
+void multicSleep(int64_t ms) {
+	#ifndef TARGET_WIN32
+	usleep(ms*1000);
+	#else
+	EnterCriticalSection(&cores[__core_num].sleep_CS);
+	SleepConditionVariableCS(&cores[__core_num].sleep_cond,&cores[__core_num].sleep_CS,ms);
+	LeaveCriticalSection(&cores[__core_num].sleep_CS);
+	#endif
 }

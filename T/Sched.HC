@@ -110,7 +110,7 @@ _TASK_CONTEXT_RESTORE::
 	INC	U64 CCPU.swap_cnter[RAX]
 	CALL &Fs
 	MOV	RSI,CTask.addr[RAX]
-	BT	U32 CTask.rflags[RSI],RFLAGf_INT
+	BT	U32 CTask.rflags[RSI],RFLAGf_INT
 	JNC	@@05
 	CALL	&Gs
 	BTS	U32 CCPU.cpu_flags[RAX],CPUf_RAN_A_TASK
@@ -298,9 +298,16 @@ U0 Yield() {
 	_Yield;
 	POP RSI
 }
-U0 __InteruptCoreRoutine() {
-  PUSH_REGS;
-  UnblockSignals;
-  Yield;
+U0 ub2() {
+  UnblockSignals;
+}
+asm {
+__InteruptCoreRoutine::
+  PUSHFD
+  PUSH_REGS
+  CALL &ub2
+  CALL &Yield
   POP_REGS;
+  POPFD
+  RET
 }

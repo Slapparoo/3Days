@@ -123,7 +123,7 @@ return task;
   LBtr(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE);
   return tmpt;
 }
-U0 Exit() {
+U0 Exit() {
 	LBts(&(Fs->task_flags),TASKf_KILL_TASK);
 	Yield();
 }
@@ -274,7 +274,7 @@ I64 TaskInit(CTask *task,I64 stk_size)
   task->cur_dir=StrNew(Fs->cur_dir,task);
   return task;
 }
-CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
+CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
 	I64 target_cpu=-1,	//-1 for current CPU. See \dLK,"multi-core",A="FI:::/Demo/MultiCore/LoadTest.HC"\d.
 	CTask *parent=NULL,	//NULL means adam
 	I64 stk_size=0,		//0=default
@@ -307,6 +307,7 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
   if (Bt(&flags,JOBf_ADD_TO_QUE)) {
     TaskQueInsChild(task);
     TaskQueIns(task,mp_cores[target_cpu]->seth_task);
+    __AwakeCore(target_cpu);
   }
   return task;
 }

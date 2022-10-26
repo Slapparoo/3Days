@@ -729,7 +729,7 @@ void _3DaysScaleScrn(){
 	sigset_t set,old_set;
 	static int64_t mp_cnt;
 	sigemptyset(&set);
-	sigaddset(&set,SIGUSR1);
+	sigaddset(&set,SIGUSR2);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
 	//See T/GR/Scale
 	if(!mp_cnt) {

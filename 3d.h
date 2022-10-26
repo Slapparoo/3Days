@@ -196,3 +196,5 @@ void *_3DaysSetResolution(int64_t w,int64_t h);
 extern int64_t _shutdown;
 extern void SetVolume(double v);
 extern double GetVolume();
+void multicAwaken(int64_t core);
+void multicSleep(int64_t ms);

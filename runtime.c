@@ -332,32 +332,13 @@ int64_t STK_SetKBCallback(int64_t *stk) {
     SetKBCallback(stk[0],stk[1]);
 }
 int64_t STK_SetMSCallback(int64_t *stk) {
-    SetMSCallback(stk[0]);    
+    SetMSCallback(stk[0]);    \
 }
-#ifdef TARGET_WIN32
-//https://stackoverflow.com/questions/85122/how-to-make-thread-sleep-less-than-a-millisecond-on-windows
-static void SleepShort(float milliseconds) {
-    static int once = 1;
-	static NTSTATUS (*ntdelay)(int,int64_t *);
-	static NTSTATUS (*zwtimer)(int,int,int64_t *);
-    if (once) {
-        ULONG actualResolution;
-        zwtimer=GetProcAddress(GetModuleHandle("ntdll.dll"), "ZwSetTimerResolution");
-		ntdelay=GetProcAddress(GetModuleHandle("ntdll.dll"), "NtDelayExecution");
-		zwtimer(1, 1, &actualResolution);
-        once = 0;
-    }
-    LARGE_INTEGER interval;
-    interval.QuadPart = -1 * (int)(milliseconds * 10000.0f);
-    ntdelay(0,&interval);
+int64_t STK_AwakeFromSleeping(int64_t *stk) {
+	multicAwaken(stk[0]);
 }
-#endif
 int64_t STK_Sleep(int64_t *stk) {
-	#ifndef TARGET_WIN32
-	usleep(1000*stk[0]);
-	#else
-	SleepShort(stk[0]);
-	#endif
+	multicSleep(stk[0]);
 }
 int64_t STK_GetFs(int64_t *stk) {
     return GetFs();
@@ -394,8 +375,6 @@ int64_t STK_GetClipboardText(int64_t *stk) {
     char *r2=HolyStrDup(r);
     TD_FREE(r);
     return r2;
-}
-int64_t STK___SleepUntilValue(int64_t *stk) {
 }
 int64_t STK_FSize(int64_t *stk) {
 	return VFsFSize(stk[0]);
@@ -539,11 +518,11 @@ void TOS_RegisterFuncPtrs() {
 	STK_RegisterFunctionPtr(&ffi_blob,"__CoreNum",CoreNum,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"FUnixTime",STK_FUnixTime,1);
 	STK_RegisterFunctionPtr(&ffi_blob,"FSize",STK_FSize,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"__SleepUntilValue",STK___SleepUntilValue,3);
     STK_RegisterFunctionPtr(&ffi_blob,"SetClipboardText",STK_SetClipboardText,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetClipboardText",STK_GetClipboardText,0);
     STK_RegisterFunctionPtr(&ffi_blob,"SndFreq",STK_SndFreq,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__Sleep",&STK_Sleep,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"__AwakeCore",&STK_AwakeFromSleeping,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetFs",STK_GetFs,0);
     STK_RegisterFunctionPtr(&ffi_blob,"SetFs",STK_SetFs,1);
     STK_RegisterFunctionPtr(&ffi_blob,"SetKBCallback",STK_SetKBCallback,2);

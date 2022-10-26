@@ -143,8 +143,9 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U0 __AwakeCore(I64i);
 import U0 SetVolume(F64);
-import F64 GetVolume();
+import F64 GetVolume();
 import U0i _3DaysScaleScrn();
 import U8i *_3DaysSetResolution(I64i w,I64i h);
 import U8i *VFsFOpenR(U8i*);

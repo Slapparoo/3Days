@@ -250,7 +250,7 @@ U0 TaskWait(CTask *task=NULL,Bool cmd_line_pmt=FALSE)
   CJob *tmpc1;
   Bool unlock;
   if (!task) task=Fs;
-  \unlock=BreakLock;
+  \unlock=BreakLock;
   while (TaskValidate(task)) {
     task1=task->last_input_filter_task;
     tmpc1=&task1->srv_ctrl.next_waiting;
@@ -494,7 +494,7 @@ U0 XTalkStrWait(CTask *task,U8 *fmt,...)
   TaskWait(task);
 }
 
-Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE)
+Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE)
 {//Terminate other task.
   I64 i;
   if (TaskValidate(task)) {
@@ -574,6 +574,7 @@ CJob *JobQue(I64 (*fp_addr)(U8 *data),U8 *data=NULL,
   CTask *seth;
   if (!(0<=target_cpu<mp_cnt))
     throw('MultCore');
+  __AwakeCore(target_cpu);
   tmpc=CAlloc(sizeof(CJob),adam_task);
   if (aux_str)
     tmpc->aux_str=StrNew(aux_str,adam_task);

@@ -246,6 +246,10 @@ void *Load(char *fn,int64_t ld_flags) {
 		signal(SIGBUS,FualtCB->data[0].val);
 		#endif
 	}*/
+	#ifndef TARGET_WIN32
+	CHash yield=map_get(&TOSLoader,"__InteruptCoreRoutine")->data[0];
+	signal(SIGUSR2,yield.val);
+	#endif
 	SetupDebugger();
     LoadPass2((char*)bfh_addr+bfh_addr->patch_table_offset,mod_base,ld_flags);    
     //Stuff may still be using data once we exit
