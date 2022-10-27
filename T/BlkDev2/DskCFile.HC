@@ -39,6 +39,7 @@ CFile *FOpen(U8 *filename,U8 *flags,I64 cnt=0)
 //Nroot's edit
         if(Let2BlkDevType(*full_name)==BDT_VIRT) {
 	  dirc=DirContextNew(full_name);
+	  VFsSetDrv(Fs->cur_dv->drv_let);
 	  VFsSetPwd(Fs->cur_dir);
 	  f->_3days_virt=VFsFOpenW(&f->de.name);
 	  DirContextDel(dirc);
@@ -102,7 +103,13 @@ U0 FClose(CFile *f)
   if (f) {
     if(f->_3days_virt) {
       VFsFClose(f->_3days_virt);
-      return;
+      if (dirc=DirContextNew(f->de.full_name)) {
+        VFsSetDrv(Fs->cur_dv->drv_let);
+        VFsSetPwd(Fs->cur_dir); //+2 to ingore T:
+        VFsFTrunc(f->de.name,f->de.size);
+        DirContextDel(dirc);
+      }
+      goto en;
     }
     if (f->flags & FF_BUF_DIRTY) {
       ClusWrite(f->dv,f->clus_buf,f->clus,1);
@@ -120,6 +127,7 @@ U0 FClose(CFile *f)
       } else
         throw('File');
     }
+en:
     Free(f->clus_buf);
     Free(f->de.full_name);
     Free(f);

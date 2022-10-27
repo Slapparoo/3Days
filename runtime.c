@@ -382,6 +382,20 @@ int64_t STK_FSize(int64_t *stk) {
 int64_t STK_FUnixTime(int64_t *stk) {
 	return VFsUnixTime(stk[0]);
 }
+int64_t STK_FTrunc(int64_t *stk) {
+	char *fn=__VFsFileNameAbs(stk[0]);
+	if(fn) {
+		#ifndef TARGET_WIN32
+		truncate(fn,stk[1]);
+		#else
+		HANDLE fh=CreateFileA(fn,GENERIC_WRITE,FILE_SHARE_WRITE,NULL,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,NULL);
+		SetFilePointer(fh,stk[1],0,FILE_BEGIN);
+		SetEndOfFile(fh);
+		CloseHandle(fh);
+		#endif
+		TD_FREE(fn);
+	}
+}
 int64_t STK___FExists(int64_t *stk) {
 	return VFsFileExists(stk[0]);
 }
@@ -517,6 +531,7 @@ void TOS_RegisterFuncPtrs() {
 	STK_RegisterFunctionPtr(&ffi_blob,"__SpawnCore",SpawnCore,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"__CoreNum",CoreNum,0);
 	STK_RegisterFunctionPtr(&ffi_blob,"FUnixTime",STK_FUnixTime,1);
+	STK_RegisterFunctionPtr(&ffi_blob,"VFsFTrunc",STK_FTrunc,2);
 	STK_RegisterFunctionPtr(&ffi_blob,"FSize",STK_FSize,1);
     STK_RegisterFunctionPtr(&ffi_blob,"SetClipboardText",STK_SetClipboardText,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetClipboardText",STK_GetClipboardText,0);

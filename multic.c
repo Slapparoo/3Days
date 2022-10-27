@@ -20,6 +20,8 @@
 #elif defined __FreeBSD__
 #include <sys/types.h>
 #include <sys/umtx.h>
+//SIGPWR doesnt exist on FreeBSD
+#define SIGPWR SIGSYS
 #endif
 static int64_t GetTicks() {
 	#ifndef TARGET_WIN32

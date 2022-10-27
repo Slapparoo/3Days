@@ -45,6 +45,7 @@ Bool VirtFileFind(CDrv *dv,U8 *cur_dir,U8 *name,
         if(fuf_flags&FUF_JUST_FILES&&VFsIsDir(at))
           res=FALSE;
         _res->size=VFsFSize(at);
+        _res->datetime=Unix2CDate(FUnixTime(at));
       }
       if (unlock)
 	DrvUnlock(dv);
@@ -211,7 +212,7 @@ Bool VirtMkDir(CDrv *dv,U8 *cur_dir,U8 *name,I64 entry_cnt)
   Bool unlock_break;
   try {
     unlock_break=BreakLock;
-    VFsSetDrv(dv->drv_let);
+    VFsSetDrv(dv->drv_let);
     VFsSetPwd(cur_dir);
     VFsDirMk(name);
     if (unlock_break)

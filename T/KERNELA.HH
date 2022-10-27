@@ -143,6 +143,7 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U0 VFsFTrunc(U8i*,I64i);
 import U0 __AwakeCore(I64i);
 import U0 SetVolume(F64);
 import F64 GetVolume();
@@ -3535,7 +3536,7 @@ public class CTask //The Fs segment reg points to current CTask.
 	*next_sibling_task,*last_sibling_task,
 	*next_child_task,*last_child_task;
 
-  //These are derived from left,top,right,bottom
+  //These are derived from left,top,right,bottom
   I64	win_width,win_height,
 	pix_left,pix_right,pix_width, //These are in pixs, not characters
 	pix_top,pix_bottom,pix_height,
