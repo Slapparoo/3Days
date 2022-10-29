@@ -13,6 +13,7 @@
 #include <stdatomic.h>
 #include <assert.h>
 #include <errno.h>
+#include <ctype.h>
 #else
 #include <memoryapi.h>
 #include <sysinfoapi.h>
@@ -58,13 +59,13 @@ void *NewVirtualChunk(int64_t sz,int64_t low32) {
 			buffer[fread(buffer,1,1<<16,map)]=0;
 			ptr=buffer;
 			while(1) {
-				void *lower=Hex2I64(ptr,&ptr);
+				void *lower=(void*)Hex2I64(ptr,&ptr);
 				if((lower-down)>=(sz/ps*ps+pad)&&lower>down) {
 					goto found;
 				}
 				//Ignore '-'
 				ptr++;
-				void *upper=Hex2I64(ptr,&ptr);
+				void *upper=(void*)Hex2I64(ptr,&ptr);
 				down=upper;
 				ptr=strchr(ptr,'\n');
 				if(!ptr) break;

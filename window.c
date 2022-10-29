@@ -99,7 +99,7 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	XLockDisplay(dw->disp);
 	pthread_mutex_lock(&dw->pt);
 	sigemptyset(&set);
-	sigaddset(&set,SIGUSR1);
+	sigaddset(&set,SIGUSR2);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
 	XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,0,0,dw->disp_w,dw->disp_h,True);
 	pthread_mutex_unlock(&dw->pt);
@@ -730,6 +730,7 @@ void _3DaysScaleScrn(){
 	static int64_t mp_cnt;
 	sigemptyset(&set);
 	sigaddset(&set,SIGUSR2);
+	sigaddset(&set,SIGUSR1);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
 	//See T/GR/Scale
 	if(!mp_cnt) {

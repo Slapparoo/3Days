@@ -32,14 +32,14 @@ void HolyFree(void *ptr) {
 	if(!fptr) {
 		fptr=map_get(&TOSLoader,"_FREE")->data->val;
 	}
-	FFI_CALL_TOS_1(fptr,ptr);
+	FFI_CALL_TOS_1(fptr,(int64_t)ptr);
 }
 void *HolyMAlloc(int64_t sz) {
 	static void *fptr;
 	if(!fptr) {
 		fptr=map_get(&TOSLoader,"_MALLOC")->data->val;
 	}
-	return FFI_CALL_TOS_2(fptr,sz,NULL);
+	return (void*)FFI_CALL_TOS_2(fptr,(int64_t)sz,(int64_t)NULL);
 }
 char *HolyStrDup(char *str) {
 	return strcpy(HolyMAlloc(strlen(str)+1),str);
@@ -49,6 +49,7 @@ char *HolyStrDup(char *str) {
 static void STK_DyadInit() {
 		dyad_init();
 		dyad_setUpdateTimeout(0.);
+		return ;
 }
 static void STK_DyadUpdate() {
 	dyad_update();
@@ -75,14 +76,14 @@ static void STK_DyadClose(int64_t *stk) {
 	dyad_close(stk[0]);
 }
 static char *STK_DyadGetAddress(int64_t *stk) {
-	char *ret=dyad_getAddress(stk[0]);
+	const char *ret=dyad_getAddress(stk[0]);
 	return HolyStrDup(ret);
 }
 static void DyadReadCB(dyad_Event *e) {
 	FFI_CALL_TOS_4(e->udata,e->stream,e->data,e->size,e->udata2);
 }
 static void STK_DyadSetReadCallback(int64_t *stk) {
-	dyad_addListener(stk[0],DYAD_EVENT_LINE,&DyadReadCB,stk[1],stk[2]);
+	dyad_addListener((void*)stk[0],DYAD_EVENT_LINE,&DyadReadCB,stk[1],stk[2]);
 }
 static void DyadListenCB(dyad_Event *e) {
 	FFI_CALL_TOS_2(e->udata,e->remote,e->udata2);
@@ -130,13 +131,13 @@ static int64_t IsValidPtr(int64_t *stk) {
 	stk[0]/=ps;
 	stk[0]*=ps;
 	//https://renatocunha.com/2015/12/msync-pointer-validity/
-	return -1!=msync(stk[0],ps,MS_ASYNC);
+	return -1!=msync((void*)stk[0],ps,MS_ASYNC);
 	#endif
 }
 static int64_t __Move(char *old,char *new) {
 	int ret=0;
-	old=VFsFileNameAbs(old);
-	new=VFsFileNameAbs(new);
+	old=__VFsFileNameAbs(old);
+	new=__VFsFileNameAbs(new);
 	if(old&&new)
 		ret=0==rename(old,new);
 	TD_FREE(old);
@@ -183,7 +184,7 @@ static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
   CHash *h;
   while(key=map_next(&Loader.symbols,&iter)) {
       if(!map_get(&TOSLoader,key)) {
-          FFI_CALL_TOS_3(func,key,map_get(&Loader.symbols,key)->value_ptr,HTT_FUN);
+          FFI_CALL_TOS_3(func,(int64_t)key,map_get(&Loader.symbols,key)->value_ptr,HTT_FUN);
       }
   }
   iter=map_iter(&TOSLoader);
@@ -192,9 +193,9 @@ static void ForeachFunc(void(*func)(const char *name,void *ptr,long sz)) {
     vec_CHash_t *var=map_get(&TOSLoader, key);
     vec_foreach_ptr(var,h,iter) {
         if(h->type==HTT_EXPORT_SYS_SYM)
-            FFI_CALL_TOS_3(func,key,h->val,HTT_FUN);
+            FFI_CALL_TOS_3(func,(int64_t)key,(int64_t)h->val,HTT_FUN);
         else
-            FFI_CALL_TOS_3(func,key,h->val,h->type);
+            FFI_CALL_TOS_3(func,(int64_t)key,(int64_t)h->val,h->type);
     }
   }
 }
@@ -274,39 +275,31 @@ static void STK_RegisterFunctionPtr(vec_char_t *blob,char *name,void *fptr,int64
     memset(&sym,0,sizeof(sym));
     sym.type=SYM_FUNC;
     sym.add_to_rt_blob=1;
-    sym.value_ptr=blob_off;
+    sym.value_ptr=(void*)blob_off;
     sym.is_importable=1;
     map_set(&Loader.symbols, name, sym);
 }
-int64_t STK_FileRead(int64_t *stk) {
-	int64_t sz;
-    char *r=VFsFileRead(stk[0],&sz);
-    if(stk[1]) ((int64_t*)stk[1])[0]=sz;
-    return r;
-}
-int64_t STK_FileWrite(int64_t *stk) {
-    return VFsFileWrite(stk[0],stk[1],stk[2]);
-}
 int64_t STK_ForeachFunc(int64_t *stk) {
-    ForeachFunc(stk[0]);
+    ForeachFunc((void*)stk[0]);
+    return 0;
 }
 int64_t STK_TOSPrint(int64_t *stk) {
-    TOSPrint(stk[0],stk[1],stk+2);
-}
-int64_t STK_memset(int64_t *stk) {
-    return memset(stk[0],stk[1],stk[2]);
+    TOSPrint((char*)stk[0],stk[1],stk+2);
+    return 0;
 }
 int64_t STK_IsDir(int64_t *stk) {
-    return IsDir(stk[0]);
+    return IsDir((char*)stk[0]);
 }
 int64_t STK_NewDrawWindow(int64_t *stk) {
-    return NewDrawWindow();
+    return (int64_t)NewDrawWindow();
 }
 int64_t STK_DrawWindowUpdate(int64_t *stk) {
-    DrawWindowUpdate(stk[0],stk[1],stk[2],stk[3]);
+    DrawWindowUpdate((void*)stk[0],(void*)stk[1],stk[2],stk[3]);
+    return 0;
 }
 int64_t STK_DrawWindowDel(int64_t *stk) {
     DrawWindowDel();
+    return 0;
 }
 int64_t STK___GetTicks() {
 	#ifndef TARGET_WIN32
@@ -329,79 +322,88 @@ int64_t STK___GetTicks() {
     #endif
 }
 int64_t STK_SetKBCallback(int64_t *stk) {
-    SetKBCallback(stk[0],stk[1]);
+    SetKBCallback((void*)stk[0],(void*)stk[1]);
+    return 0;
 }
 int64_t STK_SetMSCallback(int64_t *stk) {
-    SetMSCallback(stk[0]);    \
+    SetMSCallback((void*)stk[0]);
+    return 0;
 }
 int64_t STK_AwakeFromSleeping(int64_t *stk) {
 	multicAwaken(stk[0]);
+	return 0;
 }
 int64_t STK_Sleep(int64_t *stk) {
 	multicSleep(stk[0]);
+	return 0;
 }
 int64_t STK_GetFs(int64_t *stk) {
-    return GetFs();
+    return (int64_t)GetFs();
 }
 int64_t STK_SetFs(int64_t *stk) {
-    SetFs(stk[0]);
+    SetFs((void*)stk[0]);
+    return 0;
 }
 int64_t STK_SndFreq(int64_t *stk) {
     SndFreq(stk[0]);
+    return 0;
 }
 int64_t STK_SetClipboardText(int64_t *stk) {
     //SDL_SetClipboardText(stk[0]);
-    SetClipboard(stk[0]);
+    SetClipboard((char*)stk[0]);
+    return 0; 
 }
 int64_t STK___GetStr(int64_t *stk) {
 	#ifndef TARGET_WIN32
-	char *s=linenoise(stk[0]);
-	if(!s) return s;
+	char *s=linenoise((char*)stk[0]);
+	if(!s) return (int64_t)s;
 	linenoiseHistoryAdd(s);
 	char *r=HolyStrDup(s);
 	free(s);
-	return r;
+	return (int64_t)r;
 	#else
-	char *s=readline(stk[0]),*r;
-	if(!s) return s;
+	char *s=readline((char*)stk[0]),*r;
+	if(!s) return (int64_t)s;
 	r=HolyStrDup(s);
 	add_history(r);
 	rl_free(s);
 	#endif
-	return r;
+	return (int64_t)r;
 }
 int64_t STK_GetClipboardText(int64_t *stk) {
     char *r=ClipboardText();
     char *r2=HolyStrDup(r);
     TD_FREE(r);
-    return r2;
+    return (int64_t)r2;
 }
 int64_t STK_FSize(int64_t *stk) {
-	return VFsFSize(stk[0]);
+	return VFsFSize((char*)stk[0]);
 }
 int64_t STK_FUnixTime(int64_t *stk) {
-	return VFsUnixTime(stk[0]);
+	return VFsUnixTime((char*)stk[0]);
 }
 int64_t STK_FTrunc(int64_t *stk) {
-	char *fn=__VFsFileNameAbs(stk[0]);
+	char *fn=__VFsFileNameAbs((char*)stk[0]);
 	if(fn) {
 		#ifndef TARGET_WIN32
 		truncate(fn,stk[1]);
 		#else
 		HANDLE fh=CreateFileA(fn,GENERIC_WRITE,FILE_SHARE_WRITE,NULL,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,NULL);
-		SetFilePointer(fh,stk[1],0,FILE_BEGIN);
+		SetFilePointer(fh,(char*)stk[1],0,FILE_BEGIN);
 		SetEndOfFile(fh);
 		CloseHandle(fh);
 		#endif
 		TD_FREE(fn);
 	}
+	return 0;
 }
 int64_t STK___FExists(int64_t *stk) {
-	return VFsFileExists(stk[0]);
+	return VFsFileExists((char*)stk[0]);
 }
 #ifndef TARGET_WIN32
 #include <time.h>
 int64_t STK_Now(int64_t *stk) {
+	(void*)stk;
 	int64_t t;
 	t=time(NULL);
 	return t;
@@ -422,6 +424,7 @@ int64_t STK_Now(int64_t *stk) {
 }
 #endif
 int64_t mp_cnt(int64_t *stk) {
+	(void*)stk;
 	#ifndef TARGET_WIN32
 	return sysconf(_SC_NPROCESSORS_ONLN);
 	#else
@@ -431,77 +434,79 @@ int64_t mp_cnt(int64_t *stk) {
 	#endif
 } 
 void SpawnCore(int64_t *stk) {
-	CreateCore(stk[0],stk[1]);
-}
-void STK_GrPalleteSet(int64_t *stk) {
-	GrPalleteSet(stk[0],stk[1]);
-}
-int64_t STK_GrPalleteGet(int64_t *stk) {
-	return GrPalleteGet(stk[0]);
+	CreateCore(stk[0],(void*)stk[1]);
 }
 int64_t STK_NewVirtualChunk(int64_t *stk) {
-	return NewVirtualChunk(stk[0],stk[1]);
+	return (int64_t)NewVirtualChunk(stk[0],stk[1]);
 }
 int64_t STK_FreeVirtualChunk(int64_t *stk) {
-	FreeVirtualChunk(stk[0],stk[1]);
+	FreeVirtualChunk((void*)stk[0],stk[1]);
+	return 0;
 }
 int64_t STK_VFsSetPwd(int64_t *stk) {
-    VFsSetPwd(stk[0]);
+    VFsSetPwd((char*)stk[0]);
     return 1;
 }
 int64_t STK_VFsExists(int64_t *stk) {
-	return VFsFileExists(stk[0]);
+	return VFsFileExists((char*)stk[0]);
 }
 int64_t STK_VFsIsDir(int64_t *stk) {
-	return VFsIsDir(stk[0]);
+	return VFsIsDir((char*)stk[0]);
 }
 int64_t STK_VFsFileSize(int64_t *stk) {
-	return VFsFSize(stk[0]);
+	return VFsFSize((char*)stk[0]);
 }
 int64_t STK_VFsFRead(int64_t *stk) {
-	return VFsFileRead(stk[0],stk[1]);
+	return VFsFileRead((char*)stk[0],(int64_t*)stk[1]);
 }
 int64_t STK_VFsFWrite(int64_t *stk) {
-	return VFsFileWrite(stk[0],stk[1],stk[2]);
+	return VFsFileWrite((char*)stk[0],(char*)stk[1],stk[2]);
 }
 int64_t STK_VFsDirMk(int64_t *stk) {
-	return VFsCd(stk[0],VFS_CDF_MAKE);
+	return VFsCd((char*)stk[0],VFS_CDF_MAKE);
 }
 int64_t STK_VFsDir(int64_t *stk) {
-	return VFsDir(stk[0]);
+	return (int64_t)VFsDir((char*)stk[0]);
 }
 int64_t STK_VFsDel(int64_t *stk) {
-	return VFsDel(stk[0]);
+	return VFsDel((char*)stk[0]);
 }
 int64_t STK_VFsFOpenW(int64_t *stk) {
-	return VFsFOpen(stk[0],"wb+");
+	return (int64_t)VFsFOpen((char*)stk[0],"wb+");
 }
 int64_t STK_VFsFOpenR(int64_t *stk) {
-	return VFsFOpen(stk[0],"rb");
+	return (int64_t)VFsFOpen((char*)stk[0],"rb");
 }
 int64_t STK_VFsFClose(int64_t *stk) {
-	fclose(stk[0]);
+	fclose((FILE*)stk[0]);
+	return 0;
 }
 int64_t STK_VFsFBlkRead(int64_t *stk) {
-	fread(stk[0],stk[1],stk[2],stk[3]);
+	fread((void*)stk[0],stk[1],stk[2],(FILE*)stk[3]);
+	return 0;
 }
 int64_t STK_VFsFBlkWrite(int64_t *stk) {
-	fwrite(stk[0],stk[1],stk[2],stk[3]);
+	fwrite((void*)stk[0],stk[1],stk[2],(FILE*)stk[3]);
+	return 0;
 }
 int64_t STK_VFsFSeek(int64_t *stk) {
-	fseek(stk[1],stk[0],SEEK_SET);
+	fseek((FILE*)stk[1],stk[0],SEEK_SET);
+	return 0;
 }
 int64_t STK_VFsDrv(int64_t *stk) {
 	VFsSetDrv(stk[0]);
+	return 0;
 }
 int64_t STK__3DaysSetResolution(int64_t *stk) {
-	_3DaysSetResolution(stk[0],stk[1]);
+	return (int64_t)_3DaysSetResolution(stk[0],stk[1]);
 }
 int64_t STK__3DaysScaleScrn(int64_t *stk) {
 	_3DaysScaleScrn();
+	return 0;
 }
 int64_t STK_SetVolume(int64_t *stk) {
 	SetVolume(*(double*)stk);
+	return 0;
 }
 int64_t STK_GetVolume(int64_t *stk) {
 	union {
@@ -574,8 +579,6 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"VFsDel",STK_VFsDel,1);
     STK_RegisterFunctionPtr(&ffi_blob,"VFsDir",STK_VFsDir,0);
     STK_RegisterFunctionPtr(&ffi_blob,"VFsDirMk",STK_VFsDirMk,1);
-    STK_RegisterFunctionPtr(&ffi_blob,"GrPaletteColorSet",STK_GrPalleteSet,2);
-    STK_RegisterFunctionPtr(&ffi_blob,"GrPaletteColorGet",STK_GrPalleteGet,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetCipherPasswd",GetCipherPasswd,0);
     STK_RegisterFunctionPtr(&ffi_blob,"__IsValidPtr",IsValidPtr,1);
     STK_RegisterFunctionPtr(&ffi_blob,"VFsFBlkRead",STK_VFsFBlkRead,4);

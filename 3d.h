@@ -199,3 +199,7 @@ extern double GetVolume();
 void multicAwaken(int64_t core);
 void multicSleep(int64_t ms);
 void UnblockSignals();
+void SetKBCallback(void *fptr,void *data);
+void VFsSetPwd(char *pwd);
+int VFsIsDir(char *path);
+void _3DaysScaleScrn();

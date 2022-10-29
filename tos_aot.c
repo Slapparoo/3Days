@@ -79,11 +79,11 @@ static void LoadOneImport(char **_src,char *mod_base,int64_t ld_flags) {
                     case IET_REL_I8: *ptr2=(char*)i-ptr2-1; break;
                     case IET_IMM_U8: *ptr2=(char*)i; break;
                     case IET_REL_I16: *(int16_t*)ptr2=(char*)i-ptr2-2; break;
-                    case IET_IMM_U16: *(int16_t*)ptr2=(char*)i; break;
+                    case IET_IMM_U16: *(int16_t*)ptr2=(int64_t)i; break;
                     case IET_REL_I32: *(int32_t*)ptr2=(char*)i-ptr2-4; break;
-                    case IET_IMM_U32: *(int32_t*)ptr2=(char*)i; break;
+                    case IET_IMM_U32: *(int32_t*)ptr2=(int64_t)i; break;
                     case IET_REL_I64: *(int64_t*)ptr2=(char*)i-ptr2-8; break;
-                    case IET_IMM_I64: *(int64_t*)ptr2=(char*)i;
+                    case IET_IMM_I64: *(int64_t*)ptr2=(int64_t)i;
                     break;
                 }
                 break;
@@ -102,7 +102,7 @@ static void SysSymImportsResolve(char *st_ptr,int64_t ld_flags) {
         vec_foreach_ptr(find,tmpiss,idx) {
             if(tmpiss->type==HTT_IMPORT_SYS_SYM) {
                 ptr=tmpiss->mod_header_entry;
-                LoadOneImport(&ptr,tmpiss->mod_base,ld_flags);
+                LoadOneImport(&ptr,(char*)tmpiss->mod_base,ld_flags);
                 tmpiss->type=HTT_INVALID;
             }
         }
@@ -124,7 +124,7 @@ static void LoadPass1(char *src,char *mod_base,int64_t ld_flags) {
             case IET_IMM64_EXPORT:
             tmpex.type=HTT_EXPORT_SYS_SYM;
             if(etype==IET_IMM32_EXPORT||etype==IET_IMM64_EXPORT)
-                tmpex.val=i;
+                tmpex.val=(void*)i;
             else
                 tmpex.val=i+mod_base;
             HashAdd(&tmpex,st_ptr);
@@ -159,7 +159,7 @@ static void LoadPass1(char *src,char *mod_base,int64_t ld_flags) {
             for(j=0;j<cnt;j++) {
                     ptr2=mod_base+*(int32_t*)src;
                     src+=4;
-                    *(int32_t*)ptr2+=mod_base;
+                    *(int32_t*)ptr2+=(int32_t)mod_base;
             }
             break;
             case IET_DATA_HEAP:
