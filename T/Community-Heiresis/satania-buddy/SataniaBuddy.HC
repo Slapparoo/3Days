@@ -117,7 +117,7 @@ satania_text[1] =
 
 U0 @load_frames() {
   I64 i = 0;
-  CDirEntry *de = FilesFind("assets/*.GR*");
+  CDirEntry *de = FilesFind("assets/*.GR*");
   CDirEntry *de2 = de;
   while (de2) {
     i++;
@@ -191,7 +191,7 @@ U0 focus_popup_list() {
   while (1) {
     task = adam_task->next_child_task;
     while (task) {
-      if (IsInValidBlk(task->next_child_task)) { //He checked for NULL by almost NULL's are lurking around.
+      if (TaskValidate(task->next_child_task)) { //He checked for NULL by almost NULL's are lurking around.
         child_task = task->next_child_task;
         if (!MemCmp(child_task->task_name, "Servant", 7) &&
             child_task->win_left == 0x01 && child_task->win_right == 0x16) {

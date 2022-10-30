@@ -144,7 +144,7 @@ U0 DebuggerLandWin(I64 sig,I64 *gps) {
     //Oh no,you crashed the window manager
     TOSPrint("You crashed the window manager,aborting\n");
     Exit3Days;
-  }
+  }
   Bool b=FALSE;
 //General purpose registers are in this order,16 is RIP
   //https://wiki.osdev.org/X86-64_Instruction_Encoding
@@ -179,7 +179,7 @@ U0 DebuggerLandWin(I64 sig,I64 *gps) {
     if(bp=BptFind(_RIP,Fs)) {
         LBts(&(Fs->task_flags),TASKf_DISABLE_BPTS);
         Fs->rflags|=1<<RFLAGf_TRAP;
-    } else if(IsInValidBlk(_RIP))
+    } else if(__IsValidPtr(_RIP))
       if(_RIP(U8*)[0]==OC_BPT) //Advance if we hit a stray BPT
         _RIP++;
   }

@@ -2,6 +2,7 @@
 //
 // These are modified for 3Days; they dont take CTask * as an argument
 //
+#define __3DAYS__ TRUE
 extern class C3DaysDrawWin;
 extern class CTask;
 extern class CFile;
@@ -3536,7 +3537,7 @@ public class CTask //The Fs segment reg points to current CTask.
 	*next_sibling_task,*last_sibling_task,
 	*next_child_task,*last_child_task;
 
-  //These are derived from left,top,right,bottom
+  //These are derived from left,top,right,bottom
   I64	win_width,win_height,
 	pix_left,pix_right,pix_width, //These are in pixs, not characters
 	pix_top,pix_bottom,pix_height,
@@ -6271,7 +6272,6 @@ public extern CBpt *BptFind(U8 *needle_addr,CTask *haystack_task=NULL,Bool rem=F
 public extern U0 DbgHelp();
 public extern U0 BList(CTask *task=NULL);
 public extern U0 S(U8 *pc=INVALID_PTR,CTask *task=NULL);
-public extern Bool IsInValidBlk(U8 *ptr);
 public extern Bool ViewFrameVars(I64 frame=0,I64 depth=2);
 public extern  I64 *TaskRegAddr(CTask *task,I64 reg_num);
 extern U0 StkRep(CTask *task=NULL);
