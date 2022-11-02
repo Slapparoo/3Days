@@ -56,7 +56,7 @@ Bool BlkDevInit(CBlkDev *bd)
       case BDT_ISO_FILE_READ:
 	if (FileFind(bd->file_dsk_name,&de,FUF_JUST_FILES)) {
 	  bd->max_blk=de.size>>BLK_SIZE_BITS-1;
-	  try bd->file_dsk=FOpen(bd->file_dsk_name,"rc",bd->max_blk+1);
+	  try bd->file_dsk=FOpen(bd->file_dsk_name,"rc",bd->max_blk+1,adam_task);
 	  catch {
 	    if (Fs->except_ch=='File')
 	      PrintErr("Not Contiguous.Move file to filename.ISO.C.\n");
@@ -81,7 +81,7 @@ Bool BlkDevInit(CBlkDev *bd)
 	}
 	if (bd->max_blk<7)
 	  bd->max_blk=7;
-	bd->file_dsk=FOpen(bd->file_dsk_name,"wc",bd->max_blk+1);
+	bd->file_dsk=FOpen(bd->file_dsk_name,"wc",bd->max_blk+1,adam_task);
 	dv->fs_type=FSt_REDSEA;
 	dv->size=bd->max_blk+1-bd->drv_offset;
 	RedSeaFmt(bd->first_drv_let);

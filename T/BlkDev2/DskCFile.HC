@@ -6,10 +6,10 @@ I64 FSize(CFile *f)
     return 0;
 }
 
-CFile *FOpen(U8 *filename,U8 *flags,I64 cnt=0)
+CFile *FOpen(U8 *filename,U8 *flags,I64 cnt=0,CTask *mem_task=NULL)
 {//Allows flags "r","w","w+". "c" for contiguous.
 //(It uses $LK,"StrOcc",A="MN:StrOcc"$() for 'w', 'r', '+', 'c')
-  CFile *f=CAlloc(sizeof(CFile));
+  CFile *f=CAlloc(sizeof(CFile),mem_task);
   CDirContext *dirc;
   U8 *full_name;
   Bool contiguous=StrOcc(flags,'c');
@@ -21,7 +21,7 @@ CFile *FOpen(U8 *filename,U8 *flags,I64 cnt=0)
   else
     f->max_blk=I64_MAX;
   f->file_clus_num=INVALID_CLUS;
-  full_name=FileNameAbs(filename);
+  full_name=FileNameAbs(filename,mem_task);
   f->dv=Let2Drv(*full_name);
   if (f->dv->fs_type==FSt_REDSEA)
     contiguous=TRUE;
@@ -31,7 +31,7 @@ CFile *FOpen(U8 *filename,U8 *flags,I64 cnt=0)
 	  !(FileAttr(filename) & RS_ATTR_CONTIGUOUS))
       throw('File');
   }
-  f->clus_buf=CAlloc(f->dv->spc<<BLK_SIZE_BITS);
+  f->clus_buf=CAlloc(f->dv->spc<<BLK_SIZE_BITS,mem_task);
   if (StrOcc(flags,'w')) {
     f->flags=f->flags|FF_WRITE|FF_NEEDS_WRITE;
     if (StrOcc(flags,'+')) {
@@ -107,7 +107,7 @@ U0 FClose(CFile *f)
         VFsSetDrv(Fs->cur_dv->drv_let);
         VFsSetPwd(Fs->cur_dir); //+2 to ingore T:
         VFsFTrunc(f->de.name,f->de.size);
-        DirContextDel(dirc);
+        DirContextDel(dirc);
       }
       goto en;
     }

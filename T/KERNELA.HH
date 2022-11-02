@@ -304,7 +304,7 @@ extern U0i SndFreq(I64i freq);
 public extern Bool FBlkRead(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public extern Bool FBlkWrite(CFile *f,U8i *buf,I64i blk=FFB_NEXT_BLK,I64i cnt=1);
 public extern U0 FClose(CFile *f);
-public extern CFile *FOpen(U8i *filename,U8i *flags,I64i cnt=0);
+public extern U8i *FOpen(U8i *filename,U8i *flags,I64i cnt=0,U8i *mem_task=0);
 #endif
 public extern I64i MSize(U8i *src);   //size of heap object
 public extern I64i MSize2(U8i *src); //Internal size
@@ -5242,7 +5242,7 @@ extern CIntermediateCode *OptLag(CIntermediateCode *tmpi);
 extern CIntermediateCode *OptLag1(CIntermediateCode *tmpi);
 extern CIntermediateCode *OptLag2(CIntermediateCode *tmpi);
 extern CIntermediateCode *OptLead1(CIntermediateCode *tmpi);
-extern I64 CmpOffset2Reg(I64 offset,COptReg *reg_offsets);
+extern I64 CmpOffset2Reg(I64 offset,COptReg *reg_offsets);
 extern Bool OptFixupBinaryOp1(CIntermediateCode *tmpi,
      CIntermediateCode *tmpi1,CIntermediateCode *tmpi2,
      Bool *is_unsigned);
@@ -6484,7 +6484,7 @@ public extern U0 DVDImageWrite(U8 dvd_drv_let,
 public extern Bool FBlkRead(CFile *f,U8 *buf,I64 blk=FFB_NEXT_BLK,I64 cnt=1);
 public extern Bool FBlkWrite(CFile *f,U8 *buf,I64 blk=FFB_NEXT_BLK,I64 cnt=1);
 public extern U0 FClose(CFile *f);
-public extern CFile *FOpen(U8 *filename,U8 *flags,I64 cnt=0);
+public extern CFile *FOpen(U8 *filename,U8 *flags,I64 cnt=0,CTask *mem_task=NULL);
 public extern I64 FSize(CFile *f);
 
 extern I64 RedSeaAllocClus(CDrv *dv,I64 cnt);
@@ -6530,4 +6530,4 @@ extern U0 EnableScaling(Bool on=FALSE);
 extern U0 SetVolume(F64);
 extern F64 GetVolume();
 extern CTextGlbls text;
-extern CTask *sys_task_being_scrn_updated;
+extern CTask *sys_task_being_scrn_updated;
