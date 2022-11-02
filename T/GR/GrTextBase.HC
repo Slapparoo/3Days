@@ -1,5 +1,5 @@
 #help_index "TextBase Layer;Char/TextBase Layer"
-#help_file "::/DOC/TextBase.DD"
+#help_file "::/Doc/TextBase.DD"
 asm {
 //************************************
 _TEXT_CHAR::

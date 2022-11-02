@@ -27,7 +27,7 @@ public Bool RegDft(U8 *path,U8 *val,Bool is_adam_entry=FALSE)
       if (Fs==adam_task)
 	ExePrint("%s",val);
       else
-	TaskExe(adam_task,NULL,val,0);
+	TaskExe(adam_task,NULL,val,0);
     }
     DocWrite(sys_registry_doc);
     res=FALSE;
@@ -118,7 +118,7 @@ U0 RegInit()
 }
 
 #help_index "Boot/Once;Registry/Once"
-#help_file "::/DOC/Once.DD"
+#help_file "::/Doc/Once.DD"
 
 public U0 OnceFlush()
 {//Flush Once() buf.
@@ -152,7 +152,7 @@ public U0 OnceExe()
     RegDft("Once/Adam","");
     if (RegCnt("Once/Adam")>2) {
       TaskExe(adam_task,NULL,"RegExe(\"Once/Adam\");",0);
-      AOnceFlush;
+      RegWrite("Once/Adam","");
     }
     LBts(&once_mode,RLf_ONCE_ADAM);
 

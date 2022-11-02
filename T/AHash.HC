@@ -156,9 +156,9 @@ U8 *idx=NULL,CDoc *doc=NULL)
   CHashSrcSym *tmph;
   CHashGeneric *ptr;
   CWho *lst;
-  I64 cnt,i,j,k,f=0;
+  I64 cnt,i,j,k,f=0,ch;
   U8 buf[512],*last_idx=StrNew(""),*cur_idx,*comment;
-  Bool recurse,publics,map;
+  Bool recurse,publics,map,interupted=FALSE;
   CTask *task,*ofocus;
 
   ScanFlags(&f,Define("ST_FILE_UTIL_FLAGS"),"+r");
@@ -243,7 +243,13 @@ U8 *idx=NULL,CDoc *doc=NULL)
     progress1_max=cnt;
     progress1=0;
   }
-  for (i=0;i<cnt;i++) {
+  for (i=0;i<cnt&&!interupted;i++) {
+    if(ScanKey(&ch)) {
+       if(ch==CH_ESC||ch==CH_SHIFT_ESC) {
+         interupted=TRUE;
+         break;
+       }
+    }
     comment=NULL;
     ptr=lst[i].h;
     if (idx)
@@ -359,7 +365,7 @@ public I64 HashDepthRep(CHashTable *table=NULL)
 }
 
 #help_index "Help System"
-#help_file "::/DOC/HelpSystem.DD"
+#help_file "::/Doc/HelpSystem.DD"
 
 public U0 DocHelpIdx(CDoc *doc,U8 *idx)
 {//Put to doc report for given help idx.
@@ -375,3 +381,4 @@ public U0 PopUpHelpIndex(U8 *idx,CTask *parent=NULL)
 }
 
 #help_index "Hash/System"
+
