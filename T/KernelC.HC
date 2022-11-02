@@ -341,7 +341,7 @@ public extern U0 DirEntryDel(CDirEntry *tmpde);
 public extern U0 DirEntryDel2(CDirEntry *tmpde);
 public extern U0 DirTreeDel(CDirEntry *tmpde);
 public extern U0 DirTreeDel2(CDirEntry *tmpde);
-public extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=FUF_Z_OR_NOT_Z);
+public extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=FUF_Z_OR_NOT_Z);
 public extern U8 *FileRead(U8 *filename,I64 *_size=NULL,CTask *t=NULL);
 public extern I64 FileWrite(U8 *filename,
 	U8 *fbuf,I64 size);

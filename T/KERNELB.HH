@@ -173,5 +173,13 @@ public _extern SYS_PROGRESS4_T0 F64 progress4_t0; //Progress 4 start time.
 public _extern SYS_PROGRESS4_TF F64 progress4_tf; //Progress 4 end time.
 public _extern SYS_PROGRESSES
 	CProgress sys_progresses[PROGRESS_BARS_NUM]; //All progress bars.
+public _extern _TEXT_CHAR Bool TextChar(CTask *task,Bool allow_border=FALSE,
+I64 x,I64 y,I64 d); //Plot char. 30fps in Fs->draw_it() callback.
+public _extern _TEXT_LEN_STR Bool TextLenStr(CTask *task,I64 x,I64 y,I64 len,
+I64 attr,U8 *s); //Plot str with len.  30fps in Fs->draw_it() callback.
+public _extern _TEXT_LEN_ATTR_STR Bool TextLenAttrStr(CTask *task,I64 x,I64 y,
+I64 len,U32 *_attr); //Plot attr str with len.	30fps in Fs->draw_it() callback.
+public _extern _TEXT_LEN_ATTR Bool TextLenAttr(CTask *task,I64 x,I64 y,I64 len,
+I64 attr); //Plot attrs with len.  30fps in Fs->draw_it() callback.
 #endif
 

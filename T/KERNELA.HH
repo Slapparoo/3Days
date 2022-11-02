@@ -6529,3 +6529,5 @@ public extern U0 GrPaletteColorSet(I64i color_num,CBGR48 gr48);
 extern U0 EnableScaling(Bool on=FALSE);
 extern U0 SetVolume(F64);
 extern F64 GetVolume();
+extern CTextGlbls text;
+extern CTask *sys_task_being_scrn_updated;
