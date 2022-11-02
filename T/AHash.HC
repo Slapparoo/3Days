@@ -179,7 +179,7 @@ U8 *idx=NULL,CDoc *doc=NULL)
 //We spawn an invisilbe window,but we to keep it alive to avoid it's memory running away
 //So we focus to the next window and make it so you cant accidently select it
     LBts(&task->win_inhibit,WIf_SELF_FOCUS);
-    sys_focus_task=ofocus;
+    sys_focus_task=ofocus;
   } else
     task=NULL;
 
@@ -359,7 +359,7 @@ public I64 HashDepthRep(CHashTable *table=NULL)
 }
 
 #help_index "Help System"
-#help_file "::/Doc/HelpSystem.DD"
+#help_file "::/DOC/HelpSystem.DD"
 
 public U0 DocHelpIdx(CDoc *doc,U8 *idx)
 {//Put to doc report for given help idx.

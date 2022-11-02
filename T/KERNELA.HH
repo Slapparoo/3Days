@@ -2,7 +2,7 @@
 //
 // These are modified for 3Days; they dont take CTask * as an argument
 //
-#define __3DAYS__ TRUE
+#define __3DAYS__ TRUE
 extern class C3DaysDrawWin;
 extern class CTask;
 extern class CFile;
@@ -3545,7 +3545,7 @@ public class CTask //The Fs segment reg points to current CTask.
 
   //These must be in this order
   //for \dLK,"TASK_CONTEXT_SAVE",A="FF:::/Kernel/Sched.HC,TASK_CONTEXT_SAVE"\d and \dLK,"_TASK_CONTEXT_RESTORE",A="FF:::/Kernel/Sched.HC,_TASK_CONTEXT_RESTORE"\d
-  I64	rip,rflags,rsp,rsi,rax,rcx,rdx,rbx,rbp,rdi,
+  I64	rip,rflags,rsp,rsi,rax,rcx,rdx,rbx,rbp,rdi,
 	r8,r9,r10,r11,r12,r13,r14,r15;
   CCPU	*gs;
   CFPU	*fpu_mmx;
@@ -6440,7 +6440,7 @@ public extern Bool DirNew(CDrv *dv,U8 *cur_dir,
 extern I64 FileAttr(U8 *name,I64 old_attr=0);
 
 #help_index "File/Low Level"
-#help_file "::/Doc/FileLowLevel"
+#help_file "::/DOC/FileLowLevel"
 public extern CBlkDev *BlkDevChk(CBlkDev *bd,Bool except=TRUE);
 public extern U0 BlkDevDel(CBlkDev *bd);
 public extern Bool BlkDevLock(CBlkDev *bd);

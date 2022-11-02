@@ -1,7 +1,7 @@
 #define REGISTRY_FILENAME "/Registry.HC.Z"
 CDoc *sys_registry_doc=NULL;
 I64 sys_msg_flags[1]={0};
-F64 registry_version;
+F64 registry_version;
 I64 once_mode=0;
 Bool RegCache()
 {
@@ -27,7 +27,7 @@ public Bool RegDft(U8 *path,U8 *val,Bool is_adam_entry=FALSE)
       if (Fs==adam_task)
 	ExePrint("%s",val);
       else
-	TaskExe(adam_task,NULL,val,0);
+	TaskExe(adam_task,NULL,val,0);
     }
     DocWrite(sys_registry_doc);
     res=FALSE;
@@ -118,7 +118,7 @@ U0 RegInit()
 }
 
 #help_index "Boot/Once;Registry/Once"
-#help_file "::/Doc/Once.DD"
+#help_file "::/DOC/Once.DD"
 
 public U0 OnceFlush()
 {//Flush Once() buf.
@@ -149,13 +149,11 @@ public U0 OnceDrv(U8 drv_let=0,U8 *fmt,...)
 public U0 OnceExe()
 {//Execute Once code. Call goes in $LK,"~/Once.HC"$.
   try {
-
-    /* CHANGED TODO RESTORE
     RegDft("Once/Adam","");
     if (RegCnt("Once/Adam")>2) {
       TaskExe(adam_task,NULL,"RegExe(\"Once/Adam\");",0);
       AOnceFlush;
-    }*/
+    }
     LBts(&once_mode,RLf_ONCE_ADAM);
 
     RegDft("Once/User","");

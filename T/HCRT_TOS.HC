@@ -109,7 +109,7 @@ fp_puts2=&PutS;
 U0 PutKey(I64 ch,I64 s)	 {
     DocPutKey(DocPut,ch,s);
 }
-
+#help_index "Ctrls"
 #include "CTRLSA.HC"
 #include "CTRLSBTTN.HC"
 #include "CTRLSSLIDER.HC"
@@ -117,7 +117,7 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "AutoComplete/MakeAC.HC"
 #include "God/MakeGod.HC"
 #include "Find.HC"
-#include "ARegistry.HC"
+#include "ARegistry.HC"
 #include "AHash.HC"
 #include "ADskA.HC"
 #include "ADskB.HC"
@@ -126,7 +126,7 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "Diff.HC"
 #include "KeyDev.HC"
 #include "FILEMGR.HC"
-#include "Training.HC.Z"
+#include "Training.HC.Z"
 #include "InFile.HC"
 #include"Community-Heiresis/HolyCipher/CIPHER.HC";
 #include "Mount.HC"

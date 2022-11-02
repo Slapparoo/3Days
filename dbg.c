@@ -111,7 +111,7 @@ static void routine(int sig,struct siginfo_t *info,ucontext_t *ctx) {
 		//I added these
 		regs[16]=ctx->uc_mcontext.mc_rip;
 		regs[17]=&ctx->uc_mcontext.mc_fpstate;
-		regs[18]=ctx->uc_mcontext.mc_flags;
+		regs[18]=ctx->uc_mcontext.mc_rflags;
 		FFI_CALL_TOS_2(fun,sig,regs);
 	} else 
 		abort();

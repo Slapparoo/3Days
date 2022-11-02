@@ -371,7 +371,7 @@ public CDC *DCLoad(U8 *src,I64 *_size=NULL,CTask *task=NULL)
 }
 
 #help_index "Graphics/GR Files"
-#help_file "::/Doc/GRFiles.DD"
+#help_file "::/DOC/GRFiles.DD"
 #help_index "Graphics/Device Contexts;Graphics/GR Files"
 
 #define GR_FILE_MAX	(offset(CDC.end)-offset(CDC.start)+\
@@ -420,7 +420,7 @@ public CDC *DCScrnCapture(Bool include_zoom=TRUE,CTask *task=NULL)
   else
     dc=DCCopy(gr.dc1,task);
   dc->flags&=~DCF_SCRN_BITMAP;
-//I made it so the scrn_image is the same as usual
+//I made it so the scrn_image is the same as usual
 /**original code
  //Pick background color that never occurs. COLOR_INVALID
   GrBitMap4ToBitMap8(dst,dc->body,

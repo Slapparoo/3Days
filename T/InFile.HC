@@ -1,5 +1,5 @@
 #help_index "InFile;Help System/Training"
-#help_file "::/Doc/InFile"
+#help_file "::/DOC/InFile"
 
 public U0 InGetStr(U8 *st)
 {//Wait for user to type certain str.

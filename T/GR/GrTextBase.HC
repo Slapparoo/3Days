@@ -1,5 +1,5 @@
 #help_index "TextBase Layer;Char/TextBase Layer"
-#help_file "::/Doc/TextBase.DD"
+#help_file "::/DOC/TextBase.DD"
 asm {
 //************************************
 _TEXT_CHAR::
@@ -282,7 +282,7 @@ _TEXT_LEN_ATTR:://Bool TextLenAttr(CTask *task,I64 x,I64 y,I64 len,I64 attr)
 	CMP	RAX,TEXT_ROWS
 	JGE	@@35
 
-	IMUL2	RAX,TEXT_COLS
+	IMUL2	RAX,TEXT_COLS
 	ADD	RDI,RAX
 	SHL	RDI,2
 	ADD	RDI,U64 [&gr.text_base]
