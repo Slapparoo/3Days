@@ -126,10 +126,11 @@ U0 PutKey(I64 ch,I64 s)	 {
 #include "Diff.HC"
 #include "KeyDev.HC"
 #include "FILEMGR.HC"
-#include "Training.HC.Z"
+#include "Training.HC.Z"
 #include "InFile.HC"
 #include"Community-Heiresis/HolyCipher/CIPHER.HC";
 #include "Mount.HC"
+#include "TaskRep.HC"
 /*I64 CheckSum(U8 *data,I64 len) {
   I64 sum=0;
   while(--len>=0) sum+=data[len];

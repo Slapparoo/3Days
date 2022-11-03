@@ -59,7 +59,7 @@ U0 StartUpTasks()
     ExeFile("/WallPaper.HC.Z");
     ExePrint("WallPaperInit;;");
   } catch
-    PutExcept;
+    PutExcept;
   ACInit("/KERNEL*.HH*");
   AutoComplete(ON);
 }
@@ -97,9 +97,10 @@ U0 Adam(U8 *) {
 	//We are "adam" task
 	SrvTaskCont;
 }
-Gs->seth_task=Spawn(&CoreAPSethTask,NULL,"Seth");
 //Our entering thread doesnt have a cur_thrd,so spawn one
 adam_task=Spawn(&Adam,NULL,"Adam",,);
+Gs->seth_task=Spawn(&CoreAPSethTask,NULL,"Seth");
 //Dont Exit
 BirthWait(&adam_task);
 DeathWait(&adam_task);
+

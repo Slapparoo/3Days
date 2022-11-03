@@ -274,7 +274,7 @@ I64 TaskInit(CTask *task,I64 stk_size)
   task->cur_dir=StrNew(Fs->cur_dir,task);
   return task;
 }
-CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
+CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
 	I64 target_cpu=-1,	//-1 for current CPU. See \dLK,"multi-core",A="FI:::/Demo/MultiCore/LoadTest.HC"\d.
 	CTask *parent=NULL,	//NULL means adam
 	I64 stk_size=0,		//0=default
@@ -282,7 +282,8 @@ CTask *Spawn(U0 (*fp_start_addr)(U8 *data),U8 *data=NULL,U8 *task_name=NULL,
 {//Create task on core running at address.
 //Alloc \dLK,"CTask",A="MN:CTask"\d structure from code heap so addr will be short.
   //Could be alloced off of data heap.
-  if(!parent) parent=adam_task;
+  if(!parent) parent=Gs->seth_task;
+  if(!parent) parent=adam_task; //Modoifef by Nroot(adam_task spawns before seth)
   if(target_cpu==-1)
 	target_cpu=Gs->num;
   CTask *task=MAlloc32(sizeof(CTask),adam_task);

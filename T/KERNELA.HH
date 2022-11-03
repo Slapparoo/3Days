@@ -5242,7 +5242,7 @@ extern CIntermediateCode *OptLag(CIntermediateCode *tmpi);
 extern CIntermediateCode *OptLag1(CIntermediateCode *tmpi);
 extern CIntermediateCode *OptLag2(CIntermediateCode *tmpi);
 extern CIntermediateCode *OptLead1(CIntermediateCode *tmpi);
-extern I64 CmpOffset2Reg(I64 offset,COptReg *reg_offsets);
+extern I64 CmpOffset2Reg(I64 offset,COptReg *reg_offsets);
 extern Bool OptFixupBinaryOp1(CIntermediateCode *tmpi,
      CIntermediateCode *tmpi1,CIntermediateCode *tmpi2,
      Bool *is_unsigned);
@@ -6531,3 +6531,4 @@ extern U0 SetVolume(F64);
 extern F64 GetVolume();
 extern CTextGlbls text;
 extern CTask *sys_task_being_scrn_updated;
+public extern U0 TaskRep();

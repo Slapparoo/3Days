@@ -21,7 +21,7 @@ CFile *FOpen(U8 *filename,U8 *flags,I64 cnt=0,CTask *mem_task=NULL)
   else
     f->max_blk=I64_MAX;
   f->file_clus_num=INVALID_CLUS;
-  full_name=FileNameAbs(filename,mem_task);
+  full_name=FileNameAbs(filename);
   f->dv=Let2Drv(*full_name);
   if (f->dv->fs_type==FSt_REDSEA)
     contiguous=TRUE;
@@ -110,7 +110,7 @@ U0 FClose(CFile *f)
         DirContextDel(dirc);
       }
       goto en;
-    }
+    }
     if (f->flags & FF_BUF_DIRTY) {
       ClusWrite(f->dv,f->clus_buf,f->clus,1);
       f->flags&=~FF_BUF_DIRTY;

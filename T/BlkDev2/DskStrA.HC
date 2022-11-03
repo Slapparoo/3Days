@@ -154,7 +154,7 @@ U8 *DirNameAbs(U8 *_dirname)
     else if (*buf4) {
       if (StrCmp(buf3,"/"))
 	CatPrint(buf3,"/");
-      CatPrint(buf3,buf4);
+      CatPrint(buf3,buf4);
     }
   }
   Free(buf);
@@ -342,4 +342,3 @@ returns default.
   if(!dft) dft=DirNameAbs(dirname);
   return dft;
 }
-
