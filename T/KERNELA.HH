@@ -3048,6 +3048,7 @@ public class CFile //See \dLK,"::/Demo/Dsk/DataBase.HC"\d.
 class CMemUnused
 {
   CHeapCtrl *hc;
+  CMemBlk *blk,*pad;
   U8	*caller1,*caller2;
   CMemUnused *next;
   I64	size;
@@ -3055,6 +3056,7 @@ class CMemUnused
 class CMemUsed
 {
   CHeapCtrl *hc;
+  CMemBlk *blk,*pad;
   U8	*caller1,*caller2;
   CMemUsed *next,*last;
   I64	size;
@@ -3580,7 +3582,7 @@ public class CTask //The Fs segment reg points to current CTask.
   F64	last_ode_time;
   CHashTable *hash_table;
 
-  CJobCtrl srv_ctrl;
+  CJobCtrl srv_ctrl;
   CCmpCtrl *next_cc,*last_cc;
   CHashFun *last_fun;
 
@@ -6510,7 +6512,6 @@ extern Bool DrvTypeSet(U8 drv_let,I64 type=FSt_REDSEA);
 extern U0 DrvsRelease();
 extern U0 DskCacheInvalidate(CDrv *dv);
 extern U8 *FileExtRem(U8 *src,U8 *dst=NULL);
-extern Bool FileFind(U8 *filename,CDirEntry *_de=NULL,I64 fuf_flags=0);
 extern U8 *FileNameAbs(U8 *_filename,I64 fuf_flags=0);
 extern U8 *FileRead(U8 *filename,I64 *_size=NULL,I64 *_attr=NULL);
 extern I64 FileWrite(U8 *filename,U8 *fbuf,I64 size,CDate cdt=0,I64 attr=0);

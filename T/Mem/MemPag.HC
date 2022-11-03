@@ -19,7 +19,9 @@ class CBlkCache {
   CBlkCacheEnt ents[BLK_CACHE_MASK+1][16];
   I64 indexes[BLK_CACHE_MASK+1];
   I64 spin_lock;
+  CQue all_blocks;
 } blk_cache;
+
 I64 HashPtr(U64 ptr) {
   ptr>>=MEM_PAG_BITS;
   return ptr*((ptr>>8)&0xff);
@@ -78,11 +80,44 @@ U0 MemBlkCacheRemove(CBlkCache *cache,CMemBlk *blk) {
     LBtr(&cache->spin_lock,0);
   }
 }
+Bool IsValidPtr(U8 *ptr,I64 sz=1) {
+  CMemBlk *blk=GetMemBlkFromCache(&blk_cache,ptr),*cur_base;
+  CQue *cur;
+  cur_base=blk;
+  I64 idx,off_by;
+  if(!blk) {
+    for(cur=blk_cache.all_blocks.next;cur!=&blk_cache.all_blocks;cur=cur->next) {
+      cur_base=cur(U8*)-offset(CMemBlk.next2);
+      if(cur_base<=ptr<cur_base(U8*)+cur_base->pags<<MEM_PAG_BITS) {
+        blk=cur_base;
+        MemBlkCacheAdd(&blk_cache,blk);
+        break;
+      }
+    }
+  }
+  if(blk) {
+    if(blk->shadow[idx=(ptr-cur_base)>>3])
+       goto found;
+    while(idx) {
+      if(blk->shadow[idx]) {
+        "Access %X is %X bytes OOB\n",ptr,ptr-(idx*8+cur_base(U8*));
+        return FALSE;
+      }
+      --idx;
+    }
+  }
+  if(!__IsValidPtr(ptr)) {
+    "Access %X is really out of bounds\n",ptr;
+    return ptr;
+  }
+found:
+  return TRUE;
+}
 #else
 Bool IsValidPtr(U8 *ptr,I64 sz=1) {
   "Use '-b' on 3d_loader to enable bounds-checker.\n";
   throw('UseBC');
-};
+};
 #endif
 U8 *MemPagAlloc(I64 pags,CBlkPool *bp=NULL)
 {/*Alloc pags from BlkPool. Don't link to task.
@@ -104,6 +139,7 @@ Return: NULL if out of memory.
   res->pags=pags;
   res->mb_signature=MBS_UNUSED_SIGNATURE_VAL;
 #ifdef BC_ENABLE
+  QueIns(&res->next2,blk_cache.all_blocks.last);
   MemBlkCacheAdd(&blk_cache,res);
   res->shadow=NewVirtualChunk(pags<<MEM_PAG_BITS/8,FALSE);
   MemSet(res->shadow,FALSE,pags<<MEM_PAG_BITS/8);
@@ -130,6 +166,7 @@ U0 MemPagFree(CMemBlk *m,CBlkPool *bp=NULL)
 #ifdef BC_ENABLE
     MemBlkCacheRemove(&blk_cache,m);
     FreeVirtualChunk(m->shadow,pags<<MEM_PAG_BITS/8); 
+    QueRem(&m->next2);
 #endif
     FreeVirtualChunk(m,pags<<MEM_PAG_BITS);
     if(old)
@@ -208,3 +245,9 @@ asm {
 	LEAVE
 	RET1	16
 };
+U0 InitHeaps() {
+#ifdef BC_ENABLE
+  MemSet(&blk_cache,0,sizeof CBlkCache);
+  QueInit(&blk_cache.all_blocks);
+#endif
+}
