@@ -41,7 +41,7 @@ CAOT *CmpJoin(CCmpCtrl *cc,I64 cmp_flags,U8 *map_name=NULL,U8 mapfile_drv_let=0)
     CHashFun *fun;
     Bool okay=TRUE;
     CLexHashTableContext *htc=MAlloc(sizeof(CLexHashTableContext));
-    CAOT *res=MAlloc(sizeof(CAOT)),*parent;
+    CAOT *res=CAlloc(sizeof(CAOT)),*parent;
     if (parent=cc->aot) {
         res->parent_aot=parent;
         QueIns(res,parent->last);
@@ -50,10 +50,10 @@ CAOT *CmpJoin(CCmpCtrl *cc,I64 cmp_flags,U8 *map_name=NULL,U8 mapfile_drv_let=0)
     cc->aot=res;
 
     res->next_ie=res->last_ie=&res->next_ie;
-    cc->aotc=aotc=MAlloc(sizeof(CAOTCtrl));
+    cc->aotc=aotc=CAlloc(sizeof(CAOTCtrl));
     cc->aot_depth++;
 
-    aotc->bin=MAlloc(sizeof(CAOTBinBlk));
+    aotc->bin=CAlloc(sizeof(CAOTBinBlk));
     aotc->max_align_bits=0;
     aotc->org=INVALID_PTR;
 
@@ -83,7 +83,7 @@ CAOT *CmpJoin(CCmpCtrl *cc,I64 cmp_flags,U8 *map_name=NULL,U8 mapfile_drv_let=0)
             while (cc->token!=TK_EOF) {
                 buf=LexStmt2Bin(cc,NULL,cmp_flags);
                 if (buf!=INVALID_PTR) {
-                    tmpie=MAlloc(sizeof(CAOTImportExport));
+                    tmpie=CAlloc(sizeof(CAOTImportExport));
                     tmpie->type=IET_MAIN;
                     tmpie->rip=buf;
                     QueIns(tmpie,res->last_ie);
@@ -245,7 +245,7 @@ U0 CmpFixUpJITAsm(CCmpCtrl *cc,CAOT *tmpaot)
         case IET_IMM32_EXPORT:
         case IET_REL64_EXPORT:
         case IET_IMM64_EXPORT:
-            tmpex=MAlloc(sizeof(CHashExport));
+            tmpex=CAlloc(sizeof(CHashExport));
             tmpex->str=str;
             str=NULL;
             tmpex->type=HTT_EXPORT_SYS_SYM|HTF_IMM;
@@ -672,7 +672,7 @@ I64 ExePutS(U8 *buf,U8 *filename=NULL,
     return res;
 }
 
-I64 ExePrint(U8 *fmt,...)
+I64 ExePrint(U8 *fmt,...)
 {   //JIT Compile and execute text from a printf().
     I64 res;
     U8 *buf=StrPrintJoin(NULL,fmt,argc,argv);
@@ -711,7 +711,7 @@ I64 ExePutS2(U8 *buf,U8 *filename=NULL,I64 ccf_flags=0)
     QueIns(cc,Fs->last_cc);
     Lex(cc);
     res=ExeCmdLine(cc);
-    QueRem(cc);
+    QueRem(cc);
     CmpCtrlDel(cc);
     return res;
 }
@@ -769,7 +769,7 @@ U0 CInit()
     AsmHashLoad;
     UAsmHashLoad;
     Fs->last_cc=CmpCtrlNew;
-    Fs->last_except=MAlloc(sizeof(CExcept));
+    Fs->last_except=CAlloc(sizeof(CExcept));
     QueInit(Fs->last_except);
     QueInit(&(Fs->next_except));
 }

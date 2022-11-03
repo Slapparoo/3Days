@@ -86,7 +86,7 @@ U0 IndexGet(CServer *srv,CDyadStream *stream,CURL *url,CHTTPRequest *req) {
 			goto next;
 		if(IsDir(sorted[i]->full_name)) {
 			WriteLn(stream,NULL,"<LI><A HREF=\""WIKI_INDEX"%s/%s\">%s</A><SPAN CLASS=\"badge secondary\">Folder</SPAN></LI>",rel_dir,sorted[i]->name,sorted[i]->name);
-		} else {
+		} else {
 			WriteLn(stream,NULL,"<LI><A HREF=\"%s/%s\">%s</A>(Last edit at %D-%T)</LI>",rel_dir,sorted[i]->name,sorted[i]->name,sorted[i]->datetime,sorted[i]->datetime);
 		}
 		next:

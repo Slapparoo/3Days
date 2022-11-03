@@ -149,7 +149,7 @@ U8 *CmdLinePmt()
   LBtr(&(Fs->task_flags),TASKf_CMD_LINE_PMT);
 
   i=StrLen(st);
-  res=MAlloc(i+1+2);
+  res=MAlloc(i+1+2);
   MemCpy(res,st,i+1);
   i--;
   while (i>=0 && Bt(char_bmp_white_space,res[i]))

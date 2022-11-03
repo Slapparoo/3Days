@@ -11,6 +11,7 @@ class CHTTPRequest {
 	I64 method;
 };
 class CServer {
+	CTask *task; 
 	I64 port;
 	CDyadStream *s_sock;
 	U0(*get)(CServer*,CDyadStream*,CURL*,CHTTPRequest*);

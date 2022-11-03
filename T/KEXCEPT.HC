@@ -65,7 +65,7 @@ class CTryStk
 U0 SysTry(U8 *catch_start,U8 *untry_start)
 {
   I64 *rbp=GetRBP;
-  CExcept *tmpt=MAlloc(sizeof(CExcept));
+  CExcept *tmpt=MAlloc(sizeof(CExcept));
   tmpt->hndlr_catch=catch_start;
   tmpt->hndlr_untry=untry_start;
   tmpt->rsp=rbp(U8 *)+sizeof(CTryStk);
@@ -122,12 +122,10 @@ U0 __Break()
     Msg(MSG_KEY_DOWN,CH_SHIFT_ESC,0x20100000201);
   else {
     Fs->wake_jiffy=0;
-    /* TODO RESTORE
     TaskRstAwaitingMsg;
     DrvsRelease();
     BlkDevsRelease();
     FlushMsgs;
-    */
     throw('Break');
   }
   try ; catch ;

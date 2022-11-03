@@ -1,7 +1,8 @@
 Cd("T:/");; //We are not serving from RootFS
 Cd("/Server");;
 //This dude will refresh the search index for find.hC
-extern U0 ReIndex();
+extern class CServer;
+extern U0 ReIndex(CServer *);
 #define WIKI_EDIT "/EDIT"
 #define WIKI_ROOT "/Wiki"
 #define WIKI_NAME "TempleOS Tiki"

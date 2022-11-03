@@ -181,5 +181,5 @@ public _extern _TEXT_LEN_ATTR_STR Bool TextLenAttrStr(CTask *task,I64 x,I64 y,
 I64 len,U32 *_attr); //Plot attr str with len.	30fps in Fs->draw_it() callback.
 public _extern _TEXT_LEN_ATTR Bool TextLenAttr(CTask *task,I64 x,I64 y,I64 len,
 I64 attr); //Plot attrs with len.  30fps in Fs->draw_it() callback.
+_extern _MALLOC U8 *MAlloc(I64 size,CTask *mem_task=NULL); //Alloc memory chunk.
 #endif
-

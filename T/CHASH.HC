@@ -110,8 +110,8 @@ I64 HashVal(CHash *tmph)
 CHashTable *HashTableNew(I64 size,CTask *t=NULL)
 {   //New hash table, power-of-two in size.
     CHashTable *table;
-    table=MAlloc(sizeof(CHashTable),t);
-    table->body=MAlloc(size<<3,t);
+    table=CAlloc(sizeof(CHashTable),t);
+    table->body=CAlloc(size<<3,t);
     table->mask=size-1;
     return table;
 }
@@ -171,7 +171,7 @@ CHashGeneric *HashGenericAdd(U8 *name,I64 type,
                              I64 u0=0,I64 u1=0,I64 u2=0,CTask *task=NULL)
 {   //Add any type to task hash_table, 3 user_data values.
     if (!task) task=Fs;
-    CHashGeneric *res=MAlloc(sizeof(CHashGeneric),task);
+    CHashGeneric *res=CAlloc(sizeof(CHashGeneric),task);
     res->type=type;
     res->user_data0=u0;
     res->user_data1=u1;
@@ -222,7 +222,7 @@ I64 HashLstAdd(U8 *lst,I64 type,CHashTable *table)
                 lst++;
             else
                 i++;
-            tmph=MAlloc(sizeof(CHashGeneric));
+            tmph=CAlloc(sizeof(CHashGeneric));
             tmph->user_data0=i-1;
             tmph->str=StrNew(lst);
             tmph->type=type;
@@ -242,7 +242,7 @@ I64 HashDefineLstAdd(U8 *dname,I64 type,CHashTable *table)
         return 0;
 }
 
-I64 FramePtr(U8 *name,CTask *task=NULL)
+I64 FramePtr(U8 *name,CTask *task=NULL)
 {   //Find entry in task->hash_table, Return user_data.
     CHashGeneric *tmph;
     if(!task) task=Fs;
@@ -383,7 +383,7 @@ I64 __DbgInfoWrite(CHashTable *h,U8 *to) {
 }
 U0 DbgInfoWrite(CHashTable *h,U8 *name) {
 	I64 len=__DbgInfoWrite(h,NULL);
-	U8 *buf=MAlloc(len);
+	U8 *buf=MAlloc(len);
 	__DbgInfoWrite(h,buf);
 	FileWrite(name,buf,len);
 	Free(buf);
@@ -422,7 +422,7 @@ U0 DbgInfoRead(U8 *name) {
         else
 	  tmph->idx=NULL;
         tmph->src_link=MStrPrint("FL:%s,%d",fn,min);
-        tmph->dbg_info=MAlloc(sizeof(CDbgInfo)+sizeof(U32)*(max-min+1));
+        tmph->dbg_info=CAlloc(sizeof(CDbgInfo)+sizeof(U32)*(max-min+1));
         tmph->dbg_info->min_line=min;
         tmph->dbg_info->max_line=max;
         for(ln=min;ln<=max+1;ln++) {
@@ -472,7 +472,7 @@ U0 DbgInfoRead(U8 *name) {
 	  tmph(CHashFun*)->member_lst_and_root=tmpm2;
       }
     } else if(type&HTT_HELP_FILE) {
-      tmph=MAlloc(sizeof(CHashSrcSym));
+      tmph=CAlloc(sizeof(CHashSrcSym));
       tmph->type=HTF_PUBLIC|HTT_HELP_FILE;
       tmph->str=StrNew(ptr);
       ptr+=StrLen(ptr)+1;

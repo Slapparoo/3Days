@@ -14,7 +14,7 @@ CHashDefineStr *DefineLstLoad(U8 *dname,U8 *lst)
 {//Create DEFINE list. Not efficient, but handy.
   I64 cnt=0;
   U8 *ptr,**idx;
-  CHashDefineStr *tmph=CAlloc(sizeof(CHashDefineStr));
+  CHashDefineStr *tmph=CAlloc(sizeof(CHashDefineStr));
   tmph->type=HTT_DEFINE_STR;
   tmph->str=StrNew(dname);
   tmph->src_link=MStrPrint("AD:0x%X",Caller);

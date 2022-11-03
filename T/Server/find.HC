@@ -129,7 +129,7 @@ enter:
     dot=FileExtDot(cur->full_name);
     if(dot)
       if(!StrICmp(dot,".WIKI")||!StrICmp(dot,".WIKI.Z")) {
-        wait_for[c]=Spawn(&IndexFile,cur->full_name,"Indexer",c,Fs);
+        wait_for[c]=Spawn(&IndexFile,cur->full_name,"Indexer",c,Fs);
         c=(c+1)%mp_cnt; 
       }
 wait:
@@ -305,7 +305,6 @@ loop:
   Free(title);
   FifoI64Del(matches);
 }
-U0 ReIndex() {
-  TaskExe(index_task,Fs,"ResetFileIndex;;\n",0);
-}
-ReIndex;
+U0 ReIndex(CServer *server) {
+  TaskExe(index_task,server->task,"ResetFileIndex;;\n",0);
+}

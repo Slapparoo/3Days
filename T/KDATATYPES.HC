@@ -62,7 +62,7 @@ CQue *QueCopy(CQue *head,CTask *mem_task=NULL)
   return res;
 }
 
-I64 QueCnt(CQue *head)
+I64 QueCnt(CQue *head)
 {//Count of nodes in queue, not head.
   CQue *tmpq=head->next;
   I64 res=0;
@@ -155,7 +155,7 @@ I64 QueVectU8Get(CQueVectU8 *v,I64 idx)
 CFifoU8 *FifoU8New(I64 size,CTask *mem_task=NULL)
 {//Create new fifo.
   CFifoU8 *f;
-  f=MAlloc(sizeof(CFifoU8));
+  f=MAlloc(sizeof(CFifoU8));
   f->buf=MAlloc(size);
   f->mask=size-1;
   f->in_ptr=0;

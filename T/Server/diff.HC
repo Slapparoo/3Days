@@ -18,10 +18,11 @@ CLine *SplitLines(U8 *text,I64 *line_cnt) {
     loop:
     end_ptr=StrFirstOcc(ln_start,"\n");    
     if(!end_ptr) end_ptr=ln_start+StrLen(ln_start);
-    if(*end_ptr)
+    if(*end_ptr) {
         MemCpy(line=MAlloc(end_ptr-ln_start+2),ln_start,end_ptr-ln_start+1);
-    else {
-        MemCpy(line=MAlloc(end_ptr-ln_start+2),ln_start,end_ptr-ln_start);
+        line[end_ptr-ln_start+1]=0;
+    } else {
+        MemCpy(line=MAlloc(end_ptr-ln_start+2),ln_start,end_ptr-ln_start+1);
     }
     ret_ptr->idx=ret_ptr-ret;
     ret_ptr->text=line;
@@ -72,7 +73,7 @@ CDiffItem *DiffSub(CDiffItem *res,CLine *str1,CLine *str2,I64 N,I64 M,CLine *sor
                 i2++;
                 if(i2>=M)
                     break;
-            }
+            }
             i2=i2b;
             i1++;
         }

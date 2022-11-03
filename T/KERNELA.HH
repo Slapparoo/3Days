@@ -199,7 +199,6 @@ import U8i *__MPSpawn(I64i,CTask *,U8i *,U8i *,U8i *);
 import I64i __CoreNum();
 import U0i __SpawnCore(I64i core,U0i(*fp_ptr)());
 import U0i __MAlloc32(I64i sz,CTask *t);
-import U0i __MAlloc(I64i sz,CTask *t);
 import U0i __Free(U8i *);
 import I64i FSize(U8i *);
 import I64i FUnixTime(U8i *);
@@ -3581,7 +3580,7 @@ public class CTask //The Fs segment reg points to current CTask.
   F64	last_ode_time;
   CHashTable *hash_table;
 
-  CJobCtrl srv_ctrl;
+  CJobCtrl srv_ctrl;
   CCmpCtrl *next_cc,*last_cc;
   CHashFun *last_fun;
 
@@ -6531,4 +6530,4 @@ extern U0 SetVolume(F64);
 extern F64 GetVolume();
 extern CTextGlbls text;
 extern CTask *sys_task_being_scrn_updated;
-public extern U0 TaskRep();
+public extern U0 TaskRep();

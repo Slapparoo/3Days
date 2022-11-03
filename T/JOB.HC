@@ -51,10 +51,11 @@ CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
 {//Queues a request to compile and execute src code text.
   CJob *res;
   Bool old;
-  if (!data || !TaskValidate(srv) || master && !TaskValidate(master) ||
+  if (!data || !TaskValidate(srv) || master && !TaskValidate(master) ||
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
   res=CAlloc(sizeof(CJob),adam_task);
+  QueInit(res);
   res->master_task=master;
   res->job_code=JOBT_EXE_STR;
   res->flags=flags;
@@ -96,6 +97,7 @@ CJob *TaskText(CTask *srv,CTask *master,U8 *data,I64 flags)
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
   res=CAlloc(sizeof(CJob),adam_task);
+  QueInit(res);
   res->master_task=master; //in case somebody cares
   res->job_code=JOBT_TEXT_INPUT;
   res->flags=flags;
@@ -144,6 +146,7 @@ CJob *TaskMsg(CTask *_srv,CTask *master,
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
   tmpc=CAlloc(sizeof(CJob),adam_task);
+  QueInit(tmpc);
   tmpc->master_task=master;
   tmpc->job_code=JOBT_MSG;
   tmpc->msg_code=AbsI64(msg_code); //negative means do a down and up
@@ -314,10 +317,10 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
       LBts(&tmpc->flags,JOBf_DISPATCHED);
       LBtr(&ctrl->flags,JOBCf_LOCKED);
       if (tmpc->aux_str)
-	tmpc->spawned_task=Spawn(tmpc->addr,tmpc->fun_arg,
+        tmpc->spawned_task=Spawn(tmpc->addr,tmpc->fun_arg,
 	      tmpc->aux_str,,tmpc->aux1,tmpc->aux2,tmpc->flags);
       else
-	tmpc->spawned_task=Spawn(tmpc->addr,tmpc->fun_arg,
+        tmpc->spawned_task=Spawn(tmpc->addr,tmpc->fun_arg,
 	      "Unnamed",,tmpc->aux1,tmpc->aux2,tmpc->flags);
       break;
     case JOBT_CALL:
@@ -329,20 +332,20 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
       try
 	      tmpc->res=(*tmpc->addr)(tmpc->fun_arg);
       catch
-	Fs->catch_except=TRUE;
-      //SetRFlags(old_flags);
+        Fs->catch_except=TRUE;
+//SetRFlags(old_flags);
       break;
     case JOBT_EXE_STR:
       QueRem(tmpc);
       LBts(&tmpc->flags,JOBf_DISPATCHED);
       LBtr(&ctrl->flags,JOBCf_LOCKED);
-      //SetRFlags(run_flags);
+//SetRFlags(run_flags);
       LBtr(&(Fs->task_flags),TASKf_IDLE);
       try
 	      tmpc->res=ExePrint("%s",tmpc->aux_str);
       catch
-	Fs->catch_except=TRUE;
-      //SetRFlags(old_flags);
+        Fs->catch_except=TRUE;
+//SetRFlags(old_flags);
       break;
     default:
       res=JOB_DONE;
@@ -350,19 +353,19 @@ I64 JobRunOne(I64 run_flags,CJobCtrl *ctrl)
   if (res) {
     if (master=tmpc->master_task) {
       if (!Bt(&flags,JOBf_FREE_ON_COMPLETE)) {
-	while (LBts(&master->srv_ctrl.flags,JOBCf_LOCKED)) {
-      PAUSE;
-    }
-	QueIns(tmpc,master->srv_ctrl.last_done);
-	LBts(&tmpc->flags,JOBf_DONE);
-	LBtr(&master->srv_ctrl.flags,JOBCf_LOCKED);
-	SetRFlags(old_flags);
+        while (LBts(&master->srv_ctrl.flags,JOBCf_LOCKED)) {
+	  PAUSE;
+        }
+        QueIns(tmpc,master->srv_ctrl.last_done);
+        LBts(&tmpc->flags,JOBf_DONE);
+        LBtr(&master->srv_ctrl.flags,JOBCf_LOCKED);
+        SetRFlags(old_flags);
       }
       if (Bt(&flags,JOBf_FOCUS_MASTER) &&
 	    !Bt(&master->win_inhibit,WIf_SELF_FOCUS))
-	sys_focus_task=master;
+        sys_focus_task=master;
       if (Bt(&flags,JOBf_WAKE_MASTER))
-	Suspend(master,FALSE);
+        Suspend(master,FALSE);
     }
     if (Bt(&flags,JOBf_FREE_ON_COMPLETE))
       JobDel(tmpc);
@@ -494,7 +497,7 @@ U0 XTalkStrWait(CTask *task,U8 *fmt,...)
   TaskWait(task);
 }
 
-Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE)
+Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE)
 {//Terminate other task.
   I64 i;
   if (TaskValidate(task)) {
@@ -576,6 +579,7 @@ CJob *JobQue(I64 (*fp_addr)(U8 *data),U8 *data=NULL,
     throw('MultCore');
   __AwakeCore(target_cpu);
   tmpc=CAlloc(sizeof(CJob),adam_task);
+  QueInit(tmpc);
   if (aux_str)
     tmpc->aux_str=StrNew(aux_str,adam_task);
   tmpc->job_code=job_code;
