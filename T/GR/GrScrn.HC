@@ -396,6 +396,7 @@ asm {
   LEAVE
   RET1 1*8
 };
+I64 screen_w,screen_h;
 I64 scale_scrn_xoff=0;
 I64 scale_scrn_yoff=0;
 I64 scale_w;
@@ -421,7 +422,7 @@ U0 SetScaleResolution(I64 w,I64 h) {
   
   scale_scrn->height=h;
   scale_scrn->width=scale_scrn->width_internal=w;
-  scale_scrn->body=_3DaysSetResolution(w,h);
+  scale_scrn->body=_3DaysSetResolution(screen_w=w,screen_h=h);
   if(scale_enable) {
     w=MaxI64(GR_WIDTH,w);
     h=MaxI64(GR_HEIGHT,h);
@@ -443,7 +444,7 @@ U0 SetScaleResolution(I64 w,I64 h) {
     scale_h=GR_HEIGHT;
     scale_w=GR_WIDTH;
   }
-  UpdateGROffs(scale_w,scale_h);
+  UpdateGROffs(scale_w,scale_h);
   scale_lock_task=NULL;
   LBtr(&scale_lock,0);
 }
@@ -506,6 +507,7 @@ U0 GrUpdateScrn()
   MemCpy(gr.scrn_image->body,gr.dc2->body,MSize(gr.scrn_image->body));
 }
 U0 EnableScaling(Bool on=FALSE) {
+  I64 w,h;
   if(!on) {
     while(LBts(&scale_lock,0))
       Yield;
@@ -515,6 +517,24 @@ U0 EnableScaling(Bool on=FALSE) {
     scale_h=GR_HEIGHT;
     scale_w=GR_WIDTH;
     LBtr(&scale_lock,0);
+  } else {
+    while(LBts(&scale_lock,0))
+      Yield;
+    w=screen_w;
+    h=screen_h;
+    w=MaxI64(GR_WIDTH,w);
+    h=MaxI64(GR_HEIGHT,h);
+    scale_w=ToF64(h)/480.*640.;
+    scale_h=h;
+    scale_h=MinI64(h,scale_h);
+    if(scale_w>w) {
+//If we cant scale across,decrease height
+      scale_h=ToF64(w)/640.*480;
+      scale_w=MinI64(w,scale_w);
+    }
+    scale_scrn_yoff=(h-scale_h)/2;
+    scale_scrn_xoff=(w-scale_w)/2;
+    LBtr(&scale_lock,0);    
   }
   return LBEqu(&scale_enable,0,on);
 }
