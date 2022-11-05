@@ -172,9 +172,11 @@ void multicAwaken(int64_t core) {
 	WakeConditionVariable(&cores[core].sleep_cond);
 	#endif
 }
+#ifndef TARGET_WIN32
 static void  Awaken(int sig) {
 	longjmp(cores[__core_num].jmp_to,1);
 }
+#endif
 void multicSleep(int64_t ms) {
 	#ifndef TARGET_WIN32
 	if(!setjmp(cores[__core_num].jmp_to)) {
