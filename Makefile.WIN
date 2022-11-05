@@ -7,7 +7,7 @@ AOBJS=$(foreach o,$(AFILES),$(o).obj)
 OBJS=$(COBJS) $(AOBJS)
 LIBS=ext/wineditline-2.206/lib64/libedit_static.a  -lm -lshlwapi -ldbghelp  -lsynchronization -lshcore -lws2_32 -lwinmm -Ofast -o 3d_loader.exe
 all: $(OBJS)
-	$(CC) -mwindows $(OBJS) $(LIBS)  -o ./3d_loader.exe
+	$(CC) -mwindows $(OBJS) $(LIBS)  -o ./3d_loader.exe -static
 clean:
 	rm $(OBJS)
 %.c.obj: %.c
