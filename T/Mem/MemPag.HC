@@ -101,6 +101,12 @@ Bool IsValidPtr(U8 *ptr,I64 sz=1) {
     while(idx) {
       if(blk->shadow[idx]) {
         "Access %X is %X bytes OOB\n",ptr,ptr-(idx*8+cur_base(U8*));
+fail:
+        "[0]%P\n",Caller(1);
+        "[1]%P\n",Caller(2);
+        "[2]%P\n",Caller(3);
+        "[3]%P\n",Caller(4);
+        "[5]%P\n",Caller(5);
         return FALSE;
       }
       --idx;
@@ -108,7 +114,7 @@ Bool IsValidPtr(U8 *ptr,I64 sz=1) {
   }
   if(!__IsValidPtr(ptr)) {
     "Access %X is really out of bounds\n",ptr;
-    return ptr;
+    goto fail;
   }
 found:
   return TRUE;
@@ -246,7 +252,7 @@ asm {
 	RET1	16
 };
 U0 InitHeaps() {
-#ifdef BC_ENABLE
+#ifdef BC_ENABLE
   MemSet(&blk_cache,0,sizeof CBlkCache);
   QueInit(&blk_cache.all_blocks);
 #endif
