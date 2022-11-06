@@ -431,7 +431,6 @@ U0 ListenCallback(CDyadStream *s,CServer *srv) {
 }
 U0 Serve(CServer *srv) {
 	srv->task=Fs;
-	ReIndex(srv);
 	DyadListen(srv->s_sock,srv->port);
 	DyadSetOnListenCallback(srv->s_sock,&ListenCallback,srv);
 	"Press a button to quit serving\n";

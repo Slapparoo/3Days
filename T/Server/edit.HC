@@ -139,7 +139,6 @@ loop:
       if(!profan) {
 	BackupFile(link+StrLen(WIKI_ROOT),ftxt);
         FileWrite(link=DotZify(link),ftxt,t1-ftxt);
-        ReIndex(srv);
      }
     }
     Free(profan);
