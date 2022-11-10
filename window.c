@@ -207,6 +207,7 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	}
 	#else
 	XEvent e;
+	pthread_mutex_unlock(&dw->pt);
 	//Wait for event to sync with server to avoid nasty stuff(push a dummy event for XSync to not hang for a next event)
 	memset(&e,0,sizeof e);
 	e.type=Expose;
