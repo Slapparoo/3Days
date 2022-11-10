@@ -203,3 +203,5 @@ void SetKBCallback(void *fptr,void *data);
 void VFsSetPwd(char *pwd);
 int VFsIsDir(char *path);
 void _3DaysScaleScrn();
+int64_t __3DaysSwapRGB();
+void __3DaysEnableScaling(int64_t s);

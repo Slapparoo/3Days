@@ -8,17 +8,29 @@
 #include <X11/extensions/XShm.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <GL/gl.h>
+#include <GL/glx.h>
 typedef struct CDrawWindow {
     Window window;
     Display *disp;
-    GC gc;
     Atom clip3days;
     Cursor empty_cursor;
     //sz_x and sz_y are the window size
     //disp_w/h is the 3Days screen size
     int64_t sz_x,sz_y,disp_w,disp_h;
+    #ifndef USE_OPENGL
     XShmSegmentInfo shm_info;
     XImage *shm_image;
+    GC gc;
+    #else
+    XVisualInfo *visual;
+    GLuint gl_texture;
+    void *texture_address;
+    double gl_left,gl_right;
+    double gl_top,gl_bottom;
+    int64_t scaling_enabled;
+    GLXContext context;
+    #endif
     pthread_mutex_t pt;
     int64_t reso_changed;
 } CDrawWindow;
@@ -36,6 +48,19 @@ static void
 utf8_prop(Display *dpy, XEvent ev);
 //See note in NewDrawWindow
 static Atom wmclose;
+int64_t __3DaysSwapRGB() {
+	#ifdef USE_OPENGL
+	return 1;
+	#else
+	return 0;
+	#endif
+}
+void __3DaysEnableScaling(int64_t s) {
+	#ifdef USE_OPENGL
+	dw->scaling_enabled=s;
+	#endif
+}
+#ifndef USE_OPENGL
 CDrawWindow *NewDrawWindow() {
 	if(!dw) {
 		atexit(&DrawWindowDel);
@@ -94,6 +119,76 @@ CDrawWindow *NewDrawWindow() {
 	}
 	return dw;
 }
+#else
+static const GLfloat texcoords[] =
+{
+        0, 1,
+        1, 1,
+        1, 0,
+        0, 0,
+        0, 1,
+        1, 1,
+        1, 0,
+        0, 0,
+};
+CDrawWindow *NewDrawWindow() {
+	if(!dw) {
+		atexit(&DrawWindowDel);
+		XInitThreads();
+		dw=TD_MALLOC(sizeof(*dw));
+		dw->disp=XOpenDisplay(NULL);
+		long screen=DefaultScreen(dw->disp);
+		GLint glxAttribs[] = {
+			GLX_RGBA,
+			GLX_DOUBLEBUFFER,
+			GLX_DEPTH_SIZE,     24,
+			GLX_STENCIL_SIZE,   8,
+			GLX_RED_SIZE,       8,
+			GLX_GREEN_SIZE,     8,
+			GLX_BLUE_SIZE,      8,
+			GLX_SAMPLE_BUFFERS, 0,
+			GLX_SAMPLES,        0,
+			None
+		};
+		dw->visual = glXChooseVisual(dw->disp, screen, glxAttribs);
+		XSetWindowAttributes windowAttribs;
+		windowAttribs.border_pixel = BlackPixel(dw->disp, screen);
+		windowAttribs.background_pixel = WhitePixel(dw->disp, screen);
+		windowAttribs.override_redirect = True;
+		windowAttribs.colormap = XCreateColormap(dw->disp, RootWindow(dw->disp, screen), dw->visual->visual, AllocNone);
+		windowAttribs.event_mask = ExposureMask;
+		dw->window = XCreateWindow(dw->disp, RootWindow(dw->disp,screen), 0, 0, 640, 480, 0, dw->visual->depth, InputOutput, dw->visual->visual, CWBackPixel | CWColormap | CWBorderPixel | CWEventMask, &windowAttribs);
+		XSelectInput(dw->disp,dw->window,
+			ExposureMask|KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask|StructureNotifyMask);
+		dw->context = glXCreateContext(dw->disp, dw->visual, NULL, GL_TRUE);
+		glXMakeCurrent(dw->disp, dw->window, dw->context);
+		// Show the window
+		XSetStandardProperties(dw->disp,dw->window,"3Days",NULL,None,NULL,0,NULL);
+		XClearWindow(dw->disp, dw->window);
+		XMapRaised(dw->disp, dw->window);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glGenTextures(1,&dw->gl_texture);
+		glBindTexture(GL_TEXTURE_2D,dw->gl_texture);
+		glClientActiveTexture(dw->gl_texture);
+		glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
+		glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,640,480,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		//https://stackoverflow.com/questions/10792361/how-do-i-gracefully-exit-an-x11-event-loop
+		//Here's the deal,I dont know why they made X11 like this.
+		//Send a prayer to the dude who awnsered this question.
+		wmclose=XInternAtom(dw->disp,"WM_DELETE_WINDOW",False);
+		XSetWMProtocols(dw->disp,dw->window,&wmclose,1);
+		dw->disp_h=480;
+		dw->disp_w=640;
+		dw->scaling_enabled=1;
+		pthread_mutex_init(&dw->pt,NULL);
+	}
+}
+#endif
 void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,int64_t h) {
 	sigset_t old_set,set;
 	XLockDisplay(dw->disp);
@@ -101,6 +196,7 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	sigemptyset(&set);
 	sigaddset(&set,SIGUSR2);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
+	#ifndef USE_OPENGL
 	XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,0,0,dw->disp_w,dw->disp_h,True);
 	pthread_mutex_unlock(&dw->pt);
 	if(dw->reso_changed) {
@@ -109,12 +205,20 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 			dw->reso_changed=0;
 		}
 	}
+	#else
+	XEvent e;
+	//Wait for event to sync with server to avoid nasty stuff(push a dummy event for XSync to not hang for a next event)
+	memset(&e,0,sizeof e);
+	e.type=Expose;
+	XSendEvent(dw->disp,dw->window,False,0,&e);
+	#endif
 	XFlush(dw->disp);
 	XUnlockDisplay(dw->disp);
 	sigprocmask(SIG_SETMASK,&old_set,NULL);
 }
 void DrawWindowDel() {
 	if(dw) {
+		#ifndef USE_OPENGL
 		XLockDisplay(dw->disp);
 		XShmDetach(dw->disp,&dw->shm_info);
 		XDestroyImage(dw->shm_image);
@@ -124,7 +228,17 @@ void DrawWindowDel() {
 		XFreeGC(dw->disp,dw->gc);
 		XDestroyWindow(dw->disp,dw->window);
 		XCloseDisplay(dw->disp);
+		TD_FREE(dw);
 		dw=NULL;
+		#else
+		XLockDisplay(dw->disp);
+		XFlush(dw->disp);
+		glXDestroyContext(dw->disp,dw->context);
+		XDestroyWindow(dw->disp,dw->window);
+		XCloseDisplay(dw->disp);
+		TD_FREE(dw);
+		dw=NULL;
+		#endif
 	}
 }
 #define CH_CTRLA	0x01
@@ -511,6 +625,28 @@ static int MSCallback(void *d,XEvent *e) {
             case MotionNotify:
             x=e->xmotion.x,y=e->xmotion.y;
             ent:
+            #ifdef USE_OPENGL
+            //X11 corantes go from top to bottom
+            y=dw->sz_y-y;
+            //We need to scale out coordnates to the "screen rectangle"
+            //OpenGL cordnates go from (-1.0,-1.0) to (1.0,1.0)
+            //Our silly sauce rectangle doesn't take up the whole screen,
+            //We use (dw->gl_left,dw->gl_bottom),(dw->gl_right,dw->gl_top)
+            double xd=x/(double)dw->sz_x*2. -1.; //Make it go from -1 to 1
+            double yd=y/(double)dw->sz_y*2. -1.; //Ditto
+            if(xd<dw->gl_left)
+				xd=dw->gl_left;
+			if(xd>dw->gl_right)
+				xd=dw->gl_right;
+            if(yd<dw->gl_top)
+				yd=dw->gl_top;
+			if(yd>dw->gl_bottom)
+				yd=dw->gl_bottom;
+			yd=(yd-dw->gl_bottom)/(dw->gl_top-dw->gl_bottom);
+			xd=(xd-dw->gl_left)/(dw->gl_right-dw->gl_left);
+			y=480*yd;
+			x=640*xd;
+			#endif
             FFI_CALL_TOS_4(ms_cb,x,y,z,state);
         }
     return 0;
@@ -580,7 +716,51 @@ static void __InputLoop(void *ul,int64_t clip_only) {
     XSelectionEvent *sev;
     for(;!*(int64_t*)ul;) {
 		XNextEvent(dw->disp,&e);
-		if(e.type==ClientMessage) {
+		if(e.type==Expose) {
+			XWindowAttributes attribs;
+			XGetWindowAttributes(dw->disp, dw->window, &attribs);
+			glViewport(0, 0, attribs.width, attribs.height);
+			glClear(GL_COLOR_BUFFER_BIT);
+			char *_colors=dw->texture_address;
+			double sx,sy,ox,oy;
+			if(dw->scaling_enabled) {
+				sx=dw->sz_y/480.*640.,sy=dw->sz_y;
+				if(dw->sz_x<sx) {
+					sy=dw->sz_x/640.*480.;
+					sx=dw->sz_x;
+				}
+				ox=(dw->sz_x-sx);
+				oy=(dw->sz_y-sy);
+				sx=1.-ox/dw->sz_x;
+				sy=1.-oy/dw->sz_y;			
+			} else {
+				sx=640./dw->sz_x,sy=480./dw->sz_y;
+			}
+			dw->gl_left=-sx;
+			dw->gl_right=sx;
+			dw->gl_top=-sy;
+			dw->gl_bottom=sy;
+			GLfloat verts[]={
+				dw->gl_left,dw->gl_top,
+				dw->gl_right,dw->gl_top,
+				dw->gl_right,dw->gl_bottom,
+				dw->gl_left,dw->gl_bottom
+			};
+			glClear(GL_COLOR_BUFFER_BIT);
+			glColor4f(0,0,0,0);
+			glEnable(GL_VERTEX_ARRAY);
+			glEnable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D,dw->gl_texture);
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_ADD);
+			glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,640,480,0,GL_RGBA,GL_UNSIGNED_BYTE,_colors);
+			char triangles[]={
+				0,1,2,0,3,2
+			};
+			glVertexPointer(2,GL_FLOAT,0,verts);
+			glDrawElements(GL_TRIANGLES,6,GL_UNSIGNED_BYTE,triangles);
+			glFinish();
+			glXSwapBuffers(dw->disp,dw->window);
+		} else if(e.type==ClientMessage) {
 			if(e.xclient.data.l[0]==wmclose) {
 				__ShutdownCores();
 				DrawWindowDel();
@@ -695,6 +875,7 @@ char *GrPalleteGet(int64_t c) {
 //Expected HCRT.BIN to be loaded
 void *_3DaysSetResolution(int64_t w,int64_t h) {
 	if(!dw) return NULL; 
+	#ifndef USE_OPENGL
 	XEvent e;
 	XLockDisplay(dw->disp);
 	pthread_mutex_lock(&dw->pt);
@@ -719,6 +900,11 @@ void *_3DaysSetResolution(int64_t w,int64_t h) {
 	pthread_mutex_unlock(&dw->pt);
 	XUnlockDisplay(dw->disp);
 	return dw->shm_info.shmaddr;
+	#else
+	if(dw->texture_address)
+		free(dw->texture_address);
+	return dw->texture_address=calloc(w*h,4);
+	#endif
 }
 static void LaunchScaler(void *c) {
 	void *fp=map_get(&TOSLoader,"ScalerMP")->data[0].val;

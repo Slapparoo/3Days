@@ -508,6 +508,13 @@ int64_t STK_SetVolume(int64_t *stk) {
 	SetVolume(*(double*)stk);
 	return 0;
 }
+int64_t STK___3DaysSwapRGB(int64_t *stk) {
+	return __3DaysSwapRGB();
+}
+int64_t STK___3DaysEnableScaling(int64_t *stk){
+	__3DaysEnableScaling(stk[0]);
+	return 0;
+}
 int64_t STK_GetVolume(int64_t *stk) {
 	union {
 		double flt;
@@ -592,6 +599,8 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"_3DaysScaleScrn",STK__3DaysScaleScrn,0);
     STK_RegisterFunctionPtr(&ffi_blob,"GetVolume",STK_GetVolume,0);
     STK_RegisterFunctionPtr(&ffi_blob,"SetVolume",STK_SetVolume,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"__3DaysSwapRGB",STK___3DaysSwapRGB,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"__3DaysEnableScaling",STK___3DaysEnableScaling,1);
     char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);
     vec_deinit(&ffi_blob);

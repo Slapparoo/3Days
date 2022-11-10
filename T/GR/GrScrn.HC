@@ -508,6 +508,7 @@ U0 GrUpdateScrn()
 }
 U0 EnableScaling(Bool on=FALSE) {
   I64 w,h;
+  __3DaysEnableScaling(on);
   if(!on) {
     while(LBts(&scale_lock,0))
       Yield;
@@ -533,7 +534,7 @@ U0 EnableScaling(Bool on=FALSE) {
       scale_w=MinI64(w,scale_w);
     }
     scale_scrn_yoff=(h-scale_h)/2;
-    scale_scrn_xoff=(w-scale_w)/2;
+    scale_scrn_xoff=(w-scale_w)/2;
     LBtr(&scale_lock,0);    
   }
   return LBEqu(&scale_enable,0,on);

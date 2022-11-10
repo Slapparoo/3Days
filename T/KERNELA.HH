@@ -144,6 +144,8 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
+import U0 __3DaysEnableScaling(U8i);
+import U0 __3DaysSwapRGB();
 import U0 VFsFTrunc(U8i*,I64i);
 import U0 __AwakeCore(I64i);
 import U0 SetVolume(F64);

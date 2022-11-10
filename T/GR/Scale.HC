@@ -53,18 +53,30 @@ U0 AvTabGen() {
 AvTabGen;
 U0 GrPaletteColorSet(I64 i,CBGR48 v){
   U32 c;
-  c.u8[0]=v.b/ToF64(0xffff)*0xff;
-  c.u8[1]=v.g/ToF64(0xffff)*0xff;
-  c.u8[2]=v.r/ToF64(0xffff)*0xff;
+  if(!__3DaysSwapRGB) {
+    c.u8[0]=v.b/ToF64(0xffff)*0xff;
+    c.u8[1]=v.g/ToF64(0xffff)*0xff;
+    c.u8[2]=v.r/ToF64(0xffff)*0xff;
+  } else {
+    c.u8[2]=v.b/ToF64(0xffff)*0xff;
+    c.u8[1]=v.g/ToF64(0xffff)*0xff;
+    c.u8[0]=v.r/ToF64(0xffff)*0xff;
+  }
   pal[i]=c;
   AvTabGen;
 }
-U0 GrPaletteColorGet(I64 i) {
+U0 GrPaletteColorGet(I64 i) {
   CBGR48 r;
   U32 c=pal[i];
-  r.b=c.u8[0]*(ToF64(0xffff)/0xff);
-  r.g=c.u8[1]*(ToF64(0xffff)/0xff);
-  r.r=c.u8[2]*(ToF64(0xffff)/0xff);
+  if(!__3DaysSwapRGB) {
+    r.b=c.u8[0]*(ToF64(0xffff)/0xff);
+    r.g=c.u8[1]*(ToF64(0xffff)/0xff);
+    r.r=c.u8[2]*(ToF64(0xffff)/0xff);
+  } else {
+    r.b=c.u8[2]*(ToF64(0xffff)/0xff);
+    r.g=c.u8[1]*(ToF64(0xffff)/0xff);
+    r.r=c.u8[0]*(ToF64(0xffff)/0xff);
+  }
   return r;
 }
 U32 *grx_offs=CAlloc(641*4,adam_task);
@@ -123,7 +135,7 @@ asm {
    R15 is result body pointer(translated to [xoff,yoff])
    RSI is data pointer
    RDI is result pointer
-  */
+  */
   MOV R13,SF_ARG2[RBP]
   MOV R14,SF_ARG3[RBP]
   MOV R9,SF_ARG4[RBP]
