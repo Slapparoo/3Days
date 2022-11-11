@@ -177,6 +177,14 @@ CDrawWindow *NewDrawWindow() {
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		//
+		//Make a empty cursor
+		char data[]={0};
+		XColor colors[]={0};
+		Pixmap cpm=XCreateBitmapFromData(dw->disp,dw->window,data,1,1);
+		dw->empty_cursor=XCreatePixmapCursor(dw->disp,cpm,cpm,colors,colors,0,0);
+		XFreePixmap(dw->disp,cpm);
+		XDefineCursor(dw->disp,dw->window,dw->empty_cursor);
 		//https://stackoverflow.com/questions/10792361/how-do-i-gracefully-exit-an-x11-event-loop
 		//Here's the deal,I dont know why they made X11 like this.
 		//Send a prayer to the dude who awnsered this question.
