@@ -10,6 +10,10 @@
 #include <unistd.h>
 #include <GL/gl.h>
 #include <GL/glx.h>
+typedef enum {
+	_3D_REND_X11_SHM,
+	_3D_REND_X11_OGL,	
+} _3DaysRenderer;
 typedef struct CDrawWindow {
     Window window;
     Display *disp;
@@ -18,29 +22,20 @@ typedef struct CDrawWindow {
     //sz_x and sz_y are the window size
     //disp_w/h is the 3Days screen size
     int64_t sz_x,sz_y,disp_w,disp_h;
-    #ifndef USE_OPENGL
     XShmSegmentInfo shm_info;
     XImage *shm_image;
     GC gc;
-    #else
     XVisualInfo *visual;
     GLuint gl_texture;
-    void *texture_address;
     double gl_left,gl_right;
     double gl_top,gl_bottom;
     int64_t scaling_enabled;
     GLXContext context;
-    #endif
+    void *texture_address;
     pthread_mutex_t pt;
     int64_t reso_changed;
+    _3DaysRenderer renderer_type;
 } CDrawWindow;
-static char gr_pallete_BGR48[2*4*16];
-static int32_t gr_palette_std[]={
-0x000000,0x0000AA,0x000AA00,0x00AAAA,
-0xAA0000,0xAA00AA,0xAA5500,0xAAAAAA,
-0x555555,0x5555FF,0x55FF55,0x55ffff,
-0xFF5555,0xFF55FF,0xFFFF55,0xFFFFFF};
-static uint32_t palette[256];
 static void StartInputScanner();
 static CDrawWindow *dw=NULL;
 static char *clip_text=NULL;
@@ -49,77 +44,15 @@ utf8_prop(Display *dpy, XEvent ev);
 //See note in NewDrawWindow
 static Atom wmclose;
 int64_t __3DaysSwapRGB() {
-	#ifdef USE_OPENGL
-	return 1;
-	#else
+	if(dw->renderer_type==_3D_REND_X11_OGL)
+		return 1;
 	return 0;
-	#endif
 }
 void __3DaysEnableScaling(int64_t s) {
-	#ifdef USE_OPENGL
-	dw->scaling_enabled=s;
-	#endif
+	//The software scaling is handled by HCRT.BIN
+	if(dw->renderer_type==_3D_REND_X11_OGL)
+		dw->scaling_enabled=s;
 }
-#ifndef USE_OPENGL
-CDrawWindow *NewDrawWindow() {
-	if(!dw) {
-		atexit(&DrawWindowDel);
-		XInitThreads();
-		dw=TD_MALLOC(sizeof(*dw));
-		dw->disp=XOpenDisplay(NULL);
-		long screen=DefaultScreen(dw->disp);
-		Colormap cmap;
-		XColor c;
-		Pixmap cpm;
-		Cursor cursor;
-		int64_t i,black,white;
-		for(i=0;i!=16;i++) {
-			palette[i]=gr_palette_std[i];
-		}
-		for(i=16;i!=256;i++) {
-			palette[i]=0;
-		}
-		black=BlackPixel(dw->disp,screen);
-		dw->window=XCreateSimpleWindow(
-			dw->disp,
-			RootWindow(dw->disp,screen),
-			0,0,640,480,0,1,black
-		);
-		XSetStandardProperties(dw->disp,dw->window,"3Days",NULL,None,NULL,0,NULL);
-		XSelectInput(dw->disp,dw->window,
-			KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask|StructureNotifyMask);
-		dw->gc=XCreateGC(dw->disp,dw->window,0,0);
-		//Make a empty cursor
-		char data[]={0};
-		XColor colors[]={0};
-		cpm=XCreateBitmapFromData(dw->disp,dw->window,data,1,1);
-		dw->empty_cursor=XCreatePixmapCursor(dw->disp,cpm,cpm,colors,colors,0,0);
-		XFreePixmap(dw->disp,cpm);
-		XDefineCursor(dw->disp,dw->window,dw->empty_cursor);
-		//
-		dw->sz_x=640,dw->sz_y=480;
-		white=WhitePixel(dw->disp,screen);
-		XSetBackground(dw->disp,dw->gc,white);
-		XSetForeground(dw->disp,dw->gc,black);
-		dw->shm_image=XShmCreateImage(dw->disp,XDefaultVisual(dw->disp,screen),24,ZPixmap,0,&dw->shm_info,640,480);
-	    dw->shm_info.shmid=shmget(IPC_PRIVATE,640*480*4,IPC_CREAT|0777);
-	    dw->shm_info.readOnly=False;
-	    dw->shm_info.shmaddr=dw->shm_image->data=shmat(dw->shm_info.shmid,0,0);
-	    XShmAttach(dw->disp,&dw->shm_info);
-		XMapWindow(dw->disp,dw->window);
-		//https://stackoverflow.com/questions/10792361/how-do-i-gracefully-exit-an-x11-event-loop
-		//Here's the deal,I dont know why they made X11 like this.
-		//Send a prayer to the dude who awnsered this question.
-		wmclose=XInternAtom(dw->disp,"WM_DELETE_WINDOW",False);
-		XSetWMProtocols(dw->disp,dw->window,&wmclose,1);
-		dw->disp_h=480;
-		dw->disp_w=640;
-		pthread_mutex_init(&dw->pt,NULL);
-		_3DaysSetResolution(640,480);
-	}
-	return dw;
-}
-#else
 static const GLfloat texcoords[] =
 {
         0, 1,
@@ -151,33 +84,43 @@ CDrawWindow *NewDrawWindow() {
 			None
 		};
 		dw->visual = glXChooseVisual(dw->disp, screen, glxAttribs);
-		XSetWindowAttributes windowAttribs;
-		windowAttribs.border_pixel = BlackPixel(dw->disp, screen);
-		windowAttribs.background_pixel = WhitePixel(dw->disp, screen);
-		windowAttribs.override_redirect = True;
-		windowAttribs.colormap = XCreateColormap(dw->disp, RootWindow(dw->disp, screen), dw->visual->visual, AllocNone);
-		windowAttribs.event_mask = ExposureMask;
-		dw->window = XCreateWindow(dw->disp, RootWindow(dw->disp,screen), 0, 0, 640, 480, 0, dw->visual->depth, InputOutput, dw->visual->visual, CWBackPixel | CWColormap | CWBorderPixel | CWEventMask, &windowAttribs);
-		XSelectInput(dw->disp,dw->window,
-			ExposureMask|KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask|StructureNotifyMask);
-		dw->context = glXCreateContext(dw->disp, dw->visual, NULL, GL_TRUE);
-		glXMakeCurrent(dw->disp, dw->window, dw->context);
-		// Show the window
-		XSetStandardProperties(dw->disp,dw->window,"3Days",NULL,None,NULL,0,NULL);
-		XClearWindow(dw->disp, dw->window);
-		XMapRaised(dw->disp, dw->window);
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glGenTextures(1,&dw->gl_texture);
-		glBindTexture(GL_TEXTURE_2D,dw->gl_texture);
-		glClientActiveTexture(dw->gl_texture);
-		glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
-		glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,640,480,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		//
+		if(dw->visual) {
+			dw->renderer_type=_3D_REND_X11_OGL;
+			XSetWindowAttributes windowAttribs;
+			windowAttribs.border_pixel = BlackPixel(dw->disp, screen);
+			windowAttribs.background_pixel = WhitePixel(dw->disp, screen);
+			windowAttribs.override_redirect = True;
+			windowAttribs.colormap = XCreateColormap(dw->disp, RootWindow(dw->disp, screen), dw->visual->visual, AllocNone);
+			windowAttribs.event_mask = ExposureMask;
+			dw->window = XCreateWindow(dw->disp, RootWindow(dw->disp,screen), 0, 0, 640, 480, 0, dw->visual->depth, InputOutput, dw->visual->visual, CWBackPixel | CWColormap | CWBorderPixel | CWEventMask, &windowAttribs);
+			XSelectInput(dw->disp,dw->window,
+				ExposureMask|KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask|StructureNotifyMask);
+			dw->context = glXCreateContext(dw->disp, dw->visual, NULL, GL_TRUE);
+			glXMakeCurrent(dw->disp, dw->window, dw->context);
+			// Show the window
+			XSetStandardProperties(dw->disp,dw->window,"3Days",NULL,None,NULL,0,NULL);
+			XClearWindow(dw->disp, dw->window);
+			XMapRaised(dw->disp, dw->window);
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glGenTextures(1,&dw->gl_texture);
+			glBindTexture(GL_TEXTURE_2D,dw->gl_texture);
+			glClientActiveTexture(dw->gl_texture);
+			glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
+			glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,640,480,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		} else {
+			dw->renderer_type=_3D_REND_X11_SHM;
+			dw->shm_image=XShmCreateImage(dw->disp,XDefaultVisual(dw->disp,screen),24,ZPixmap,0,&dw->shm_info,640,480);
+			dw->shm_info.shmid=shmget(IPC_PRIVATE,640*480*4,IPC_CREAT|0777);
+			dw->shm_info.readOnly=False;
+			dw->shm_info.shmaddr=dw->shm_image->data=shmat(dw->shm_info.shmid,0,0);
+			XShmAttach(dw->disp,&dw->shm_info);
+			XMapWindow(dw->disp,dw->window);
+		}
 		//Make a empty cursor
 		char data[]={0};
 		XColor colors[]={0};
@@ -196,7 +139,6 @@ CDrawWindow *NewDrawWindow() {
 		pthread_mutex_init(&dw->pt,NULL);
 	}
 }
-#endif
 void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,int64_t h) {
 	sigset_t old_set,set;
 	XLockDisplay(dw->disp);
@@ -204,50 +146,50 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	sigemptyset(&set);
 	sigaddset(&set,SIGUSR2);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
-	#ifndef USE_OPENGL
-	XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,0,0,dw->disp_w,dw->disp_h,True);
-	pthread_mutex_unlock(&dw->pt);
-	if(dw->reso_changed) {
-		if(map_get(&TOSLoader,"SetScaleResolution")) {
-			FFI_CALL_TOS_2(map_get(&TOSLoader,"SetScaleResolution")->data[0].val,dw->sz_x,dw->sz_y);
-			dw->reso_changed=0;
+	if(dw->renderer_type==_3D_REND_X11_SHM) {
+		XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,0,0,dw->disp_w,dw->disp_h,True);
+		pthread_mutex_unlock(&dw->pt);
+		if(dw->reso_changed) {
+			if(map_get(&TOSLoader,"SetScaleResolution")) {
+				FFI_CALL_TOS_2(map_get(&TOSLoader,"SetScaleResolution")->data[0].val,dw->sz_x,dw->sz_y);
+				dw->reso_changed=0;
+			}
 		}
+	} else if(dw->renderer_type==_3D_REND_X11_OGL) { 
+		XEvent e;
+		pthread_mutex_unlock(&dw->pt);
+		//I will OpenGL on the main thread
+		memset(&e,0,sizeof e);
+		e.type=Expose;
+		XSendEvent(dw->disp,dw->window,False,0,&e);
 	}
-	#else
-	XEvent e;
-	pthread_mutex_unlock(&dw->pt);
-	//Wait for event to sync with server to avoid nasty stuff(push a dummy event for XSync to not hang for a next event)
-	memset(&e,0,sizeof e);
-	e.type=Expose;
-	XSendEvent(dw->disp,dw->window,False,0,&e);
-	#endif
 	XFlush(dw->disp);
 	XUnlockDisplay(dw->disp);
 	sigprocmask(SIG_SETMASK,&old_set,NULL);
 }
 void DrawWindowDel() {
 	if(dw) {
-		#ifndef USE_OPENGL
-		XLockDisplay(dw->disp);
-		XShmDetach(dw->disp,&dw->shm_info);
-		XDestroyImage(dw->shm_image);
-		shmdt(dw->shm_info.shmaddr);
-		shmctl(dw->shm_info.shmid,IPC_RMID,NULL);
-		XFlush(dw->disp);
-		XFreeGC(dw->disp,dw->gc);
-		XDestroyWindow(dw->disp,dw->window);
-		XCloseDisplay(dw->disp);
-		TD_FREE(dw);
-		dw=NULL;
-		#else
-		XLockDisplay(dw->disp);
-		XFlush(dw->disp);
-		glXDestroyContext(dw->disp,dw->context);
-		XDestroyWindow(dw->disp,dw->window);
-		XCloseDisplay(dw->disp);
-		TD_FREE(dw);
-		dw=NULL;
-		#endif
+		if(dw->renderer_type==_3D_REND_X11_SHM) {
+			XLockDisplay(dw->disp);
+			XShmDetach(dw->disp,&dw->shm_info);
+			XDestroyImage(dw->shm_image);
+			shmdt(dw->shm_info.shmaddr);
+			shmctl(dw->shm_info.shmid,IPC_RMID,NULL);
+			XFlush(dw->disp);
+			XFreeGC(dw->disp,dw->gc);
+			XDestroyWindow(dw->disp,dw->window);
+			XCloseDisplay(dw->disp);
+			TD_FREE(dw);
+			dw=NULL;
+		} else {
+			XLockDisplay(dw->disp);
+			XFlush(dw->disp);
+			glXDestroyContext(dw->disp,dw->context);
+			XDestroyWindow(dw->disp,dw->window);
+			XCloseDisplay(dw->disp);
+			TD_FREE(dw);
+			dw=NULL;
+		}
 	}
 }
 #define CH_CTRLA	0x01
@@ -634,28 +576,28 @@ static int MSCallback(void *d,XEvent *e) {
             case MotionNotify:
             x=e->xmotion.x,y=e->xmotion.y;
             ent:
-            #ifdef USE_OPENGL
-            //X11 corantes go from top to bottom
-            y=dw->sz_y-y;
-            //We need to scale out coordnates to the "screen rectangle"
-            //OpenGL cordnates go from (-1.0,-1.0) to (1.0,1.0)
-            //Our silly sauce rectangle doesn't take up the whole screen,
-            //We use (dw->gl_left,dw->gl_bottom),(dw->gl_right,dw->gl_top)
-            double xd=x/(double)dw->sz_x*2. -1.; //Make it go from -1 to 1
-            double yd=y/(double)dw->sz_y*2. -1.; //Ditto
-            if(xd<dw->gl_left)
-				xd=dw->gl_left;
-			if(xd>dw->gl_right)
-				xd=dw->gl_right;
-            if(yd<dw->gl_top)
-				yd=dw->gl_top;
-			if(yd>dw->gl_bottom)
-				yd=dw->gl_bottom;
-			yd=(yd-dw->gl_bottom)/(dw->gl_top-dw->gl_bottom);
-			xd=(xd-dw->gl_left)/(dw->gl_right-dw->gl_left);
-			y=480*yd;
-			x=640*xd;
-			#endif
+            if(dw->renderer_type==_3D_REND_X11_OGL) {
+				//X11 corantes go from top to bottom
+				y=dw->sz_y-y;
+				//We need to scale out coordnates to the "screen rectangle"
+				//OpenGL cordnates go from (-1.0,-1.0) to (1.0,1.0)
+				//Our silly sauce rectangle doesn't take up the whole screen,
+				//We use (dw->gl_left,dw->gl_bottom),(dw->gl_right,dw->gl_top)
+				double xd=x/(double)dw->sz_x*2. -1.; //Make it go from -1 to 1
+				double yd=y/(double)dw->sz_y*2. -1.; //Ditto
+				if(xd<dw->gl_left)
+					xd=dw->gl_left;
+				if(xd>dw->gl_right)
+					xd=dw->gl_right;
+				if(yd<dw->gl_top)
+					yd=dw->gl_top;
+				if(yd>dw->gl_bottom)
+					yd=dw->gl_bottom;
+				yd=(yd-dw->gl_bottom)/(dw->gl_top-dw->gl_bottom);
+				xd=(xd-dw->gl_left)/(dw->gl_right-dw->gl_left);
+				y=480*yd;
+				x=640*xd;
+			}
             FFI_CALL_TOS_4(ms_cb,x,y,z,state);
         }
     return 0;
@@ -864,56 +806,39 @@ utf8_prop(Display *dpy, XEvent ev)
     XDeleteProperty(dpy, w, target);
     XUnlockDisplay(dpy);
 }
-static int32_t BGR48(uint16_t *c) {
-	int64_t r=c[2]*(255./0xffFF),g=c[1]*(255./0xffFF),b=c[0]*(255./0xffFF); //0xffFF is the highest 16bit value 
-	if(r>0xff) r=0xff;
-	if(g>0xff) g=0xff;
-	if(b>0xff) b=0xff;
-	return ((r&0xff)<<16)|((g&0xff)<<8)|(b&0xff);
-}
-void GrPalleteSet(int c,int64_t _color) { //B,G,R,PAD
-	  int16_t *color=&_color;
-	  memcpy(gr_pallete_BGR48,color,2*4);
-	  palette[c]=gr_palette_std[c]=BGR48(color);
-}
-char *GrPalleteGet(int64_t c) {
-	int64_t r=0;
-	memcpy(&r,&gr_pallete_BGR48[2*4*c],2*4);
-	return r;
-}
 //Expected HCRT.BIN to be loaded
 void *_3DaysSetResolution(int64_t w,int64_t h) {
 	if(!dw) return NULL; 
-	#ifndef USE_OPENGL
-	XEvent e;
-	XLockDisplay(dw->disp);
-	pthread_mutex_lock(&dw->pt);
-	dw->disp_h=h;
-	dw->disp_w=w;
-	XShmDetach(dw->disp,&dw->shm_info);
-	XDestroyImage(dw->shm_image);
-	shmdt(dw->shm_info.shmaddr);
-	shmctl(dw->shm_info.shmid,IPC_RMID,NULL);
-	memset(&dw->shm_info,0,sizeof(dw->shm_info));
-	dw->shm_info.shmid=shmget(IPC_PRIVATE,w*h*4,IPC_CREAT|0777);
-	dw->shm_info.readOnly=False;
-	dw->shm_info.shmaddr=shmat(dw->shm_info.shmid,0,0);
-	XShmAttach(dw->disp,&dw->shm_info);
-	dw->shm_image=XShmCreateImage(dw->disp,XDefaultVisual(dw->disp,DefaultScreen(dw->disp)),24,ZPixmap,0,&dw->shm_info,w,h);
-	dw->shm_image->data=dw->shm_info.shmaddr;
-	//Wait for event to sync with server to avoid nasty stuff(push a dummy event for XSync to not hang for a next event)
-	memset(&e,0,sizeof e);
-	e.type=Expose;
-	XSendEvent(dw->disp,dw->window,False,0,&e);
-	XSync(dw->disp,False);
-	pthread_mutex_unlock(&dw->pt);
-	XUnlockDisplay(dw->disp);
-	return dw->shm_info.shmaddr;
-	#else
-	if(dw->texture_address)
-		free(dw->texture_address);
-	return dw->texture_address=calloc(w*h,4);
-	#endif
+	if(dw->renderer_type==_3D_REND_X11_SHM) {
+		XEvent e;
+		XLockDisplay(dw->disp);
+		pthread_mutex_lock(&dw->pt);
+		dw->disp_h=h;
+		dw->disp_w=w;
+		XShmDetach(dw->disp,&dw->shm_info);
+		XDestroyImage(dw->shm_image);
+		shmdt(dw->shm_info.shmaddr);
+		shmctl(dw->shm_info.shmid,IPC_RMID,NULL);
+		memset(&dw->shm_info,0,sizeof(dw->shm_info));
+		dw->shm_info.shmid=shmget(IPC_PRIVATE,w*h*4,IPC_CREAT|0777);
+		dw->shm_info.readOnly=False;
+		dw->shm_info.shmaddr=shmat(dw->shm_info.shmid,0,0);
+		XShmAttach(dw->disp,&dw->shm_info);
+		dw->shm_image=XShmCreateImage(dw->disp,XDefaultVisual(dw->disp,DefaultScreen(dw->disp)),24,ZPixmap,0,&dw->shm_info,w,h);
+		dw->shm_image->data=dw->shm_info.shmaddr;
+		//Wait for event to sync with server to avoid nasty stuff(push a dummy event for XSync to not hang for a next event)
+		memset(&e,0,sizeof e);
+		e.type=Expose;
+		XSendEvent(dw->disp,dw->window,False,0,&e);
+		XSync(dw->disp,False);
+		pthread_mutex_unlock(&dw->pt);
+		XUnlockDisplay(dw->disp);
+		return dw->shm_info.shmaddr;
+	} else if(dw->renderer_type==_3D_REND_X11_OGL) {
+		if(dw->texture_address)
+			free(dw->texture_address);
+		return dw->texture_address=calloc(w*h,4);
+	}
 }
 static void LaunchScaler(void *c) {
 	void *fp=map_get(&TOSLoader,"ScalerMP")->data[0].val;
