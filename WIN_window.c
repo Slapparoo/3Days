@@ -6,35 +6,52 @@
 #include <windowsx.h>
 #include <winbase.h>
 #include <shellscalingapi.h>
+#include <GL/gl.h>
 HANDLE *mutex;
 LPSTR* WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int* numargs);
 typedef struct CDrawWindow {
     int64_t sz_x,sz_y;
+    int64_t scaling_enabled;
     int64_t scroll_x,scroll_y,changed_reso;
     void *fb_addr;
     HWND win;
+    HDC dc;
+    HGLRC glc;
+    GLint gl_texture;
+    double gl_top,gl_left,gl_bottom,gl_right;
+    char *texture_address;
 } CDrawWindow;
-static char gr_pallete_BGR48[2*4*16]; //2 bytes,4 channels,16 colors
-static int32_t gr_palette_std[]={
-0x000000,0x0000AA,0x000AA00,0x00AAAA,
-0xAA0000,0xAA00AA,0xAA5500,0xAAAAAA,
-0x555555,0x5555FF,0x55FF55,0x55ffff,
-0xFF5555,0xFF55FF,0xFFFF55,0xFFFFFF};
-static int32_t palette[256];
+static const GLfloat texcoords[] =
+{
+        0, 1,
+        1, 1,
+        1, 0,
+        0, 0,
+        0, 1,
+        1, 1,
+        1, 0,
+        0, 0,
+};
 static void StartInputScanner();
 static CDrawWindow *dw=NULL;
 static char *clip_text=NULL;
 CDrawWindow *NewDrawWindow() {
 	if(!dw) {
 		dw=TD_MALLOC(sizeof(*dw));
-		int64_t i;
-		for(i=0;i!=16;i++) {
-			palette[i]=gr_palette_std[i];
-		}
 	}
 	return dw;
 }
 int32_t buf[640*480];
+int64_t __3DaysSwapRGB() {
+	#ifndef USE_OPENGL
+	return 0;
+	#else
+	return 1;
+	#endif
+}
+void __3DaysEnableScaling(int64_t s) {
+	dw->scaling_enabled=s;
+}
 void DrawWindowDel(CDrawWindow *win) {
 }
 #define CH_CTRLA	0x01
@@ -366,9 +383,16 @@ static HANDLE normal_c;
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, int nCmdShow) {
     MSG  msg;
     HWND hwnd;
-    int argc;
+    PIXELFORMATDESCRIPTOR pfd;
+    int argc,pf;
 	char **argv;
     float dpi;
+    memset(&pfd,0,sizeof(pfd));
+    pfd.nSize=sizeof(pfd);
+    pfd.nVersion=1;
+    pfd.dwFlags=PFD_DRAW_TO_WINDOW|PFD_SUPPORT_OPENGL;
+    pfd.iPixelType=PFD_TYPE_RGBA;
+    pfd.cColorBits=32;
     WNDCLASS wc = {0};
     mutex=CreateMutexA(NULL,0,NULL);
     wc.lpfnWndProc=WndProc;
@@ -399,6 +423,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 		SWP_NOMOVE
 	);
 	NewDrawWindow()->win=hwnd;
+	dw->dc=GetDC(hwnd);
+	dw->scaling_enabled=1;
+	assert(0!=(pf=ChoosePixelFormat(dw->dc,&pfd)));
+	assert(FALSE!=SetPixelFormat(dw->dc,pf,&pfd));
+	DescribePixelFormat(dw->dc,pf,sizeof(PIXELFORMATDESCRIPTOR),&pfd);
+	dw->glc=wglCreateContext(dw->dc);
+	wglMakeCurrent(dw->dc,dw->glc);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glGenTextures(1,&dw->gl_texture);
+	glBindTexture(GL_TEXTURE_2D,dw->gl_texture);
+	glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,640,480,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);	
+	dw->texture_address=buf;
 	argv=CommandLineToArgvA_wine(lpCmdLine,&argc);
 	_main(argc,argv);
 	SetCursor(NULL);
@@ -409,32 +451,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 	return 0;
 }
 void DrawWindowUpdate(struct CDrawWindow *ul,int8_t *colors,int64_t internal_width,int64_t h) {
-	int64_t x,y,b,b2,mul=4;
-	HBITMAP bmp;
-	HBRUSH brush,obrush;
-	RECT rct;
 	WaitForSingleObject(mutex,INFINITE);
-	HDC dc=GetDC(dw->win),dc2;
-	GetClientRect(dw->win,&rct);
-	BITMAPINFO  binfo;
-	memset(&binfo,0,sizeof(binfo));
-	binfo.bmiHeader.biSize=sizeof(binfo);
-	binfo.bmiHeader.biWidth=dw->sz_x;
-	//See https://learn.microsoft.com/en-us/windows/win32/wmdm/-bitmapinfoheader
-	//We want a top down DIB
-	binfo.bmiHeader.biHeight=-dw->sz_y;
-	binfo.bmiHeader.biPlanes=1;
-	binfo.bmiHeader.biBitCount=32;
-	binfo.bmiHeader.biCompression=BI_RGB;
-	SetDIBitsToDevice(dc,0,0,dw->sz_x,dw->sz_y,0,0,0,dw->sz_y,dw->fb_addr,&binfo,DIB_RGB_COLORS);
+	RedrawWindow(dw->win , NULL , NULL , RDW_INVALIDATE);
 	ReleaseMutex(mutex);
-	ReleaseDC(dw->win,dc);
-	if(dw->changed_reso&&rct.right-rct.left!=dw->sz_x&&rct.bottom-rct.top!=dw->sz_y) {
-		if(map_get(&TOSLoader,"SetScaleResolution")) {
-			FFI_CALL_TOS_2(map_get(&TOSLoader,"SetScaleResolution")->data[0].val,rct.right-rct.left,rct.bottom-rct.top);
-			dw->changed_reso=0;
-		}
-	}
 }
 char *ClipboardText() {
 	char *ret;
@@ -463,13 +482,12 @@ void SetClipboard(char *text) {
 LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 	PAINTSTRUCT ps;
 	int64_t cx,cy;
-	RECT *lr;
+	RECT *lr,rct;
 	if(_shutdown) goto kill;
 	switch(msg) {
 		case WM_SIZE:
 		case WM_SIZING:
-			if(dw)
-				dw->changed_reso=1;
+			glViewport(0,0,LOWORD(lParam),HIWORD(lParam));
 			break;
 		case WM_KILLFOCUS:
 			if(persist_mod&SCF_ALT)
@@ -497,6 +515,46 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 			break;
 		case WM_PAINT:
 			WaitForSingleObject(mutex,INFINITE);
+			GetClientRect(hwnd,&rct);
+			dw->sz_x=rct.right-rct.left;
+			dw->sz_y=rct.bottom-rct.top;
+			float sx,sy,ox,oy;
+			if(dw->scaling_enabled) {
+				sx=dw->sz_y/480.*640.,sy=dw->sz_y;
+				if(dw->sz_x<sx) {
+					sy=dw->sz_x/640.*480.;
+					sx=dw->sz_x;
+				}
+				ox=(dw->sz_x-sx);
+				oy=(dw->sz_y-sy);
+				sx=1.-ox/dw->sz_x;
+				sy=1.-oy/dw->sz_y;			
+			} else {
+				sx=640./dw->sz_x,sy=480./dw->sz_y;
+			}
+			dw->gl_left=-sx;
+			dw->gl_right=sx;
+			dw->gl_top=-sy;
+			dw->gl_bottom=sy;
+			GLfloat verts[]={
+				dw->gl_left,dw->gl_top,
+				dw->gl_right,dw->gl_top,
+				dw->gl_right,dw->gl_bottom,
+				dw->gl_left,dw->gl_bottom
+			};
+			glClear(GL_COLOR_BUFFER_BIT);
+			glColor4f(0,0,0,0);
+			glEnable(GL_VERTEX_ARRAY);
+			glEnable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D,dw->gl_texture);
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_ADD);
+			glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,640,480,0,GL_RGBA,GL_UNSIGNED_BYTE,dw->texture_address);
+			char triangles[]={
+				0,1,2,0,3,2
+			};
+			glVertexPointer(2,GL_FLOAT,0,verts);
+			glDrawElements(GL_TRIANGLES,6,GL_UNSIGNED_BYTE,triangles);
+			glFlush();
 			BeginPaint(hwnd,&ps);
 			EndPaint(hwnd,&ps);
 			ReleaseMutex(mutex);
@@ -508,51 +566,10 @@ kill:
 	}
 	return DefWindowProc(hwnd,msg,wParam,lParam);
 }
-static int32_t BGR48(uint16_t *c) {
-	int64_t r=c[2]*(255./0xffFF),g=c[1]*(255./0xffFF),b=c[0]*(255./0xffFF); //0xffFF is the highest 16bit value 
-	if(r>0xff) r=0xff;
-	if(g>0xff) g=0xff;
-	if(b>0xff) b=0xff;
-	return ((r&0xff)<<16)|((g&0xff)<<8)|(b&0xff);
-}
-void GrPalleteSet(int c,int64_t _color) { //B,G,R,PAD
-	  int16_t *color=&_color;
-	  memcpy(gr_pallete_BGR48+2*4*c,color,2*4); //2 bytes,4 channels
-	  palette[c]=gr_palette_std[c]=BGR48(color);
-}
-char *GrPalleteGet(int64_t c) {
-	int64_t r=0;
-	memcpy(&r,&gr_pallete_BGR48[2*4*c],2*4);
-	return r;
-}
 void *_3DaysSetResolution(int64_t w,int64_t h) {
 	WaitForSingleObject(mutex,INFINITE);
-	dw->sz_x=w;
-	dw->sz_y=h;
-        if(dw->fb_addr)
-        	free(dw->fb_addr);
-	dw->fb_addr=calloc(4,w*h);
 	ReleaseMutex(mutex);
-	return dw->fb_addr;
+	return dw->texture_address=buf;
 }
-static void LaunchScaler(void *c) {
-	void *fp=map_get(&TOSLoader,"ScalerMP")->data[0].val;
-	FFI_CALL_TOS_1(fp,c);
-	return 0;
-}
-void _3DaysScaleScrn(){
-	static int64_t mp_cnt;
-	//See T/GR/Scale
-	if(!mp_cnt) {
-		SYSTEM_INFO info;
-		GetSystemInfo(&info);
-		mp_cnt=info.dwNumberOfProcessors;
-	}
-	HANDLE scalers[mp_cnt];
-	int64_t i;
-	for(i=0;i!=mp_cnt;i++)
-		scalers[i]=CreateThread(NULL,0,&LaunchScaler,i,0,NULL);	
-	WaitForMultipleObjects(mp_cnt,scalers,1,INFINITE);
-	for(i=0;i!=mp_cnt;i++)
-		CloseHandle(scalers[i]);
+void _3DaysScaleScrn() {
 }
