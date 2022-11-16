@@ -447,8 +447,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 	NewDrawWindow()->win=hwnd;
 	dw->dc=GetDC(hwnd);
 	dw->scaling_enabled=1;
-	if(0==(pf=ChoosePixelFormat(dw->dc,&pfd)))
-	   goto software;
+	//if(0==(pf=ChoosePixelFormat(dw->dc,&pfd)))
+	goto software;
 	assert(FALSE!=SetPixelFormat(dw->dc,pf,&pfd));
 	DescribePixelFormat(dw->dc,pf,sizeof(PIXELFORMATDESCRIPTOR),&pfd);
 	if(!(dw->glc=wglCreateContext(dw->dc)))
