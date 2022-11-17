@@ -6,7 +6,14 @@
 #include <windowsx.h>
 #include <winbase.h>
 #include <shellscalingapi.h>
-#include <GL/gl.h>
+#include <math.h>
+#include <d2d1.h>
+#include <d2d1helper.h>
+#include <dwrite.h>
+#include <wincodec.h>
+#include <wincodec.h>
+extern "C" {
+	using namespace D2D1;
 HANDLE *mutex;
 LPSTR* WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int* numargs);
 typedef enum {
@@ -19,23 +26,12 @@ typedef struct CDrawWindow {
     int64_t scroll_x,scroll_y,changed_reso;
     HWND win;
     HDC dc;
-    HGLRC glc;
-    GLint gl_texture;
     double gl_top,gl_left,gl_bottom,gl_right;
     char *texture_address;
+    double dpi;
+    ID2D1Factory *factory;
     _3DaysRenderer renderer_type; 
 } CDrawWindow;
-static const GLfloat texcoords[] =
-{
-        0, 1,
-        1, 1,
-        1, 0,
-        0, 0,
-        0, 1,
-        1, 1,
-        1, 0,
-        0, 0,
-};
 static void StartInputScanner();
 static CDrawWindow *dw=NULL;
 static char *clip_text=NULL;
@@ -52,7 +48,7 @@ int64_t __3DaysSwapRGB() {
 void __3DaysEnableScaling(int64_t s) {
 	dw->scaling_enabled=s;
 }
-void DrawWindowDel(CDrawWindow *win) {
+void DrawWindowDel() {
 }
 #define CH_CTRLA	0x01
 #define CH_CTRLB	0x02
@@ -407,7 +403,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
     HWND hwnd;
     int argc,pf;
 	char **argv;
-    float dpi;
     WNDCLASS wc = {0};
     mutex=CreateMutexA(NULL,0,NULL);
     wc.lpfnWndProc=WndProc;
@@ -428,22 +423,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 		NULL
 	);
 	assert(hwnd);
-	dpi=GetDpiForWindow(hwnd);
+	//float dpi=GetDpiForWindow(hwnd);
+	float dpi=96;
 	SetWindowPos(
 		hwnd,
 		NULL,
 		NULL,
 		NULL,
-		10+ceil(650.*dpi/96.), //Windows makes the window smaller for some reason
-		10+ceil(510.*dpi/96.),
+		ceil(640*dpi/96.), //Windows makes the window smaller for some reason
+		ceil(480*dpi/96.),
 		SWP_NOMOVE
 	);
 	NewDrawWindow()->win=hwnd;
 	dw->scaling_enabled=1;
 	dw->renderer_type=_3D_REND_WIN32_GDI_SCALE;
-	if(1) {
+	dw->dpi=dpi;
+	dw->texture_address=(void*)buf;
+	if(0) {
 		software:
 		dw->renderer_type=_3D_REND_WIN32_SOFT_SCALE;
+	} else {
+		D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,&dw->factory);
 	}
 	argv=CommandLineToArgvA_wine(lpCmdLine,&argc);
 	_main(argc,argv);
@@ -549,7 +549,6 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 		case WM_PAINT:
 			if(dw->renderer_type==_3D_REND_WIN32_GDI_SCALE) {
 				WaitForSingleObject(mutex,INFINITE);
-				HDC dc=BeginPaint(hwnd,&ps);
 				GetClientRect(hwnd,&rct);
 				dw->sz_x=rct.right-rct.left;
 				dw->sz_y=rct.bottom-rct.top;
@@ -575,39 +574,27 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 				dw->gl_top=-sy;
 				dw->gl_bottom=sy;
 				int64_t x,y,b,b2,mul=4;
-				RECT rct;
-				GetClientRect(dw->win,&rct);
-				BITMAPINFO  binfo;
-				memset(&binfo,0,sizeof(binfo));
-				binfo.bmiHeader.biSize=sizeof(binfo);
-				binfo.bmiHeader.biWidth=640;
-				//See https://learn.microsoft.com/en-us/windows/win32/wmdm/-bitmapinfoheader
-				//We want a top down DIB
-				binfo.bmiHeader.biHeight=-480;
-				binfo.bmiHeader.biPlanes=1;
-				binfo.bmiHeader.biBitCount=32;
-				binfo.bmiHeader.biCompression=BI_RGB;
-				HBITMAP bmp=CreateCompatibleBitmap(dc,dw->sz_x,dw->sz_y),bmp2;
-				HDC dc2=CreateCompatibleDC(dc);
-				SelectObject(dc2,bmp);
-				HRGN r=CreateRectRgn(rct.left,rct.top,rct.right,rct.bottom);
-				FillRgn(dc2,r,GetStockObject(BLACK_BRUSH));
-				DeleteObject(r);
-				HDC dc3=CreateCompatibleDC(dc);
-				bmp2=CreateCompatibleBitmap(dc,640,480);
-				SelectObject(dc3,bmp2);
-				SetDIBitsToDevice(dc3,0,0,640,480,0,0,0,480,dw->texture_address,&binfo,DIB_RGB_COLORS);
-				HPALETTE pal=CreateHalftonePalette(dc2);
-				SelectPalette(dc2,pal,FALSE);
-				RealizePalette(dc2);
-				assert(SetStretchBltMode(dc2,HALFTONE));
-				assert(SetBrushOrgEx(dc2,0,0,NULL));
- 				assert(StretchBlt(dc2,(dw->sz_x-rx)/2,(dw->sz_y-ry)/2,rx,ry,dc3,0,0,640,480,SRCCOPY));
- 				BitBlt(dc,0,0,dw->sz_x,dw->sz_y,dc2,0,0, SRCCOPY);
-				DeleteObject(pal);
-				DeleteDC(dc3);
-				DeleteDC(dc2);
-				EndPaint(hwnd,&ps);
+				ID2D1HwndRenderTarget *target=NULL;
+				ID2D1Bitmap *bmp;
+				D2D1_SIZE_U size=SizeU(dw->sz_x,dw->sz_y);
+				dw->factory->CreateHwndRenderTarget(
+					RenderTargetProperties(),
+					HwndRenderTargetProperties(hwnd,size),
+					&target
+				);
+				target->BeginDraw();
+				D2D1_SIZE_U holyres=SizeU(640,480);
+				D2D1_BITMAP_PROPERTIES prop;
+				prop.pixelFormat=PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_IGNORE);
+				prop.dpiX=96;
+				prop.dpiY=96;
+				target->CreateBitmap(holyres,prop,&bmp);
+				bmp->CopyFromMemory(NULL,dw->texture_address,640*4);
+				D2D1_RECT_F dst_rct=RectF((dw->sz_x-rx)/2,(dw->sz_y-ry)/2,(dw->sz_x-rx)/2+rx,(dw->sz_y-ry)/2+ry);
+				target->DrawBitmap(bmp,&dst_rct,1.0,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,NULL);
+				target->EndDraw();
+				bmp->Release();
+				target->Release();
 				ReleaseMutex(mutex);
 			
 			}
@@ -624,7 +611,7 @@ void *_3DaysSetResolution(int64_t w,int64_t h) {
 	WaitForSingleObject(mutex,INFINITE);
 	if(dw->renderer_type==_3D_REND_WIN32_GDI_SCALE) {
 		//Do nothing
-		dw->texture_address=buf;
+		dw->texture_address=(void*)buf;
 	} else if(dw->renderer_type==_3D_REND_WIN32_SOFT_SCALE) {
 		dw->sz_x=w,dw->sz_y=h;
 		if(dw->texture_address)
@@ -666,3 +653,4 @@ void _3DaysScaleScrn(){
 	}
 	WaitForMultipleObjects(mp_cnt,finevents,TRUE,INFINITE);
 }
+};
