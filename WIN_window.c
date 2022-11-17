@@ -10,8 +10,8 @@
 HANDLE *mutex;
 LPSTR* WINAPI CommandLineToArgvA_wine(LPSTR lpCmdline, int* numargs);
 typedef enum {
-	_3D_REND_X11_WIN32,
-	_3D_REND_X11_OGL,	
+	_3D_REND_WIN32_SOFT_SCALE,
+	_3D_REND_WIN32_GDI_SCALE,	
 } _3DaysRenderer;
 typedef struct CDrawWindow {
     int64_t sz_x,sz_y;
@@ -47,7 +47,7 @@ CDrawWindow *NewDrawWindow() {
 }
 int32_t buf[640*480];
 int64_t __3DaysSwapRGB() {
-	return dw->renderer_type==_3D_REND_X11_OGL;
+	return 0;
 }
 void __3DaysEnableScaling(int64_t s) {
 	dw->scaling_enabled=s;
@@ -70,7 +70,7 @@ void DrawWindowDel(CDrawWindow *win) {
 #define CH_CTRLN	0x0E
 #define CH_CTRLO	0x0F
 #define CH_CTRLP	0x10
-#define CH_CTRLQ	0x11
+#define CH_CTRLQ	0WIN32
 #define CH_CTRLR	0x12
 #define CH_CTRLS	0x13
 #define CH_CTRLT	0x14
@@ -369,7 +369,7 @@ static int MSCallback(HWND hwnd,void *d,UINT msg,WPARAM w,LPARAM e) {
             case WM_MOUSEMOVE:
             x=GET_X_LPARAM(e),y=GET_Y_LPARAM(e);
             ent:;
-             if(dw->renderer_type==_3D_REND_X11_OGL) {
+             if(dw->renderer_type==_3D_REND_WIN32_GDI_SCALE) {
 				//Window corantes go from top to bottom
 				y=dw->sz_y-y;
 				//We need to scale out coordnates to the "screen rectangle"
@@ -405,21 +405,15 @@ static HANDLE normal_c;
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, int nCmdShow) {
     MSG  msg;
     HWND hwnd;
-    PIXELFORMATDESCRIPTOR pfd;
     int argc,pf;
 	char **argv;
     float dpi;
-    memset(&pfd,0,sizeof(pfd));
-    pfd.nSize=sizeof(pfd);
-    pfd.nVersion=1;
-    pfd.dwFlags=PFD_DRAW_TO_WINDOW|PFD_SUPPORT_OPENGL;
-    pfd.iPixelType=PFD_TYPE_RGBA;
-    pfd.cColorBits=32;
     WNDCLASS wc = {0};
     mutex=CreateMutexA(NULL,0,NULL);
     wc.lpfnWndProc=WndProc;
     wc.lpszClassName="Holy Drawer";
 	wc.hInstance=hInstance;
+	wc.style=CS_HREDRAW|CS_VREDRAW;
 	RegisterClassA(&wc);
 	hwnd=CreateWindowExA(
 		NULL,
@@ -445,35 +439,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 		SWP_NOMOVE
 	);
 	NewDrawWindow()->win=hwnd;
-	dw->dc=GetDC(hwnd);
 	dw->scaling_enabled=1;
-	//if(0==(pf=ChoosePixelFormat(dw->dc,&pfd)))
-	goto software;
-	assert(FALSE!=SetPixelFormat(dw->dc,pf,&pfd));
-	DescribePixelFormat(dw->dc,pf,sizeof(PIXELFORMATDESCRIPTOR),&pfd);
-	if(!(dw->glc=wglCreateContext(dw->dc)))
-	   goto software;
-	wglMakeCurrent(dw->dc,dw->glc);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glGenTextures(1,&dw->gl_texture);
-	glBindTexture(GL_TEXTURE_2D,dw->gl_texture);
-	glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
-	glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,640,480,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);	
-	dw->texture_address=buf;
-	dw->renderer_type=_3D_REND_X11_OGL;
+	dw->renderer_type=_3D_REND_WIN32_GDI_SCALE;
 	if(0) {
 		software:
-		pfd.dwFlags&=~PFD_SUPPORT_OPENGL;
-		dw->renderer_type=_3D_REND_X11_WIN32;
-		assert(0!=(pf=ChoosePixelFormat(dw->dc,&pfd)));
-		assert(FALSE!=SetPixelFormat(dw->dc,pf,&pfd));
-		DescribePixelFormat(dw->dc,pf,sizeof(PIXELFORMATDESCRIPTOR),&pfd);
-		ReleaseDC(hwnd,dw->dc);
+		dw->renderer_type=_3D_REND_WIN32_SOFT_SCALE;
 	}
 	argv=CommandLineToArgvA_wine(lpCmdLine,&argc);
 	_main(argc,argv);
@@ -486,12 +456,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 }
 void DrawWindowUpdate(struct CDrawWindow *ul,int8_t *colors,int64_t internal_width,int64_t h) {
 	WaitForSingleObject(mutex,INFINITE);
-	if(dw->renderer_type==_3D_REND_X11_OGL)
+	if(dw->renderer_type==_3D_REND_WIN32_GDI_SCALE)
 		RedrawWindow(dw->win , NULL , NULL , RDW_INVALIDATE);
-	else if(dw->renderer_type==_3D_REND_X11_WIN32) {
+	else if(dw->renderer_type==_3D_REND_WIN32_SOFT_SCALE) {
 		int64_t x,y,b,b2,mul=4;
 		HBITMAP bmp;
-		HBRUSH brush,obrush;
 		RECT rct;
 		HDC dc=GetDC(dw->win);
 		GetClientRect(dw->win,&rct);
@@ -550,9 +519,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 	switch(msg) {
 		case WM_SIZE:
 		case WM_SIZING:
-			if(dw->renderer_type==_3D_REND_X11_OGL)
-				glViewport(0,0,LOWORD(lParam),HIWORD(lParam));
-			else if(dw->renderer_type==_3D_REND_X11_WIN32)
+			if(dw->renderer_type==_3D_REND_WIN32_SOFT_SCALE)
 				dw->changed_reso=1;
 			break;
 		case WM_KILLFOCUS:
@@ -580,53 +547,62 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 				MSCallback(hwnd,NULL,msg,wParam,lParam);
 			break;
 		case WM_PAINT:
-			WaitForSingleObject(mutex,INFINITE);
-			if(dw->renderer_type==_3D_REND_X11_OGL) {
+			if(dw->renderer_type==_3D_REND_WIN32_GDI_SCALE) {
+				WaitForSingleObject(mutex,INFINITE);
+				HDC dc=BeginPaint(hwnd,&ps);
 				GetClientRect(hwnd,&rct);
 				dw->sz_x=rct.right-rct.left;
 				dw->sz_y=rct.bottom-rct.top;
-				float sx,sy,ox,oy;
+				float sx,sy,ox,oy,rx,ry;
 				if(dw->scaling_enabled) {
 					sx=dw->sz_y/480.*640.,sy=dw->sz_y;
 					if(dw->sz_x<sx) {
 						sy=dw->sz_x/640.*480.;
 						sx=dw->sz_x;
 					}
+					rx=sx;
+					ry=sy;
 					ox=(dw->sz_x-sx);
 					oy=(dw->sz_y-sy);
 					sx=1.-ox/dw->sz_x;
 					sy=1.-oy/dw->sz_y;			
 				} else {
 					sx=640./dw->sz_x,sy=480./dw->sz_y;
+					rx=640;ry=480;
 				}
 				dw->gl_left=-sx;
 				dw->gl_right=sx;
 				dw->gl_top=-sy;
 				dw->gl_bottom=sy;
-				GLfloat verts[]={
-					dw->gl_left,dw->gl_top,
-					dw->gl_right,dw->gl_top,
-					dw->gl_right,dw->gl_bottom,
-					dw->gl_left,dw->gl_bottom
-				};
-				glClear(GL_COLOR_BUFFER_BIT);
-				glColor4f(0,0,0,0);
-				glEnable(GL_VERTEX_ARRAY);
-				glEnable(GL_TEXTURE_2D);
-				glBindTexture(GL_TEXTURE_2D,dw->gl_texture);
-				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_ADD);
-				glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,640,480,0,GL_RGBA,GL_UNSIGNED_BYTE,dw->texture_address);
-				char triangles[]={
-					0,1,2,0,3,2
-				};
-				glVertexPointer(2,GL_FLOAT,0,verts);
-				glDrawElements(GL_TRIANGLES,6,GL_UNSIGNED_BYTE,triangles);
-				glFlush();				
-				BeginPaint(hwnd,&ps);
+				int64_t x,y,b,b2,mul=4;
+				RECT rct;
+				GetClientRect(dw->win,&rct);
+				BITMAPINFO  binfo;
+				memset(&binfo,0,sizeof(binfo));
+				binfo.bmiHeader.biSize=sizeof(binfo);
+				binfo.bmiHeader.biWidth=640;
+				//See https://learn.microsoft.com/en-us/windows/win32/wmdm/-bitmapinfoheader
+				//We want a top down DIB
+				binfo.bmiHeader.biHeight=-480;
+				binfo.bmiHeader.biPlanes=1;
+				binfo.bmiHeader.biBitCount=32;
+				binfo.bmiHeader.biCompression=BI_RGB;
+				HBITMAP bmp=CreateCompatibleBitmap(dc,dw->sz_x,dw->sz_y);
+				HDC dc2=CreateCompatibleDC(dc);
+				HRGN r=CreateRectRgn(rct.left,rct.top,rct.right,rct.bottom);
+				FillRgn(dc2,r,GetStockObject(BLACK_BRUSH));
+				DeleteObject(r);
+				SelectObject(dc2,bmp);				
+				SetStretchBltMode(dc2,HALFTONE);
+ 				StretchDIBits(dc2,(dw->sz_x-rx)/2,(dw->sz_y-ry)/2,rx,ry,0,0,640,480,dw->texture_address,&binfo,DIB_RGB_COLORS,SRCCOPY);
+ 				BitBlt(dc,0,0,dw->sz_x,dw->sz_y,dc2,0,0,SRCCOPY);
+				DeleteDC(dc2);
+				DeleteObject(bmp);
 				EndPaint(hwnd,&ps);
+				ReleaseMutex(mutex);
+			
 			}
-			ReleaseMutex(mutex);
-			break;
+			return 0;
 		case WM_DESTROY:
 kill:
 			PostQuitMessage(0);
@@ -637,10 +613,10 @@ dft:
 }
 void *_3DaysSetResolution(int64_t w,int64_t h) {
 	WaitForSingleObject(mutex,INFINITE);
-	if(dw->renderer_type==_3D_REND_X11_OGL) {
+	if(dw->renderer_type==_3D_REND_WIN32_GDI_SCALE) {
 		//Do nothing
 		dw->texture_address=buf;
-	} else if(dw->renderer_type==_3D_REND_X11_WIN32) {
+	} else if(dw->renderer_type==_3D_REND_WIN32_SOFT_SCALE) {
 		dw->sz_x=w,dw->sz_y=h;
 		if(dw->texture_address)
 			free(dw->texture_address);
