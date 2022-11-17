@@ -120,7 +120,8 @@ void LaunchCore0(void *fp) {
 	pthread_create(&cores[core].thread,NULL,FFI_CALL_TOS_0_ZERO_BP,fp);
 	#else
 	cores[core].thread=CreateThread(NULL,0,FFI_CALL_TOS_0_ZERO_BP,fp,0,NULL);
-	InitializeConditionVariable(&cores[core].sleep_cond);
+	SetThreadPriority(cores[core].thread,THREAD_PRIORITY_HIGHEST);
+	  InitializeConditionVariable(&cores[core].sleep_cond);
 	InitializeCriticalSection(&cores[core].sleep_CS);
 	#endif
 }
@@ -138,6 +139,7 @@ void CreateCore(int core,void *fp) {
 	pthread_create(&cores[core].thread,NULL,LaunchCore,core);
 	#else
 	cores[core].thread=CreateThread(NULL,0,LaunchCore,core,0,NULL);
+	SetThreadPriority(cores[core].thread,THREAD_PRIORITY_HIGHEST);
 	InitializeConditionVariable(&cores[core].sleep_cond);
 	InitializeCriticalSection(&cores[core].sleep_CS);
 	#endif
@@ -188,8 +190,10 @@ void multicSleep(int64_t ms) {
 	}
 	__atomic_store_n(&cores[__core_num].is_sleeping,0,__ATOMIC_RELAXED)	;
 	#else
-	EnterCriticalSection(&cores[__core_num].sleep_CS);
-	SleepConditionVariableCS(&cores[__core_num].sleep_cond,&cores[__core_num].sleep_CS,ms);
-	LeaveCriticalSection(&cores[__core_num].sleep_CS);
+	if(ms) {
+		EnterCriticalSection(&cores[__core_num].sleep_CS);
+		SleepConditionVariableCS(&cores[__core_num].sleep_cond,&cores[__core_num].sleep_CS,ms);
+		LeaveCriticalSection(&cores[__core_num].sleep_CS);
+	}
 	#endif
 }

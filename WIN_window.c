@@ -70,7 +70,7 @@ void DrawWindowDel(CDrawWindow *win) {
 #define CH_CTRLN	0x0E
 #define CH_CTRLO	0x0F
 #define CH_CTRLP	0x10
-#define CH_CTRLQ	0WIN32
+#define CH_CTRLQ	0x11
 #define CH_CTRLR	0x12
 #define CH_CTRLS	0x13
 #define CH_CTRLT	0x14
@@ -441,7 +441,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 	NewDrawWindow()->win=hwnd;
 	dw->scaling_enabled=1;
 	dw->renderer_type=_3D_REND_WIN32_GDI_SCALE;
-	if(0) {
+	if(1) {
 		software:
 		dw->renderer_type=_3D_REND_WIN32_SOFT_SCALE;
 	}
@@ -587,17 +587,26 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 				binfo.bmiHeader.biPlanes=1;
 				binfo.bmiHeader.biBitCount=32;
 				binfo.bmiHeader.biCompression=BI_RGB;
-				HBITMAP bmp=CreateCompatibleBitmap(dc,dw->sz_x,dw->sz_y);
+				HBITMAP bmp=CreateCompatibleBitmap(dc,dw->sz_x,dw->sz_y),bmp2;
 				HDC dc2=CreateCompatibleDC(dc);
+				SelectObject(dc2,bmp);
 				HRGN r=CreateRectRgn(rct.left,rct.top,rct.right,rct.bottom);
 				FillRgn(dc2,r,GetStockObject(BLACK_BRUSH));
 				DeleteObject(r);
-				SelectObject(dc2,bmp);				
-				SetStretchBltMode(dc2,HALFTONE);
- 				StretchDIBits(dc2,(dw->sz_x-rx)/2,(dw->sz_y-ry)/2,rx,ry,0,0,640,480,dw->texture_address,&binfo,DIB_RGB_COLORS,SRCCOPY);
- 				BitBlt(dc,0,0,dw->sz_x,dw->sz_y,dc2,0,0,SRCCOPY);
+				HDC dc3=CreateCompatibleDC(dc);
+				bmp2=CreateCompatibleBitmap(dc,640,480);
+				SelectObject(dc3,bmp2);
+				SetDIBitsToDevice(dc3,0,0,640,480,0,0,0,480,dw->texture_address,&binfo,DIB_RGB_COLORS);
+				HPALETTE pal=CreateHalftonePalette(dc2);
+				SelectPalette(dc2,pal,FALSE);
+				RealizePalette(dc2);
+				assert(SetStretchBltMode(dc2,HALFTONE));
+				assert(SetBrushOrgEx(dc2,0,0,NULL));
+ 				assert(StretchBlt(dc2,(dw->sz_x-rx)/2,(dw->sz_y-ry)/2,rx,ry,dc3,0,0,640,480,SRCCOPY));
+ 				BitBlt(dc,0,0,dw->sz_x,dw->sz_y,dc2,0,0, SRCCOPY);
+				DeleteObject(pal);
+				DeleteDC(dc3);
 				DeleteDC(dc2);
-				DeleteObject(bmp);
 				EndPaint(hwnd,&ps);
 				ReleaseMutex(mutex);
 			
@@ -625,24 +634,35 @@ void *_3DaysSetResolution(int64_t w,int64_t h) {
 	ReleaseMutex(mutex);
 	return dw->texture_address;
 }
+static HANDLE revents[64],finevents[64];
+static HANDLE scalers[64];
 static void LaunchScaler(void *c) {
-	void *fp=map_get(&TOSLoader,"ScalerMP")->data[0].val;
-	FFI_CALL_TOS_1(fp,c);
+	for(;;) {
+		WaitForSingleObject(revents[(int)c],INFINITE);
+		void *fp=map_get(&TOSLoader,"ScalerMP")->data[0].val;
+		FFI_CALL_TOS_1(fp,c);
+		SetEvent(finevents[(int)c]);
+	}
 	return 0;
 }
 void _3DaysScaleScrn(){
 	static int64_t mp_cnt;
+	int64_t i;
 	//See T/GR/Scale
 	if(!mp_cnt) {
 		SYSTEM_INFO info;
 		GetSystemInfo(&info);
 		mp_cnt=info.dwNumberOfProcessors;
+		for(i=0;i!=mp_cnt;i++) {
+			revents[i]=CreateEvent(NULL,FALSE,FALSE,NULL);
+			finevents[i]=CreateEvent(NULL,TRUE,TRUE,NULL);
+		}
+		for(i=0;i!=mp_cnt;i++)
+			scalers[i]=CreateThread(NULL,0,&LaunchScaler,i,0,NULL);	
 	}
-	HANDLE scalers[mp_cnt];
-	int64_t i;
-	for(i=0;i!=mp_cnt;i++)
-		scalers[i]=CreateThread(NULL,0,&LaunchScaler,i,0,NULL);	
-	WaitForMultipleObjects(mp_cnt,scalers,1,INFINITE);
-	for(i=0;i!=mp_cnt;i++)
-		CloseHandle(scalers[i]);
+	for(i=0;i!=mp_cnt;i++) {
+		ResetEvent(finevents[i]);
+		SetEvent(revents[i]);
+	}
+	WaitForMultipleObjects(mp_cnt,finevents,TRUE,INFINITE);
 }
