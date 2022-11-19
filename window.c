@@ -578,13 +578,13 @@ static int MSCallback(void *d,XEvent *e) {
             ent:
             if(dw->renderer_type==_3D_REND_X11_OGL) {
 				//X11 corantes go from top to bottom
-				y=dw->sz_y-y;
+				int64_t y2=dw->sz_y-y,x2=x;
 				//We need to scale out coordnates to the "screen rectangle"
 				//OpenGL cordnates go from (-1.0,-1.0) to (1.0,1.0)
 				//Our silly sauce rectangle doesn't take up the whole screen,
 				//We use (dw->gl_left,dw->gl_bottom),(dw->gl_right,dw->gl_top)
-				double xd=x/(double)dw->sz_x*2. -1.; //Make it go from -1 to 1
-				double yd=y/(double)dw->sz_y*2. -1.; //Ditto
+				double xd=x2/(double)dw->sz_x*2. -1.; //Make it go from -1 to 1
+				double yd=y2/(double)dw->sz_y*2. -1.; //Ditto
 				if(xd<dw->gl_left)
 					xd=dw->gl_left;
 				if(xd>dw->gl_right)
@@ -595,10 +595,11 @@ static int MSCallback(void *d,XEvent *e) {
 					yd=dw->gl_bottom;
 				yd=(yd-dw->gl_bottom)/(dw->gl_top-dw->gl_bottom);
 				xd=(xd-dw->gl_left)/(dw->gl_right-dw->gl_left);
-				y=480*yd;
-				x=640*xd;
-			}
-            FFI_CALL_TOS_4(ms_cb,x,y,z,state);
+				y2=480*yd;
+				x2=640*xd;
+				FFI_CALL_TOS_4(ms_cb,x2,y2,z,state);
+			} else
+				FFI_CALL_TOS_4(ms_cb,x,y,z,state);
         }
     return 0;
 }
