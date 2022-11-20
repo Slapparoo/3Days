@@ -141,8 +141,9 @@ CDrawWindow *NewDrawWindow() {
 }
 void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,int64_t h) {
 	sigset_t old_set,set;
+	if(0!=pthread_mutex_trylock(&dw->pt))
+		goto ret;
 	XLockDisplay(dw->disp);
-	pthread_mutex_lock(&dw->pt);
 	sigemptyset(&set);
 	sigaddset(&set,SIGUSR2);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
@@ -166,6 +167,7 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	XFlush(dw->disp);
 	XUnlockDisplay(dw->disp);
 	sigprocmask(SIG_SETMASK,&old_set,NULL);
+	ret:;
 }
 void DrawWindowDel() {
 	if(dw) {
@@ -669,6 +671,7 @@ static void __InputLoop(void *ul,int64_t clip_only) {
     for(;!*(int64_t*)ul;) {
 		XNextEvent(dw->disp,&e);
 		if(e.type==Expose) {
+			pthread_mutex_lock(&dw->pt);
 			XWindowAttributes attribs;
 			XGetWindowAttributes(dw->disp, dw->window, &attribs);
 			glViewport(0, 0, attribs.width, attribs.height);
@@ -712,6 +715,7 @@ static void __InputLoop(void *ul,int64_t clip_only) {
 			glDrawElements(GL_TRIANGLES,6,GL_UNSIGNED_BYTE,triangles);
 			glFinish();
 			glXSwapBuffers(dw->disp,dw->window);
+			pthread_mutex_unlock(&dw->pt);
 		} else if(e.type==ClientMessage) {
 			if(e.xclient.data.l[0]==wmclose) {
 				__ShutdownCores();
@@ -836,9 +840,12 @@ void *_3DaysSetResolution(int64_t w,int64_t h) {
 		XUnlockDisplay(dw->disp);
 		return dw->shm_info.shmaddr;
 	} else if(dw->renderer_type==_3D_REND_X11_OGL) {
+		pthread_mutex_lock(&dw->pt);
 		if(dw->texture_address)
 			free(dw->texture_address);
-		return dw->texture_address=calloc(w*h,4);
+		dw->texture_address=calloc(w*h,4);
+		pthread_mutex_unlock(&dw->pt);
+		return dw->texture_address;
 	}
 }
 static void LaunchScaler(void *c) {
