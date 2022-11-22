@@ -143,10 +143,10 @@ void DrawWindowUpdate(CDrawWindow *win,int8_t *_colors,int64_t internal_width,in
 	sigset_t old_set,set;
 	if(0!=pthread_mutex_trylock(&dw->pt))
 		goto ret;
-	XLockDisplay(dw->disp);
 	sigemptyset(&set);
 	sigaddset(&set,SIGUSR2);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
+	XLockDisplay(dw->disp);
 	if(dw->renderer_type==_3D_REND_X11_SHM) {
 		XShmPutImage(dw->disp,dw->window,dw->gc,dw->shm_image,0,0,0,0,dw->disp_w,dw->disp_h,True);
 		pthread_mutex_unlock(&dw->pt);
@@ -185,10 +185,12 @@ void DrawWindowDel() {
 			dw=NULL;
 		} else {
 			XLockDisplay(dw->disp);
+			pthread_mutex_lock(&dw->pt);
 			XFlush(dw->disp);
-			glXDestroyContext(dw->disp,dw->context);
+			glXDestroyContext(dw->disp,dw->context);			
 			XDestroyWindow(dw->disp,dw->window);
 			XCloseDisplay(dw->disp);
+			pthread_mutex_destroy(&dw->pt);
 			TD_FREE(dw);
 			dw=NULL;
 		}
@@ -858,8 +860,8 @@ void _3DaysScaleScrn(){
 	static int64_t mp_cnt;
 	sigemptyset(&set);
 	sigaddset(&set,SIGUSR2);
-	sigaddset(&set,SIGUSR1);
 	sigprocmask(SIG_BLOCK,&set,&old_set);
+	pthread_mutex_lock(&dw->pt);
 	//See T/GR/Scale
 	if(!mp_cnt) {
 		mp_cnt=sysconf(_SC_NPROCESSORS_ONLN);
@@ -870,5 +872,6 @@ void _3DaysScaleScrn(){
 		pthread_create(&scalers[i],NULL,&LaunchScaler,i);	
 	for(i=0;i!=mp_cnt;i++)
 		pthread_join(scalers[i],NULL);
+	pthread_mutex_unlock(&dw->pt);
 	sigprocmask(SIG_SETMASK,&old_set,NULL);
 }

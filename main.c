@@ -148,6 +148,10 @@ int main(int argc,char **argv)
 				VFsMountDrive('T',"T");
 			}
 			#endif
+			else {
+				fprintf(stderr,"No T drive specified!!!.\n");
+				exit(EXIT_FAILURE);
+			}
 		}
 	}
 	//IMPORTANT,init thread VFs after we make drive T
