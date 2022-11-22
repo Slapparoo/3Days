@@ -12,6 +12,7 @@
 #include "ext/C_Unescaper/escaper.h"
 #define DFT_T_DRIVE ".3DAYS_BOOT"
 #define DFT_TEMPLATE "/usr/local/include/3Days/T/"
+#include <unistd.h>
 #else
 #include <windows.h>
 #include <libloaderapi.h>
@@ -135,7 +136,19 @@ int main(int argc,char **argv)
 		#endif
 		//CreateTemplateBootDrv Checks if exists too
 		//DFT_TEMPLATE IS RELATIVE TO PROGRAM IN WINDOWS
-		CreateTemplateBootDrv(t_drive,template,OverwriteBootDrvArg->count);
+		if(!CreateTemplateBootDrv(t_drive,template,OverwriteBootDrvArg->count)) {
+			#ifndef TARGET_WIN32
+			if(access("./T",F_OK)==0) {
+				fprintf(stderr,"Looks like a T drive exists here,using that.\n");
+				VFsMountDrive('T',"T");
+			}
+			#else
+			if(PathFileExistsA("./T")) {
+				fprintf(stderr,"Looks like a T drive exists here,using that.\n");
+				VFsMountDrive('T',"T");
+			}
+			#endif
+		}
 	}
 	//IMPORTANT,init thread VFs after we make drive T
 	VFsThrdInit();

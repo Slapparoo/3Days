@@ -420,16 +420,16 @@ static int __FIsNewer(char *fn,char *fn2) {
 	#endif
 }
 
-void CreateTemplateBootDrv(char *to,char *template,int overwrite) {
+int CreateTemplateBootDrv(char *to,char *template,int overwrite) {
 	char buffer[1024],drvl[16],buffer2[1024];
 	if(!overwrite)
 		if(__FExists(to)) {
 			if(!__FExists(template)) {
 				VFsMountDrive('T',to);
-				return;
+				return 1;
 			} else if(!__FIsNewer(template,to)) {
 				VFsMountDrive('T',to);
-				return;
+				return 1;
 			}
 		}
 	if(__FExists(to)) {
@@ -453,10 +453,14 @@ void CreateTemplateBootDrv(char *to,char *template,int overwrite) {
     strcat(buffer2,"\\");
     #else
     strcpy(buffer2,template);
-    assert(__FExists(buffer2));
     #endif
+    if(!__FExists(buffer2)) {
+		fprintf(stderr,"Use \"./3d_loader -t T\" to specify the T drive.\n");
+		return 0; 
+	}
     CopyDir(to,buffer2);
     VFsMountDrive('T',to);
+    return 1;
 }
 int VFsIsDir(char *path) {
 	path=__VFsFileNameAbs(path);

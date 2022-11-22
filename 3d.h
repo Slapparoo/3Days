@@ -111,7 +111,7 @@ void VFsThrdInit();
 void __Sleep(int64_t t);
 int64_t VFsDel(char *p);
 char *HostHomeDir();
-void CreateTemplateBootDrv(char *to,char *t,int overwrite);
+int CreateTemplateBootDrv(char *to,char *t,int overwrite);
 //Not VFs
 void* FileRead(char *fn,int64_t *sz);
 int64_t FileWrite(char *fn,void *data,int64_t sz);
