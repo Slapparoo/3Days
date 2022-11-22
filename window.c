@@ -44,14 +44,16 @@ utf8_prop(Display *dpy, XEvent ev);
 //See note in NewDrawWindow
 static Atom wmclose;
 int64_t __3DaysSwapRGB() {
-	if(dw->renderer_type==_3D_REND_X11_OGL)
-		return 1;
+	if(dw)
+		if(dw->renderer_type==_3D_REND_X11_OGL)
+			return 1;
 	return 0;
 }
 void __3DaysEnableScaling(int64_t s) {
 	//The software scaling is handled by HCRT.BIN
-	if(dw->renderer_type==_3D_REND_X11_OGL)
-		dw->scaling_enabled=s;
+	if(dw)
+		if(dw->renderer_type==_3D_REND_X11_OGL)
+			dw->scaling_enabled=s;
 }
 static const GLfloat texcoords[] =
 {
@@ -185,7 +187,7 @@ void DrawWindowDel() {
 			dw=NULL;
 		} else {
 			XLockDisplay(dw->disp);
-			pthread_mutex_lock(&dw->pt);
+			pthread_mutex_lock(&dw	->pt);
 			XFlush(dw->disp);
 			glXDestroyContext(dw->disp,dw->context);			
 			XDestroyWindow(dw->disp,dw->window);
