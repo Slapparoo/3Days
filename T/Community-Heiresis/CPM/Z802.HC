@@ -1171,6 +1171,7 @@ class CCPM {
   U16 DMA_ADDR,DP_ADDR;
   CFifoI64 *keys;
 } CPM;
+MemSet(&CPM,0,sizeof CCPM);
 CPM.keys=FifoI64New(0x100);
 U8 *SkipWhitespace(U8 *ptr) {
   while(*ptr&&Bt(char_bmp_white_space,*ptr)) ptr++;
@@ -1182,7 +1183,7 @@ U0 CCP(U8 *buffer=NULL,Bool sub=FALSE) {
   CDirEntry *ents,*c_ent,ent;
   I64 pages;
   TermPrint("Welcome to Holy Control-Program/Monitor\n");
-  loop:
+  loop2:
   if(!sub){
     StrPrint(prompt,"%c%d> ",CPM.drive+'A',CPM.user);
     TermPrint(prompt);
@@ -1326,7 +1327,7 @@ U0 CCP(U8 *buffer=NULL,Bool sub=FALSE) {
     TermPrint("\n");
   }
   Free(buffer);
-  goto loop;
+  goto loop2;
 }
 U8 *FCBToHostname(CFCB *fcb) {
   U8 *name=MAlloc(64),*nptr=name;
@@ -1453,7 +1454,7 @@ U0 HostnameToFCB(CFCB*fcb,U8 *hn,Bool create=FALSE) {
   U8 *ext;
   CDirEntry ent;
   I64 i,i2;
-  loop:
+  loop2:
   if(hn&&FileFind(hn,&ent)) {
     MemSetU8(fcb,0,sizeof(CFCB));
     Free(ent.full_name);
@@ -1473,7 +1474,7 @@ U0 HostnameToFCB(CFCB*fcb,U8 *hn,Bool create=FALSE) {
   } else {
     if(hn&&create) {
       FileWrite(hn,"",0);
-      goto loop;
+      goto loop2;
     }
     zHL=zA=0xff;
    }
@@ -1829,4 +1830,3 @@ U0 CPM_LoadProgram(U8 *bin,I64 len,Bool run_once=FALSE,U8 *fa=NULL,U8 *fb=NULL,U
 }
 CCP;
 Exit;
-

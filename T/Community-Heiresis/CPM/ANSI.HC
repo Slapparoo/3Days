@@ -26,6 +26,7 @@ class CANSITerm {
   U8 text[TEXT_ROWS-1][TEXT_COLS];
   U8 text_attrs[TEXT_ROWS-1][TEXT_COLS];
 } Term;
+MemSet(&Term,0,sizeof CANSITerm);
 Term.cur_cp=Term.default_cp=BLACK<<4|WHITE;
 MemSetU8(Term.text,' ',TEXT_COLS*(TEXT_ROWS-1));
 MemSetU8(Term.text_attrs,Term.default_cp,TEXT_COLS*(TEXT_ROWS-1));
@@ -49,7 +50,7 @@ U0 DrawTerm(CTask *,CDC *dc) {
 }
 U0 TermPrint(U8 *str) {
   I64 dist,dist2;
-  loop:
+  loop2:;
   if(Term.awaiting&&*str) {
     while(*str&&!Bt(char_bmp_alpha,*str))
       Term.escape_buf[Term.escape_buf_idx++]=*str++;
@@ -58,7 +59,7 @@ U0 TermPrint(U8 *str) {
       Term.escape_buf[Term.escape_buf_idx++]=0;
     }
     Term.cy=MinI64(MaxI64(Term.cy,0),TEXT_ROWS-1);
-    Term.cx=MinI64(MaxI64(Term.cx,0),TEXT_COLS);
+    Term.cx=MinI64(MaxI64(Term.cx,0),TEXT_COLS);
     switch(*str) {
       case 0:break;
       start:
@@ -110,7 +111,7 @@ U0 TermPrint(U8 *str) {
       Term.escape_buf_idx=0;
       break;
       case 'H':
-      StrScan(Term.escape_buf+1,"%d;%dH",&dist,&dist2);
+      StrScan(Term.escape_buf+1,"%d;%dH",&dist,&dist2);
       Term.cy=MinI64(dist-1,TEXT_ROWS-1),Term.cx=MinI64(dist2-1,TEXT_COLS);
       break;
       case 'm':
@@ -133,30 +134,30 @@ U0 TermPrint(U8 *str) {
       Term.escape_buf_idx=0;
       break;
       default:
-      TOSPrint("UNIMP:%c\n",*str);
+      //TOSPrint("UNIMP:%c\n",*str);
       Term.awaiting=FALSE;
       Term.escape_buf_idx=0;
     }
     if(*str) str++;
-      goto loop;
+      goto loop2;
   } else {
     while(*str) {
       if(*str==0x1b) {
         Term.awaiting=TRUE;
         str++;
-        goto loop;
+        goto loop2;
       }
       if(*str=='\r') {
         Term.cx=0;
         str++;
-        goto loop;
+        goto loop2;
       }
       //Backsapce
       if(*str==127||*str==8) {
         Term.text[Term.cy][Term.cx]=' ';
         Term.cx=MaxI64(Term.cx-1,0);
         str++;
-        goto loop;
+        goto loop2;
       }
       if(*str=='\n') {
         Term.cx=0;
@@ -195,7 +196,7 @@ U8 *TermGetStr() {
   U8 buffer[0x100],buffer2[0x100];
   I64 bpos=0,blen=0,kc,sc;
   buffer[0]=0;
-loop:
+loop2:;
   ScanKey(&kc,&sc);
   switch(kc&0xff) {
     case CH_BACKSPACE:
@@ -245,7 +246,7 @@ loop:
         TermPrint(buffer2);
       }
   }
-  goto loop;
+  goto loop2;
 }
 WinBorder(0);
 WinMax;
