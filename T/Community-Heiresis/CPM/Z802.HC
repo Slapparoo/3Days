@@ -1,9 +1,9 @@
+#exe {Cd(__DIR__);;};;
 #include "ANSI.HC";
 //#define DBG 
 #ifdef DBG
 U0 DbgLog(U8 *fmt,...) {
         U8 *fmted=StrPrintJoin(NULL,fmt,argc,argv);
-	TOSPrint("%s\n",fmted);
         Free(fmted);
 }
 #else
@@ -61,10 +61,10 @@ class CZ80 {
 
 #define zRAM z80->RAM
 
-#define DBG 1
+//#define DBG 1
 U0 DumpRegs() {
 #ifdef DBG
-  TOSPrint("AF:%p,",zA);
+  TOSPrint("AF:%p,",zA);
   if(Bt(&zF,7)) TOSPrint("S,");
   if(Bt(&zF,6)) TOSPrint("Z,");
   if(Bt(&zF,4)) TOSPrint("H,");
@@ -216,11 +216,6 @@ U0 Z80Call(U16 addr) {
   zPC=addr;
 }
 U0 Z80Run() {
-  /*TOSPrint("OC:%p,%p\n",zRAM[zPC],zPC);
-  zPC++;
-  DumpRegs;
-  zPC--;
-  */
   I64 sum,cy;
   switch(Fetch8(zPC)) {
       break; case 0x00:
@@ -1159,11 +1154,9 @@ class CFCB {
 
 #define CBLK_SZ 128
 U0 TerminalWriteChr(U8 chr) {
-  //TODO ansi codes
   U8 buf[2];
   buf[0]=chr;
   buf[1]=0;
-  //TOSPrint("%d\n",chr);
   TermPrint(buf);
 }
 class CCPM {
@@ -1226,18 +1219,6 @@ U0 CCP(U8 *buffer=NULL,Bool sub=FALSE) {
     ents=FilesFind(hn);
     for(c_ent=ents;c_ent;c_ent=c_ent->next)
       Del(c_ent->full_name);
-    DirEntryDel(ents);
-    Free(hn);
-  } else if(!StrICmp(com_buf,"DIR")) {
-    if(!*f1) StrCpy(f1,"*.*");
-    hn=MStrPrint("%C/%d/%s",CPM.drive+'A',CPM.user,f1);
-    ents=FilesFind(hn);
-    if(!ents)
-      TermPrint("NOFILE\n");
-    for(c_ent=ents;c_ent;c_ent=c_ent->next) {
-      StrPrint(prompt,"%s\n",c_ent->name);
-      TermPrint(prompt);
-    }
     DirEntryDel(ents);
     Free(hn);
   } else if(!StrICmp(com_buf,"HELP")) {
@@ -1330,7 +1311,7 @@ U0 CCP(U8 *buffer=NULL,Bool sub=FALSE) {
   goto loop2;
 }
 U8 *FCBToHostname(CFCB *fcb) {
-  U8 *name=MAlloc(64),*nptr=name;
+  U8 *name=MAlloc(64),*nptr=name,*nptr2;
   I64 i;
   if(fcb->DR&&fcb->DR!='?') {
     *nptr='A'+fcb->DR-1;
@@ -1352,6 +1333,31 @@ U8 *FCBToHostname(CFCB *fcb) {
       *nptr++=fcb->T[i];
   }
   *nptr=0;
+  if(!StrNCmp("??????????.",name,10)) {
+    MemCpy(name,"*         .",10);
+  }
+  nptr2=StrLastOcc(name,".")-1;
+  i=0;
+  while(nptr2>name)
+    if(*nptr2=='?') {
+      i=1;
+      *nptr2=' ';
+      nptr2--;
+    } else break;
+  if(i) nptr2[1]='*';
+  nptr2=StrLastOcc(name,".");
+  if(nptr2) {
+    i=0;
+    nptr2+=StrLen(nptr2)-1;
+    while(*nptr2!='.')
+      if(*nptr2=='?'){
+        *nptr2--==' ';
+        i=0;
+      } else break;
+    if(i)
+      nptr2[1]='*';
+  }
+  StrUtil(name,SUF_REM_SPACES);
   while(nptr=StrFirstOcc(name,"\d"))
     *nptr='D';
   return name;
@@ -1482,8 +1488,9 @@ U0 HostnameToFCB(CFCB*fcb,U8 *hn,Bool create=FALSE) {
 
 U0 Bdos() {
   I64 ch;
-  U16 optr,ptr,cap,i;
+  U16 optr,ptr,cap,i,i2;
   U8 *buffer,*buffer2;
+  static CFCB find_fcb;
   CFCB *fcb;
   CDirEntry *ents,*c_ent;
   Yield;
@@ -1567,35 +1574,38 @@ case 17:
   buffer=FCBToHostname(fcb);
   ents=FilesFind(buffer);
   if(ents) {
-    DirEntryDel(ents);
-    goto open;
+    MemCpy(&find_fcb,fcb,sizeof CFCB);
   } else 
     zHL=zA=0xff;
+  DirEntryDel(ents);
   Free(buffer);
   break;
 case 18:
   //Search for next
-  dir_pos++;
+  i2=dir_pos++;
   fcb=&z80->RAM[zDE];
-  buffer=FCBToHostname(fcb);
+  buffer=FCBToHostname(&find_fcb);
   ents=FilesFind(buffer);
   if(ents) {
     i=0;
-    for(c_ent=ents;c_ent;c_ent=ents->next) {
-      if(i++<dir_pos)
+    for(c_ent=ents;c_ent;c_ent=c_ent->next) {
+      if(i++<i2)
         ;
       else{
         break;
       }
     }
     if(!c_ent) {
-      Free(buffer);
-      buffer=NULL;
+      goto find_fin;
     }
+    Free(buffer);
+    buffer=MStrPrint("%C/%d/%s",'A'+CPM.drive,CPM.user,c_ent->name);
     DirEntryDel(ents);
     if(buffer)
       goto open;
   }
+find_fin:
+  DirEntryDel(ents);
   zHL=zA=0xff;
   Free(buffer);
   break;
@@ -1771,8 +1781,6 @@ U0 CPM_Z80_Run() {
     Yield;
     cnt=0;
   }
-  //TOSPrint("%p,A:%p,BC:%p,DE:%p,HL:%p\n",zPC&0xffFF,zA&0xffFF,zBC&0xffFF,zDE&0xffFF,zHL&0xffFF);
-  //TOSPrint("%p,%p,%p\n",zPC,Z80.RAM[zPC],Z80.RAM[zPC+1]);
   U0 (*foo)();
   if(zPC>=BIOS_VECTOR_START) {
     Bios;

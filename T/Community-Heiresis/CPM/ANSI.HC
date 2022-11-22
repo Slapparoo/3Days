@@ -59,7 +59,7 @@ U0 TermPrint(U8 *str) {
       Term.escape_buf[Term.escape_buf_idx++]=0;
     }
     Term.cy=MinI64(MaxI64(Term.cy,0),TEXT_ROWS-1);
-    Term.cx=MinI64(MaxI64(Term.cx,0),TEXT_COLS);
+    Term.cx=MinI64(MaxI64(Term.cx,0),TEXT_COLS);
     switch(*str) {
       case 0:break;
       start:
@@ -105,6 +105,7 @@ U0 TermPrint(U8 *str) {
         case 3:
         MemSetU8(&Term.text,' ',TEXT_COLS*(TEXT_ROWS-1));
         MemSetU8(&Term.text_attrs,Term.default_cp,TEXT_COLS*(TEXT_ROWS-1));
+        Term.cy=Term.cx=0;
         break;
       }
       Term.awaiting=FALSE;
