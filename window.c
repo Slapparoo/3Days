@@ -718,13 +718,13 @@ static void __InputLoop(void *ul,int64_t clip_only) {
 			pthread_mutex_unlock(&dw->pt);
 		} else if(e.type==ClientMessage) {
 			if(e.xclient.data.l[0]==wmclose) {
+				bye:
 				__ShutdownCores();
 				DrawWindowDel();
 				exit(0);
 			}
 		} else if(e.type==DestroyNotify){
-			DrawWindowDel();
-			break;
+			goto bye;
 		} else if(e.type==ConfigureNotify&&dw) {
 			if(dw->sz_x!=e.xconfigure.width||dw->sz_y!=e.xconfigure.height)
 				dw->reso_changed=1;

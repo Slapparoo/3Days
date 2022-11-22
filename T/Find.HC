@@ -15,11 +15,13 @@ I64 PopUpFindMenu()
   i=PopUpMenu(doc);
   DocDel(doc);
   return i;
-}
+}
 
 I64 FindFile(U8 *needle_str,U8 *haystack_filename,
 	I64 *_fuf_flags,U8 *replace_text)
 {//Have you confused with $LK,"FileFind",A="MN:FileFind"$()?
+  if(!FilesFindMatch(haystack_filename,FILEMASK_TXT))
+    return 0;
   Bool first_on_line,write_this_file=FALSE,cont=!Bt(_fuf_flags,FUf_CANCEL);
   U8 *src,*dst,*dst2,*name_buf=NULL;
   I64 i,j,plen,rlen,dlen,cnt=0,old_flags,ss_flags;
