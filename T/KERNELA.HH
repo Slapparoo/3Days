@@ -144,7 +144,7 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
-import U0 __3DaysEnableScaling(U8i);
+import U0 __3DaysEnableScaling(U8i);
 import U0 __3DaysSwapRGB();
 import U0 VFsFTrunc(U8i*,I64i);
 import U0 __AwakeCore(I64i);
@@ -966,7 +966,7 @@ public class CHashTable
 
 #define HTT_INVALID		0
 #define HTT_EXPORT_SYS_SYM	0x00001 //CHashExport
-#define HTT_IMPORT_SYS_SYM	0x00002 //CHashImport
+#define HTT_IMPORT_SYS_SYM	0x00002 //CHashImport
 #define HTT_DEFINE_STR		0x00004 //CHashDefineStr
 #define HTT_GLBL_VAR		0x00008 //CHashGlblVar
 #define HTT_CLASS		0x00010 //CHashClass
@@ -3650,6 +3650,7 @@ public class CCPU //The Gs segment reg points to current CCPU.
   I64	kill_jiffy;
   CTSS	*tss;
   I64	start_stk[16];
+  I64	last_yield;
 };
 
 #define MEM_MIN_MEG		512 //512 Meg minimum.
@@ -6534,3 +6535,4 @@ extern F64 GetVolume();
 extern CTextGlbls text;
 extern CTask *sys_task_being_scrn_updated;
 public extern U0 TaskRep();
+extern Bool IsFrozen(CCPU *gs);

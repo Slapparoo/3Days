@@ -166,11 +166,14 @@ public I64 EdLinkCvt(U8 *link_st,U8 **_filename=NULL,U8 **_needle_str=NULL,
   U8 *st,*ptr,*src,*filename=NULL,*needle_str=NULL,*filename2;
   I64 res,i,num=1;
   CHashSrcSym *tmph;
-  if (!link_st||!*link_st) {
+  if (!link_st) {
+empty:
     if (edf_dof_flags&EDF_BAIL)
       return -1;
     link_st=blkdev.tmp_filename;
   }
+  if(!*link_st)
+    goto empty;
   st=StrNew(link_st);
   res=LK_FILE;
   if (StrLen(st)>3 && st[2]==':') {
@@ -191,7 +194,7 @@ public I64 EdLinkCvt(U8 *link_st,U8 **_filename=NULL,U8 **_needle_str=NULL,
 	} else
 	  i=DFT_ADDR_LINK_BIN_SIZE;
 	if (ptr=SrcEdLink(ExePrint("%s;",filename2),i)) {
-	  res=EdLinkCvt(ptr,&filename,&needle_str,&num,edf_dof_flags);
+	  res=EdLinkCvt(ptr,&filename,&needle_str,&num,edf_dof_flags);
 	  Free(ptr);
 	} else
 	  res=-1;
