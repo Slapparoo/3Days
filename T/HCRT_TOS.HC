@@ -61,8 +61,9 @@ CTask *adam_task=Fs;
 CInit;
 #endif
 #include "AMATH.HC"
-#include "FONT.HC"
-#include "FONT2.HC"
+//#include "FONT.HC"
+//#include "FONT2.HC"
+#include "FontStd8x12.HC"
 #include "KMISC.HC"
 #include "KBMESSAGE.HC"
 #include "MOUSE.HC"

@@ -3793,9 +3793,9 @@ public class CTextGlbls
 };
 
 #define GR_WIDTH 1024
-#define GR_HEIGHT 768
+#define GR_HEIGHT 768
 #define FONT_WIDTH 8
-#define FONT_HEIGHT 8
+#define FONT_HEIGHT 12
 #define TEXT_COLS (GR_WIDTH/FONT_WIDTH)
 #define TEXT_ROWS (GR_HEIGHT/FONT_HEIGHT)
 
