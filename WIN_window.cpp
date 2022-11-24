@@ -30,6 +30,7 @@ typedef struct CDrawWindow {
     char *texture_address;
     double dpi;
     ID2D1Factory *factory;
+    ID2D1HwndRenderTarget *target;
     _3DaysRenderer renderer_type; 
 } CDrawWindow;
 static void StartInputScanner();
@@ -44,6 +45,17 @@ CDrawWindow *NewDrawWindow() {
 int32_t buf[640*480];
 int64_t __3DaysSwapRGB() {
 	return 0;
+}
+static void SetWindowSz(int64_t x,int64_t y) {
+	if(!dw) return;
+	if(dw->target)
+		dw->target->Release();
+	D2D1_SIZE_U size=SizeU(dw->sz_x=x,dw->sz_y=y);
+	dw->factory->CreateHwndRenderTarget(
+		RenderTargetProperties(),
+		HwndRenderTargetProperties(dw->win,size),
+		&dw->target
+	);
 }
 void __3DaysEnableScaling(int64_t s) {
 	dw->scaling_enabled=s;
@@ -552,8 +564,8 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 			if(dw->renderer_type==_3D_REND_WIN32_GDI_SCALE) {
 				WaitForSingleObject(mutex,INFINITE);
 				GetClientRect(hwnd,&rct);
-				dw->sz_x=rct.right-rct.left;
-				dw->sz_y=rct.bottom-rct.top;
+				if(dw->sz_x!=rct.right-rct.left||dw->sz_y!=rct.bottom-rct.top)
+					SetWindowSz(rct.right-rct.left,rct.bottom-rct.top);
 				float sx,sy,ox,oy,rx,ry;
 				if(dw->scaling_enabled) {
 					sx=dw->sz_y/480.*640.,sy=dw->sz_y;
@@ -576,27 +588,19 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 				dw->gl_top=-sy;
 				dw->gl_bottom=sy;
 				int64_t x,y,b,b2,mul=4;
-				ID2D1HwndRenderTarget *target=NULL;
 				ID2D1Bitmap *bmp;
-				D2D1_SIZE_U size=SizeU(dw->sz_x,dw->sz_y);
-				dw->factory->CreateHwndRenderTarget(
-					RenderTargetProperties(),
-					HwndRenderTargetProperties(hwnd,size),
-					&target
-				);
-				target->BeginDraw();
+				dw->target->BeginDraw();
 				D2D1_SIZE_U holyres=SizeU(640,480);
 				D2D1_BITMAP_PROPERTIES prop;
 				prop.pixelFormat=PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_IGNORE);
 				prop.dpiX=96;
 				prop.dpiY=96;
-				target->CreateBitmap(holyres,prop,&bmp);
+				dw->target->CreateBitmap(holyres,prop,&bmp);
 				bmp->CopyFromMemory(NULL,dw->texture_address,640*4);
 				D2D1_RECT_F dst_rct=RectF((dw->sz_x-rx)/2,(dw->sz_y-ry)/2,(dw->sz_x-rx)/2+rx,(dw->sz_y-ry)/2+ry);
-				target->DrawBitmap(bmp,&dst_rct,1.0,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,NULL);
-				target->EndDraw();
+				dw->target->DrawBitmap(bmp,&dst_rct,1.0,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,NULL);
+				dw->target->EndDraw();
 				bmp->Release();
-				target->Release();
 				ReleaseMutex(mutex);
 			
 			}
