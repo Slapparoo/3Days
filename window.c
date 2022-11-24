@@ -92,7 +92,7 @@ CDrawWindow *NewDrawWindow() {
 			windowAttribs.override_redirect = True;
 			windowAttribs.colormap = XCreateColormap(dw->disp, RootWindow(dw->disp, screen), dw->visual->visual, AllocNone);
 			windowAttribs.event_mask = ExposureMask;
-			dw->window = XCreateWindow(dw->disp, RootWindow(dw->disp,screen), 0, 0, 640, 480, 0, dw->visual->depth, InputOutput, dw->visual->visual, CWBackPixel | CWColormap | CWBorderPixel | CWEventMask, &windowAttribs);
+			dw->window = XCreateWindow(dw->disp, RootWindow(dw->disp,screen), 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, dw->visual->depth, InputOutput, dw->visual->visual, CWBackPixel | CWColormap | CWBorderPixel | CWEventMask, &windowAttribs);
 			XSelectInput(dw->disp,dw->window,
 				ExposureMask|KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|ButtonMotionMask|Button3MotionMask|Button4MotionMask|Button5MotionMask|FocusChangeMask|StructureNotifyMask);
 			dw->context = glXCreateContext(dw->disp, dw->visual, NULL, GL_TRUE);
@@ -106,7 +106,7 @@ CDrawWindow *NewDrawWindow() {
 			glBindTexture(GL_TEXTURE_2D,dw->gl_texture);
 			glClientActiveTexture(dw->gl_texture);
 			glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
-			glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,640,480,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
+			glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,SCREEN_WIDTH,SCREEN_HEIGHT,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
 			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -114,8 +114,8 @@ CDrawWindow *NewDrawWindow() {
 			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 		} else {
 			dw->renderer_type=_3D_REND_X11_SHM;
-			dw->shm_image=XShmCreateImage(dw->disp,XDefaultVisual(dw->disp,screen),24,ZPixmap,0,&dw->shm_info,640,480);
-			dw->shm_info.shmid=shmget(IPC_PRIVATE,640*480*4,IPC_CREAT|0777);
+			dw->shm_image=XShmCreateImage(dw->disp,XDefaultVisual(dw->disp,screen),24,ZPixmap,0,&dw->shm_info,SCREEN_WIDTH,SCREEN_HEIGHT);
+			dw->shm_info.shmid=shmget(IPC_PRIVATE,SCREEN_WIDTH*SCREEN_HEIGHT*4,IPC_CREAT|0777);
 			dw->shm_info.readOnly=False;
 			dw->shm_info.shmaddr=dw->shm_image->data=shmat(dw->shm_info.shmid,0,0);
 			XShmAttach(dw->disp,&dw->shm_info);
@@ -133,8 +133,8 @@ CDrawWindow *NewDrawWindow() {
 		//Send a prayer to the dude who awnsered this question.
 		wmclose=XInternAtom(dw->disp,"WM_DELETE_WINDOW",False);
 		XSetWMProtocols(dw->disp,dw->window,&wmclose,1);
-		dw->disp_h=480;
-		dw->disp_w=640;
+		dw->disp_h=SCREEN_HEIGHT;
+		dw->disp_w=SCREEN_WIDTH;
 		dw->scaling_enabled=1;
 		pthread_mutex_init(&dw->pt,NULL);
 	}
@@ -599,8 +599,8 @@ static int MSCallback(void *d,XEvent *e) {
 					yd=dw->gl_bottom;
 				yd=(yd-dw->gl_bottom)/(dw->gl_top-dw->gl_bottom);
 				xd=(xd-dw->gl_left)/(dw->gl_right-dw->gl_left);
-				y2=480*yd;
-				x2=640*xd;
+				y2=SCREEN_HEIGHT*yd;
+				x2=SCREEN_WIDTH*xd;
 				FFI_CALL_TOS_4(ms_cb,x2,y2,z,state);
 			} else
 				FFI_CALL_TOS_4(ms_cb,x,y,z,state);
@@ -681,9 +681,9 @@ static void __InputLoop(void *ul,int64_t clip_only) {
 			char *_colors=dw->texture_address;
 			double sx,sy,ox,oy;
 			if(dw->scaling_enabled) {
-				sx=dw->sz_y/480.*640.,sy=dw->sz_y;
+				sx=dw->sz_y/SCREEN_HEIGHT*SCREEN_WIDTH,sy=dw->sz_y;
 				if(dw->sz_x<sx) {
-					sy=dw->sz_x/640.*480.;
+					sy=dw->sz_x/SCREEN_WIDTH*SCREEN_HEIGHT;
 					sx=dw->sz_x;
 				}
 				ox=(dw->sz_x-sx);
@@ -691,7 +691,7 @@ static void __InputLoop(void *ul,int64_t clip_only) {
 				sx=1.-ox/dw->sz_x;
 				sy=1.-oy/dw->sz_y;			
 			} else {
-				sx=640./dw->sz_x,sy=480./dw->sz_y;
+				sx=SCREEN_WIDTH/dw->sz_x,sy=SCREEN_HEIGHT/dw->sz_y;
 			}
 			dw->gl_left=-sx;
 			dw->gl_right=sx;
@@ -709,7 +709,7 @@ static void __InputLoop(void *ul,int64_t clip_only) {
 			glEnable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D,dw->gl_texture);
 			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_ADD);
-			glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,640,480,0,GL_RGBA,GL_UNSIGNED_BYTE,_colors);
+			glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,SCREEN_WIDTH,SCREEN_HEIGHT,0,GL_RGBA,GL_UNSIGNED_BYTE,_colors);
 			char triangles[]={
 				0,1,2,0,3,2
 			};

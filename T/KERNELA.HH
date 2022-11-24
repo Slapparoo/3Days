@@ -144,7 +144,7 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
-import U0 __3DaysEnableScaling(U8i);
+import U0 __3DaysEnableScaling(U8i);
 import U0 __3DaysSwapRGB();
 import U0 VFsFTrunc(U8i*,I64i);
 import U0 __AwakeCore(I64i);
@@ -3787,8 +3787,8 @@ public class CTextGlbls
   U8	border_chars[16];
 };
 
-#define GR_WIDTH 640
-#define GR_HEIGHT 480
+#define GR_WIDTH 1024
+#define GR_HEIGHT 768
 #define FONT_WIDTH 8
 #define FONT_HEIGHT 8
 #define TEXT_COLS (GR_WIDTH/FONT_WIDTH)
