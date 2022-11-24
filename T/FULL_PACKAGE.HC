@@ -13,7 +13,7 @@ static U0 BootstrapImportSymbol(U8 *name,U8 *ptr,I64 type) {
         find(CHashFun*)->exe_addr=ptr;
         Btr(&find(CHashFun*)->flags,Cf_EXTERN);
     } else if(name[0]=='_'||!StrNCmp(name,"SYS",3)) {
-		find=MAlloc(sizeof(CHashExport));
+		find=CAlloc(sizeof(CHashExport));
 		find->str=StrNew(name);
 		find->type=HTT_EXPORT_SYS_SYM;
 		find(CHashExport*)->val=ptr;
@@ -103,4 +103,3 @@ Gs->seth_task=Spawn(&CoreAPSethTask,NULL,"Seth");
 //Dont Exit
 BirthWait(&adam_task);
 DeathWait(&adam_task);
-

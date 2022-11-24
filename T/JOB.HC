@@ -51,7 +51,7 @@ CJob *TaskExe(CTask *srv,CTask *master,U8 *data,I64 flags)
 {//Queues a request to compile and execute src code text.
   CJob *res;
   Bool old;
-  if (!data || !TaskValidate(srv) || master && !TaskValidate(master) ||
+  if (!data || !TaskValidate(srv) || master && !TaskValidate(master) ||
 	srv->popup_task && !Bt(&srv->task_flags,TASKf_FILTER_INPUT))
     return NULL;
   res=CAlloc(sizeof(CJob),adam_task);
@@ -253,7 +253,7 @@ U0 TaskWait(CTask *task=NULL,Bool cmd_line_pmt=FALSE)
   CJob *tmpc1;
   Bool unlock;
   if (!task) task=Fs;
-  \unlock=BreakLock;
+  unlock=BreakLock;
   while (TaskValidate(task)) {
     task1=task->last_input_filter_task;
     tmpc1=&task1->srv_ctrl.next_waiting;
@@ -529,7 +529,7 @@ Bool Kill(CTask *task,Bool wait=TRUE,Bool just_break=FALSE)
 
 
 U0 CoreAPSethTask()
-{
+{
   cpu_structs[__CoreNum]=Gs;
   QueInit(&(Gs->next_dying));
   Gs->num=__CoreNum;
@@ -537,7 +537,7 @@ U0 CoreAPSethTask()
   mp_cores[Gs->num]=Gs;
   CJobCtrl *ctrl=&(Fs->srv_ctrl);
   CTask *task,*task1=Fs;
-  I64 ms,t,last_checkin=__GetTicks;
+  I64 ns,t;
   while (TRUE) {
     do {
       TaskKillDying;
@@ -547,19 +547,19 @@ U0 CoreAPSethTask()
 //LBts(&(Fs->task_flags),TASKf_AWAITING_MSG);
     LBtr(&ctrl->flags,JOBCf_LOCKED);
     LBts(&(Fs->task_flags),TASKf_IDLE);
-    ms=100,t=__GetTicks;
+    ns=0.1*JIFFY_FREQ,t=__GetTicksHP;
     for(task=Fs->next_task;task!=task1;task=task->next_task) {
       if(Bt(&task->task_flags,TASKf_SUSPENDED)||Bt(&task->task_flags,TASKf_AWAITING_MSG))
         goto next;
-      if(!task->wake_jiffy)
-        ms=0;
-      else if(task->wake_jiffy-t<ms)
-        ms=task->wake_jiffy-t;
+      if(!Bt(&task->task_flags,TASKf_IDLE))
+        ns=0;
+      if(task->wake_jiffy-t<ns)
+        ns=task->wake_jiffy-t;
 next:
     }
-    if(ms>=0) {
-      Gs->idle_pt_hits+=ms;
-      __Sleep(ms);
+    if(ns>0) {
+      Gs->idle_pt_hits+=ns;
+      __SleepHP(ns);
     }
     Yield;
     LBtr(&(Fs->task_flags),TASKf_IDLE);

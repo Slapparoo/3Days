@@ -301,6 +301,25 @@ int64_t STK_DrawWindowDel(int64_t *stk) {
     DrawWindowDel();
     return 0;
 }
+int64_t STK__GetTicksHP() {
+	#ifndef TARGET_WIN32
+	struct timespec ts;
+    int64_t theTick = 0U;
+    clock_gettime(CLOCK_REALTIME,&ts);
+    theTick  = ts.tv_nsec / 1000;
+    theTick += ts.tv_sec*1000000U;
+    return theTick;
+    #else
+    static int64_t freq;
+    int64_t cur;
+    if(!freq) {
+		QueryPerformanceFrequency(&freq);
+		freq/=1000000U;
+	}
+	QueryPerformanceCounter(&cur);
+	return cur/freq;
+    #endif
+}
 int64_t STK___GetTicks() {
 	#ifndef TARGET_WIN32
 	//https://stackoverflow.com/questions/2958291/equivalent-to-gettickcount-on-linux
@@ -331,6 +350,10 @@ int64_t STK_SetMSCallback(int64_t *stk) {
 }
 int64_t STK_AwakeFromSleeping(int64_t *stk) {
 	multicAwaken(stk[0]);
+	return 0;
+}
+int64_t STK_SleepHP(int64_t *stk) {
+	multicSleepHP(stk[0]);
 	return 0;
 }
 int64_t STK_Sleep(int64_t *stk) {
@@ -549,6 +572,7 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"GetClipboardText",STK_GetClipboardText,0);
     STK_RegisterFunctionPtr(&ffi_blob,"SndFreq",STK_SndFreq,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__Sleep",&STK_Sleep,1);
+    STK_RegisterFunctionPtr(&ffi_blob,"__SleepHP",&STK_SleepHP,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__AwakeCore",&STK_AwakeFromSleeping,1);
     STK_RegisterFunctionPtr(&ffi_blob,"GetFs",STK_GetFs,0);
     STK_RegisterFunctionPtr(&ffi_blob,"SetFs",STK_SetFs,1);
@@ -600,6 +624,7 @@ void TOS_RegisterFuncPtrs() {
     STK_RegisterFunctionPtr(&ffi_blob,"GetVolume",STK_GetVolume,0);
     STK_RegisterFunctionPtr(&ffi_blob,"SetVolume",STK_SetVolume,1);
     STK_RegisterFunctionPtr(&ffi_blob,"__3DaysSwapRGB",STK___3DaysSwapRGB,0);
+    STK_RegisterFunctionPtr(&ffi_blob,"__GetTicksHP",STK__GetTicksHP,0);
     STK_RegisterFunctionPtr(&ffi_blob,"__3DaysEnableScaling",STK___3DaysEnableScaling,1);
     char *blob=NewVirtualChunk(ffi_blob.length,1);
     memcpy(blob,ffi_blob.data,ffi_blob.length);

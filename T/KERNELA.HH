@@ -144,7 +144,8 @@ extern class CFile;
 extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
-import U0 __3DaysEnableScaling(U8i);
+import U0 __3DaysEnableScaling(U8i);
+import U0 __SleepHP(I64i);
 import U0 __3DaysSwapRGB();
 import U0 VFsFTrunc(U8i*,I64i);
 import U0 __AwakeCore(I64i);
@@ -235,7 +236,10 @@ import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 import U0i UnblockSignals();
+import U64i __GetTicksHP(); 
 #else
+extern U0 __SleepHP(I64i);
+extern U64i __GetTicksHP(); 
 extern U8i *GetCipherPasswd();
 extern U8i __IsValidPtr(U8i *ptr);
 extern U64i UnixNow();
@@ -853,7 +857,7 @@ public class CCntsGlbls
   Bool	time_stamp_calibrated;
 };
 
-#define JIFFY_FREQ		1000 // Hz
+#define JIFFY_FREQ		1e6 // Hz
 #define CDATE_FREQ		49710 // Hz
 #define SYS_TIMER_FREQ		(18333*65536/1000) //Hz
 #define SYS_TIMER0_PERIOD	(65536*182/10/JIFFY_FREQ)
@@ -3650,6 +3654,7 @@ public class CCPU //The Gs segment reg points to current CCPU.
   I64	kill_jiffy;
   CTSS	*tss;
   I64	start_stk[16];
+  I64	last_yield;
 };
 
 #define MEM_MIN_MEG		512 //512 Meg minimum.
@@ -6534,3 +6539,4 @@ extern F64 GetVolume();
 extern CTextGlbls text;
 extern CTask *sys_task_being_scrn_updated;
 public extern U0 TaskRep();
+extern Bool IsFrozen(CCPU *gs);

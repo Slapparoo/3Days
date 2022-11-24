@@ -179,6 +179,52 @@ static void  Awaken(int sig) {
 	longjmp(cores[__core_num].jmp_to,1);
 }
 #endif
+#ifdef TARGET_WIN32
+//https://gist.github.com/Youka/4153f12cf2e17a77314c
+/* Windows sleep in 100ns units */
+BOOLEAN nanosleep(LONGLONG ns){
+	/* Declarations */
+	HANDLE timer;	/* Timer handle */
+	LARGE_INTEGER li;	/* Time defintion */
+	/* Create timer */
+	if(!(timer = CreateWaitableTimer(NULL, TRUE, NULL)))
+		return FALSE;
+	/* Set timer properties */
+	li.QuadPart = -ns;
+	if(!SetWaitableTimer(timer, &li, 0, NULL, NULL, FALSE)){
+		CloseHandle(timer);
+		return FALSE;
+	}
+	/* Start & wait for timer */
+	WaitForSingleObject(timer, INFINITE);
+	/* Clean resources */
+	CloseHandle(timer);
+	/* Slept without problems */
+	return TRUE;
+}
+#endif
+void multicSleepHP(int64_t us) {
+	#ifndef TARGET_WIN32
+	if(!setjmp(cores[__core_num].jmp_to)) {
+		__atomic_store_n(&cores[__core_num].is_sleeping,1,__ATOMIC_RELAXED);
+		signal(SIGPWR,&Awaken);
+		usleep(us);
+	} else {
+		UnblockSignals();
+	}
+	__atomic_store_n(&cores[__core_num].is_sleeping,0,__ATOMIC_RELAXED)	;
+	#else
+	if(us/1000>=14) {
+		EnterCriticalSection(&cores[__core_num].sleep_CS);
+		SleepConditionVariableCS(&cores[__core_num].sleep_cond,&cores[__core_num].sleep_CS,us/1000);
+		LeaveCriticalSection(&cores[__core_num].sleep_CS);
+		us%=1000;
+	}
+	if(us/100)
+		nanosleep(us/100);
+	#endif
+}
+
 void multicSleep(int64_t ms) {
 	#ifndef TARGET_WIN32
 	if(!setjmp(cores[__core_num].jmp_to)) {
