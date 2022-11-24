@@ -185,7 +185,7 @@ U0 TermPrint(U8 *str) {
       if(!Bt(char_bmp_white_space,*str)||*str==' ')
         Term.text[Term.cy][Term.cx++]=*str;
       else
-        Term.cx++;
+        Term.text[Term.cy][Term.cx++]=' ';
       str++;
     }
   }
