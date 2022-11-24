@@ -51,7 +51,7 @@ U0 TaskFocusNext()
   } while (task!=_task);
 }
 I64 GetTicks() {
-	return __GetTicks;
+	return __GetTicksHP;
 }
 U0 SetFs2(CTask *t) {
 	SetFs(t);

@@ -145,6 +145,7 @@ extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
 import U0 __3DaysEnableScaling(U8i);
+import U0 __SleepHP(I64i);
 import U0 __3DaysSwapRGB();
 import U0 VFsFTrunc(U8i*,I64i);
 import U0 __AwakeCore(I64i);
@@ -235,7 +236,10 @@ import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 import U0i UnblockSignals();
+import U64i __GetTicksHP(); 
 #else
+extern U0 __SleepHP(I64i);
+extern U64i __GetTicksHP(); 
 extern U8i *GetCipherPasswd();
 extern U8i __IsValidPtr(U8i *ptr);
 extern U64i UnixNow();
@@ -853,7 +857,7 @@ public class CCntsGlbls
   Bool	time_stamp_calibrated;
 };
 
-#define JIFFY_FREQ		1000 // Hz
+#define JIFFY_FREQ		1e6 // Hz
 #define CDATE_FREQ		49710 // Hz
 #define SYS_TIMER_FREQ		(18333*65536/1000) //Hz
 #define SYS_TIMER0_PERIOD	(65536*182/10/JIFFY_FREQ)
@@ -966,7 +970,7 @@ public class CHashTable
 
 #define HTT_INVALID		0
 #define HTT_EXPORT_SYS_SYM	0x00001 //CHashExport
-#define HTT_IMPORT_SYS_SYM	0x00002 //CHashImport
+#define HTT_IMPORT_SYS_SYM	0x00002 //CHashImport
 #define HTT_DEFINE_STR		0x00004 //CHashDefineStr
 #define HTT_GLBL_VAR		0x00008 //CHashGlblVar
 #define HTT_CLASS		0x00010 //CHashClass

@@ -182,8 +182,10 @@ U0 TermPrint(U8 *str) {
         Term.cy--;
       }
       Term.text_attrs[Term.cy][Term.cx]=Term.cur_cp;
-      if(!Bt(char_bmp_white_space,*str)||*str==' ')
+      if(!Bt(char_bmp_white_space,*str)||*str==' ')
         Term.text[Term.cy][Term.cx++]=*str;
+      else
+        Term.cx++;
       str++;
     }
   }

@@ -116,7 +116,7 @@ return task;
   LBtr(&task->srv_ctrl.flags,JOBCf_LOCKED);
   LBtr(&task->task_flags,TASKf_TASK_LOCK);
 
-  task->wake_jiffy=__GetTicks+DYING_JIFFIES;
+  task->wake_jiffy=__GetTicksHP+DYING_JIFFIES;
   while (LBts(&(Gs->cpu_flags),CPUf_DYING_TASK_QUE))
     PAUSE
   QueIns(task,Gs->last_dying);
