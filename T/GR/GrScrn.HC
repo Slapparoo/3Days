@@ -150,7 +150,7 @@ U0 GrUpdateTextBG()
 {
   I64 reg RSI *dst=gr.dc2->body,reg R13 c,row,col,
 	num_rows=TEXT_ROWS,num_cols=TEXT_COLS,i,j,cur_ch,
-	reg R12 w1=gr.dc2->width_internal,w2=-7*w1+8,w3=7*w1,w4=0;
+	reg R12 w1=gr.dc2->width_internal,w2=-7*w1+8,w3=(FONT_HEIGHT-1)*w1,w4=0;
   U32 *src=gr.text_base;
   Bool blink_flag=Blink;
   U8 *dst2=dst;
@@ -213,22 +213,13 @@ U0 GrUpdateTextBG()
 	  cur_ch.u8[1]=cur_ch.u8[1]<<4+cur_ch.u8[1]>>4;
       }
       c=gr.to_8_colors[cur_ch.u8[1]>>4];
-      MOV	U64 [RSI],R13
-      ADD	RSI,R12
-      MOV	U64 [RSI],R13
-      ADD	RSI,R12
-      MOV	U64 [RSI],R13
-      ADD	RSI,R12
-      MOV	U64 [RSI],R13
-      ADD	RSI,R12
-      MOV	U64 [RSI],R13
-      ADD	RSI,R12
-      MOV	U64 [RSI],R13
-      ADD	RSI,R12
-      MOV	U64 [RSI],R13
-      ADD	RSI,R12
-      MOV	U64 [RSI],R13
-      dst(U8 *)+=w2;
+      I64 *dstTmp = dst, ix;
+      for (ix = 0; ix < FONT_HEIGHT; ix++, dst+=TEXT_COLS) {
+        MOV	U64 [RSI],R13
+      }
+      dst = dstTmp;
+      dst++;
+
     }
     src+=w4;
     dst(U8 *)+=w3;
@@ -239,7 +230,7 @@ U0 GrUpdateTextFG()
 {//See \dLK,"TextBase Layer",A="HI:TextBase Layer"\d.
   U32 *src=gr.text_base;
   I64 i,j,cur_ch,*dst=gr.dc2->body,
-	w1=gr.dc2->width_internal,w2=7*w1,w4=0,
+	w1=gr.dc2->width_internal,w2=(FONT_HEIGHT-1)*w1,w4=0,
 	num_rows=TEXT_ROWS,num_cols=TEXT_COLS,row,col;
   U8 *dst_start=gr.dc2->body,*dst_end=dst_start+w1*gr.dc2->height-7*w1-8;
   Bool blink_flag=Blink;
@@ -284,9 +275,11 @@ U0 GrUpdateTextFG()
 	if (i&0x10) i|=~0x1F;
 	i=w1*i+j;
 	if (dst_start<=dst(U8 *)+i<dst_end)
-	  GrRopEquU8NoClipping(cur_ch&(ATTRF_UNDERLINE+0xFFF),dst(U8 *)+i,w1);
+// remove underline	  GrRopEquU8NoClipping(cur_ch&(ATTRF_UNDERLINE+0xFFF),dst(U8 *)+i,w1);
+	  GrRopEquU8NoClipping(cur_ch&0xFFF,dst(U8 *)+i,w1);
       } else
-	GrRopEquU8NoClipping(cur_ch&(ATTRF_UNDERLINE+0xFFF),dst,w1);
+	GrRopEquU8NoClipping(cur_ch&0xFFF,dst,w1);
+// remove underline	GrRopEquU8NoClipping(cur_ch&(ATTRF_UNDERLINE+0xFFF),dst,w1);
       dst(U8 *)+=8;
     }
     src+=w4;
@@ -298,12 +291,10 @@ U0 DCBlotColor8(CDC *dc,CDC *img)
 {
   U8  *src=img->body,*b0=dc->body;
   I64 j,k,d0=img->width_internal*img->height;
-  for (k=0;k<d0;k++) {
+  for (k=0;k<d0;k++, b0++) {
     j=*src++;
     if (j!=TRANSPARENT)
-      *b0++=j;
-    else
-      b0++;
+      *b0=j;
   }
 }
 
@@ -431,7 +422,7 @@ U0 SetScaleResolution(I64 w,I64 h) {
     scale_h=MinI64(h,scale_h);
     if(scale_w>w) {
       //If we cant scale across,decrease height
-      scale_h=ToF64(w)/640.*480;
+      scale_h=ToF64(w)/GR_WIDTH*GR_HEIGHT;
       scale_w=MinI64(w,scale_w);
     }
     scale_scrn_yoff=(h-scale_h)/2;
@@ -452,10 +443,10 @@ U0 ScaleMouseCords(I64 *x,I64 *y) {
   I64 x2=*x,y2=*y;
   x2-=scale_scrn_xoff;
   y2-=scale_scrn_yoff;
-  x2=(ToF64(x2)/scale_w*640.);
-  y2=(ToF64(y2)/scale_h*480.);
-  x2=ClampI64(x2,0,640);
-  y2=ClampI64(y2,0,480);
+  x2=(ToF64(x2)/scale_w*GR_WIDTH);
+  y2=(ToF64(y2)/scale_h*GR_HEIGHT);
+  x2=ClampI64(x2,0,GR_WIDTH);
+  y2=ClampI64(y2,0,GR_HEIGHT);
   *x=x2;
   *y=y2;
 }
@@ -508,7 +499,7 @@ U0 GrUpdateScrn()
 }
 U0 EnableScaling(Bool on=FALSE) {
   I64 w,h;
-  __3DaysEnableScaling(on);
+  __3DaysEnableScaling(on);
   if(!on) {
     while(LBts(&scale_lock,0))
       Yield;
@@ -525,12 +516,12 @@ U0 EnableScaling(Bool on=FALSE) {
     h=screen_h;
     w=MaxI64(GR_WIDTH,w);
     h=MaxI64(GR_HEIGHT,h);
-    scale_w=ToF64(h)/480.*640.;
+    scale_w=ToF64(h)/GR_WIDTH*GR_HEIGHT;
     scale_h=h;
     scale_h=MinI64(h,scale_h);
     if(scale_w>w) {
 //If we cant scale across,decrease height
-      scale_h=ToF64(w)/640.*480;
+      scale_h=ToF64(w)/GR_WIDTH*GR_HEIGHT;
       scale_w=MinI64(w,scale_w);
     }
     scale_scrn_yoff=(h-scale_h)/2;

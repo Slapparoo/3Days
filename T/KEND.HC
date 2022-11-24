@@ -11,8 +11,8 @@ U0 SysGlblsInit() {
 	pow10_I64=CAlloc(sizeof(F64)*(308+308+1));
 	for (i=-308;i<309;i++)
 		pow10_I64[i+309]=Pow(10.,i);
-    text.font=sys_font_std;
-    text.aux_font=sys_font_cyrillic;
+    text.font=sys_font_std_8x12;
+    text.aux_font=sys_font_block_8x12;
     text.cols=GR_WIDTH/FONT_WIDTH;
     text.rows=GR_HEIGHT/FONT_HEIGHT;
     text.raw_scrn_image=CAlloc(GR_WIDTH*GR_HEIGHT/8);
