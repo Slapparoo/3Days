@@ -62,6 +62,9 @@ void *Load(char *fn,int64_t ld_flags);
 #define HTT_HELP_FILE		0x08000 //CHashSrcSym
 #define HTT_FRAME_PTR		0x10000 //CHashGeneric
 #define HTG_TYPE_MASK		0x1FFFF
+#define SCREEN_WIDTH        1024
+#define SCREEN_HEIGHT       768
+
 typedef struct {
     int64_t type;
     union {

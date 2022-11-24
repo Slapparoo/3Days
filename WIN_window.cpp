@@ -42,7 +42,7 @@ CDrawWindow *NewDrawWindow() {
 	}
 	return dw;
 }
-int32_t buf[640*480];
+int32_t buf[SCREEN_WIDTH*SCREEN_HEIGHT];
 int64_t __3DaysSwapRGB() {
 	return 0;
 }
@@ -397,8 +397,8 @@ static int MSCallback(HWND hwnd,void *d,UINT msg,WPARAM w,LPARAM e) {
 					yd=dw->gl_bottom;
 				yd=(yd-dw->gl_bottom)/(dw->gl_top-dw->gl_bottom);
 				xd=(xd-dw->gl_left)/(dw->gl_right-dw->gl_left);
-				y2=480*yd;
-				x2=640*xd;
+				y2=SCREEN_HEIGHT*yd;
+				x2=SCREEN_WIDTH*xd;
 				FFI_CALL_TOS_4(ms_cb,x2,y2,z,state);
 			} else
 				FFI_CALL_TOS_4(ms_cb,x,y,z,state);
@@ -444,8 +444,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,PSTR lpCmdLine, 
 		NULL,
 		NULL,
 		NULL,
-		ceil(640*dpi/96.), //Windows makes the window smaller for some reason
-		ceil(480*dpi/96.),
+		ceil(SCREEN_WIDTH*dpi/96.), //Windows makes the window smaller for some reason
+		ceil(SCREEN_HEIGHT*dpi/96.),
 		SWP_NOMOVE
 	);
 	NewDrawWindow()->win=hwnd;
@@ -568,9 +568,9 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 					SetWindowSz(rct.right-rct.left,rct.bottom-rct.top);
 				float sx,sy,ox,oy,rx,ry;
 				if(dw->scaling_enabled) {
-					sx=dw->sz_y/480.*640.,sy=dw->sz_y;
+					sx=dw->sz_y/480.*SCREEN_WIDTH.,sy=dw->sz_y;
 					if(dw->sz_x<sx) {
-						sy=dw->sz_x/640.*480.;
+						sy=dw->sz_x/SCREEN_WIDTH.*SCREEN_HEIGHT.;
 						sx=dw->sz_x;
 					}
 					rx=sx;
@@ -580,8 +580,8 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 					sx=1.-ox/dw->sz_x;
 					sy=1.-oy/dw->sz_y;			
 				} else {
-					sx=640./dw->sz_x,sy=480./dw->sz_y;
-					rx=640;ry=480;
+					sx=SCREEN_WIDTH./dw->sz_x,sy=SCREEN_HEIGHT./dw->sz_y;
+					rx=SCREEN_WIDTH;ry=SCREEN_HEIGHT;
 				}
 				dw->gl_left=-sx;
 				dw->gl_right=sx;
@@ -590,13 +590,13 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 				int64_t x,y,b,b2,mul=4;
 				ID2D1Bitmap *bmp;
 				dw->target->BeginDraw();
-				D2D1_SIZE_U holyres=SizeU(640,480);
+				D2D1_SIZE_U holyres=SizeU(SCREEN_WIDTH,SCREEN_HEIGHT);
 				D2D1_BITMAP_PROPERTIES prop;
 				prop.pixelFormat=PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_IGNORE);
 				prop.dpiX=96;
 				prop.dpiY=96;
 				dw->target->CreateBitmap(holyres,prop,&bmp);
-				bmp->CopyFromMemory(NULL,dw->texture_address,640*4);
+				bmp->CopyFromMemory(NULL,dw->texture_address,SCREEN_WIDTH*4);
 				D2D1_RECT_F dst_rct=RectF((dw->sz_x-rx)/2,(dw->sz_y-ry)/2,(dw->sz_x-rx)/2+rx,(dw->sz_y-ry)/2+ry);
 				dw->target->DrawBitmap(bmp,&dst_rct,1.0,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,NULL);
 				dw->target->EndDraw();
