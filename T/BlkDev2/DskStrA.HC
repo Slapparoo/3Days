@@ -154,7 +154,7 @@ U8 *DirNameAbs(U8 *_dirname)
     else if (*buf4) {
       if (StrCmp(buf3,"/"))
 	CatPrint(buf3,"/");
-      CatPrint(buf3,buf4);
+      CatPrint(buf3,buf4);
     }
   }
   Free(buf);
@@ -310,6 +310,11 @@ returns default.
     ext=StrNew("");
   while (StrOcc(st,'/')&&!IsDir(st))
     StrLastRem(st,"/");
+//Changed by nroot,I made it this way so "T:/some_file" will strip down to "T:/".
+//This is important as EdCodeTools calls this to get the directory name
+//This may make bugs for ultra othodox code,but I think it will fix more bugs
+  if(StrLen(st)==2&&st[1]==':')
+    return st;
   while (StrOcc(st,'/')) {
     st2=StrNew(st);
     st3=StrNew(st);
