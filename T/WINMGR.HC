@@ -13,7 +13,7 @@ public U0 Refresh(I64 cnt=1,Bool force=FALSE)
     LBts(&sys_semas[SEMA_JUST_PUMP_MSGS],0);
   while (Bt(&sys_semas[SEMA_REFRESH_IN_PROGRESS],0)) {
     if (force && sys_winmgr_task)
-      sys_winmgr_task->wake_jiffy=__GetTicks;
+      sys_winmgr_task->wake_jiffy=__GetTicksHP;
     Yield;
   }
   if (cnt>1 && old_doc)
@@ -21,7 +21,7 @@ public U0 Refresh(I64 cnt=1,Bool force=FALSE)
   update_cnt=winmgr.updates+cnt;
   while (winmgr.updates<update_cnt) {
     if (force && sys_winmgr_task)
-      sys_winmgr_task->wake_jiffy=__GetTicks;
+      sys_winmgr_task->wake_jiffy=__GetTicksHP;
     Sleep(1);
   }
   if (old_doc)
@@ -190,7 +190,7 @@ U0 WinCalcIdles()
   winmgr.ideal_refresh_tS=tS;
   if ((t->calc_idle_delta_time=
 	(calc_idle_time=tS)-t->last_calc_idle_time)>.5) {
-    total_jiffies=__GetTicks;
+    total_jiffies=__GetTicksHP;
     for (i=0;i<mp_cnt;i++)
       idle_pt_hits[i]=cpu_structs[i]->idle_pt_hits;
     total_jiffies_delta=total_jiffies-t->last_total_jiffies;
@@ -258,7 +258,7 @@ I64 WinMgrSleep(Bool flush_msgs=FALSE)
     t=tS+WINMGR_PERIOD/8;
     while (winmgr.ideal_refresh_tS<t)
       winmgr.ideal_refresh_tS+=WINMGR_PERIOD;
-    timeout_val=__GetTicks+(winmgr.ideal_refresh_tS-tS)*JIFFY_FREQ;
+    timeout_val=__GetTicksHP+(winmgr.ideal_refresh_tS-tS)*JIFFY_FREQ;
     LBts(&sys_semas[SEMA_REFRESH_IN_PROGRESS],0);
     GrUpdateScrn;
     LBtr(&sys_semas[SEMA_REFRESH_IN_PROGRESS],0);
@@ -852,5 +852,5 @@ public F64 SetFPS(F64 target) {
   F64 ret=target_fps;
   if(target>100.) target=99.;
   target_fps=target;
-  return ret;
+  return ret;
 }

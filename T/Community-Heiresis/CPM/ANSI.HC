@@ -30,21 +30,15 @@ MemSet(&Term,0,sizeof CANSITerm);
 Term.cur_cp=Term.default_cp=BLACK<<4|WHITE;
 MemSetU8(Term.text,' ',TEXT_COLS*(TEXT_ROWS-1));
 MemSetU8(Term.text_attrs,Term.default_cp,TEXT_COLS*(TEXT_ROWS-1));
-U0 DrawTerm(CTask *,CDC *dc) {
-  I64 x,y;
+U0 DrawTerm(CTask *task,CDC *dc) {
+  I64 x,y,attr;
   for(x=0;x!=TEXT_COLS;x++) {
     for(y=0;y!=TEXT_ROWS-1;y++) {
-      if(x!=Term.cx||y!=Term.cy) {
-        dc->color=Term.text_attrs[y][x]>>4;
-        GrRect(dc,x*FONT_WIDTH,y*FONT_HEIGHT,FONT_WIDTH,FONT_HEIGHT);
-        dc->color=Term.text_attrs[y][x]&0xf;
-        GrPrint(dc,x*FONT_WIDTH,y*FONT_HEIGHT,"%c",Term.text[y][x]);
-      } else {
-        dc->color=Term.text_attrs[y][x]&0xf;
-        GrRect(dc,x*FONT_WIDTH,y*FONT_HEIGHT,FONT_WIDTH,FONT_HEIGHT);
-        dc->color=Term.text_attrs[y][x]>>$ER$4;
-        GrPrint(dc,x*FONT_WIDTH,y*FONT_HEIGHT,"%c",Term.text[y][x]);
-      }
+      //See TextBase layer in Help index
+      attr=Term.text[y][x]|(Term.text_attrs[y][x]>>4)<<12|(Term.text_attrs[y][x]&0xf)<<8;
+      if(x==Term.cx&&y==Term.cy)
+        attr|=1<<29;
+      TextChar(task,FALSE,x,y,attr);
     }
   }
 }
@@ -105,7 +99,7 @@ U0 TermPrint(U8 *str) {
         case 3:
         MemSetU8(&Term.text,' ',TEXT_COLS*(TEXT_ROWS-1));
         MemSetU8(&Term.text_attrs,Term.default_cp,TEXT_COLS*(TEXT_ROWS-1));
-        Term.cy=Term.cx=0;
+        Term.cy=Term.cx=0;
         break;
       }
       Term.awaiting=FALSE;
@@ -188,7 +182,10 @@ U0 TermPrint(U8 *str) {
         Term.cy--;
       }
       Term.text_attrs[Term.cy][Term.cx]=Term.cur_cp;
-      Term.text[Term.cy][Term.cx++]=*str;
+      if(!Bt(char_bmp_white_space,*str)||*str==' ')
+        Term.text[Term.cy][Term.cx++]=*str;
+      else
+        Term.text[Term.cy][Term.cx++]=' ';
       str++;
     }
   }

@@ -1,4 +1,4 @@
-U8 sys_var_init_flag=1;
+U8 sys_var_init_flag=0;
 U8 sys_var_init_val=0;
 #include "TEMPLATES.HC"
 #include "CEXT.HH"

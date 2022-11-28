@@ -51,7 +51,7 @@ U0 TaskFocusNext()
   } while (task!=_task);
 }
 I64 GetTicks() {
-	return __GetTicks;
+	return __GetTicksHP;
 }
 U0 SetFs2(CTask *t) {
 	SetFs(t);
@@ -293,21 +293,21 @@ END_FOCUS_USER:
 _extern _TASK_CONTEXT_RESTORE U0 TaskContextRestore(); //Restore a task context.
 _extern _YIELD U0 _Yield(); //Yield cpu to next task.
 
+Bool IsFrozen(CCPU *gs) {
+  if(!gs) gs=Gs;
+  return (__GetTicks>=gs->last_yield+ToI64(0.05*1000));
+}
+
 U0 Yield() {
-	PUSH RSI
-	_Yield;
-	POP RSI
+  PUSH RSI
+  _Yield;
+  Gs->last_yield=__GetTicks;
+  POP RSI
 }
 U0 ub2() {
-  UnblockSignals;
+  UnblockSignals;
 }
 asm {
 __InteruptCoreRoutine::
-  PUSHFD
-  PUSH_REGS
-  CALL &ub2
-  CALL &Yield
-  POP_REGS;
-  POPFD
-  RET
+  CALL _BREAK;
 }

@@ -488,8 +488,10 @@ static U0 _Exit() {
 }
 static U0 KBCb(I64 c,I64 s) {
   U8 *old_rip;
+  F64 time_out;
+  I64 old_idle_pt_hits;
   while(LBts(&kb_mtx,0))
-    PAUSE;
+    PAUSE;
   SetFs(adam_task);
   kbd.last_down_scan_code=s;
   kbd.scan_code=s;
@@ -505,12 +507,21 @@ static U0 KBCb(I64 c,I64 s) {
     if(c=='c') {
        if(!Bt(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_C)) {
          LBts(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_C);
-         InteruptCore(0);
+         goto await_yeild;
        }
     } else if(c=='x') {
       if(!Bt(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_X)) {
         LBts(&SYS_CTRL_ALT_FLAGS,CTRL_ALT_X);
-        InteruptCore(0);
+        await_yeild:
+        time_out=__GetTicks;
+        while(time_out-__GetTicks<ToI64(0.05*1000)) {
+          if(IsFrozen(cpu_structs[0])) {
+            InteruptCore(0);
+            break;
+          } else
+            break;
+          __Sleep(2);
+        }
       }
     }
   }

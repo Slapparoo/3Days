@@ -145,6 +145,7 @@ extern class CCPU;
 extern class CDyadStream;
 #ifdef IMPORT_BUILTINS
 import U0 __3DaysEnableScaling(U8i);
+import U0 __SleepHP(I64i);
 import U0 __3DaysSwapRGB();
 import U0 VFsFTrunc(U8i*,I64i);
 import U0 __AwakeCore(I64i);
@@ -235,7 +236,10 @@ import U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
 import I64i __InBounds(U8i *,I64i sz);
 import U8i *__CmdLineBootText();
 import U0i UnblockSignals();
+import U64i __GetTicksHP(); 
 #else
+extern U0 __SleepHP(I64i);
+extern U64i __GetTicksHP(); 
 extern U8i *GetCipherPasswd();
 extern U8i __IsValidPtr(U8i *ptr);
 extern U64i UnixNow();
@@ -354,7 +358,7 @@ extern class CJobCtrl;
 #define F64_MIN (0xFFEFFFFFFFFFFFFF(F64))
 #define inf	(0x7FF0000000000000(F64))
 #define pi	(0x400921FB54442D18(F64))
-#define ã pi
+#define \E3 pi
 #define exp_1	(0x4005BF0A8B145769(F64)) //The number "e"
 #define log2_10 (0x400A934F0979A371(F64))
 #define log2_e	(0x3FF71547652B82FE(F64))
@@ -853,7 +857,7 @@ public class CCntsGlbls
   Bool	time_stamp_calibrated;
 };
 
-#define JIFFY_FREQ		1000 // Hz
+#define JIFFY_FREQ		1e6 // Hz
 #define CDATE_FREQ		49710 // Hz
 #define SYS_TIMER_FREQ		(18333*65536/1000) //Hz
 #define SYS_TIMER0_PERIOD	(65536*182/10/JIFFY_FREQ)
@@ -1843,7 +1847,7 @@ public class CAutoCompleteDictGlbls
 #define OPTf_KEEP_PRIVATE	0x21
 #define OPTf_NO_REG_VAR		0x22  //Applied to funs, not stmts
 #define OPTf_GLBLS_ON_DATA_HEAP	0x23
-//Disable 10-byte float consts for ã,log2_10,log10_2,loge_2
+//Disable 10-byte float consts for \E3,log2_10,log10_2,loge_2
 #define OPTf_NO_BUILTIN_CONST	0x24 //Applied to funs, not stmts
 #define OPTf_USE_IMM64		0x25 //Not completely implemented
 #define OPTf_BOUNDS_CHECK 0x26    
@@ -3650,6 +3654,7 @@ public class CCPU //The Gs segment reg points to current CCPU.
   I64	kill_jiffy;
   CTSS	*tss;
   I64	start_stk[16];
+  I64	last_yield;
 };
 
 #define MEM_MIN_MEG		512 //512 Meg minimum.
@@ -4575,9 +4580,9 @@ public extern I64 *Mat4x4MulMat4x4Equ(I64 *dst,I64 *m1,I64 *m2);
 public extern I64 *Mat4x4MulMat4x4New(I64 *m1,I64 *m2,CTask *mem_task=NULL);
 public extern I64 *Mat4x4Equ(I64 *dst,I64 *src);
 public extern I64 *Mat4x4New(I64 *src,CTask *mem_task=NULL);
-public extern I64 *Mat4x4RotX(I64 *m,F64 è);
-public extern I64 *Mat4x4RotY(I64 *m,F64 ê);
-public extern I64 *Mat4x4RotZ(I64 *m,F64 é);
+public extern I64 *Mat4x4RotX(I64 *m,F64 \E8);
+public extern I64 *Mat4x4RotY(I64 *m,F64 \EA);
+public extern I64 *Mat4x4RotZ(I64 *m,F64 \E9);
 public extern I64 *Mat4x4Scale(I64 *m,F64 s);
 public extern U0 DCThickScale(CDC *dc=NULL);
 public extern I64 *Mat4x4TranslationEqu(I64 *r,I64 x,I64 y,I64 z);
@@ -4685,9 +4690,9 @@ public extern U0 Sprite3(CDC *dc=NULL,I64 x,I64 y,I64 z,U8 *elems,
 	Bool just_one_elem=FALSE);
 public extern U0 Sprite3B(CDC *dc=NULL,I64 x,I64 y,I64 z,U8 *elems);
 public extern U0 Sprite3Mat4x4B(CDC *dc=NULL,I64 x,I64 y,I64 z,U8 *elems,I64 *m);
-public extern U0 Sprite3XB(CDC *dc=NULL,I64 x,I64 y,I64 z,U8 *elems,F64 è=0);
-public extern U0 Sprite3YB(CDC *dc=NULL,I64 x,I64 y,I64 z,U8 *elems,F64 ê=0);
-public extern U0 Sprite3ZB(CDC *dc=NULL,I64 x,I64 y,I64 z,U8 *elems,F64 é=0);
+public extern U0 Sprite3XB(CDC *dc=NULL,I64 x,I64 y,I64 z,U8 *elems,F64 \E8=0);
+public extern U0 Sprite3YB(CDC *dc=NULL,I64 x,I64 y,I64 z,U8 *elems,F64 \EA=0);
+public extern U0 Sprite3ZB(CDC *dc=NULL,I64 x,I64 y,I64 z,U8 *elems,F64 \E9=0);
 public extern U0 SpriteExtents(U8 *elems,I64 *min_x=NULL,I64 *max_x=NULL,
 				   I64 *min_y=NULL,I64 *max_y=NULL);
 public extern CDC *Sprite2DC(U8 *elems);
@@ -5411,10 +5416,10 @@ class CTransformForm
   F64 x_scale	format "\dDA-TRM,A=\"X Scale :%12.6f\"\d\n";
   F64 y_scale	format "\dDA-TRM,A=\"Y Scale :%12.6f\"\d\n";
   F64 z_scale	format "\dDA-TRM,A=\"Z Scale :%12.6f\"\d\n";
-  F64 é_z	format "\nAngles are in degrees\n"
+  F64 \E9_z	format "\nAngles are in degrees\n"
 		       "\dDA-TRM,A=\"Z-Axis  :%12.6f\"\d\n";
-  F64 é_y	format "\dDA-TRM,A=\"Y-Axis  :%12.6f\"\d\n";
-  F64 é_x	format "\dDA-TRM,A=\"X-Axis  :%12.6f\"\d\n";
+  F64 \E9_y	format "\dDA-TRM,A=\"Y-Axis  :%12.6f\"\d\n";
+  F64 \E9_x	format "\dDA-TRM,A=\"X-Axis  :%12.6f\"\d\n";
   F64 x_offset	format "\n\dDA-TRM,A=\"X Offset:%12.6f\"\d\n";
   F64 y_offset	format "\dDA-TRM,A=\"Y Offset:%12.6f\"\d\n";
   F64 z_offset	format "\dDA-TRM,A=\"Z Offset:%12.6f\"\d\n";
@@ -6534,3 +6539,4 @@ extern F64 GetVolume();
 extern CTextGlbls text;
 extern CTask *sys_task_being_scrn_updated;
 public extern U0 TaskRep();
+extern Bool IsFrozen(CCPU *gs);

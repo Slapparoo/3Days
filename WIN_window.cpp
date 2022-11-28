@@ -30,6 +30,7 @@ typedef struct CDrawWindow {
     char *texture_address;
     double dpi;
     ID2D1Factory *factory;
+    ID2D1HwndRenderTarget *target;
     _3DaysRenderer renderer_type; 
 } CDrawWindow;
 static void StartInputScanner();
@@ -44,6 +45,17 @@ CDrawWindow *NewDrawWindow() {
 int32_t buf[SCREEN_WIDTH*SCREEN_HEIGHT];
 int64_t __3DaysSwapRGB() {
 	return 0;
+}
+static void SetWindowSz(int64_t x,int64_t y) {
+	if(!dw) return;
+	if(dw->target)
+		dw->target->Release();
+	D2D1_SIZE_U size=SizeU(dw->sz_x=x,dw->sz_y=y);
+	dw->factory->CreateHwndRenderTarget(
+		RenderTargetProperties(),
+		HwndRenderTargetProperties(dw->win,size),
+		&dw->target
+	);
 }
 void __3DaysEnableScaling(int64_t s) {
 	dw->scaling_enabled=s;
@@ -568,8 +580,8 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 					sx=1.-ox/dw->sz_x;
 					sy=1.-oy/dw->sz_y;			
 				} else {
-					sx=SCREEN_WIDTH./dw->sz_x,sy=480./dw->sz_y;
-					rx=SCREEN_WIDTH;ry=480;
+					sx=SCREEN_WIDTH./dw->sz_x,sy=SCREEN_HEIGHT./dw->sz_y;
+					rx=SCREEN_WIDTH;ry=SCREEN_HEIGHT;
 				}
 				dw->gl_left=-sx;
 				dw->gl_right=sx;
@@ -584,8 +596,8 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) {
 					HwndRenderTargetProperties(hwnd,size),
 					&target
 				);
-				target->BeginDraw();
-				D2D1_SIZE_U holyres=SizeU(SCREEN_WIDTH,480);
+				dw->target->BeginDraw();
+				D2D1_SIZE_U holyres=SizeU(SCREEN_WIDTH,SCREEN_HEIGHT);
 				D2D1_BITMAP_PROPERTIES prop;
 				prop.pixelFormat=PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_IGNORE);
 				prop.dpiX=96;
