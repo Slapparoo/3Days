@@ -1,4 +1,4 @@
-#/bin/tcsh
+#!/bin/tcsh
 set STAGEDIR = `pwd`/debian
 mkdir -p ${STAGEDIR}
 if -e ${STAGEDIR}/usr then
@@ -29,5 +29,5 @@ foreach f ($files)
     endif
 end
 cd -
-rm -r T/T
+--rm -r T/T
 dpkg-deb --build debian 3days.deb

@@ -1,4 +1,5 @@
-$WW,1$$FG,5$$TX+CX,"Command Line Overview"$$FG$
+
+$WW,1$$FG,5$$TX+CX,"Command Line Overview"$$FG$
 
 The cmd line feeds into the $LK,"HolyC",A="FI:::/Doc/HolyC.DD"$ compiler line-by-line as you type.  A stmt outside a function executes immediately.  Remember to add a semicolon.$WW,1$
 

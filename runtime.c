@@ -88,7 +88,7 @@ static void STK_DyadSetReadCallback(int64_t *stk) {
 static void DyadListenCB(dyad_Event *e) {
 	FFI_CALL_TOS_2(e->udata,e->remote,e->udata2);
 }
-static STK_DyadSetOnListenCallback(int64_t *stk) {
+static void STK_DyadSetOnListenCallback(int64_t *stk) {
 	dyad_addListener(stk[0],DYAD_EVENT_ACCEPT,&DyadListenCB,stk[1],stk[2]);
 }
 #endif
