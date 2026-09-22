@@ -13,7 +13,6 @@ extern class CFile;
 #define REGT_R32	3
 #define REGT_R64	4
 #define REGT_SEG	5
-#define REGT_FSTK	6
 #define REGT_MM		7
 #define REGT_XMM	8
 
@@ -286,8 +285,8 @@ public extern U8i *CAlloc(I64i size,CTask *t=0);
 public extern U0i TOSPrint(U8i *,...);
 public extern U0 Exit();
 public extern U8 *__GetStr(U8 *pmt="");
-extern U0 __SetThreadPtr(U0 *_3dt,U8 *ptr);
-extern U0 __BootstrapForeachSymbol(U0 *fptr);
+extern U0 __SetThreadPtr(U8 *_3dt,U8 *ptr);
+extern U0 __BootstrapForeachSymbol(U8 *fptr);
 extern C3DaysDrawWin *DrawWindowNew();
 extern U0i DrawWindowUpdate(C3DaysDrawWin *win,U8i *,I64i,I64i);
 extern C3DaysDrawWin *DrawWindowDel(C3DaysDrawWin *);
