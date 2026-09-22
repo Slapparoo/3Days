@@ -29,5 +29,5 @@ foreach f ($files)
     endif
 end
 cd -
---rm -r T/T
+##rm -r T/T
 dpkg-deb --build debian 3days.deb
