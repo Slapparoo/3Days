@@ -53,7 +53,10 @@ array sizes, global initializers, and every expression position; adjacent
 string literals concatenate), block scopes with C shadowing and
 `static` block objects on arena storage (M21), aggregate initializers
 (`int a[4]={1,2,3,4};`, `int a[]`/`int m[][3]`/`char s[]` size deduction,
-`char s[]="text"` byte init) (M22) and struct/union initializers (M23),
+`char s[]="text"` byte init) (M22) and struct/union initializers (M23)
+— and their elements may be POINTER values: string literals, a DEFINED
+function name, or `&global` (M24: `char *tab[]={"a","b"};`,
+`int (*gf)(int)=f;`, `struct L gl={&gi,4};`)
 `for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
 `do-while` (M14), `goto`/labels and the conditional `?:` (M16),
 functions (forward refs,
@@ -84,6 +87,18 @@ unsigned long size_t;`), a line-oriented preprocessor-lite, and the
 adapted-musl (MIT) headers in `T:/CC/INC/`: stdio.h, stdlib.h,
 string.h, stddef.h (guarded, include each other by plain name).
 
+Silent deviation (wrong result, no diagnostic): **array decay erases the
+element's type.** Subscripting a decayed pointer element a second time —
+`char *tab[2]; tab[0]="xy"; tab[0][0]` — falls back to the model's
+default element scale (4) and a 4-byte load, so it yields the string's
+low 16 bits (31096 for `"xy"`) instead of `'x'`. `tab[0][1]` is off by
+the same scale. Copying through a pointer first (`p=tab[0]; p[0]`),
+dereferencing (`*tab[0]`), `strlen(tab[0])` and single subscripts are all
+correct, and `int *ap[]` looks right by accident (the default matches an
+int element). Fixing it means carrying the element's TYPE through decay
+into the second subscript — M25's target; until then, pointer arrays are
+safe to build and pass around, less safe to subscript twice.
+
 Not supported — each currently fails with a compile diagnostic:
 
 - Multi-declarator globals must not hide a function: `int a,b();` is
@@ -100,11 +115,22 @@ Not supported — each currently fails with a compile diagnostic:
   nested deeper than the array's rank diagnose for the same reason. A
   512-value cap (CC_INIT_MAX) bounds one initializer. Designators
   (`[0]=x`, `.x=x`) are not supported; struct arrays and function-pointer
-  arrays keep their existing rejections; a global/static array whose
-  elements need a CODE address (a function table) cannot initialize yet —
-  arena values are saved as raw bytes and only code sites carry
-  relocations. `extern int a[];` (an incomplete array declared extern) is
+  arrays keep their existing rejections; pointer elements work since M24
+  (strings, defined function names, `&globals`) because the arena slots
+  they fill carry relocations of their own. `extern int a[];` (an incomplete array declared extern) is
   "array size missing". Braced SCALARS are accepted (`int x={5};`).
+  Initializer VALUE edges (M24): a pointer element in a non-pointer array
+  is accepted (`int a[2]={"ab"};` stores the address where C warns); a
+  function name must be DEFINED by then (a bare forward reference is
+  "not a compile-time constant", a prototype-only name "initializer refers
+  to a function that is not defined yet" — no arena slot means no patch
+  queue); the address of a frame LOCAL is accepted in ordinary assignment
+  (C-legal, emitted store) but refused inside a brace list, where values
+  must fold ("initializer must be a constant, a string, or the address of
+  a function or global"). String literals live in the writable data arena,
+  so mutating one through any slot works here (`wbuf[0]='Z'`); C would put
+  the literal in `.rodata` and the same write is UB there — gcc segfaults
+  on it, so a fixture that mutates literal bytes needs a real array.
 - `else if` chains parse; nested `switch` works (M14 — but nested
   switches exposed the sharing bug: per-statement parse state must be
   CALL-LOCAL, the ctrl-array version let an inner switch overwrite its
@@ -151,8 +177,12 @@ Not supported — each currently fails with a compile diagnostic:
   pops — HolyC's epilogue differs); `sizeof(*fp)` reports 8 where C
   rejects a function type; a function address used before its
   DEFINITION resolves at definition time (prototype required first,
-  like any C use); global fp initializers stay in the constant-only
-  club — assign in a function body; a stored fp is a raw code address:
+  like any C use); global and `static` fp initializers work since M24
+  (`int (*gf)(int)=f;` — a defined function's address, or 0) and land as
+  a relocated arena slot, so the target survives a saved-object load; a
+  forward reference diagnoses "not a compile-time constant" and a
+  prototype-only name "initializer refers to a function that is not
+  defined yet"; a stored fp is a raw code address:
   NULL is the only portable sentinel (`fp==0` / `fp!=0` work).
 - Scoping (M21): blocks, `for`-init clauses, switch bodies and function
   bodies are real C scopes — a waterline truncates the symbol, typedef,
@@ -165,10 +195,7 @@ Not supported — each currently fails with a compile diagnostic:
   pointers all work — with block-scoped NAMES: independent twins per
   function, and a static may shadow a global of the same name.
   Remaining scope deviations: a block-scope `extern int x;` becomes an
-  ordinary local (it does not link to a file-scope x); `static`
-  function-pointer initializers are refused outright (an initializer
-  there is an EMITTED store, which would re-assign the target on every
-  call where C initializes exactly once); file-scope tentative double
+  ordinary local (it does not link to a file-scope x); file-scope tentative double
   definitions (`int g; int g;`) still claim two arena slots where C
   merges one.
 - Enum edges (M20): `enum x;` consumes `x` as a TAG (C's incomplete-type
@@ -224,9 +251,9 @@ Not supported — each currently fails with a compile diagnostic:
   values in its group are excess, like C), and a by-value one-slot
   member takes the one quad that IS that sub-object. Designators
   (`{.a=1}`, `[0]=x`) are not supported anywhere; a 2-D array of structs
-  diagnoses; a function-pointer member cannot initialize yet (function
-  addresses are not foldable constants — see the M22 arena-relocation
-  note); char members land as full quads (harmless: each member has its
+  diagnoses; a function-pointer member initializes from a DEFINED
+  function name (M24 arena relocations made arena code addresses
+  portable); char members land as full quads (harmless: each member has its
   own 8-byte slot and only its low byte is ever read through it). The
   shared mapper reports overfull targets as "excess elements in
   initializer" (generalized from M22's array-only wording).
@@ -404,13 +431,19 @@ Not supported — each currently fails with a compile diagnostic:
   arenas/fields (locals+strings, private stack, RSP-save slot, out
   buffer, the cc block's argc/argv). Everything else — rel32 calls and
   jumps, RBP-relative locals — is self-relative and needs nothing.
-  `CCSave(fn)` serializes: header (magic/version/entry_off/code_len/
-  arena_len/nfix) + relocation triples + code bytes + the *initial*
-  data arena (global initializers and the string pool are written to
-  the arena at compile time, so the dump is the `.data` snapshot —
-  save BEFORE running). `CCLoad(fn)` validates sizes/relocations,
-  `CCInit`s fresh arenas, copies, and rewrites each site as
-  `newBase+delta`; `CCRunObj`/`CCRunObjFile` then call main. Loaded
+  `CCSave(fn)` serializes (v2, M24): header (magic/version/entry_off/
+  code_len/arena_len/nfix/nafx) + nfix CODE relocation triples + nafx
+  ARENA relocation triples + code bytes + the *initial* data arena
+  (global initializers and the string pool are written to the arena at
+  compile time, so the dump is the `.data` snapshot — save BEFORE
+  running). The arena is a fresh allocation on every load, so pointer
+  slots INSIDE the arena (a string table, a function table, `&global`)
+  carry relocations too: an absolute baked into the arena was exactly as
+  stale as one baked into code. `CCLoad(fn)` validates sizes and BOTH
+  relocation tables (arena records are checked against the ARENA length;
+  their fields sit at `arec+0/1/2` because `arec` already counts the
+  header and the code table), `CCInit`s fresh arenas, copies, and
+  rewrites each site as `newBase+delta`; `CCRunObj`/`CCRunObjFile` then call main. Loaded
   modules run main() only — the symbol table is not part of the
   object, so `CCFind` needs the source recompiled. The suite saves +
   reloads objdemo (all five bases; a *second* reload with argc=2
@@ -1085,9 +1118,73 @@ Not supported — each currently fails with a compile diagnostic:
    arrinit 27/27 unchanged, cross-checked against `gcc -std=gnu99`
    (only the model `sizeof` number adjusted) — identical check by
    check, clean `CC TESTS: 0 failed`.
+ - [x] **M24** pointer-valued initializers + ARENA relocations. Values
+   that are absolute addresses (a string literal's pool slot, a DEFINED
+   function, `&global`) now initialize anything — scalars, brace lists,
+   struct members, `static` and global arrays, function pointers.
+   `CCInitOne` is the single value primitive: it returns a folded constant
+   (`*pkind=-1`), or a pool/code/arena address with its base KIND and
+   DELTA. `CCArenaPtr(cc,off,kind,addr)` (CC_EMIT.HC) stores the 8 bytes
+   at an arena offset AND records the triple, and `CCSave`/`CCLoad` gained
+   a second relocation table (object format v2, `nafx` records) patched
+   with the same `CCBase(kind)+delta` the code sites use. Without it, a
+   pointer baked into the arena pointed at the arena the module was
+   COMPILED against — the arena is a fresh allocation per load, exactly
+   like the code buffer. `extern int a[];` still needs a size (no tentative
+   extern), fp initializers take a defined function or 0, and forward uses
+   diagnose rather than queue (an arena slot has no patch list).
+   **Negative control, and the reason this is worth stating:** with the
+   load-side arena patch loop neutralized, `int gi; int *gp=&gi;` +
+   `gp[0]=gp[0]+1` saved once and run three times from the object gives
+   `3 2 1` — the mutation lands somewhere shared and LEAKS across
+   reloads; with relocations it is `1 1 1`, and ptrinit (which mutates a
+   global array through a pointer slot and retargets `gtab[0]`) reloads
+   25 25 25 identically. The version word went 1→2, and the loader
+   refuses an old object rather than misreading it (pinned: patching
+   `hdr[1]=1` on a saved file yields "is not a CC object").
+   **Landmine #1 — an `extern` prototype AFTER the definition breaks
+   LINKING, not parsing.** `CCArenaPtr`'s prototype first went at the top
+   of CC_PARSE.HC in the ordinary extern block; the unit compiled clean and
+   every call into it died with `ERROR: Undefined Extern at
+   &CCArrayInit+0x392` — an extern declared after the definition promises
+   the symbol from ELSEWHERE and the host never resolves it. Prototypes of
+   cross-file functions belong in CC.HH's forward block (spliced first);
+   the same file-ordering class of bug as the M20 rule, different symptom:
+   M20 was a missing prototype silently executing nothing, this is a
+   too-late prototype refusing to link. See the gotchas list.
+   **Landmine #2 — record indexing in the new table.** Arena records sit
+   at `arec+0/1/2` (`arec=7+3*nfix` already counts the header AND the code
+   table), but the copy-pasted code-table literals made the validator read
+   `arec+9` and every saved arena pointer looked "corrupt". **Landmine
+   #3:** the fp declarator path created the symbol, ran the static branch
+   and RETURNED before `s->ty=TY_PTR` was set, so `sf(41)` on an
+   initialized static fp reported "not a function" — type the symbol before
+   any early exit. Plus the usual `nafix`/`nafx` typo.
+   **Found while verifying (pre-existing, not M24):** the array-decay
+   element-type gap above — identical at HEAD on the same probe, so it is
+   M25's job, and the two failing probe checks were moved to forms the
+   model handles instead of being papered over. Error paths pinned: forward
+   function name, prototype-only name, `&local` in a brace list, `&5`,
+   string on an fp, a mutated literal's portability. 75 cases (ptrinit.c:
+   24 checks + closer — global/local/static string tables, `&global`
+   scalars and arrays, `int (*gf)(int)=f` global/static/struct-member/
+   frame-member forms, a `char *tab[]` param walked by strlen, enum-folded
+   members, retargeting a table slot, writing through a pointer slot),
+   green x2, saved-object reloads 25/25/25 with structinit 22/22,
+   arrinit 27/27, fptr 27/27 unchanged, fixture cross-checked against
+   `gcc -std=gnu99` (25, after the fixture was changed to a writable
+   array), clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 
+- **Prototypes of functions defined in ANOTHER CC_*.HC belong in CC.HH's
+  forward block**, not in the consumer's extern list: an `extern` that
+  arrives after the definition is a promise from elsewhere and never
+  resolves (see the rule below — M24 hit it as `Undefined Extern at
+  &CCArrayInit+0x392` for `CCArenaPtr`, which is defined in CC_EMIT.HC,
+  the file the umbrella splices first). Missing prototype → a call that
+  silently runs nothing (M20); too-late prototype → a link failure (M24).
+  When a brand-new call site misbehaves, grep its output for "at &".
 - **There is NO `continue` keyword in this HolyC dialect.** The kernel
   source never uses it (grep T/*.HC: effectively zero hits), and
   `continue;` anywhere in host-side `.HC` code — even inside a plain
@@ -1207,6 +1304,16 @@ Not supported — each currently fails with a compile diagnostic:
   emitted AFTER that brace must not reference the slot. Anything that
   must live for the whole function is allocated BEFORE the scope mark
   (the switch dispatch slot is, deliberately).
+- Any POINTER value written into the arena (a global, a `static`, or an
+  initializer slot) goes through `CCArenaPtr(cc,off,kind,addr)`, never raw
+  bytes: the arena is a fresh allocation on every `CCInit`, so an absolute
+  stored without a record points at the compile-time arena and reads as
+  stale-or-foreign data after a reload (M24: leaks across loads instead of
+  resetting). Raw-byte stores stay correct for folded CONSTANTS, which is
+  why the two paths are kept separate by `kind<0`. `CCOBJ_VER` is 2; old
+  v1 objects are refused, not misread, so any change to the record layout
+  means bumping it and re-checking the loader's validation of BOTH tables
+  (code positions against clen, arena positions against alen).
 - ANY new function group in the compiler unit gets file-top `extern`
   declarations like every existing chain function (M20 proof): without
   them the host COMPILES the unit but same-unit call edges into the new

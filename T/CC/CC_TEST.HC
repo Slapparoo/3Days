@@ -302,6 +302,10 @@ CCAssert(27,"T:/CC/TEST/arrinit.c","arrinit");
  * init zero-filled, C's brace-group-to-element mapping with union arity 1,
  * struct arrays (deduced too), globals, statics, one-slot members. */
 CCAssert(22,"T:/CC/TEST/structinit.c","structinit");
+/* M24: pointer-valued initializers (string literals, DEFINED function
+ * names, &globals) + ARENA relocations: pointer slots inside the arena are
+ * re-derived on load instead of pointing at the compile-time arena. */
+CCAssert(25,"T:/CC/TEST/ptrinit.c","ptrinit");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

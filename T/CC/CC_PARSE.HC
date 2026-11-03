@@ -39,10 +39,18 @@ extern I64 CCConstExpr(CCCtrl *cc);
 extern U0 CCEraseScope(CCCtrl *cc,I64 mark,I64 base);
 extern U0 CCMakeStatic(CCCtrl *cc,CSym *s);
 extern U0 CCReserveArray(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 total,I64 use_arena);
-extern I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *pisstr);
+extern I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 charr);
 extern U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena);
 extern I64 CCInitMap(CCCtrl *cc,I64 n,I64 *vgrp,I64 *eloc,I64 A);
 extern U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena);
+extern I64 CCInitOne(CCCtrl *cc,I64 *pkind,I64 *pisstr);
+//M24 NOTE: CCArenaPtr's extern lives in CC.HH's forward block, NOT
+//here: an `extern` prototype placed AFTER a definition makes this host
+//promise the symbol from somewhere else and the call then fails to LINK
+//("Undefined Extern at &CCArrayInit+0x392") even though the function is
+//right there in the same unit. Every working extern in this codebase
+//precedes its definition; CC.HH is included first, so that block is the
+//only legal home for prototypes of functions defined in CC_EMIT.HC.
 extern I64 CCEnumTagFind(CCCtrl *cc,U8 *nm);
 extern U0 CCEnumDef(CCCtrl *cc,U8 *tag);
 extern U0 CCSnap(CCCtrl *cc,U8 **pp,I64 *ptk,I64 *pkw,I64 *pnum,U8 *pstr);
@@ -3086,6 +3094,76 @@ U0 CCReserveArray(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 total,I64 use_arena)
   }
 }
 
+/* M24: ONE initializer value, in three families:
+ *   folded constant        *pkind=-1; the value is returned as-is
+ *   "text"                 a pointer into the string pool (kind
+ *                          CC_B_LOCALS; *pisstr=1 so the scalar paths
+ *                          keep their `char *g = "text"` coercion)
+ *   name / &name / &g      a pointer to a DEFINED function (kind
+ *                          CC_B_CODE) or to a global variable (&g, kind
+ *                          CC_B_LOCALS). An arena slot has no patch
+ *                          queue, so a not-yet-defined function is a
+ *                          diagnostic; a frame local's address is a
+ *                          RUNTIME thing and is not a constant here.
+ * Values are absolute for THIS compile, so anything that consumes them
+ * immediately (frame stores included) just works; kind+delta is what a
+ * saved object re-derives through CCArenaPtr's table. */
+I64 CCInitOne(CCCtrl *cc,I64 *pkind,I64 *pisstr)
+{
+  CSym *sy;
+  I64 v,amp;
+  U8 nm[CC_TOK_MAX];
+
+  *pkind=-1;
+  *pisstr=0;
+  if (cc->tk==TK_STR)
+  {
+    v=CCStrAlloc(cc,cc->tk_str);		//this dialect is permissive
+    *pkind=CC_B_LOCALS;			//about pointer/integer mixing;
+    *pisstr=1;				//CCArenaPtr derives the delta
+						//from the address itself
+    CCLex(cc);
+    return v;
+  }
+  amp=0;
+  if (CCTkIsPunct(cc,'&'))
+  {
+    CCLex(cc);
+    amp=1;
+  }
+  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_NONE))
+  {
+    StrCpy(nm,cc->tk_str);
+    sy=CCSymFind(cc,nm);
+    if (sy&&(sy->kind==SC_FUN))
+    {
+      if (sy->offset<0)
+      {
+        CCError(cc,"initializer refers to a function that is not defined yet");
+        return 0;
+      }
+      *pkind=CC_B_CODE;
+      CCLex(cc);
+      return cc->code+sy->offset;
+    }
+    if (amp&&sy&&(sy->kind==SC_GLOBAL))
+    {
+      *pkind=CC_B_LOCALS;
+      CCLex(cc);
+      return cc->locals+sy->offset;
+    }
+  }
+  if (amp)
+  {
+    //A local's address, &5, &a[2]: runtime quantities. C allows them in
+    //automatic objects; this model folds initializers up front, so they
+    //are a diagnostic rather than a wrong answer.
+    CCError(cc,"initializer must be a constant, a string, or the address of a function or global");
+    return 0;
+  }
+  return CCConstExpr(cc);
+}
+
 /* M22: collect one array initializer into vals[], recording for every
  * value WHICH brace group it came from (vgrp[k] >= 0: inside the
  * group-ordinal-th '{' nested inside the optional outer brace; -1:
@@ -3104,9 +3182,9 @@ U0 CCReserveArray(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 total,I64 use_arena)
  * the NEXT element, so for a 1-D array of scalars `{{1},{2,3},{4}}` is
  * elements 1,2,4-with-excess — NOT a flattened list. CCArrayInit does
  * that mapping; the collector only records where each value came from. */
-I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *pisstr)
+I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 charr)
 {
-  I64 n,depth,grp,gnext,i,ch;
+  I64 n,depth,grp,gnext,i,ch,ek;
   n=0;
   gnext=0;			//next element-group ordinal
   grp=-1;			//-1: written flat. FLAT VALUES MUST NOT
@@ -3123,8 +3201,11 @@ I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *pisstr)
     CCLex(cc);			//the list's own braces are not a group
     depth=1;
   }
-  if (cc->tk==TK_STR)
+  if (charr&&(cc->tk==TK_STR))
   {
+    //A byte array initialized from a literal: the BYTES are the values.
+    //(charr comes from the target: `char *tab[]={"a"}` has pointer
+    //elements and its strings fall through to CCInitOne as addresses.)
     i=0;
     while (i!=CC_TOK_MAX)
     {
@@ -3199,9 +3280,9 @@ I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *pisstr)
         CCError(cc,"array initializer too large");
         return -1;
       }
-      vals[n]=CCConstExpr(cc);
-      if (cc->errs)
-        return -1;
+      vals[n]=CCInitOne(cc,&vk[n],&ek);		//M24: constants, strings
+      if (cc->errs)				//and function/global
+        return -1;				//addresses all arrive here
       vgrp[n]=grp;
       n++;
       if (!CCAccept(cc,','))
@@ -3298,12 +3379,21 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
   I64 vals[CC_INIT_MAX];
   I64 vgrp[CC_INIT_MAX];
   I64 eloc[CC_INIT_MAX];
-  I64 isstr,total,n,i,stride,v,A,e,hw,vi;
+  I64 vk[CC_INIT_MAX];		//per-value base kind (-1 = a plain
+  I64 isstr,total,n,i,stride,v,A,e,hw,vi,kind,charr;
   U8 *bp;
 
-  n=CCInitCollect(cc,vals,vgrp,&isstr);
+  if (s->ty==TY_CHARP)
+    charr=1;			//byte elements: a literal IS the values
+  else
+    charr=0;			//pointer elements: a literal is an
+  n=CCInitCollect(cc,vals,vgrp,vk,&isstr,charr);	//ADDRESS (M24)
   if (n<0)
     return;
+  if (n==0)
+    vk[0]=-1;			//defensive: the placer only reads vk[]
+				//while vi<n, but an empty list should not
+				//leave the array undefined at all
   if (isstr&&(s->ty!=TY_CHARP))
   {
     CCError(cc,"only char arrays take string initializers");
@@ -3379,21 +3469,28 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
     for (e=0;e!=total;e++)
     {
       v=0;
+      kind=-1;
       if ((vi<n)&&(eloc[vi]==e))
       {
         v=vals[vi];
-        vi++;
+        kind=vk[vi];		//M24: a pointer element carries the
+        vi++;			//base it must be re-derived from
       }
-      bp[0]=v;
-      if (stride!=1)
+      if (kind>=0)
+        CCArenaPtr(cc,bp-cc->locals,kind,v);
+      else
       {
-        bp[1]=v>>8;
-        bp[2]=v>>16;
-        bp[3]=v>>24;
-        bp[4]=v>>32;
-        bp[5]=v>>40;
-        bp[6]=v>>48;
-        bp[7]=v>>56;
+        bp[0]=v;
+        if (stride!=1)
+        {
+          bp[1]=v>>8;
+          bp[2]=v>>16;
+          bp[3]=v>>24;
+          bp[4]=v>>32;
+          bp[5]=v>>40;
+          bp[6]=v>>48;
+          bp[7]=v>>56;
+        }
       }
       bp+=stride;
     }
@@ -3416,13 +3513,18 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
   for (e=0;e!=total;e++)
   {
     v=0;
+    kind=-1;
     if ((vi<n)&&(eloc[vi]==e))
     {
       v=vals[vi];
+      kind=vk[vi];
       vi++;
     }
-    CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,imm64
-    CCQuad(cc,v);
+    CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,
+    if (kind>=0)
+      CCQuadAbs(cc,kind,v);		//M24: a pointer operand relocates
+    else				//with the code buffer, exactly
+      CCQuad(cc,v);			//like any other absolute address
     if (stride==1)
     {
       CCByte(cc,0x88);CCByte(cc,0x08);	//MOV [RAX],CL
@@ -3457,17 +3559,16 @@ U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
   I64 vals[CC_INIT_MAX];
   I64 vgrp[CC_INIT_MAX];
   I64 eloc[CC_INIT_MAX];
-  I64 isstr,n,hw,A,total,e2,vi,v,memb,off2,prev;
+  I64 vk[CC_INIT_MAX];		//per-value base kind (-1 = a plain
+  I64 isstr,n,hw,A,total,e2,vi,v,memb,off2,prev,kind;
   U8 *bp;
 
-  n=CCInitCollect(cc,vals,vgrp,&isstr);
+  //Members are never byte arrays (struct members may not be arrays), so
+  //charr=0: a string element is a POINTER value, which is exactly what
+  //a pointer member wants (M24) rather than the byte-list form.
+  n=CCInitCollect(cc,vals,vgrp,vk,&isstr,0);
   if (n<0)
     return;
-  if (isstr)
-  {
-    CCError(cc,"string initializers apply to arrays only");
-    return;
-  }
   if (s->dim2)
   {
     CCError(cc,"struct initializers support one dimension only");
@@ -3510,23 +3611,30 @@ U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
     for (e2=0;e2!=total;e2++)
     {
       v=0;
+      kind=-1;
       if ((vi<n)&&(eloc[vi]==e2))
       {
         v=vals[vi];
+        kind=vk[vi];
         vi++;
       }
       memb=e2%A;
       //Member offsets are a table, not a stride: recompute the target
       //address from the tag every time (element = e2/A, member = e2%A).
       bp=cc->locals+s->offset+((e2-memb)/A)*cc->st[stag].size+cc->st[stag].moff[memb];
-      bp[0]=v;
-      bp[1]=v>>8;
-      bp[2]=v>>16;
-      bp[3]=v>>24;
-      bp[4]=v>>32;
-      bp[5]=v>>40;
-      bp[6]=v>>48;
-      bp[7]=v>>56;
+      if (kind>=0)
+        CCArenaPtr(cc,bp-cc->locals,kind,v);
+      else
+      {
+        bp[0]=v;
+        bp[1]=v>>8;
+        bp[2]=v>>16;
+        bp[3]=v>>24;
+        bp[4]=v>>32;
+        bp[5]=v>>40;
+        bp[6]=v>>48;
+        bp[7]=v>>56;
+      }
     }
     return;
   }
@@ -3543,9 +3651,11 @@ U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
   for (e2=0;e2!=total;e2++)
   {
     v=0;
+    kind=-1;
     if ((vi<n)&&(eloc[vi]==e2))
     {
       v=vals[vi];
+      kind=vk[vi];
       vi++;
     }
     memb=e2%A;
@@ -3556,8 +3666,11 @@ U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
       CCWord(cc,off2-prev);
       prev=off2;
     }
-    CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,imm64
-    CCQuad(cc,v);
+    CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,
+    if (kind>=0)
+      CCQuadAbs(cc,kind,v);		//M24: pointer operand relocates
+    else
+      CCQuad(cc,v);
     CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0x08);	//MOV [RAX],RCX
   }
 }
@@ -3599,7 +3712,7 @@ U0 CCBlockStmt(CCCtrl *cc)
 U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
 {
   CSym *s;
-  I64 n,n2,fpok,sstat,val,vi,pend,isarr;
+  I64 n,n2,fpok,sstat,val,vi,pend,isarr,ivk,iisstr;
   I64 ty=base;
   I64 stk,skw,snum;
   U8 *spc;
@@ -3619,24 +3732,44 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     s=CCSymNew(cc,fpname,SC_LOCAL);
     if (!s)
       return;
-    if (cc->spec_static)
-    {
-      //M21: a `static` function pointer needs arena storage like any
-      //other block static. An initializer here would be an EMITTED
-      //store (function addresses are not foldable constants), which
-      //would re-assign the target on every call — C initializes a
-      //static exactly once — so it is refused rather than approximated.
-      CCMakeStatic(cc,s);
-      if (CCTkIsPunct(cc,'='))
-      {
-        CCError(cc,"static function-pointer initializers not supported");
-        return;
-      }
-    }
+    //Type the symbol FIRST: the static path below returns early, and a
+    //half-filled symbol made `sf(41)` see an int ("not a function") —
+    //a pointer that never got its ty is not a function pointer.
     s->ty=TY_PTR;
     s->sty=-1;
     s->dim=1;
     s->dim2=0;
+    if (cc->spec_static)
+    {
+      //M21: a `static` function pointer needs arena storage like any
+      //other block static (an emitted store would re-run every call,
+      //and C initializes a static exactly once).
+      CCMakeStatic(cc,s);
+      if (CCTkIsPunct(cc,'='))
+      {
+        //M24: a `static` fp CAN initialize now. A defined function's
+        //address becomes an arena pointer with a relocation, so the
+        //one-time store C requires is structural (no emitted store that
+        //would re-run every call), and 0 (NULL) lands as plain bytes.
+        CCLex(cc);
+        val=CCInitOne(cc,&ivk,&iisstr);
+        if (cc->errs)
+          return;
+        if (ivk<0)
+        {
+          for (vi=0;vi!=8;vi++)
+            cc->locals[s->offset+vi]=val>>(8*vi);
+        }
+        else if (ivk==CC_B_CODE)
+          CCArenaPtr(cc,s->offset,ivk,val);
+        else
+        {
+          CCError(cc,"function-pointer initializers need a function address or zero");
+          return;
+        }
+        return;
+      }
+    }
     if (CCTkIsPunct(cc,'='))		//fp=add; — the RHS yields the
     {
       CCVarAddr(cc,s);			//code address (M18 SC_FUN
@@ -3753,15 +3886,22 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     }
     if (s->persist)
     {
-      //C requires a constant for static init — the folder enforces
-      //it; the bytes go straight into the arena (the initial value
-      //is there before any call runs, and reloads with the object).
+      //C requires a constant for static init — the folder enforces it,
+      //and M24 adds string / function / &global address values, recorded
+      //as arena relocations so a saved object re-derives them. Either
+      //way the bytes go straight into the arena: the initial value is
+      //there before any call runs, and reloads with the object.
       CCLex(cc);
-      val=CCConstExpr(cc);
+      val=CCInitOne(cc,&ivk,&iisstr);
       if (cc->errs)
         return;
-      for (vi=0;vi!=8;vi++)
-        cc->locals[s->offset+vi]=val>>(8*vi);
+      if (ivk>=0)
+        CCArenaPtr(cc,s->offset,ivk,val);
+      else
+      {
+        for (vi=0;vi!=8;vi++)
+          cc->locals[s->offset+vi]=val>>(8*vi);
+      }
       return;
     }
     CCVarAddr(cc,s);
@@ -4269,7 +4409,7 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
 Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
 {
   U8 name[CC_TOK_MAX];
-  I64 ty=base,val,neg,n,n2,i,entry,fpok,pend,isarr;
+  I64 ty=base,val,n,n2,i,entry,fpok,pend,isarr,ivk,iisstr;
   I64 stk,skw,snum;
   U8 *spc;
   U8 sstr[CC_TOK_MAX];
@@ -4296,11 +4436,26 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     s->dim2=0;
     if (CCTkIsPunct(cc,'='))
     {
-      //Global fp initializers stay in the constant-only club: a
-      //function address is known at compile time but the arena-write
-      //path takes TK_NUM; assign in main instead (documented).
-      CCError(cc,"global initializer must be a constant");
-      return FALSE;
+      //M24: a global fp CAN initialize. A DEFINED function's address is
+      //an arena pointer with a relocation (so a saved object re-derives
+      //it after a code-buffer move), and NULL lands as plain bytes.
+      CCLex(cc);
+      val=CCInitOne(cc,&ivk,&iisstr);
+      if (cc->errs)
+        return FALSE;
+      if (ivk<0)
+      {
+        gp=cc->locals+s->offset;
+        for (i=0;i!=8;i++)
+          gp[i]=val>>(8*i);
+      }
+      else if (ivk==CC_B_CODE)
+        CCArenaPtr(cc,s->offset,ivk,val);
+      else
+      {
+        CCError(cc,"function-pointer initializers need a function address or zero");
+        return FALSE;
+      }
     }
     return FALSE;		//FALSE = "declarator done, ';' follows"
   }
@@ -4413,35 +4568,35 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
       CCArrayInit(cc,s,base,stag,pend,TRUE);	//handles deduction and
       return FALSE;			//the tail zeros)
     }
-    if (cc->tk==TK_STR)
+    //M20/M24: literals, enum constants and folded expressions
+    //(`g=RED*2+1`); string literals (`char *g = "text"` — the pooled
+    //address, and a `char *` global becomes a byte pointer because
+    //that is what its content is); and DEFINED function / &global
+    //addresses. Anything else — a variable, a call, a not-yet-defined
+    //function — diagnoses loudly.
+    val=CCInitOne(cc,&ivk,&iisstr);
+    if (cc->errs)
+      return FALSE;
+    if (iisstr)
     {
-      //`char *g = "text";` — store the pooled address as the value.
       if ((s->ty!=TY_PTR)&&(s->ty!=TY_CHARP))
       {
         CCError(cc,"only pointer globals take string initializers");
         return FALSE;
       }
-      val=CCStrAlloc(cc,cc->tk_str);
       if (s->ty==TY_PTR)
         s->ty=TY_CHARP;		//string content implies byte pointers
-      CCLex(cc);
-    }
-    else
-    {
-      //M20: literals, enum constants, and folded expressions
-      //(`g=RED*2+1`) initialize globals. Anything that is not a
-      //compile-time constant — a variable, a call, a function
-      //address — still diagnoses loudly here.
-      val=CCConstExpr(cc);
-      if (cc->errs)
-        return FALSE;
     }
     s->init=val;
     s->has_init=TRUE;
-    //HolyC needs postfix casts, so just store the 8 bytes directly.
-    gp=cc->locals+s->offset;
-    for (i=0;i!=8;i++)
-      gp[i]=val>>(8*i);
+    if (ivk>=0)
+      CCArenaPtr(cc,s->offset,ivk,val);	//M24: the arena moves per load;
+    else					//re-derive this one from
+    {					//(base, delta) like a code
+      gp=cc->locals+s->offset;		//operand. HolyC needs postfix
+      for (i=0;i!=8;i++)		//casts, so plain values store
+        gp[i]=val>>(8*i);		//8 bytes directly.
+    }
   }
   else if (pend)
     CCError(cc,"array size missing");	//`int g[];` needs an initializer

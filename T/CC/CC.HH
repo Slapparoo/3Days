@@ -317,6 +317,15 @@ class CCCtrl
   I64	fix_pos[CC_FIXUPS];	//code offset of the 8-byte absolute
   I64	fix_kind[CC_FIXUPS];	//CC_B_* base
   I64	fix_delta[CC_FIXUPS];	//byte offset from that base
+  /* M24: the same relocation record for the 8-byte pointer slots that
+   * initializers write INTO the arena (string tables, function tables,
+   * `&global`). The arena is a fresh allocation on every load, so an
+   * absolute address baked into it at compile time is as stale as one
+   * baked into code — CCLoad re-derives these from (base, delta) too. */
+  I64	nafx;
+  I64	afx_pos[CC_FIXUPS];	//arena byte offset of the slot
+  I64	afx_kind[CC_FIXUPS];	//CC_B_* base
+  I64	afx_delta[CC_FIXUPS];	//byte offset from that base
   /* M13: object-like macros (name -> text) filled by the prep pass,
    * and typedef bindings (name -> TY_* base) filled by the parser.
    * Both reset with CCInit and live only for the source translation. */
@@ -365,6 +374,7 @@ extern U0 CCPrologue(CCCtrl *cc,I64 entry);
 extern U0 CCFunRet(CCCtrl *cc,I64 entry);
 /* CALL rel32 to f (patched now or recorded on f for later), then
  * optional ADD RSP to pop n args. */
+extern U0 CCArenaPtr(CCCtrl *cc,I64 off,I64 kind,I64 addr);
 extern U0 CCCall(CCCtrl *cc,CSym *f);
 extern U0 CCPopArgs(CCCtrl *cc,I64 n);
 extern U0 CCPatchCallPos(CCCtrl *cc,I64 pos,I64 target_off);

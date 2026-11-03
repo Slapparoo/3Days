@@ -580,6 +580,37 @@ I64 CCBase(CCCtrl *cc,I64 kind)
   return cc;			//CC_B_CTRL: the cc block itself
 }
 
+/* M24: write a POINTER value into the arena at byte offset off and
+ * record the relocation that lets a saved object re-derive it. The
+ * arena moves on every load exactly like the code buffer, so a compile
+ * time absolute stored here is otherwise stale; delta is measured from
+ * the same CCBase() the code fixups use. */
+U0 CCArenaPtr(CCCtrl *cc,I64 off,I64 kind,I64 addr)
+{
+  I64 v;
+  U8 *p;
+
+  v=addr;
+  p=cc->locals+off;
+  p[0]=v;
+  p[1]=v>>8;
+  p[2]=v>>16;
+  p[3]=v>>24;
+  p[4]=v>>32;
+  p[5]=v>>40;
+  p[6]=v>>48;
+  p[7]=v>>56;
+  if (cc->nafx>=CC_FIXUPS)
+    CCError(cc,"too many arena relocations");
+  else
+  {
+    cc->afx_pos[cc->nafx]=off;
+    cc->afx_kind[cc->nafx]=kind;
+    cc->afx_delta[cc->nafx]=addr-CCBase(cc,kind);
+    cc->nafx++;
+  }
+}
+
 /* Emit the 8-byte absolute `addr` and record the site so a dumped
  * object can rebase it: the delta from that base is computed HERE as
  * plain I64 arithmetic, because mixing `&member - ptr` in one caller

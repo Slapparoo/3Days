@@ -459,7 +459,8 @@ I64 CCRunFile(U8 *fn)
  * The symbol table is not part of the object: a loaded module runs
  * main(); CCFind needs the module recompiled. */
 #define CCOBJ_MAGIC	0x43434F31	//'CCO1'
-#define CCOBJ_VER	1
+#define CCOBJ_VER	2		//M24: v2 carries an arena relocation
+					//table after the code relocations
 
 /* Dump the compiled module. 0 on success, -1 on error. */
 I64 CCSave(U8 *fn)
@@ -480,7 +481,9 @@ I64 CCSave(U8 *fn)
   }
   clen=cc.ep-cc.code;
   alen=cc.goff;
-  total=(6+3*cc.nfix)*8+clen+alen;
+  //v2 layout: 7 header words, nfix code records, nafx arena records
+  //M24, then the code blob, then the arena blob.
+  total=(7+3*cc.nfix+3*cc.nafx)*8+clen+alen;
   blob=MAlloc(total);
   hdr=blob;
   hdr[0]=CCOBJ_MAGIC;
@@ -489,13 +492,20 @@ I64 CCSave(U8 *fn)
   hdr[3]=clen;
   hdr[4]=alen;
   hdr[5]=cc.nfix;
+  hdr[6]=cc.nafx;
   for (i=0;i!=cc.nfix;i++)
   {
-    hdr[6+3*i]=cc.fix_kind[i];
-    hdr[7+3*i]=cc.fix_delta[i];
-    hdr[8+3*i]=cc.fix_pos[i];
+    hdr[7+3*i]=cc.fix_kind[i];
+    hdr[8+3*i]=cc.fix_delta[i];
+    hdr[9+3*i]=cc.fix_pos[i];
   }
-  p=blob+(6+3*cc.nfix)*8;
+  for (i=0;i!=cc.nafx;i++)
+  {
+    hdr[7+3*cc.nfix+3*i]=cc.afx_kind[i];
+    hdr[8+3*cc.nfix+3*i]=cc.afx_delta[i];
+    hdr[9+3*cc.nfix+3*i]=cc.afx_pos[i];
+  }
+  p=blob+(7+3*cc.nfix+3*cc.nafx)*8;
   MemCpy(p,cc.code,clen);
   MemCpy(p+clen,cc.locals,alen);
   if (FileWrite(fn,blob,total)<=0)
@@ -511,7 +521,7 @@ I64 CCSave(U8 *fn)
  * The FileRead block is leaked, never Free()d: see CCSrc comment. */
 Bool CCLoad(U8 *fn)
 {
-  I64 len,nfix,clen,alen,i,total,val,kind;
+  I64 len,nfix,nafx,clen,alen,i,total,val,kind,arec;
   I64 *hdr;
   U8 *data,*p,*q;
 
@@ -535,18 +545,37 @@ Bool CCLoad(U8 *fn)
   clen=hdr[3];
   alen=hdr[4];
   nfix=hdr[5];
-  if (((nfix<0)||(nfix>CC_FIXUPS))||((clen<1)||(clen>CC_CODE_SIZE))||
-      ((alen<0)||(alen>CC_LOCAL_SIZE))||(len!=(6+3*nfix)*8+clen+alen))
+  nafx=hdr[6];
+  if (((nfix<0)||(nfix>CC_FIXUPS))||((nafx<0)||(nafx>CC_FIXUPS))||
+      ((clen<1)||(clen>CC_CODE_SIZE))||((alen<0)||(alen>CC_LOCAL_SIZE))||
+      (len!=(7+3*nfix+3*nafx)*8+clen+alen))
   {
     "CC ERROR: CCLoad: %s has bad sizes\n",fn;
     return FALSE;
   }
   for (i=0;i!=nfix;i++)
   {
-    kind=hdr[6+3*i];
-    if (((kind<0)||(kind>CC_B_CODE))||((hdr[8+3*i]<0)||(hdr[8+3*i]+8>clen)))	//M18: CODE is a legal base kind now
+    kind=hdr[7+3*i];
+    if (((kind<0)||(kind>CC_B_CODE))||((hdr[9+3*i]<0)||(hdr[9+3*i]+8>clen)))	//M18: CODE is a legal base kind now
     {
       "CC ERROR: CCLoad: %s has a corrupt relocation\n",fn;
+      return FALSE;
+    }
+  }
+  //M24: arena relocations target the arena image, so their positions
+  //are validated against the ARENA length instead.
+  //Record fields sit at arec+0/1/2 within each 3-word entry: `arec`
+  //already counts the 7 header words AND the code table, so reusing the
+  //code table's +7/+8/+9 literals here (my first draft) read seven
+  //words past the record and every arena relocation looked corrupt.
+  arec=7+3*nfix;
+  for (i=0;i!=nafx;i++)
+  {
+    kind=hdr[arec+3*i];
+    if (((kind<0)||(kind>CC_B_CODE))||((hdr[arec+3*i+2]<0)||
+        (hdr[arec+3*i+2]+8>alen)))
+    {
+      "CC ERROR: CCLoad: %s has a corrupt arena relocation\n",fn;
       return FALSE;
     }
   }
@@ -554,14 +583,30 @@ Bool CCLoad(U8 *fn)
   cc.hflush=&CCFlush;	//M6c: rebind the flush helper to this session
   CCSetLib(&cc);	//M12: rebind the stdlib helper table likewise
   cc.entry_off=hdr[2];
-  p=data+(6+3*nfix)*8;
+  p=data+(7+3*nfix+3*nafx)*8;
   MemCpy(cc.code,p,clen);
   MemCpy(cc.locals,p+clen,alen);
   cc.ep=cc.code+clen;
   for (i=0;i!=nfix;i++)
   {
-    val=CCBase(&cc,hdr[6+3*i])+hdr[7+3*i];
-    q=cc.code+hdr[8+3*i];
+    val=CCBase(&cc,hdr[7+3*i])+hdr[8+3*i];
+    q=cc.code+hdr[9+3*i];
+    q[0]=val;
+    q[1]=val>>8;
+    q[2]=val>>16;
+    q[3]=val>>24;
+    q[4]=val>>32;
+    q[5]=val>>40;
+    q[6]=val>>48;
+    q[7]=val>>56;
+  }
+  //M24: pointer slots inside the arena get the same treatment: the
+  //arena the object was compiled against is not this one.
+  arec=7+3*nfix;
+  for (i=0;i!=nafx;i++)
+  {
+    val=CCBase(&cc,hdr[arec+3*i])+hdr[arec+3*i+1];
+    q=cc.locals+hdr[arec+3*i+2];
     q[0]=val;
     q[1]=val>>8;
     q[2]=val>>16;
