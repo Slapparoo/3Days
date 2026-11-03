@@ -53,7 +53,7 @@ array sizes, global initializers, and every expression position; adjacent
 string literals concatenate), block scopes with C shadowing and
 `static` block objects on arena storage (M21), aggregate initializers
 (`int a[4]={1,2,3,4};`, `int a[]`/`int m[][3]`/`char s[]` size deduction,
-`char s[]="text"` byte init) (M22),
+`char s[]="text"` byte init) (M22) and struct/union initializers (M23),
 `for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
 `do-while` (M14), `goto`/labels and the conditional `?:` (M16),
 functions (forward refs,
@@ -213,10 +213,23 @@ Not supported — each currently fails with a compile diagnostic:
   written), line-continuation backslashes, and `#if` interacting
   inside block comments (prep is line-shaped; keep conditionals and
   block comments disjoint, as real code does).
-- Structs: no by-value passing or return, no struct/array or by-value
-  struct members (only `struct T *m` pointers), no initializers,
-  `v = w;` copies unsupported, tags must be defined before any use
-  (no forward tags), one member may not nest a struct by value.
+- Structs: no by-value passing or return, no array members and no
+  by-value members of MULTI-slot tags (one-slot tags — any union, any
+  single-member struct — are by-value since M19), `v = w;` whole-object
+  copies unsupported, tags must be defined before any use (no forward
+  tags), and one member may not nest a struct by value. Initializers
+  (M23) work for objects and 1-D arrays: members fill in declaration
+  order, partial initializers zero-fill the rest (mandatory for frame
+  objects), a union takes exactly ONE value (its first member — extra
+  values in its group are excess, like C), and a by-value one-slot
+  member takes the one quad that IS that sub-object. Designators
+  (`{.a=1}`, `[0]=x`) are not supported anywhere; a 2-D array of structs
+  diagnoses; a function-pointer member cannot initialize yet (function
+  addresses are not foldable constants — see the M22 arena-relocation
+  note); char members land as full quads (harmless: each member has its
+  own 8-byte slot and only its low byte is ever read through it). The
+  shared mapper reports overfull targets as "excess elements in
+  initializer" (generalized from M22's array-only wording).
 - Postfix `++`/`--` needs an lvalue primary: `v++` and `buf[i]++` are
   fine, `(*p)++` needs parens support the postfix pass lacks (write
   `*p=*p+1`).
@@ -1033,6 +1046,45 @@ Not supported — each currently fails with a compile diagnostic:
    scoped 49/49 identical, cross-checked against `gcc -std=gnu99` on a
    copy with only the model `sizeof` numbers adjusted — 27 with the same
    per-check increments, clean `CC TESTS: 0 failed`.
+ - [x] **M23** struct and union initializers. The M22 collector is
+   reused unchanged; the element mapping was extracted into `CCInitMap`
+   so aggregates share ONE rule with a different target ARITY: 1 for a
+   scalar element, `dim2` for a row, `nmem` for a struct, and **1 for a
+   union** (its first member — extra values in its group are excess, as
+   in C). Tags gained an `isu` flag, written on BOTH definition paths
+   because the M21 waterlines RECYCLE tag slots: a flag set only in the
+   union branch would inherit a stale value from a dead tag (the same
+   class of bug as recycled symbol entries, which M21 had to fix).
+   `CCStructInit` walks targets in ascending order like `CCArrayInit`
+   does for elements: arena bytes for globals and `static` objects, one
+   emitted quad store per member for frame objects. Member addresses are
+   a TABLE, not a stride, so the frame walk advances RAX by the
+   DIFFERENCE between consecutive `element*size + moff[member]` targets
+   (ascending by construction: the next element starts at `size+moff[0]`
+   above the previous element's last member), and the arena path just
+   recomputes from the tag each time. Everything lands as a full quad:
+   each member owns its own 8-byte slot, so writing a char member's
+   unused upper bytes is invisible, and a by-value member can only be a
+   one-slot tag (M19) so that sub-object IS one quad. Struct ARRAYS work
+   too (arity repeats per element, elements step by the tag's size — the
+   layout the '.' arm already uses, probed first rather than assumed),
+   including size deduction (`struct P gpa[]={{1,2,3},{4,5,6}};`).
+   Expectation traps #10 and #11, both caught by the gcc cross-check
+   BEFORE the compiler was blamed: a flat 8-value list into `struct P
+   pf[4]` fills members in order (so `pf[2].b` is 8 and `pf[3]` is all
+   zero — not `pf[3].a==8`), and a deduced 2-element struct array is
+   48 model bytes, not 144. Error paths pinned: excess elements (struct
+   and union), string initializer on a struct ("apply to arrays only"),
+   2-D struct arrays, function-pointer members ("not a compile-time
+   constant"). 74 cases (structinit.c: 21 checks + closer — members in
+   order, partial zero-fill, grouped and flat struct arrays incl. the
+   tail element, enum-folded elements, union first-member semantics and
+   union ARRAYS, by-value one-slot members (local and global), NULL
+   pointer members, globals/statics incl. a persisting static struct,
+   `sizeof` unchanged), green x2, saved-object reloads 22/22 with
+   arrinit 27/27 unchanged, cross-checked against `gcc -std=gnu99`
+   (only the model `sizeof` number adjusted) — identical check by
+   check, clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 

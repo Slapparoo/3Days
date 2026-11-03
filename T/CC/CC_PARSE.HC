@@ -41,6 +41,8 @@ extern U0 CCMakeStatic(CCCtrl *cc,CSym *s);
 extern U0 CCReserveArray(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 total,I64 use_arena);
 extern I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *pisstr);
 extern U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena);
+extern I64 CCInitMap(CCCtrl *cc,I64 n,I64 *vgrp,I64 *eloc,I64 A);
+extern U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena);
 extern I64 CCEnumTagFind(CCCtrl *cc,U8 *nm);
 extern U0 CCEnumDef(CCCtrl *cc,U8 *tag);
 extern U0 CCSnap(CCCtrl *cc,U8 **pp,I64 *ptk,I64 *pkw,I64 *pnum,U8 *pstr);
@@ -3220,27 +3222,83 @@ I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *pisstr)
   return n;
 }
 
-/* M22: consume and land an aggregate initializer; '=' is already eaten
- * and the FIRST dimension may still be unknown (pend) — deduction sizes
- * the object from the initializer exactly like C: the number of elements
- * touched, counted through the same mapping the stores use.
- *
- * Element mapping (C 6.7.9): an element of a 1-D array is a scalar
- * (arity 1); a row of a 2-D array has arity dim2. A brace group starts
- * the NEXT element and its values fill it in order; flat values fill the
- * current element and roll over into the next when it is full — which is
- * why `int m[2][3]={1,2,3,4,5,6}` and `{{1,2,3},{4,5,6}}` agree while
- * `{{1},{2,3},{4}}` on a 1-D array is excess-elements (C's warning, our
- * error). Overfull elements and elements past the object diagnose; C
- * zero-fills everything the initializer leaves, and for frame objects we
- * MUST (that memory is not pre-zeroed), so the store walk writes every
- * element in ascending order, taking initializer values where one maps. */
+/* Map collected initializer values onto TARGET indices per C 6.7.9.
+ * The target arity A comes from what is being initialized: 1 for a 1-D
+ * array of scalars, dim2 for a row, nmem for a struct, 1 for a union.
+ * A brace group OPENS the next target and fills it in order; flat values
+ * keep filling the current target and roll over when it is full — which
+ * is why `int m[2][3]={1,2,3,4,5,6}` and `{{1,2,3},{4,5,6}}` agree while
+ * `{{1},{2,3},{4}}` on a 1-D array is excess. eloc[] receives each
+ * value's target index; the result is the highest index touched (-1 on a
+ * diagnostic). Flat values must stay positionally distinct: the mapper
+ * recognizes "same target" as an UNCHANGED group id, so every flat value
+ * reports -1 and the rollover test runs for each — M22 originally let
+ * all flat values share -2, which made {10,20,30} look like three values
+ * crammed into one scalar target and killed the first global in the
+ * fixture with a spurious "excess elements". */
+I64 CCInitMap(CCCtrl *cc,I64 n,I64 *vgrp,I64 *eloc,I64 A)
+{
+  I64 i,E,off,lastg,hw,elem;
+  E=0;
+  off=0;
+  lastg=-2;
+  hw=-1;
+  for (i=0;i!=n;i++)
+  {
+    if (vgrp[i]>=0)
+    {
+      if (vgrp[i]!=lastg)
+      {
+        if (off)		//a group opens the next target, finishing
+        {			//a partially filled one first
+          E++;
+          off=0;
+        }
+        lastg=vgrp[i];
+      }
+    }
+    else
+    {
+      lastg=-1;		//flat: keep filling, roll over when full
+      if (off>=A)
+      {
+        E++;
+        off=0;
+      }
+    }
+    if (off>=A)		//only a group can land here overfull
+    {
+      CCError(cc,"excess elements in initializer");
+      return -1;
+    }
+    elem=E*A+off;
+    eloc[i]=elem;
+    off++;
+    if (elem>hw)
+      hw=elem;
+  }
+  if (cc->errs)
+    return -1;
+  return hw;
+}
+
+/* M22: consume and land an ARRAY initializer; '=' is already eaten and
+ * the FIRST dimension may still be unknown (pend) — deduction sizes the
+ * object from the highest element the mapping touches, exactly like C
+ * (a partial final row still counts). C zero-fills everything the
+ * initializer leaves; for frame objects we MUST (that memory is not
+ * pre-zeroed), so the store walk visits every element in ascending order
+ * and takes initializer values where one maps. Globals and `static`
+ * objects land as ARENA bytes (compile-time, so a saved object carries
+ * the initial state and every reload starts from it); frame objects
+ * become one store per element, walking the base pointer by the SAME
+ * scale the index path uses: 1 for char arrays, 8 otherwise. */
 U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
 {
   I64 vals[CC_INIT_MAX];
   I64 vgrp[CC_INIT_MAX];
   I64 eloc[CC_INIT_MAX];
-  I64 isstr,total,n,i,stride,v,A,e,elem,E,off,lastg,hw,vi;
+  I64 isstr,total,n,i,stride,v,A,e,hw,vi;
   U8 *bp;
 
   n=CCInitCollect(cc,vals,vgrp,&isstr);
@@ -3255,55 +3313,17 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
     A=s->dim2;			//arity of one element (a row)
   else
     A=1;			//scalars — a group may supply one value
-  E=0;
-  off=0;
-  lastg=-2;
-  hw=-1;
-  for (i=0;i!=n;i++)
+  if (isstr)
   {
-    if (isstr)
-      elem=i;			//the literal's bytes ARE consecutive
-    else
-    {
-      if (vgrp[i]>=0)
-      {
-        //A brace group IS an element boundary: its first value opens
-        //the next element (finishing a partially filled one first); the
-        //rest fill it in order and anything past its arity is excess.
-        if (vgrp[i]!=lastg)
-        {
-          if (off)
-          {
-            E++;
-            off=0;
-          }
-          lastg=vgrp[i];
-        }
-      }
-      else
-      {
-        //Flat values have no identity of their own (they all report
-        //-1): each one keeps filling the current element and rolls
-        //over to the next when that element is full — which is what
-        //makes {1,2,3,4,5,6} fill two rows of a [2][3] in order.
-        lastg=-1;
-        if (off>=A)
-        {
-          E++;
-          off=0;
-        }
-      }
-      if (off>=A)		//only a group can land here overfull
-      {
-        CCError(cc,"excess elements in array initializer");
-        return;
-      }
-      elem=E*A+off;
-      off++;
-    }
-    eloc[i]=elem;
-    if (elem>hw)
-      hw=elem;
+    for (i=0;i!=n;i++)
+      eloc[i]=i;		//the literal's bytes ARE consecutive
+    hw=n-1;			//elements
+  }
+  else
+  {
+    hw=CCInitMap(cc,n,vgrp,eloc,A);
+    if (hw<0)
+      return;
   }
   if (pend)
   {
@@ -3341,7 +3361,7 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
   }
   else if (n&&(eloc[n-1]>=total))
   {
-    CCError(cc,"excess elements in array initializer");
+    CCError(cc,"excess elements in initializer");
     return;
   }
   if (pend)
@@ -3388,7 +3408,10 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
   //they map, zeros everywhere else), walking the base pointer up by the
   //element stride. No expression is evaluated here, so RAX — the only
   //register these instructions touch that the declaration needs — is
-  //free to hold the walk, and MOVABS RCX feeds the value.
+  //free to hold the walk, and MOVABS RCX feeds the value: the 8-bit MOV
+  //needs a nameless-register ModRM reg field, and without REX.R 0x38
+  //asks for BH (the high byte of RBX) — which silently zeroed every
+  //char-array initializer byte until CL (reg 1, ModRM 0x08) replaced it.
   CCVarAddr(cc,s);			//RAX = &a[0]
   for (e=0;e!=total;e++)
   {
@@ -3398,12 +3421,6 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
       v=vals[vi];
       vi++;
     }
-    //RCX carries the value: the 8-bit MOV needs a NAMELESS-register
-    //ModRM reg field, and without a REX.R prefix 0x38 asks for BH (the
-    //high byte of RBX) — the first draft stored that and every char
-    //array initializer byte landed as zero. CL (reg 1, ModRM 0x08)
-    //needs no prefix, and no expression is evaluated here, so spending
-    //RCX is free.
     CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,imm64
     CCQuad(cc,v);
     if (stride==1)
@@ -3419,6 +3436,129 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
       CCByte(cc,0x48);CCByte(cc,0x05);	//ADD RAX,imm32
       CCWord(cc,stride);
     }
+  }
+}
+
+/* M23: struct and union initializers — same collector, same mapper, with
+ * the target ARITY read from the tag: a struct has one 8-byte target per
+ * member in declaration order (nmem per element), a union has ONE (its
+ * first member; extra values in its group are excess, as in C). A struct
+ * ARRAY repeats that arity per element and steps elements by the tag's
+ * size, which is exactly how the '.' arm walks them at run time (probed:
+ * 8-byte member slots ascending from the base slot, elements contiguous
+ * by size). Every target gets a store — the ones the initializer left out
+ * get zeros, which C requires and frame memory demands. Values land as
+ * full QUADS: each member slot is 8 bytes in this model (a char member's
+ * upper bytes are never read through it), and a by-value member can only
+ * be a one-slot tag (M19), so that sub-object IS one quad. Designators
+ * (`{.a=1}`) are not supported, and neither is a 2-D array of structs. */
+U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
+{
+  I64 vals[CC_INIT_MAX];
+  I64 vgrp[CC_INIT_MAX];
+  I64 eloc[CC_INIT_MAX];
+  I64 isstr,n,hw,A,total,e2,vi,v,memb,off2,prev;
+  U8 *bp;
+
+  n=CCInitCollect(cc,vals,vgrp,&isstr);
+  if (n<0)
+    return;
+  if (isstr)
+  {
+    CCError(cc,"string initializers apply to arrays only");
+    return;
+  }
+  if (s->dim2)
+  {
+    CCError(cc,"struct initializers support one dimension only");
+    return;
+  }
+  if (cc->st[stag].isu)
+    A=1;			//a union initializes ONE member
+  else
+    A=cc->st[stag].nmem;	//a struct fills its members in order
+  hw=CCInitMap(cc,n,vgrp,eloc,A);
+  if (hw<0)
+    return;
+  if (pend)
+  {
+    if (hw<0)
+    {
+      CCError(cc,"array size missing: empty initializer");
+      return;
+    }
+    s->dim=(hw+1)/A;
+    if (((hw+1)%A)!=0)
+      s->dim=s->dim+1;
+    if ((s->dim<1)||(s->dim>2048))
+    {
+      CCError(cc,"array size out of range");
+      return;
+    }
+  }
+  total=s->dim*A;
+  if (n&&(eloc[n-1]>=total))
+  {
+    CCError(cc,"excess elements in initializer");
+    return;
+  }
+  if (pend)
+    CCReserveArray(cc,s,TY_STRUCT,stag,total,use_arena);
+  vi=0;
+  if (use_arena)
+  {
+    for (e2=0;e2!=total;e2++)
+    {
+      v=0;
+      if ((vi<n)&&(eloc[vi]==e2))
+      {
+        v=vals[vi];
+        vi++;
+      }
+      memb=e2%A;
+      //Member offsets are a table, not a stride: recompute the target
+      //address from the tag every time (element = e2/A, member = e2%A).
+      bp=cc->locals+s->offset+((e2-memb)/A)*cc->st[stag].size+cc->st[stag].moff[memb];
+      bp[0]=v;
+      bp[1]=v>>8;
+      bp[2]=v>>16;
+      bp[3]=v>>24;
+      bp[4]=v>>32;
+      bp[5]=v>>40;
+      bp[6]=v>>48;
+      bp[7]=v>>56;
+    }
+    return;
+  }
+  if ((cc->ep-cc->code)+20*(total+8)>CC_CODE_SIZE)
+  {
+    CCError(cc,"struct initializer too large for the code buffer");
+    return;
+  }
+  //Frame object: walk RAX forward by the DIFFERENCE between consecutive
+  //targets — ascending by construction, since the next element starts at
+  //size+moff[0] while the previous stopped at moff[nmem-1] below that.
+  CCVarAddr(cc,s);			//RAX = &object (element 0, member 0)
+  prev=0;
+  for (e2=0;e2!=total;e2++)
+  {
+    v=0;
+    if ((vi<n)&&(eloc[vi]==e2))
+    {
+      v=vals[vi];
+      vi++;
+    }
+    memb=e2%A;
+    off2=((e2-memb)/A)*cc->st[stag].size+cc->st[stag].moff[memb];
+    if (off2!=prev)
+    {
+      CCByte(cc,0x48);CCByte(cc,0x05);	//ADD RAX,imm32
+      CCWord(cc,off2-prev);
+      prev=off2;
+    }
+    CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,imm64
+    CCQuad(cc,v);
+    CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0x08);	//MOV [RAX],RCX
   }
 }
 
@@ -3599,20 +3739,16 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
   }
   if (CCTkIsPunct(cc,'='))
   {
-    if (isarr)				//M22: { constants } (nested groups
-    {					//flattened), a string literal for
-      if (base==TY_STRUCT)		//byte arrays, and the tail zeros
-      {
-        CCError(cc,"struct array initializers not supported");
-        return;
-      }
-      CCLex(cc);			//consume '='
-      CCArrayInit(cc,s,base,stag,pend,sstat);
+    if (s->ty==TY_STRUCT)		//M23: struct|union object, or an
+    {					//array of them — CCStructInit
+      CCLex(cc);			//reads the arity from the tag
+      CCStructInit(cc,s,stag,pend,sstat);
       return;
     }
-    if (s->ty==TY_STRUCT)
-    {
-      CCError(cc,"struct initializers not supported");
+    if (isarr)				//M22: { constants } (groups map to
+    {					//elements), a string literal for
+      CCLex(cc);			//byte arrays, and the tail zeros
+      CCArrayInit(cc,s,base,stag,pend,sstat);
       return;
     }
     if (s->persist)
@@ -4267,20 +4403,15 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     cc->goff+=cc->st[stag].size-8;	//claim the struct's bytes
   if (CCAccept(cc,'='))
   {
-    if (isarr)				//M22: aggregate initializers land
-    {					//as arena bytes (CCArrayInit
-      if (base==TY_STRUCT)		//handles deduction and the tail
-      {
-        CCError(cc,"struct array initializers not supported");
-        return FALSE;
-      }
-      CCArrayInit(cc,s,base,stag,pend,TRUE);
+    if (s->ty==TY_STRUCT)		//M23: struct|union (arrays of
+    {					//them included) land member by
+      CCStructInit(cc,s,stag,pend,TRUE);	//member in the arena
       return FALSE;
     }
-    if (s->ty==TY_STRUCT)
-    {
-      CCError(cc,"global struct initializers not supported");
-      return FALSE;
+    if (isarr)				//M22: aggregate initializers land
+    {					//as arena bytes (CCArrayInit
+      CCArrayInit(cc,s,base,stag,pend,TRUE);	//handles deduction and
+      return FALSE;			//the tail zeros)
     }
     if (cc->tk==TK_STR)
     {
@@ -4484,6 +4615,9 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag,I64 is_union)
     CCError(cc,"empty struct");
     return -1;
   }
+  cc->st[t].isu=is_union;	//M23: initializer arity comes from this
+				//tag slot is RECYCLED by the scope
+				//waterlines, so both paths must write it
   if (is_union)
   {
     //M19: the single-slot union. Every member type this model admits

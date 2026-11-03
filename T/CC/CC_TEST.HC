@@ -298,6 +298,10 @@ CCAssert(49,"T:/CC/TEST/scoped.c","scoped");
  * rules), size deduction, string byte init, tail zero fill, globals +
  * `static` arrays, braced scalars. */
 CCAssert(27,"T:/CC/TEST/arrinit.c","arrinit");
+/* M23: struct|union initializers — members in declaration order, partial
+ * init zero-filled, C's brace-group-to-element mapping with union arity 1,
+ * struct arrays (deduced too), globals, statics, one-slot members. */
+CCAssert(22,"T:/CC/TEST/structinit.c","structinit");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

@@ -161,7 +161,9 @@ class CStag
   I64	msty[CC_MAX_MEMBERS];	//member's struct tag (TY_PTR to struct), else -1
   I64	moff[CC_MAX_MEMBERS];	//byte offset = 8*i
   I64	nmem;
-  I64	size;			//8*nmem bytes
+  I64	size;			//8*nmem bytes (8 for a union)
+  I64	isu;			//M23: TRUE for a union — initializer
+				//arity is ONE member, not nmem
 };
 
 class CSym
