@@ -575,6 +575,8 @@ I64 CCBase(CCCtrl *cc,I64 kind)
     return cc->hflush;
   if (kind==CC_B_LIB)
     return cc->lib;		//delta = 8*slot into the helper table
+  if (kind==CC_B_CODE)
+    return cc->code;		//M18: function-address values
   return cc;			//CC_B_CTRL: the cc block itself
 }
 

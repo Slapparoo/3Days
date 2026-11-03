@@ -544,7 +544,7 @@ Bool CCLoad(U8 *fn)
   for (i=0;i!=nfix;i++)
   {
     kind=hdr[6+3*i];
-    if (((kind<0)||(kind>CC_B_LIB))||((hdr[8+3*i]<0)||(hdr[8+3*i]+8>clen)))
+    if (((kind<0)||(kind>CC_B_CODE))||((hdr[8+3*i]<0)||(hdr[8+3*i]+8>clen)))	//M18: CODE is a legal base kind now
     {
       "CC ERROR: CCLoad: %s has a corrupt relocation\n",fn;
       return FALSE;

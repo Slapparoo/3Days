@@ -281,6 +281,9 @@ CCAssert(14,"T:/CC/TEST/tern.c","tern");
 /* M17: two-dimensional arrays — row scaling, array-row params (int/
  * char/struct), byte-stride char[] params, 2-D sizeof, paren decay. */
 CCAssert(22,"T:/CC/TEST/array2.c","array2");
+/* M18: function pointers — decls in every position, forward addresses
+ * patched at definition, indirect/member/typedef calls, NULL sentinels. */
+CCAssert(27,"T:/CC/TEST/fptr.c","fptr");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

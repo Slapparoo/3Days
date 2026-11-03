@@ -16,6 +16,10 @@ extern U0 CCExpr(CCCtrl *cc);
 extern U0 CCExprNC(CCCtrl *cc);
 extern U0 CCExprLogOr(CCCtrl *cc);
 extern U0 CCExprConditional(CCCtrl *cc);
+extern I64 CCParseFunPtrDecl(CCCtrl *cc,U8 *name);
+extern U0 CCSnap(CCCtrl *cc,U8 **pp,I64 *ptk,I64 *pkw,I64 *pnum,U8 *pstr);
+extern U0 CCRestore(CCCtrl *cc,U8 *p,I64 tk,I64 kw,I64 num,U8 *str);
+extern U0 CCIndirectCallAt(CCCtrl *cc);
 extern U0 CCExprBitOr(CCCtrl *cc);
 extern U0 CCExprEquality(CCCtrl *cc);
 extern U0 CCExprRelational(CCCtrl *cc);
@@ -250,7 +254,11 @@ I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
  * single-sourced at file scope; see M9). */
 U0 CCParseTypedef(CCCtrl *cc)
 {
-  I64 ty,stag;
+  I64 ty,stag,fpok;
+  I64 stk,skw,snum;
+  U8 *spc;
+  U8 sstr[CC_TOK_MAX];
+  U8 fpname[CC_TOK_MAX];
   CCLex(cc);			//consume 'typedef'
   ty=CCAcceptBase(cc,&stag);
   if (ty<0)
@@ -260,6 +268,27 @@ U0 CCParseTypedef(CCCtrl *cc)
   }
   if (ty==TY_VOID)
     ty=TY_CHAR;		//typedef void *vp: vp is a byte pointer
+  fpok=0;
+  if (CCTkIsPunct(cc,'('))		//M18: `typedef int (*cmp_t)(int,
+  {
+    CCSnap(cc,&spc,&stk,&skw,&snum,sstr);	//int);` — the name sits
+    fpok=CCParseFunPtrDecl(cc,fpname);		//INSIDE the parens; the
+    if (!fpok)
+      CCRestore(cc,spc,stk,skw,snum,sstr);	//binding is a plain
+  }
+  if (fpok)
+  {
+    if (cc->tn>=CC_MAX_TYPEDEF)
+    {
+      CCError(cc,"too many typedefs");
+      return;
+    }
+    StrCpy(cc->tname[cc->tn],fpname);
+    cc->tty[cc->tn]=TY_PTR;		//fp values are slot pointers;
+    cc->tn++;				//the arity they promised is the
+    CCExpect(cc,';',"expected ';' after typedef");	//call site's business
+    return;
+  }
   while (CCAccept(cc,'*'))
   {
     if (ty==TY_CHAR)
@@ -488,13 +517,127 @@ U0 CCCompareEmit(CCCtrl *cc,I64 op)
  * TY and drop structness (nested structs are not supported). */
 /* One member of tag bsty resolves to its declared type; a
  * `struct T *m` member keeps tag T so `n->next->v` chains. */
+/* M18: match `(* name ) ( param-list )` — the function-pointer
+ * declarator. The caller has seen '(' and snapshotted the lexer; on
+ * FALSE nothing is consumed (caller restores). On TRUE the name is
+ * captured (possibly empty: anonymous fp params), tokens sit past the
+ * parameter list's ')', and the caller registers a TY_PTR slot. Arity
+ * is deliberately DROPPED: an indirect call takes its arg count from
+ * the call site (see CCIndirectCallAt), and C only requires a match —
+ * mismatched arity through an fp is as broken here as it is machine-
+ * dependent in C. */
+I64 CCParseFunPtrDecl(CCCtrl *cc,U8 *name)
+{
+  I64 depth;
+  name[0]=0;
+  CCLex(cc);			//consume '('
+  if (!CCAccept(cc,'*'))
+    return FALSE;		//`(x)` etc: caller rewinds the one token
+  if (cc->tk==TK_IDENT)
+  {
+    StrCpy(name,cc->tk_str);
+    CCLex(cc);
+  }
+  if (!CCTkIsPunct(cc,')'))
+  {
+    CCError(cc,"expected ')' in function-pointer declarator");
+    return FALSE;
+  }
+  CCLex(cc);
+  if (CCTkIsPunct(cc,'['))
+  {
+    CCError(cc,"function-pointer arrays not supported: keep one (*f)");
+    return FALSE;
+  }
+  if (!CCTkIsPunct(cc,'('))
+  {
+    CCError(cc,"expected parameter list in function-pointer declarator");
+    return FALSE;
+  }
+  CCLex(cc);
+  depth=1;			//swallow params wholesale: fp params may
+  while ((!cc->errs)&&(cc->tk!=TK_EOF)&&depth)
+  {
+    if (CCTkIsPunct(cc,'('))
+      depth++;
+    else if (CCTkIsPunct(cc,')'))
+      depth--;
+    if (depth)
+      CCLex(cc);		//nested declarators inside parse their
+  }				//own parens — the counter keeps the
+  CCExpect(cc,')',"expected ')' after function-pointer parameter list");	//swallow honest
+  if (cc->errs)
+    return FALSE;
+  return TRUE;
+}
+
+/* M18: `expr(args)` when expr is a chain-produced pointer VALUE in
+ * hand; '(' already consumed. Normalize RAX to the TARGET ADDRESS:
+ *   is_addr==1 with ety TY_PTR/TY_CHARP — RAX is the ADDRESS OF the
+ *     pointer slot; the target is its value -> CCVal loads it (the
+ *     member case: `n.fn(2)`).
+ *   is_addr==1 with ety TY_INT — the object IS a function whose
+ *     address the chain already produced (`(*fp)(3)`: the deref marked
+ *     a pending load, but a function has no further load — C adjusts
+ *     the lvalue to exactly this address) -> use RAX as-is.
+ *   is_addr 0/2 — RAX already holds the value (or a decayed base) ✓.
+ * Spill the target to a hidden local (lofs grows; the frame imm32 is
+ * patched at the function's end — switch's proven trick), evaluate
+ * args (RAX free to clobber), reload, CALL RAX, pop args. The callee
+ * is CC-compiled C: plain `ret` + caller-side pops, exactly like
+ * C-to-C calls; HolyC-JIT functions have a different epilogue (see
+ * PLAN) so calling one through a C fp is not supported. */
+U0 CCIndirectCallAt(CCCtrl *cc)
+{
+  I64 n,disp;
+  if ((cc->is_addr==1)&&((cc->ety==TY_PTR)||(cc->ety==TY_CHARP)))
+    CCVal(cc);
+  cc->lofs++;
+  disp=-8*cc->lofs;
+  CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0x85);	//MOV [RBP+d32],RAX
+  CCWord(cc,disp);
+  n=0;
+  if (!CCTkIsPunct(cc,')'))
+  {
+    while ((!cc->errs)&&(cc->tk!=TK_EOF))
+    {
+      CCExprNC(cc);		//commas here are ARGUMENT separators
+      CCByte(cc,0x50);		//PUSH RAX (arg)
+      n++;
+      if (!CCAccept(cc,','))
+        break;
+    }
+  }
+  CCExpect(cc,')',"expected ')' after indirect call args");
+  if (cc->errs)
+    return;
+  CCByte(cc,0x48);CCByte(cc,0x8B);CCByte(cc,0x85);	//MOV RAX,[RBP+d32]
+  CCWord(cc,disp);
+  CCByte(cc,0xFF);CCByte(cc,0xD0);			//CALL RAX
+  CCPopArgs(cc,n);
+  cc->is_addr=0;
+  cc->aty=0;
+  cc->ety=TY_INT;
+  cc->sty=-1;
+  cc->esz2=0;
+}
+
 U0 CCPostfix(CCCtrl *cc)
 {
   I64 ekind,off,mi,bsty,hijack,bty,sty0;
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&
-      (((cc->tk_num=='[')||(cc->tk_num=='.'))||(cc->tk_num==OP_ARROW)))
+      ((((cc->tk_num=='[')||(cc->tk_num=='.'))||(cc->tk_num==OP_ARROW))||(cc->tk_num=='(')))
   {
-    if (cc->tk_num=='[')
+    if (cc->tk_num=='(')
+    {
+      //M18: call through what the chain produced: `n.fn(2)`,
+      //`(*fp)(3)`, `(bp)(1)`. Ident-head calls are handled upstream
+      //by Primary's peek (which parses args itself), so only chain
+      //results and groups reach this arm.
+      CCLex(cc);		//consume '('
+      CCIndirectCallAt(cc);
+    }
+    else if (cc->tk_num=='[')
     {
       bsty=-1;
       hijack=0;
@@ -822,7 +965,33 @@ U0 CCExprPrimary(CCCtrl *cc)
       if (!s)
         s=CCSymNew(cc,save_name,SC_FUN);	//forward reference
       if (s->kind!=SC_FUN)
-        CCError(cc,"not a function");
+      {
+        //M18: `fp(3)` on a pointer-shaped variable (global/local/
+        //param, or a 2-D... no: arrays are TY_CHARP too — calling an
+        //array base is as much UB here as in C). Args are ALREADY
+        //pushed: load the target LAST into RAX (nothing runs after
+        //to clobber it) and CALL RAX.
+        if ((s->ty==TY_PTR)||(s->ty==TY_CHARP))
+        {
+          if (s->dim>1)
+          {
+            CCError(cc,"cannot call through an array of function pointers");
+          }
+          else
+          {
+            CCVarAddr(cc,s);
+            cc->is_addr=1;			//describe the slot we
+            cc->ety=s->ty;			//just located — the
+            cc->aty=0;				//STATE is what CCVal
+            cc->sty=-1;				//reads, and the last
+            cc->esz2=0;				//arg expression left
+            CCVal(cc);				//its own there (calling
+            CCByte(cc,0xFF);CCByte(cc,0xD0);	//CALL RAX	&slot was the
+          }					//first bug here)
+        }
+        else
+          CCError(cc,"not a function");
+      }
       else
         CCCall(cc,s);		//queues if defined later
       CCPopArgs(cc,n);
@@ -844,8 +1013,15 @@ U0 CCExprPrimary(CCCtrl *cc)
       CCError(cc,"undefined variable");
       return;
     }
-    CCVarAddr(cc,s);		//RAX = address of storage
-    if ((s->dim>1)||(s->ty==TY_STRUCT))
+    CCVarAddr(cc,s);		//RAX = address of storage (M18: or the
+    if (s->kind==SC_FUN)	//function's OWN address for SC_FUN —
+    {
+      cc->is_addr=2;		//it is a value already, never loads,
+      cc->ety=TY_PTR;		//never assigns (`f=x` stays a C error)
+      cc->aty=0;
+      cc->sty=-1;
+    }
+    else if ((s->dim>1)||(s->ty==TY_STRUCT))
     {
       //Array or struct name: value IS the address (decay); never load.
       cc->is_addr=2;
@@ -2248,8 +2424,39 @@ U0 CCBlockStmt(CCCtrl *cc)
 U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
 {
   CSym *s;
-  I64 n,n2;
+  I64 n,n2,fpok;
   I64 ty=base;
+  I64 stk,skw,snum;
+  U8 *spc;
+  U8 sstr[CC_TOK_MAX];
+  U8 fpname[CC_TOK_MAX];
+
+  fpok=0;
+  if (CCTkIsPunct(cc,'('))		//M18: `int (*fp)(int)` — the
+  {
+    CCSnap(cc,&spc,&stk,&skw,&snum,sstr);	//ONLY shape that begins
+    fpok=CCParseFunPtrDecl(cc,fpname);	//with '(' after a base type
+    if (!fpok)
+      CCRestore(cc,spc,stk,skw,snum,sstr);
+  }
+  if (fpok)
+  {
+    s=CCSymNew(cc,fpname,SC_LOCAL);
+    if (!s)
+      return;
+    s->ty=TY_PTR;
+    s->sty=-1;
+    s->dim=1;
+    s->dim2=0;
+    if (CCTkIsPunct(cc,'='))		//fp=add; — the RHS yields the
+    {
+      CCVarAddr(cc,s);			//code address (M18 SC_FUN
+      cc->is_addr=1;			//value), stored one quad
+      cc->aty=0;
+      CCAssignTail(cc);
+    }
+    return;
+  }
   while (CCAccept(cc,'*'))
   {
     if (ty==TY_CHAR)
@@ -2473,7 +2680,11 @@ U0 CCStmt(CCCtrl *cc)
  * name on the header surface is a parser-dispatched builtin anyway. */
 U0 CCParseParams(CCCtrl *cc)
 {
-  I64 base,stag,i;
+  I64 base,stag,i,fpok;
+  I64 stk,skw,snum;
+  U8 *spc;
+  U8 sstr[CC_TOK_MAX];
+  U8 fpname[CC_TOK_MAX];
 
   cc->nparam=0;
   if (!CCTkIsPunct(cc,')'))
@@ -2525,6 +2736,16 @@ U0 CCParseParams(CCCtrl *cc)
       }
       cc->psty[cc->nparam]=stag;
       cc->pty[cc->nparam]=base;
+      fpok=0;
+      if (CCTkIsPunct(cc,'('))		//M18: `run(int (*f)(int))` and
+      {
+        CCSnap(cc,&spc,&stk,&skw,&snum,sstr);	//the anonymous
+        fpok=CCParseFunPtrDecl(cc,fpname);	//`int (*)(int)`
+        if (!fpok)
+          CCRestore(cc,spc,stk,skw,snum,sstr);
+      }
+      if (!fpok)
+      {
       while (CCAccept(cc,'*'))
       {
         //char* -> byte pointer; any further pointer (char**, int**) —
@@ -2534,10 +2755,17 @@ U0 CCParseParams(CCCtrl *cc)
         else
           cc->pty[cc->nparam]=TY_PTR;
       }
+      }
       i=cc->nparam;
       cc->pname[i*CC_TOK_MAX]=0;	//empty name = anonymous parameter
       cc->pdim2[i]=0;			//M17: cleared until proven otherwise
-      if (cc->tk==TK_IDENT)
+      if (fpok)
+      {
+        StrCpy(cc->pname+i*CC_TOK_MAX,fpname);	//"" stays anonymous
+        cc->pty[i]=TY_PTR;
+        cc->psty[i]=-1;
+      }
+      else if (cc->tk==TK_IDENT)
       {
         StrCpy(cc->pname+i*CC_TOK_MAX,cc->tk_str);
         CCLex(cc);
@@ -2593,7 +2821,8 @@ U0 CCParseParams(CCCtrl *cc)
  * emitted only for 'main'. */
 U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
 {
-  I64 sub_pos,i,entryflag,t;
+  I64 sub_pos,i,entryflag,t,apv;
+  U8 *app;
   CSym *f,*s;
 
   CCParseParams(cc);
@@ -2662,6 +2891,34 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
   for (i=0;i!=f->npatch;i++)
     CCPatchCallPos(cc,f->patches[i],entry);
   f->npatch=0;
+  //M18: forward function-ADDRESS references (fp=add before add is
+  //defined): write the final absolute into each deferred MOVABS
+  //operand — the buffer never moved, so the position is exact — and
+  //record the save/reload fixup here (delta = bytes from the CODE
+  //base, exactly what CCLoad's generic CCBase+delta patch expects).
+  for (i=0;i!=f->napatch;i++)
+  {
+    app=cc->code+f->apatch[i];
+    apv=cc->code+entry;
+    app[0]=apv;
+    app[1]=apv>>8;
+    app[2]=apv>>16;
+    app[3]=apv>>24;
+    app[4]=apv>>32;
+    app[5]=apv>>40;
+    app[6]=apv>>48;
+    app[7]=apv>>56;
+    if (cc->nfix>=CC_FIXUPS)
+      CCError(cc,"too many absolute-address sites");
+    else
+    {
+      cc->fix_pos[cc->nfix]=f->apatch[i];
+      cc->fix_kind[cc->nfix]=CC_B_CODE;
+      cc->fix_delta[cc->nfix]=entry;
+      cc->nfix++;
+    }
+  }
+  f->napatch=0;
   entryflag=!StrCmp(name,"main");
   cc->cur_entry=entryflag;
   //main(int argc,char *argv[]...): the harness bridge fills those slots.
@@ -2700,10 +2957,41 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
 Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
 {
   U8 name[CC_TOK_MAX];
-  I64 ty=base,val,neg,n,n2,i,entry;
+  I64 ty=base,val,neg,n,n2,i,entry,fpok;
+  I64 stk,skw,snum;
+  U8 *spc;
+  U8 sstr[CC_TOK_MAX];
+  U8 fpname[CC_TOK_MAX];
   U8 *gp;
   CSym *s;
 
+  fpok=0;
+  if (CCTkIsPunct(cc,'('))		//M18: global `int (*gf)(int)`
+  {
+    CCSnap(cc,&spc,&stk,&skw,&snum,sstr);
+    fpok=CCParseFunPtrDecl(cc,fpname);
+    if (!fpok)
+      CCRestore(cc,spc,stk,skw,snum,sstr);
+  }
+  if (fpok)
+  {
+    s=CCSymNew(cc,fpname,SC_GLOBAL);
+    if (!s)
+      return FALSE;
+    s->ty=TY_PTR;
+    s->sty=-1;
+    s->dim=1;
+    s->dim2=0;
+    if (CCTkIsPunct(cc,'='))
+    {
+      //Global fp initializers stay in the constant-only club: a
+      //function address is known at compile time but the arena-write
+      //path takes TK_NUM; assign in main instead (documented).
+      CCError(cc,"global initializer must be a constant");
+      return FALSE;
+    }
+    return FALSE;		//FALSE = "declarator done, ';' follows"
+  }
   while (CCAccept(cc,'*'))
   {
     if (ty==TY_CHAR)
@@ -2848,7 +3136,12 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
  * by-value nested structs, or initializers. Returns the tag id, -1 error. */
 I64 CCStructDef(CCCtrl *cc,U8 *tag)
 {
-  I64 t,mty,msty,mi;
+  I64 t,mty,msty,mi,fpok;
+  I64 stk,skw,snum;
+  U8 *spc;
+  U8 sstr[CC_TOK_MAX];
+  U8 fpname[CC_TOK_MAX];
+  U8 *nm;
   if (cc->nst>=CC_STRUCTS)
   {
     CCError(cc,"too many structs");
@@ -2867,6 +3160,7 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag)
   while ((!cc->errs)&&(cc->tk!=TK_EOF)&&!CCTkIsPunct(cc,'}'))
   {
     msty=-1;
+    fpok=0;
     if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_STRUCT))
     {
       CCLex(cc);
@@ -2882,16 +3176,31 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag)
         return -1;
       }
       CCLex(cc);
-      if (!CCAccept(cc,'*'))
+      if (CCTkIsPunct(cc,'('))		//M18: `struct T (*fn)()` member
       {
-        CCError(cc,"struct members must be pointers: struct T *m");
-        return -1;
+        CCSnap(cc,&spc,&stk,&skw,&snum,sstr);
+        fpok=CCParseFunPtrDecl(cc,fpname);
+        if (!fpok)
+          CCRestore(cc,spc,stk,skw,snum,sstr);
       }
-      while (CCAccept(cc,'*'))
+      if (fpok)
       {
-        //`struct T **m` is still a slot pointer.
+        mty=TY_PTR;		//an fp member is a plain slot
+        msty=-1;		//address: no tag involved
       }
-      mty=TY_PTR;
+      else
+      {
+        if (!CCAccept(cc,'*'))
+        {
+          CCError(cc,"struct members must be pointers: struct T *m");
+          return -1;
+        }
+        while (CCAccept(cc,'*'))
+        {
+          //`struct T **m` is still a slot pointer.
+        }
+        mty=TY_PTR;
+      }
     }
     else if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_CHAR)))
     {
@@ -2900,12 +3209,25 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag)
       else
         mty=TY_INT;
       CCLex(cc);
-      while (CCAccept(cc,'*'))
+      fpok=0;
+      if (CCTkIsPunct(cc,'('))		//M18: `int (*fn)(int)` member
       {
-        if (mty==TY_CHAR)
-          mty=TY_CHARP;
-        else
-          mty=TY_PTR;
+        CCSnap(cc,&spc,&stk,&skw,&snum,sstr);
+        fpok=CCParseFunPtrDecl(cc,fpname);
+        if (!fpok)
+          CCRestore(cc,spc,stk,skw,snum,sstr);
+      }
+      if (fpok)
+        mty=TY_PTR;
+      else
+      {
+        while (CCAccept(cc,'*'))
+        {
+          if (mty==TY_CHAR)
+            mty=TY_CHARP;
+          else
+            mty=TY_PTR;
+        }
       }
     }
     else
@@ -2913,10 +3235,26 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag)
       CCError(cc,"struct members are int/char (optionally starred) or struct pointers");
       return -1;
     }
-    if (cc->tk!=TK_IDENT)
+    if (fpok)
     {
-      CCError(cc,"expected member name");
-      return -1;
+      //M18: the declarator swallowed the name (`(*fn)`); an anonymous
+      //member would be unreachable, so C-legal or not it is an error.
+      if (!fpname[0])
+      {
+        CCError(cc,"function-pointer members need a name");
+        return -1;
+      }
+      nm=fpname;
+    }
+    else
+    {
+      if (cc->tk!=TK_IDENT)
+      {
+        CCError(cc,"expected member name");
+        return -1;
+      }
+      nm=cc->tk_str;
+      CCLex(cc);
     }
     mi=cc->st[t].nmem;
     if (mi>=CC_MAX_MEMBERS)
@@ -2924,8 +3262,7 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag)
       CCError(cc,"too many struct members");
       return -1;
     }
-    StrCpy(cc->st[t].mname+mi*CC_TOK_MAX,cc->tk_str);
-    CCLex(cc);
+    StrCpy(cc->st[t].mname+mi*CC_TOK_MAX,nm);
     if (CCTkIsPunct(cc,'['))
     {
       CCError(cc,"struct member arrays not supported");
@@ -3038,8 +3375,13 @@ I64 CCParse(CCCtrl *cc)
   for (i=0;i!=cc->sym_cnt;i++)
   {
     s=&cc->syms[i];
-    if ((s->kind==SC_FUN)&&(s->offset<0)&&(s->npatch))
-      CCError(cc,"call to undefined function");
+    if ((s->kind==SC_FUN)&&(s->offset<0))
+    {
+      if (s->npatch)
+        CCError(cc,"call to undefined function");
+      if (s->napatch)		//M18: prototype promised an address
+        CCError(cc,"address of undefined function");	//nobody ever defined
+    }
   }
   if (cc->errs)
     return -1;

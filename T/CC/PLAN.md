@@ -50,7 +50,9 @@ self-referential links — see M9), string and char literals,
 `do-while` (M14), `goto`/labels and the conditional `?:` (M16),
 functions (forward refs,
 recursion, and M13 prototype declarations `int f(int a);` — undefined
-at link time is a compile error), `printf` (literal format:
+at link time is a compile error), function pointers (M18: declared in
+any position, assigned from a name or `&name`, called directly or
+through `(*fp)`/`(fp)`/member/typedef/param forms), `printf` (literal format:
 `%d %s %c %%`), `putchar`, `exit`, and the
 M12 stdlib subset — `strlen strcmp strcpy strchr memmove memcpy memset
 memcmp malloc atoi abs puts srand rand` (delegated to kernel routines
@@ -97,7 +99,20 @@ Not supported — each currently fails with a compile diagnostic:
   (C requires parens — we eat them as the operator, harmless); mixed-
   type arms fold to the int model, identical-kind arms keep element
   types and struct tags so `(c?&p1:&p2)->x` works.
-- `float`/`double`, unions, function pointers in C.
+- `float`/`double`, unions.
+- Function-pointer edges (M18): arity is NOT checked — `int (*f)(int)`
+  called with the wrong arg count against a mismatched callee is as
+  undefined as the C it mirrors (mismatched types at assignment are
+  likewise silent — the declarator swallows params wholesale); arrays
+  of function pointers are rejected with a clean diagnostic (one
+  `(*f)` per variable); calling a HOLYC-JIT function through a C fp is
+  unsupported (Callees must be CC-compiled: plain `ret` + caller-side
+  pops — HolyC's epilogue differs); `sizeof(*fp)` reports 8 where C
+  rejects a function type; a function address used before its
+  DEFINITION resolves at definition time (prototype required first,
+  like any C use); global fp initializers stay in the constant-only
+  club — assign in a function body; a stored fp is a raw code address:
+  NULL is the only portable sentinel (`fp==0` / `fp!=0` work).
 - Array edges (M17): THREE dimensions are rejected (symbol carries
   dim/dim2 only); `sizeof(m[i])` on a row goes through the expression
   path and reports the POINTER size (C's row size needs the bare
@@ -671,6 +686,60 @@ Not supported — each currently fails with a compile diagnostic:
    the next row exactly like C), 2-D sizeof totals), green x3, saved-
    object reloads 22/22/22/22, `||`-and-`&&` side-effect probes 14/14,
    clean `CC TESTS: 0 failed`.
+ - [x] **M18** function pointers. Declarator: `CCParseFunPtrDecl`
+   matches `(* name ) ( param-list )` after any base type — used from
+   local decls, global decls, struct members (int/char/struct-based),
+   parameters (named or ANONYMOUS `int (*)(int)`), and typedefs (name
+   captured INSIDE the parens); every call site snapshots with
+   CCSnap/CCRestore and rewinds on FALSE (`(x)` groupings survive the
+   peek). Params are SWALLOWED with a depth counter (nested declarators
+   parse their own parens) and deliberately DROPPED: an indirect call
+   takes its arg count from the call site, and C only requires a match.
+   Values: an SC_FUN name IS a code address — CCVarAddr emits
+   MOVABS RAX,code+off with a CC_B_CODE relocation (new base kind;
+   CCLoad's kind validation bound moved from CC_B_LIB to CC_B_CODE —
+   forgetting it rejects every fp object as "corrupt relocation"),
+   is_addr=2 (value, never loads, never assigns: `f=x` stays C's
+   error). FORWARD addresses: a prototype-then-definition pair queues
+   the MOVABS operand positions on the symbol (apatch/napatch); at
+   definition the final absolute is written into the buffer (the code
+   buffer is allocated ONCE per compile by CCInit — queued positions
+   never slide) AND the fixup record is appended there (delta=entry:
+   exactly what CCLoad's generic CCBase+delta patch consumes). A
+   prototype whose body never arrives leaves queued addresses →
+   "address of undefined function" at the end of the TU. Under noemit
+   nothing is emitted AND nothing queued (a silent scan that recorded
+   a 10-byte site whose bytes were never written would have the
+   definition-time patch scribble over LIVE code). Calls through
+   values: Primary's IDENT-peek dispatch handles `fp(3)` (args pushed
+   first, target loaded LAST into RAX — the landmine: CCVarAddr does
+   NOT write the pending-lvalue state, the caller does; without setting
+   is_addr/ety/aty/sty/esz2 by hand, CCVal used the LAST ARGUMENT'S
+   state, skipped the slot load, and `call rax` executed the stack
+   slot — SIGSEGV with the return address looking like code). Chain
+   results (`n.fn(2)`, `(*fp)(3)`, `(bp)(1)`) flow through a new
+   Postfix `(` arm → CCIndirectCallAt: normalize RAX to the TARGET
+   (is_addr==1+TY_PTR: CCVal loads the slot — the member case;
+   is_addr==1+TY_INT: use as-is — `*fp` left a pending-load marker
+   but a function HAS no further load; is_addr 0/2: already a value);
+   spill to a hidden local (lofs grows; frame imm32 patched at function
+   end — switch's trick), evaluate args with RAX free, reload, CALL
+   RAX, pop. Struct fp members (`int (*fn)(int,int);`) ride the member
+   machinery unchanged: TY_PTR member, '.' yields is_addr=1 member
+   address, the `(` arm loads it. Landmines this milestone stepped on,
+   all probe-pinned: the peek-path state bug above; arity-mismatch
+   probes that passed the compiler and failed the MATHS (`runvia`
+   taking `int(*)(int)` around a two-arg `add` — the compiler is right,
+   C is UB); a fixture referencing a global before its file-scope
+   declaration (C agrees); expected-sum traps (twice(later)=33+44=77,
+   not 78 — fifth such catch). Saved objects rebase flawlessly: fp
+   values survive dump/reload at 27/27/27/27. 69 cases (fptr.c: 26
+   checks + closer — member/global/typedef/param fps, `(*fp)`/`(fp)`/
+   `(fp=expr)(...)` forms, forward-address resolution, zero-arg side-
+   effect counting, NULL sentinels, address equality, sizeof, anon
+   declarators), green x3, saved-object round trips 27/27/27/27,
+   error paths pinned (undefined-label-style diagnostics for int-call,
+   prototype-only address use, fp arrays), clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 
@@ -773,6 +842,11 @@ Not supported — each currently fails with a compile diagnostic:
 - Expression value always lands in RAX; binary ops `PUSH` the left
   half and `POP` it back into RCX.
 - Every emit goes through `CCByte`/`CCWord`/`CCQuad` (bounds-checked).
+- Absolute code addresses (fp values, M18) relocate through base kind
+  CC_B_CODE (CCLoad validates `kind>CC_B_CODE`); forward uses queue
+  operand positions on the symbol and resolve AT DEFINITION — both the
+  buffer operand and the fixup delta get written there, which is safe
+  only because CCInit allocates the code buffer once per compile.
 - Type analysis for `sizeof(expr)`/cast decisions runs the REAL parser
   with `cc->noemit=1` (M15): CCByte refuses everything (so CCWord/
   CCHalf/CCQuad inherit the freeze), CCQuadAbs refuses its FIXUP

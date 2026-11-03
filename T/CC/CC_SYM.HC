@@ -91,7 +91,39 @@ U0 CCVarAddr(CCCtrl *cc,CSym *s)
     CCWord(cc,CCRbpDisp(cc,s));
   }
   else if (s->kind==SC_FUN)
-    CCError(cc,"function name used as variable");
+  {
+    //M18: in C a function name IS an address value. Offset known?
+    //emit the code-buffer absolute (relocatable via CC_B_CODE, so a
+    //saved object rebases identically on reload). is_addr=2: it is
+    //already a value (never loads) and never assignable ("assignment
+    //to array" is the reuse of that state — C rejects `f=x` too).
+    //Forward reference (prototype seen, body later): queue the operand
+    //position with the symbol; CCParseFun writes the final address at
+    //definition and records the save/reload fixup then. The code
+    //buffer is allocated once per compile (CCInit), so the queued
+    //position never slides under a buffer move. Under noemit nothing
+    //is emitted AND nothing queued — a silent sizeof scan must not
+    //register a site whose 10 bytes were never written.
+    if (s->offset<0)
+    {
+      if (!cc->noemit)
+      {
+        if (s->napatch>=CC_PATCHES)
+          CCError(cc,"too many forward references to this function");
+        else
+        {
+          CCByte(cc,0x48);CCByte(cc,0xB8);	//MOVABS RAX,placeholder
+          s->apatch[s->napatch++]=cc->ep-cc->code;
+          CCQuad(cc,0);
+        }
+      }
+    }
+    else
+    {
+      CCByte(cc,0x48);CCByte(cc,0xB8);		//MOVABS RAX,code+off
+      CCQuadAbs(cc,CC_B_CODE,cc->code+s->offset);
+    }
+  }
   else
   {
     CCByte(cc,0x48);CCByte(cc,0xB8);			//MOVABS RAX,addr

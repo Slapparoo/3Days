@@ -112,6 +112,10 @@
 #define CC_B_CTRL	4	//the cc block itself (argc/argv fields)
 #define CC_B_HFLUSH	5	//the HolyC CCFlush() helper address
 #define CC_B_LIB	6	//cc->lib[] stdlib delegation helper table
+#define CC_B_CODE	7	//M18: the code buffer itself — the base
+				//for FUNCTION ADDRESSES (fp values). A
+				//saved object re-derives code+delta on
+				//reload exactly like the other kinds.
 
 /* M12: cc->lib[] slots — zero-arg HolyC helpers that read staged args
  * from cc->ext[] and call kernel routines (CC_LIB.HC). Slot order is
@@ -162,6 +166,9 @@ class CSym
   I64	has_init;
   I64	patches[CC_PATCHES];	//call sites (rel32 operand pos) awaiting def
   I64	npatch;
+  I64	apatch[CC_PATCHES];	//M18: MOVABS-operand positions wanting this
+  I64	napatch;		//function's code address (fp = f before
+				//definition); resolved by CCParseFun
   I64	fargc;		//SC_FUN: parameter count (CCFind arg thunks)
   I64	extstub;	//cached address of the zero-arg ext[] stub
 			//(CCExtStub); 0 = not built yet; resets with CCInit
