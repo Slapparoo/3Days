@@ -284,6 +284,9 @@ CCAssert(22,"T:/CC/TEST/array2.c","array2");
 /* M18: function pointers — decls in every position, forward addresses
  * patched at definition, indirect/member/typedef calls, NULL sentinels. */
 CCAssert(27,"T:/CC/TEST/fptr.c","fptr");
+/* M19: qualifier keywords, unsigned/signed char, unions (slot-aliased
+ * tags, by-value one-slot members), escapes, literal indexing. */
+CCAssert(40,"T:/CC/TEST/unionc.c","unionc");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

@@ -18,6 +18,7 @@ extern U0 CCExprLogOr(CCCtrl *cc);
 extern U0 CCExprConditional(CCCtrl *cc);
 extern I64 CCParseFunPtrDecl(CCCtrl *cc,U8 *name);
 extern U0 CCSnap(CCCtrl *cc,U8 **pp,I64 *ptk,I64 *pkw,I64 *pnum,U8 *pstr);
+extern I64 CCStructDef(CCCtrl *cc,U8 *tag,I64 is_union);
 extern U0 CCRestore(CCCtrl *cc,U8 *p,I64 tk,I64 kw,I64 num,U8 *str);
 extern U0 CCIndirectCallAt(CCCtrl *cc);
 extern U0 CCExprBitOr(CCCtrl *cc);
@@ -152,6 +153,12 @@ I64 CCTokTypeStart(CCCtrl *cc)
     return TRUE;
   if ((kw==KW_STRUCT)||(kw==KW_CONST))
     return TRUE;
+  if ((kw==KW_UNION)||((kw==KW_EXTERN)||((kw==KW_STATIC)||(kw==KW_REGISTER))))
+    return TRUE;
+  if ((kw==KW_AUTO)||(kw==KW_VOLATILE))
+    return TRUE;
+  if (kw==KW_INLINE)
+    return TRUE;
   if ((kw==KW_VOID)||(kw==KW_UNSIGNED))
     return TRUE;
   if ((kw==KW_SIGNED)||(kw==KW_LONG))
@@ -170,52 +177,89 @@ I64 CCTokTypeStart(CCCtrl *cc)
  * int family, or void with anything, is an error. */
 I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
 {
-  I64 ty=-1,ti;
+  I64 ty=-1,ti,had_int,had_char,tent;
   *pstag=-1;
+  had_int=0;
+  had_char=0;
+  tent=0;
   //No `continue` in HolyC (the keyword does not exist in this dialect):
   //the fold is one if/else chain per token, and each arm advances or
   //breaks. See PLAN.
+  //M19 fold rules, C-truth in the single-width byte/slot model:
+  //  qualifiers (const signed extern static register auto volatile
+  //  inline) are no-ops that PROVISIONALLY promise int — exactly C's
+  //  default-int when nothing else shows up — but a real base (char/
+  //  void/struct/typedef) overwrites the promise;
+  //  had_int (int/long/short ONLY) blocks char both ways (`unsigned
+  //  char` and `char unsigned` fold to the byte model because char IS
+  //  the unsigned byte model here); had_char blocks int/long/short.
   while (cc->tk==TK_IDENT)
   {
-    if ((cc->tk_kw==KW_CONST)||(cc->tk_kw==KW_SIGNED))
-      CCLex(cc);
+    if ((cc->tk_kw==KW_CONST)||((cc->tk_kw==KW_SIGNED)||((cc->tk_kw==KW_EXTERN)||((cc->tk_kw==KW_STATIC)||((cc->tk_kw==KW_REGISTER)||((cc->tk_kw==KW_AUTO)||((cc->tk_kw==KW_VOLATILE)||(cc->tk_kw==KW_INLINE))))))))
+    {
+      if (ty<0)
+      {
+        ty=TY_INT;		//default-int promise; bases overwrite
+        tent=1;			//...but it is a PROMISE only: void
+        CCLex(cc);		//and struct take it over below
+      }
+      else
+        CCLex(cc);
+    }
     else if ((cc->tk_kw==KW_UNSIGNED)||((cc->tk_kw==KW_LONG)||((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_SHORT))))
     {
-      if (ty==TY_CHAR)
+      if (cc->tk_kw==KW_UNSIGNED)
       {
-        CCError(cc,"type keyword conflict (char with int/long/unsigned)");
+        if (ty<0)
+          ty=TY_INT;		//bare `unsigned x` = unsigned int
+      }
+      else if (had_char)
+      {
+        CCError(cc,"type keyword conflict (char with int/long)");
         return -1;
       }
-      ty=TY_INT;
+      else
+      {
+        had_int=1;
+        ty=TY_INT;
+      }
       CCLex(cc);
     }
     else if (cc->tk_kw==KW_CHAR)
     {
-      if ((ty==TY_INT)||(ty==TY_VOID))
+      if (had_int||(ty==TY_VOID))
       {
         CCError(cc,"type keyword conflict");
         return -1;
       }
-      ty=TY_CHAR;
-      CCLex(cc);
+      if (had_char)
+      {
+        CCError(cc,"duplicate char");
+        return -1;
+      }
+      had_char=1;
+      ty=TY_CHAR;		//unsigned/signed char both land here:
+      CCLex(cc);		//the model's char already zero-extends
     }
     else if (cc->tk_kw==KW_VOID)
     {
-      if (ty>=0)
+      if ((ty>=0)&&(tent==0))
       {
         CCError(cc,"void cannot combine with another type");
         return -1;
       }
-      ty=TY_VOID;
-      CCLex(cc);
+      ty=TY_VOID;		//M19: a bare-qualifier promise yields
+      tent=0;			//to void — `const void *v` is the
+      CCLex(cc);		//headers' idiom and must fold
     }
-    else if (cc->tk_kw==KW_STRUCT)
+    else if ((cc->tk_kw==KW_STRUCT)||(cc->tk_kw==KW_UNION))
     {
-      if (ty>=0)
+      if ((ty>=0)&&(tent==0))
       {
         CCError(cc,"struct cannot combine with another type");
         return -1;
       }
+      tent=0;
       CCLex(cc);
       if (cc->tk!=TK_IDENT)
       {
@@ -332,37 +376,62 @@ I64 CCSizeOfEty(CCCtrl *cc,I64 ty,I64 sty)
  * standard full token-state snapshot. */
 I64 CCTrySpec(CCCtrl *cc,I64 *pstag)
 {
-  I64 ty=-1,ti;
+  I64 ty=-1,ti,had_int,had_char,tent;
   *pstag=-1;
+  had_int=0;
+  had_char=0;
+  tent=0;
+  //M19: exact silent mirror of CCAcceptBase's fold rules (see there).
   while (cc->tk==TK_IDENT)
   {
-    if ((cc->tk_kw==KW_CONST)||(cc->tk_kw==KW_SIGNED))
-      CCLex(cc);
+    if ((cc->tk_kw==KW_CONST)||((cc->tk_kw==KW_SIGNED)||((cc->tk_kw==KW_EXTERN)||((cc->tk_kw==KW_STATIC)||((cc->tk_kw==KW_REGISTER)||((cc->tk_kw==KW_AUTO)||((cc->tk_kw==KW_VOLATILE)||(cc->tk_kw==KW_INLINE))))))))
+    {
+      if (ty<0)
+      {
+        ty=TY_INT;
+        tent=1;
+        CCLex(cc);
+      }
+      else
+        CCLex(cc);
+    }
     else if ((cc->tk_kw==KW_UNSIGNED)||((cc->tk_kw==KW_LONG)||((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_SHORT))))
     {
-      if (ty==TY_CHAR)
+      if (cc->tk_kw==KW_UNSIGNED)
+      {
+        if (ty<0)
+          ty=TY_INT;
+      }
+      else if (had_char)
         return -1;
-      ty=TY_INT;
+      else
+      {
+        had_int=1;
+        ty=TY_INT;
+      }
       CCLex(cc);
     }
     else if (cc->tk_kw==KW_CHAR)
     {
-      if ((ty==TY_INT)||(ty==TY_VOID))
+      if (had_int||(ty==TY_VOID)||(had_char))
         return -1;
+      had_char=1;
       ty=TY_CHAR;
       CCLex(cc);
     }
     else if (cc->tk_kw==KW_VOID)
     {
-      if (ty>=0)
+      if ((ty>=0)&&(tent==0))
         return -1;
       ty=TY_VOID;
+      tent=0;
       CCLex(cc);
     }
-    else if (cc->tk_kw==KW_STRUCT)
+    else if ((cc->tk_kw==KW_STRUCT)||(cc->tk_kw==KW_UNION))
     {
-      if (ty>=0)
+      if ((ty>=0)&&(tent==0))
         return -1;
+      tent=0;
       CCLex(cc);
       if (cc->tk!=TK_IDENT)
         return -1;
@@ -818,8 +887,9 @@ U0 CCExprPrimary(CCCtrl *cc)
     cc->ety=TY_CHARP;
     cc->sty=-1;
     CCLex(cc);
-    return;
-  }
+    CCPostfix(cc);		//M19: `"ab"[1]` and friends — the literal
+    return;			//is a pointer VALUE; Postfix indexes it
+  }				//with byte scale, no new machinery.
   if (cc->tk==TK_IDENT)
   {
     //Peek one token: IDENT '(' is a call, else a variable.
@@ -2554,7 +2624,48 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
  * parse here exactly like at file scope. */
 U0 CCDeclStmt(CCCtrl *cc)
 {
-  I64 ty,stag;
+  I64 ty,stag,t,isu;
+  I64 stk,skw,snum;
+  U8 *spc;
+  U8 sstr[CC_TOK_MAX];
+  U8 tag[CC_TOK_MAX];
+
+  //M19: block-scope `struct|union Tag { ... };` — mirror of the top-level
+  //definition path (CCDeclOne reserves frame slots for declarators after
+  //the body). Peeked with the full snapshot: `struct L l;` (a USE) must
+  //rewind to run through CCAcceptBase unchanged.
+  if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_STRUCT)||(cc->tk_kw==KW_UNION)))
+  {
+    CCSnap(cc,&spc,&stk,&skw,&snum,sstr);
+    isu=(cc->tk_kw==KW_UNION);
+    CCLex(cc);
+    if (cc->tk==TK_IDENT)
+    {
+      StrCpy(tag,cc->tk_str);
+      CCLex(cc);
+      if (CCTkIsPunct(cc,'{'))
+      {
+        t=CCStructDef(cc,tag,isu);
+        if (t<0)
+          return;
+        stag=t;
+        if (CCAccept(cc,';'))
+          return;		//pure tag definition
+        ty=TY_STRUCT;
+        while ((!cc->errs)&&(cc->tk!=TK_EOF))
+        {
+          CCDeclOne(cc,ty,stag);
+          if (cc->errs)
+            return;
+          if (!CCAccept(cc,','))
+            break;
+        }
+        CCExpect(cc,';',"expected ';' after declaration");
+        return;
+      }
+    }
+    CCRestore(cc,spc,stk,skw,snum,sstr);	//a use: normal path below
+  }
   ty=CCAcceptBase(cc,&stag);
   if (ty<0)
   {
@@ -3134,9 +3245,9 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
  * the tag being DEFINED is registered before its '{', so self-referential
  * `struct Node { struct Node *next; }` links work). No member arrays,
  * by-value nested structs, or initializers. Returns the tag id, -1 error. */
-I64 CCStructDef(CCCtrl *cc,U8 *tag)
+I64 CCStructDef(CCCtrl *cc,U8 *tag,I64 is_union)
 {
-  I64 t,mty,msty,mi,fpok;
+  I64 t,mty,msty,mi,fpok,ui;
   I64 stk,skw,snum;
   U8 *spc;
   U8 sstr[CC_TOK_MAX];
@@ -3161,7 +3272,7 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag)
   {
     msty=-1;
     fpok=0;
-    if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_STRUCT))
+    if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_STRUCT)||(cc->tk_kw==KW_UNION)))
     {
       CCLex(cc);
       if (cc->tk!=TK_IDENT)
@@ -3188,18 +3299,31 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag)
         mty=TY_PTR;		//an fp member is a plain slot
         msty=-1;		//address: no tag involved
       }
-      else
+      else if (CCTkIsPunct(cc,'*'))
       {
-        if (!CCAccept(cc,'*'))
-        {
-          CCError(cc,"struct members must be pointers: struct T *m");
-          return -1;
-        }
         while (CCAccept(cc,'*'))
         {
           //`struct T **m` is still a slot pointer.
         }
         mty=TY_PTR;
+      }
+      else if (cc->st[msty].size==8)
+      {
+        //M19: BY-VALUE member of a one-slot tag — every union (all
+        //members are slots, so a union is always exactly one slot)
+        //and any single-member struct. The member IS a slot: no copy
+        //semantics needed, and the Postfix '.' arm chains through
+        //msty for free. Multi-slot structs stay pointer-only (C's
+        //by-value copy needs member memcpy this model lacks); a tag
+        //mid-definition still has size 0 here, which is why C's
+        //illegal self-by-value `struct S { struct S s; }` rejects
+        //itself with the pointer message.
+        mty=TY_STRUCT;		//value semantics; msty carries the tag
+      }
+      else
+      {
+        CCError(cc,"struct members must be pointers: struct T *m");
+        return -1;
       }
     }
     else if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_CHAR)))
@@ -3282,7 +3406,20 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag)
     CCError(cc,"empty struct");
     return -1;
   }
-  cc->st[t].size=8*cc->st[t].nmem;
+  if (is_union)
+  {
+    //M19: the single-slot union. Every member type this model admits
+    //is one 8-byte slot (int/char fold/pointer/struct pointer/fp), so
+    //every member IS the slot: all offsets 0, size exactly one slot.
+    //That is byte-truth too: a char member reads its quad's low byte
+    //and the arena/frames are zeroed, so int->char->int round trips
+    //deterministically (C would call the stale upper bits garbage).
+    for (ui=0;ui!=cc->st[t].nmem;ui++)
+      cc->st[t].moff[ui]=0;
+    cc->st[t].size=8;
+  }
+  else
+    cc->st[t].size=8*cc->st[t].nmem;
   return t;
 }
 
@@ -3290,7 +3427,7 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag)
  * `int|char decl [, decl]* ;` */
 U0 CCParseTop(CCCtrl *cc)
 {
-  I64 ty=TY_INT,first=TRUE,stag=-1,t;
+  I64 ty=TY_INT,first=TRUE,stag=-1,t,isunion;
   U8 tag[CC_TOK_MAX];
 
   if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_TYPEDEF))
@@ -3298,19 +3435,20 @@ U0 CCParseTop(CCCtrl *cc)
     CCParseTypedef(cc);
     return;
   }
-  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_STRUCT))
+  if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_STRUCT)||(cc->tk_kw==KW_UNION)))
   {
-    CCLex(cc);			//consume 'struct'
+    isunion=(cc->tk_kw==KW_UNION);
+    CCLex(cc);			//consume 'struct' or 'union'
     if (cc->tk!=TK_IDENT)
     {
-      CCError(cc,"expected struct tag name");
+      CCError(cc,"expected tag name");
       return;
     }
     StrCpy(tag,cc->tk_str);
     CCLex(cc);
     if (CCTkIsPunct(cc,'{'))
     {
-      t=CCStructDef(cc,tag);
+      t=CCStructDef(cc,tag,isunion);
       if (t<0)
         return;
       stag=t;

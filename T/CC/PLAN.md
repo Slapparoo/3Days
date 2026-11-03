@@ -45,7 +45,9 @@ CCSave("prog.cco");                  //BEFORE running: saves the
 
 Supported: `int`/`char` scalars, pointers, arrays (M17: up to two
 dimensions, row-major), structs (tag definitions, `.`/`->`, struct-pointer params,
-self-referential links — see M9), string and char literals,
+self-referential links — see M9), unions (M19: one-slot aliased tags,
+by-value single-slot members, arrays and array-row params), string and
+char literals (M19: `\n \t \r \\ \" \a \b \f \v \e \xHH \ooo`),
 `for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
 `do-while` (M14), `goto`/labels and the conditional `?:` (M16),
 functions (forward refs,
@@ -99,7 +101,27 @@ Not supported — each currently fails with a compile diagnostic:
   (C requires parens — we eat them as the operator, harmless); mixed-
   type arms fold to the int model, identical-kind arms keep element
   types and struct tags so `(c?&p1:&p2)->x` works.
-- `float`/`double`, unions.
+- `float`/`double`.
+- M19 edges: qualifier keywords (`extern static register auto volatile
+  inline`, added to `const`) are accepted and folded — with C's
+  default-int PROMISE when they stand alone (`static x;` is `static
+  int x`), which a real base overwrites; consequences: `static` locals
+  are ordinary slots (no persistence — C would keep the value between
+  calls), `extern` globals get their own arena slot (no cross-module
+  link), and `signed char` is indistinguishable from `char` (the byte
+  model ZERO-EXTENDS: `sb=-3; sb==253` is TRUE here, C-truth -3 — the
+  deviation the unionc fixture pins). Struct/union TAGS share one
+  namespace (`struct S` and `union S` collide; C keeps them separate).
+  By-value members are allowed only for ONE-SLOT tags (any union, any
+  single-member struct — the member IS a slot); multi-slot struct
+  members stay pointer-only (C-by-value copy needs member memcpy).
+  Union assignment (`a=b` between union objects) is not supported;
+  `sizeof` a string LITERAL answers the pointer size, not the byte
+  count (the silent expression route cannot see pool lengths); a tag
+  still mid-definition has size 0, so C's illegal by-value self-member
+  rejects itself. `void` combinations follow C once the qualifier
+  promise is discounted (`const void *v` folds to the byte-pointer
+  model like every void*).
 - Function-pointer edges (M18): arity is NOT checked — `int (*f)(int)`
   called with the wrong arg count against a mismatched callee is as
   undefined as the C it mirrors (mismatched types at assignment are
@@ -740,6 +762,58 @@ Not supported — each currently fails with a compile diagnostic:
    declarators), green x3, saved-object round trips 27/27/27/27,
    error paths pinned (undefined-label-style diagnostics for int-call,
    prototype-only address use, fp arrays), clean `CC TESTS: 0 failed`.
+ - [x] **M19** qualifiers + unsigned/signed char + unions + escapes +
+   literal indexing. **Fold table rewrite** (CCAcceptBase and its
+   silent twin CCTrySpec, kept as exact mirrors): every qualifier is a
+   no-op consume; alone it PROVISIONALLY promises TY_INT (C's
+   default-int) with a `tent` flag; `had_int` (int/long/short ONLY —
+   never bare unsigned) and `had_char` implement C's combining rules,
+   so `unsigned char`/`char unsigned` fold to the byte model (char IS
+   the zero-extending byte type here), bare `unsigned` is the int
+   model, `int char`/`char int`/`char char` diagnose. Landmine, caught
+   ONLY by the suite (every fresh probe stayed green because none of
+   them wrote `const void *`): the qualifier's provisional TY_INT made
+   the void and struct arms' `ty>=0` combine-checks fire on
+   `const void *v` — the headers' favorite parameter — breaking the
+   hdr fixture with "void cannot combine". The `tent` flag is the fix:
+   a bare-qualifier promise YIELDS to void/struct/typedef (which
+   overwrite it), while a REAL base (unsigned/int/char so far) still
+   combines illegally. Same-day expectation traps the compiler beat
+   three more times: `signed char sb=-3; sb==-3` is FALSE in the byte
+   model (zero-extend: 253 — now pinned AS the documented behavior);
+   `*v.p=*v.p+1000` mutates the POINTED-TO variable while the union
+   slot keeps the POINTER quad (`v.i==&ip_value`, not ==tot); and
+   3+100=103. Unions ride the struct machinery end-to-end: `union`
+   joins the tag arms (ONE shared tag namespace — `struct S`/`union S`
+   collide, a deliberate simplification), CCStructDef takes an
+   is_union flag (all member offsets 0, size exactly one slot — true
+   because every member type the model admits IS a slot), and the
+   Postfix `.` arm chains nested value members through msty for free.
+   The new acceptance — by-value members of ONE-SLOT tags — is exactly
+   C's union-member semantics, and a tag mid-definition still has
+   size 0 there, so C's illegal `struct S { struct S s; }` rejects
+   itself with the pointer message. Block-scope `struct T {...};`
+   definitions: peeked in CCDeclStmt with the full CCSnap/CCRestore
+   pair (the USE form `struct L l;` must rewind and run the ordinary
+   CCAcceptBase path — def-before-use in HolyC again needed an extern
+   for CCStructDef's new 3-arg signature before CCDeclStmt could call
+   it). Escapes: \a \b \f \v \e added to both literal kinds, \xHH
+   (1-2 hex digits, error on none) and \ooo octal (up to 3 digits —
+   `\17z` stops at two because z is non-octal, exactly like C) join
+   them; `\0` in a string lands a NUL, which the pool stores as the
+   terminator (strlen("a\0b")==1 — C-truth by construction). String
+   LITERALS now enter Postfix: `"ab"[1]`, `("ab"+1)[0]` — byte scale
+   from TY_CHARP, zero new machinery. Python anchor discipline (count==1
+   asserts) caught a duplicated declaration block between the two fold
+   functions before it could edit the wrong one. 70 cases (unionc.c:
+   39 checks + closer — every qualifier position, qualified function
+   defs, unsigned/signed/char-unsigned decls + sizes, full union alias
+   matrix int/char/pointer incl. arrays + params + nested chains +
+   block-scope defs, 14 escape forms, literal indexing, for-init
+   declarations), green x2, saved-object reload 40/40 identical, error
+   paths pinned (int-char conflicts, duplicate char, tag redefined,
+   by-value self-member, shared-tag collision), clean
+   `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 

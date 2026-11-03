@@ -37,6 +37,14 @@
 				//like unsigned/long (C 2-byte short is a
 				//documented deviation)
 #define KW_GOTO		23	//M16
+#define KW_UNION		24	//M19: shares the struct tag namespace and
+					//the whole slot machinery (see CCStructDef)
+#define KW_EXTERN		25	//M19 qualifiers: accepted and folded to
+#define KW_STATIC		26	//no-ops — one width, one arena, one link
+#define KW_REGISTER		27	//namespace in this model (see PLAN M19)
+#define KW_AUTO		28
+#define KW_VOLATILE		29
+#define KW_INLINE		30
 
 /* Minimal expression types (everything is a 64-bit slot; pointers
  * carry only their element size for scaling). */

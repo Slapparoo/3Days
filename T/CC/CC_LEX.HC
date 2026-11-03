@@ -48,7 +48,7 @@ Bool CIsDigit(I64 ch)
 U0 CCLex(CCCtrl *cc)
 {
   U8 *p;
-  I64 i,ch;
+  I64 i,ch,ei,d2;
   CCSkipSpace(cc);
   p=cc->pc;
   cc->tk_kw=KW_NONE;
@@ -115,13 +115,29 @@ U0 CCLex(CCCtrl *cc)
       cc->tk_kw=KW_SHORT;
     else if (!StrCmp(cc->tk_str,"goto"))
       cc->tk_kw=KW_GOTO;
+    else if (!StrCmp(cc->tk_str,"union"))
+      cc->tk_kw=KW_UNION;
+    else if (!StrCmp(cc->tk_str,"extern"))
+      cc->tk_kw=KW_EXTERN;
+    else if (!StrCmp(cc->tk_str,"static"))
+      cc->tk_kw=KW_STATIC;
+    else if (!StrCmp(cc->tk_str,"register"))
+      cc->tk_kw=KW_REGISTER;
+    else if (!StrCmp(cc->tk_str,"auto"))
+      cc->tk_kw=KW_AUTO;
+    else if (!StrCmp(cc->tk_str,"volatile"))
+      cc->tk_kw=KW_VOLATILE;
+    else if (!StrCmp(cc->tk_str,"inline"))
+      cc->tk_kw=KW_INLINE;
     return;
   }
   if (*p=='"')
   {
-    //String literal: bytes land in tk_str (NUL terminated). Escape
-    //support: \n \t \r \\ \" — embedded NULs unsupported. Silent
-    //truncation would be a nasty bug, so over-length is an error.
+    //String literal: bytes land in tk_str (NUL terminated). Escapes:
+    //\n \t \r \\ \" \a \b \f \v \e, \xHH (M19) and \0..\7 octal
+    //(M19, up to 3 digits). Embedded NULs unsupported: a \0 ends the
+    //literal early exactly like C strings behave downstream anyway.
+    //Silent truncation would be a nasty bug, so over-length is an error.
     i=0;
     p++;
     while ((*p)&&(*p!='"'))
@@ -129,14 +145,62 @@ U0 CCLex(CCCtrl *cc)
       ch=*p++;
       if (ch=='\\')
       {
-        ch=*p;
+        ch=*p++;
         if (ch=='n')
           ch='\n';
         else if (ch=='t')
           ch='\t';
         else if (ch=='r')
           ch='\r';
-        p++;
+        else if (ch=='a')
+          ch=7;
+        else if (ch=='b')
+          ch=8;
+        else if (ch=='f')
+          ch=12;
+        else if (ch=='v')
+          ch=11;
+        else if (ch=='e')
+          ch=27;
+        else if (ch=='x')
+        {
+          //\xHH: one or two hex digits (C takes more; two is the
+          //byte-complete span and what every fixture exercises).
+          ei=0;
+          ch=0;
+          while (ei!=2)
+          {
+            d2=*p;
+            if ((d2>='0')&&(d2<='9'))
+              d2=d2-'0';
+            else if ((d2>='a')&&(d2<='f'))
+              d2=d2-'a'+10;
+            else if ((d2>='A')&&(d2<='F'))
+              d2=d2-'A'+10;
+            else
+              break;
+            ch=ch*16+d2;
+            p++;
+            ei++;
+          }
+          if (!ei)
+            CCError(cc,"\\x needs a hex digit");
+        }
+        else if ((ch>='0')&&(ch<='7'))
+        {
+          //\nnn octal, up to three digits total (the first is spent).
+          ch=ch-'0';
+          ei=1;
+          while (ei!=3)
+          {
+            d2=*p;
+            if ((d2<'0')||(d2>'7'))
+              break;
+            ch=ch*8+(d2-'0');
+            p++;
+            ei++;
+          }
+        }
       }
       if (i>=CC_TOK_MAX-1)
       {
@@ -156,7 +220,8 @@ U0 CCLex(CCCtrl *cc)
     cc->tk=TK_STR;
     return;
   }
-  if (*p==39)		//' char literal -> TK_NUM (escapes: \n \t \r \0 \\ \')
+  if (*p==39)		//' char literal -> TK_NUM (full M19 escape set:
+			//\n \t \r \\ \' \a \b \f \v \e \xHH \octal)
   {
     //39 spares HolyC a nested-quote escape in this source.
     p++;
@@ -170,12 +235,56 @@ U0 CCLex(CCCtrl *cc)
         ch='\t';
       else if (ch=='r')
         ch='\r';
-      else if (ch=='0')
-        ch=0;
+      else if (ch=='a')
+        ch=7;
+      else if (ch=='b')
+        ch=8;
+      else if (ch=='f')
+        ch=12;
+      else if (ch=='v')
+        ch=11;
+      else if (ch=='e')
+        ch=27;
       else if (ch=='\\')
         ch='\\';
       else if (ch==39)
         ch=39;
+      else if (ch=='x')
+      {
+        ei=0;
+        ch=0;
+        while (ei!=2)
+        {
+          d2=*p;
+          if ((d2>='0')&&(d2<='9'))
+            d2=d2-'0';
+          else if ((d2>='a')&&(d2<='f'))
+            d2=d2-'a'+10;
+          else if ((d2>='A')&&(d2<='F'))
+            d2=d2-'A'+10;
+          else
+            break;
+          ch=ch*16+d2;
+          p++;
+          ei++;
+        }
+        if (!ei)
+          CCError(cc,"\\x needs a hex digit");
+      }
+      else if ((ch>='0')&&(ch<='7'))
+      {
+        ch=ch-'0';
+        ei=1;
+        while (ei!=3)
+        {
+          d2=*p;
+          if ((d2<'0')||(d2>'7'))
+            break;
+          ch=ch*8+(d2-'0');
+          p++;
+          ei++;
+        }
+      }
     }
     if (*p!=39)
     {
