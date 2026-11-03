@@ -47,12 +47,38 @@ U8 *CCSrc(U8 *fn)
   return s;
 }
 
+/* M6c streaming: the zero-arg console flush helper. Generated C code
+ * CALLs this (absolute address via CCQuadAbs base CC_B_HFLUSH, zero-arg
+ * activation — the only call form the HolyC JIT handles reliably in
+ * every context) after writing '\n' and when the buffer is nearly
+ * full. ALL console output is delegated to HolyC's own "%s" print,
+ * i.e. the kernel Print path — exactly what CCOutPrint does for the
+ * harness; the JIT'd program itself never touches the OS. Zeroes the
+ * buffer count so writes continue at out[8]; any bytes after the last
+ * newline are still pending for CCOutPrint as usual. */
+U0 CCFlush()
+{
+  I64 i,n;
+  n=0;
+  for (i=7;i>=0;i--)
+    n=n*256+cc.out[i];
+  if ((n<0)||(n>CC_OUT_SIZE-9))
+    n=0;
+  if (!n)
+    return;
+  cc.out[8+n]=0;
+  "%s",cc.out+8;
+  for (i=0;i!=8;i++)
+    cc.out[i]=0;
+}
+
 /* Compile source text. TRUE on success. */
 Bool CCCompile(CCCtrl *c,U8 *text)
 {
   I64 entry,plen,tlen;
   U8 *full;
   CCInit(c);
+  c->hflush=&CCFlush;	//M6c: generated putchar streams through this
   //The CC runtime prelude comes first so its symbols exist and get
   //defined before user code (printf lowering) can reference them.
   plen=StrLen(CC_PRELUDE);
@@ -509,13 +535,14 @@ Bool CCLoad(U8 *fn)
   for (i=0;i!=nfix;i++)
   {
     kind=hdr[6+3*i];
-    if (((kind<0)||(kind>CC_B_CTRL))||((hdr[8+3*i]<0)||(hdr[8+3*i]+8>clen)))
+    if (((kind<0)||(kind>CC_B_HFLUSH))||((hdr[8+3*i]<0)||(hdr[8+3*i]+8>clen)))
     {
       "CC ERROR: CCLoad: %s has a corrupt relocation\n",fn;
       return FALSE;
     }
   }
   CCInit(&cc);		//fresh arenas; all relocations target these
+  cc.hflush=&CCFlush;	//M6c: rebind the flush helper to this session
   cc.entry_off=hdr[2];
   p=data+(6+3*nfix)*8;
   MemCpy(cc.code,p,clen);

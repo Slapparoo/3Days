@@ -255,6 +255,36 @@ Not supported — each currently fails with a compile diagnostic:
   findargs (Call3+Call1 over one module), findstub (raw thunk, wrapper
   shape), tlcall (Call3 from a top-level statement): 54 cases, green
   twice in fresh processes, clean `CC TESTS: 0 failed` summary.
+- [x] **M6c** streaming output — delegated, not reimplemented. The
+  `putchar` codegen (the single funnel every `printf`/`putchar` write
+  flows through) gained two flush paths: after storing a '\n'
+  (C line-buffered semantics) and before storing when the buffer is
+  within 64 bytes of `CC_OUT_SIZE` (bounded index; the old AND-wrap
+  silently dropped everything past 64K). A flush is
+  `PUSH RAX; MOVABS RCX,hflush; CALL RCX; POP RAX` — a zero-argument
+  call (the activation verified safe in every context, and the only
+  kind a HolyC-compiled callee handles cleanly from generated code;
+  `cc_find_popextra`/`RET imm16` variants proved nothing pops extra
+  for arity 0). `hflush` is the 6th relocation base (`CC_B_HFLUSH`):
+  `CCCompile` binds it to `&CCFlush`, `CCLoad` rebinds it so saved
+  objects stream in the loading session. `CCFlush` (HolyC, CC.HC)
+  does what the kernel does for HolyC programs — terminate the span,
+  `"%s"` print, zero the count — so *all* console I/O, formatting
+  delegation aside, is the kernel's own Print path; CC implements no
+  OS interface in generated code. RAX is saved around the call
+  because C `putchar(c)` returns `c` and the helper clobbers it;
+  every other generated-code live value is RBP-anchored and the
+  flush clobbers nothing RBP-relative. New cases `stream` (200 lines,
+  every '\n' flushes: 200 lines observed arriving live) and
+  `streambig` (96KB no-newline output crosses the guard once; every
+  byte + markers arrive; buffer empties at exit — old code would have
+  lost 30KB); both assert residual count 0 at main's return (the
+  mid-program flush paths are what produce it): 56
+  cases, green twice, clean summary. Delegation note: `%d` digit
+  conversion still runs in compiled-C (CCItoa); routing conversions
+  through kernel `Prnt` via `cc->ext` staging is a possible further
+  delegation, deliberately not done here (C's format-flag semantics
+  would have to survive the mapping).
 
 ## HolyC dialect gotchas (all verified in this build)
 

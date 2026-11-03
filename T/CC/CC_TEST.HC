@@ -16,6 +16,39 @@ U0 CCAssert(I64 want,U8 *fn,U8 *name)
   }
 }
 
+/* M6c: generated putchar streams through the HolyC CCFlush helper
+ * ('\n' flush + near-full guard). Both programs end on a newline, so
+ * the buffer must be EMPTY (count 0) when main returns; the TAIL
+ * markers' presence in the streamed output is asserted by the shell
+ * around the suite run. */
+U0 CCM12()
+{
+  I64 got,n,i;
+
+  got=CCRunFile("T:/CC/TEST/stream.c");
+  n=0;
+  for (i=7;i>=0;i--)
+    n=n*256+cc.out[i];
+  if ((got==7)&&(n==0))
+    "PASS stream = rc7 resid0\n";
+  else
+  {
+    "FAIL stream got %d resid %d\n",got,n;
+    fails++;
+  }
+  got=CCRunFile("T:/CC/TEST/streambig.c");
+  n=0;
+  for (i=7;i>=0;i--)
+    n=n*256+cc.out[i];
+  if ((got==8)&&(n==0))
+    "PASS streambig = rc8 resid0\n";
+  else
+  {
+    "FAIL streambig got %d resid %d\n",got,n;
+    fails++;
+  }
+}
+
 /* The raw arg-taking CCFind thunk exercised in its verified-clean
  * shape: the enclosing HolyC function returns immediately after the
  * fp call, so the JIT's deferred arg pops land on the epilogue, where
@@ -208,6 +241,7 @@ CCAssert(47,"T:/CC/TEST/strchar.c","strchar");
 CCAssert(41,"T:/CC/TEST/strlink.c","strlink");
 CCM7();
 CCM10();
+CCM12();
 /* CCFindCallN from a TOP-LEVEL statement: compile findargs.c, then
  * call the staged 3-arg entry. Direct activations are top-level-safe
  * (this is the shape CCRunFile/CCRunArgv have always used). */

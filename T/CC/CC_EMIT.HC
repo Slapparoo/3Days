@@ -3,7 +3,9 @@
 
 /* CC compiles its own tiny C runtime, prepended to every module, so
  * printf call sites can emit CALLs into symbols that already exist.
- * Nothing here may rely on Free() or the OS; putchar goes to cc->out. */
+ * Nothing here may rely on Free(). putchar appends to cc->out and
+ * delegates every console write to the zero-arg HolyC CCFlush helper
+ * (M6c); JIT'd code never touches the kernel directly. */
 U8 *CC_PRELUDE=
 "int CCOutByte(int cc_c)\n"
 "{\n"
@@ -82,6 +84,8 @@ I64 CCBase(CCCtrl *cc,I64 kind)
     return cc->save;
   if (kind==CC_B_OUT)
     return cc->out;
+  if (kind==CC_B_HFLUSH)
+    return cc->hflush;
   return cc;			//CC_B_CTRL: the cc block itself
 }
 
@@ -199,14 +203,53 @@ U0 CCCall(CCCtrl *cc,CSym *f)
   }
 }
 
+/* unsigned-below (jump if CF) and not-equal (jump if ZF=0), rel32.
+ * Needed by CCEmitPutchar's flush conditionals, which precede the
+ * generic jump helpers below (same-unit order matters). */
+I64 CCJb(CCCtrl *cc)
+{
+  I64 pos;
+  CCByte(cc,0x0F);CCByte(cc,0x82);
+  pos=cc->ep-cc->code;
+  CCWord(cc,0);
+  return pos;
+}
+
+I64 CCJnz(CCCtrl *cc)
+{
+  I64 pos;
+  CCByte(cc,0x0F);CCByte(cc,0x85);
+  pos=cc->ep-cc->code;
+  CCWord(cc,0);
+  return pos;
+}
+
+/* Zero-arg CALL to the HolyC flush helper, preserving RAX: putchar
+ * must return its argument, and RAX is the only live register across
+ * this call (every C live value is RBP-anchored, and the helper call
+ * is a zero-arg activation — the form verified safe everywhere). The
+ * helper streams cc->out to the console through the kernel and zeroes
+ * its count; callers reload what they need from memory. */
+U0 CCFlushCall(CCCtrl *cc)
+{
+  CCByte(cc,0x50);			//PUSH RAX
+  CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,hflush
+  CCQuadAbs(cc,CC_B_HFLUSH,cc->hflush);
+  CCByte(cc,0xFF);CCByte(cc,0xD1);	//CALL RCX
+  CCByte(cc,0x58);			//POP RAX
+}
+
 /* putchar(c): append AL to cc->out (bytes from offset 8; the 8-byte LE
- * counter lives at cc->out[0..7]). The counter is masked with
- * CC_OUT_SIZE-1 so a full buffer wraps instead of overrunning.
- * RAX (the char) survives — C putchar returns its argument.
- * No OS interaction: the HolyC harness prints the buffer via the
- * kernel after the program returns. */
+ * counter lives at cc->out[0..7]), then stream: flush when the char is
+ * '\n' (line-buffered, C semantics) or when the buffer is within 64
+ * bytes of full (index bounded; the old AND-wrap silently dropped
+ * bytes past 64K). All OS contact is delegated to the zero-arg HolyC
+ * CCFlush helper — generated code never touches the kernel itself.
+ * RAX (the char) survives — C putchar returns its argument. */
 U0 CCEmitPutchar(CCCtrl *cc)
 {
+  I64 pos;
+
   //Only REX.W forms on legacy-encodable regs: an extended reg field
   //needs REX.R and an SIB index needs REX.X, and REX.W alone makes
   //field 000 mean RAX, not R8 (that bug silently zeroed the buffer).
@@ -215,11 +258,25 @@ U0 CCEmitPutchar(CCCtrl *cc)
   CCByte(cc,0x48);CCByte(cc,0xBE);		//MOVABS RSI,out (count slot)
   CCQuadAbs(cc,CC_B_OUT,cc->out);
   CCByte(cc,0x48);CCByte(cc,0x8B);CCByte(cc,0x16);	//MOV RDX,[RSI]
-  CCByte(cc,0x48);CCByte(cc,0x81);CCByte(cc,0xE2);	//AND RDX,imm32=SIZE-1
-  CCWord(cc,CC_OUT_SIZE-1);
+  CCByte(cc,0x48);CCByte(cc,0x81);CCByte(cc,0xFA);	//CMP RDX,imm32
+  CCWord(cc,CC_OUT_SIZE-64);
+  pos=CCJb(cc);				//below the cap -> store
+  CCFlushCall(cc);
+  //After a full-buffer flush the count is zero and the helper has
+  //clobbered our scratch: reload all three pointers fresh.
+  CCByte(cc,0x48);CCByte(cc,0xB9);		//MOVABS RCX,out+8
+  CCQuadAbs(cc,CC_B_OUT,cc->out+8);
+  CCByte(cc,0x48);CCByte(cc,0xBE);		//MOVABS RSI,out
+  CCQuadAbs(cc,CC_B_OUT,cc->out);
+  CCByte(cc,0x48);CCByte(cc,0x8B);CCByte(cc,0x16);	//MOV RDX,[RSI]
+  CCPatchJmp(cc,pos);
   CCByte(cc,0x88);CCByte(cc,0x04);CCByte(cc,0x11);	//MOV [RCX+RDX],AL (no REX)
   CCByte(cc,0x48);CCByte(cc,0xFF);CCByte(cc,0xC2);	//INC RDX
   CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0x16);	//MOV [RSI],RDX
+  CCByte(cc,0x48);CCByte(cc,0x3D);CCWord(cc,10);	//CMP RAX,10 ('\n'?)
+  pos=CCJnz(cc);
+  CCFlushCall(cc);
+  CCPatchJmp(cc,pos);
 }
 
 /* ADD RSP,8n (caller pops args; n<=15 fits the imm8 form). */

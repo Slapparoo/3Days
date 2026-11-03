@@ -93,6 +93,7 @@
 #define CC_B_SAVE	2	//caller-RSP save slot
 #define CC_B_OUT	3	//harness-printed output buffer
 #define CC_B_CTRL	4	//the cc block itself (argc/argv fields)
+#define CC_B_HFLUSH	5	//the HolyC CCFlush() helper address
 
 /* Struct tag: one table entry per `struct Name { ... }` definition.
  * Every member is one 8-byte slot (members at byte offset 8*i); a char
@@ -145,6 +146,11 @@ class CCCtrl
   U8	*out;		//program output buffer: [0..7]=I64 LE count,
  			//bytes from [8..]; the HolyC harness prints it
  			//through the kernel — JIT'd code never does I/O
+  U8	*hflush;	//address of the HolyC CCFlush() helper: generated
+			//putchar code zero-arg-CALLs it on '\n' and when the
+			//buffer is nearly full (M6c streaming). Set by
+			//CCCompile/CCLoad; a relocation base (CC_B_HFLUSH)
+			//so saved objects rebind to the loading session.
   I64	goff;		//next free byte offset in locals
   I64	lofs;		//current function's local area usage (slots)
   I64	cur_entry;	//current function is the HolyC-called entry (main)
