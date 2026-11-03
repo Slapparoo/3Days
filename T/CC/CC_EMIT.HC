@@ -32,6 +32,125 @@ U8 *CC_PRELUDE=
 "    CCItoa(cc_v/10);\n"
 "  putchar(48+cc_v-(cc_v/10*10));\n"
 "  return 0;\n"
+"}\n"
+"/* M12 pure-C stdlib half: the kernel has no equivalents for these, so
+ * CC compiles them itself. Byte semantics match CC's char* model; see
+ * the fixture stdlib.c for the pinned behavior. free() is deliberately
+ * absent (poopalloc chunk hazard, see CC.HC CCSrc comment). */\n"
+"int strcmp(char *cc_a,char *cc_b)\n"
+"{\n"
+"  while (*cc_a)\n"
+"  {\n"
+"    if (*cc_a!=*cc_b)\n"
+"      return *cc_a-*cc_b;\n"
+"    cc_a=cc_a+1;\n"
+"    cc_b=cc_b+1;\n"
+"  }\n"
+"  if (*cc_b)\n"
+"    return -1;\n"
+"  return 0;\n"
+"}\n"
+"char *strcpy(char *cc_d,char *cc_s)\n"
+"{\n"
+"  char *cc_r;\n"
+"  cc_r=cc_d;\n"
+"  while (*cc_s)\n"
+"  {\n"
+"    *cc_d=*cc_s;\n"
+"    cc_d=cc_d+1;\n"
+"    cc_s=cc_s+1;\n"
+"  }\n"
+"  *cc_d=0;\n"
+"  return cc_r;\n"
+"}\n"
+"char *strchr(char *cc_s,int cc_c)\n"
+"{\n"
+"  while (*cc_s)\n"
+"  {\n"
+"    if (*cc_s==cc_c)\n"
+"      return cc_s;\n"
+"    cc_s=cc_s+1;\n"
+"  }\n"
+"  if (cc_c==0)\n"
+"    return cc_s;\n"
+"  return 0;\n"
+"}\n"
+"char *memmove(char *cc_d,char *cc_s,int cc_n)\n"
+"{\n"
+"  char *cc_r;\n"
+"  cc_r=cc_d;\n"
+"  if (cc_d<cc_s)\n"
+"  {\n"
+"    while (cc_n)\n"
+"    {\n"
+"      *cc_d=*cc_s;\n"
+"      cc_d=cc_d+1;\n"
+"      cc_s=cc_s+1;\n"
+"      cc_n=cc_n-1;\n"
+"    }\n"
+"    return cc_r;\n"
+"  }\n"
+"  cc_d=cc_d+cc_n-1;\n"
+"  cc_s=cc_s+cc_n-1;\n"
+"  while (cc_n)\n"
+"  {\n"
+"    *cc_d=*cc_s;\n"
+"    cc_d=cc_d-1;\n"
+"    cc_s=cc_s-1;\n"
+"    cc_n=cc_n-1;\n"
+"  }\n"
+"  return cc_r;\n"
+"}\n"
+"int cc_rseed;\n"
+"int srand(int cc_s)\n"
+"{\n"
+"  cc_rseed=cc_s;\n"
+"  return 0;\n"
+"}\n"
+"int rand()\n"
+"{\n"
+"  cc_rseed=cc_rseed*1103515245+12345;\n"
+"  if (cc_rseed<0)\n"
+"    cc_rseed=-cc_rseed;\n"
+"  cc_rseed=cc_rseed-cc_rseed/1073741824*1073741824;\n"
+"  return cc_rseed;\n"
+"}\n"
+"int atoi(char *cc_s)\n"
+"{\n"
+"  int cc_neg,cc_v;\n"
+"  cc_neg=0;\n"
+"  cc_v=0;\n"
+"  if (*cc_s==45)\n"
+"  {\n"
+"    cc_neg=1;\n"
+"    cc_s=cc_s+1;\n"
+"  }\n"
+"  while (*cc_s)\n"
+"  {\n"
+"    if ((*cc_s<48)||(*cc_s>57))\n"
+"      break;\n"
+"    cc_v=cc_v*10+*cc_s-48;\n"
+"    cc_s=cc_s+1;\n"
+"  }\n"
+"  if (cc_neg)\n"
+"    return -cc_v;\n"
+"  return cc_v;\n"
+"}\n"
+"int abs(int cc_x)\n"
+"{\n"
+"  if (cc_x<0)\n"
+"    return -cc_x;\n"
+"  return cc_x;\n"
+"}\n"
+"int puts(char *cc_s)\n"
+"{\n"
+"  while (*cc_s)\n"
+"  {\n"
+"    putchar(*cc_s);\n"
+"    cc_s=cc_s+1;\n"
+"  }\n"
+"  putchar(10);\n"
+"  return 0;\n"
 "}\n";
 U0 CCByte(CCCtrl *cc,I64 b)
 
@@ -86,6 +205,8 @@ I64 CCBase(CCCtrl *cc,I64 kind)
     return cc->out;
   if (kind==CC_B_HFLUSH)
     return cc->hflush;
+  if (kind==CC_B_LIB)
+    return cc->lib;		//delta = 8*slot into the helper table
   return cc;			//CC_B_CTRL: the cc block itself
 }
 
@@ -224,6 +345,18 @@ I64 CCJnz(CCCtrl *cc)
   return pos;
 }
 
+/* Load RDI with the ctrl scratch quads (reloc base CTRL, rebases with
+ * the object load). Any CALL into a JIT-compiled HolyC function must be
+ * preceded by this: its frame-zeroing prologue REP STOSQs 8*RCX bytes at
+ * the incoming RDI (CC.HH libscr comment). Harmless otherwise visible
+ * only as random data loss — RDI from C code is whatever the last
+ * expression left there, often a string-pool pointer. */
+U0 CCSetScratch(CCCtrl *cc)
+{
+  CCByte(cc,0x48);CCByte(cc,0xBF);	//MOVABS RDI,&cc->libscr[0]
+  CCQuadAbs(cc,CC_B_CTRL,cc->libscr);
+}
+
 /* Zero-arg CALL to the HolyC flush helper, preserving RAX: putchar
  * must return its argument, and RAX is the only live register across
  * this call (every C live value is RBP-anchored, and the helper call
@@ -233,6 +366,7 @@ I64 CCJnz(CCCtrl *cc)
 U0 CCFlushCall(CCCtrl *cc)
 {
   CCByte(cc,0x50);			//PUSH RAX
+  CCSetScratch(cc);			//CCFlush stosqs 128B at RDI: hand it
   CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,hflush
   CCQuadAbs(cc,CC_B_HFLUSH,cc->hflush);
   CCByte(cc,0xFF);CCByte(cc,0xD1);	//CALL RCX
@@ -277,6 +411,34 @@ U0 CCEmitPutchar(CCCtrl *cc)
   pos=CCJnz(cc);
   CCFlushCall(cc);
   CCPatchJmp(cc,pos);
+}
+
+/* M12: stage the value in RAX into cc->ext[i] (reloc base CTRL). */
+U0 CCPushExt(CCCtrl *cc,I64 i)
+{
+  CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,&cc->ext[0]
+  CCQuadAbs(cc,CC_B_CTRL,&cc->ext[0]);
+  CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0x81);	//MOV [RCX+d32],RAX
+  CCWord(cc,8*i);
+}
+
+/* M12: zero-arg call to the stdlib helper in cc->lib[slot]. Reloc base
+ * LIB is the TABLE (not the pointer value, unlike hflush's own base), so
+ * the patched quad names the SLOT and the code must LOAD through it:
+ * MOVABS RAX,&lib[slot]; CALL [RAX]. That indirection is a gift: a
+ * reloaded object picks up whatever helpers the loading session's
+ * CCSetLib installed, with zero object-format involvement.
+ * The helper is zero-arg HolyC: it reads cc->ext[], calls the kernel,
+ * and returns the value in RAX. Nothing else needs saving: RAX is the
+ * result by definition, and every other live generated-code value is
+ * RBP-anchored (M11 analysis; the M6c flush call proved the same
+ * zero-arg shape end to end). */
+U0 CCEmitLibCall(CCCtrl *cc,I64 slot)
+{
+  CCSetScratch(cc);			//callee stosqs at RDI - hand it ours
+  CCByte(cc,0x48);CCByte(cc,0xB8);	//MOVABS RAX,&lib[slot]
+  CCQuadAbs(cc,CC_B_LIB,cc->lib+slot);	//POINTER math: +1 is one quad.
+  CCByte(cc,0xFF);CCByte(cc,0x10);	//CALL QWORD PTR [RAX]
 }
 
 /* ADD RSP,8n (caller pops args; n<=15 fits the imm8 form). */

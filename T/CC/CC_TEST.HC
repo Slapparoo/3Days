@@ -191,6 +191,24 @@ U0 CCM10()
     "FAIL objstruct got %d want 138\n",got;
     fails++;
   }
+  /* M12: the delegated stdlib through an object. The saved module's
+   * call sites name cc->lib SLOTS (CC_B_LIB), and the scratch quads
+   * (CC_B_CTRL); both must rebase to the loading session's ctrl. The
+   * CALL [RAX] indirection means the code never baked another session's
+   * helper addresses — reload picks up this process's CCSetLib table. */
+  got=-1;
+  t=CCSrc("T:/CC/TEST/stdlib.c");
+  if (t)
+    if (CCCompile(&cc,t))
+      if (CCSave(obj)==0)
+        got=CCRunObjFile(obj);
+  if (got==29)
+    "PASS objstdlib = 29\n";
+  else
+  {
+    "FAIL objstdlib got %d want 29\n",got;
+    fails++;
+  }
 }
 
 CCAssert(42,"T:/CC/TEST/ret42.c","ret42");
@@ -242,6 +260,7 @@ CCAssert(41,"T:/CC/TEST/strlink.c","strlink");
 CCM7();
 CCM10();
 CCM12();
+CCAssert(29,"T:/CC/TEST/stdlib.c","stdlib");
 /* CCFindCallN from a TOP-LEVEL statement: compile findargs.c, then
  * call the staged 3-arg entry. Direct activations are top-level-safe
  * (this is the shape CCRunFile/CCRunArgv have always used). */

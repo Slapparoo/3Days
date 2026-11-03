@@ -128,6 +128,7 @@ void SetupDebugger() {
 	sigaction(SIGTRAP,&inf,NULL);
 	sigaction(SIGBUS,&inf,NULL);
 	sigaction(SIGSEGV,&inf,NULL);
+	sigaction(SIGILL,&inf,NULL);
 	sigaction(SIGFPE,&inf,NULL);
 }
 #else

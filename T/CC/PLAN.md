@@ -47,7 +47,10 @@ Supported: `int`/`char` scalars, pointers and 1-D arrays (locals and
 globals), structs (tag definitions, `.`/`->`, struct-pointer params,
 self-referential links — see M9), string and char literals,
 `for`/`while`/`if`/`else`/`break`/`continue`, functions (forward refs,
-recursion), `printf` (literal format: `%d %s %c %%`), `putchar`, `exit`, the usual operators —
+recursion), `printf` (literal format: `%d %s %c %%`), `putchar`, `exit`, and the
+M12 stdlib subset — `strlen strcmp strcpy strchr memmove memcpy memset
+memcmp malloc atoi abs puts srand rand` (delegated to kernel routines
+where they exist; see M12) — the usual operators —
 `++ -- & * []`, comma, short-circuit logic, bitwise `& | ^`, shifts
 `<< >>`, `~`, all ten compound assignments (`p+=n` scales), chained
 `a=b=5` — with C's full precedence chain (shift vs relational vs the
@@ -71,6 +74,15 @@ Not supported — each currently fails with a compile diagnostic:
 - Postfix `++`/`--` needs an lvalue primary: `v++` and `buf[i]++` are
   fine, `(*p)++` needs parens support the postfix pass lacks (write
   `*p=*p+1`).
+- `free()` does not exist: this port's `Free()` releases whole poopalloc
+  chunks and would pull shared pages out from under live arenas, so
+  `malloc()` memory is permanent-by-design (see the CCSrc note in CC.HC).
+- Builtin names bind BUILTINS: `strlen memcpy memset memcmp malloc`
+  (like `printf`/`putchar`/`exit`) are dispatched by name before the
+  symbol table, so a user function of the same name is shadowed. The
+  pure prelude half (`strcmp strcpy strchr memmove atoi abs puts srand
+  rand` + `CCItoa`) are ordinary symbols BUT pre-reserved: redefining
+  one is a compile error (`function redefined` — verified).
 - Arg-taking C from an fp variable (`fp=CCFind("f"); fp(a,b,c)`) returns
   the right value but the HolyC JIT's stack tracking around multi-arg
   indirect calls desyncs in most statement shapes and breaks *later*
@@ -88,6 +100,7 @@ Not supported — each currently fails with a compile diagnostic:
 | `CC_SYM.HC` | symbol table, variable load/store                |
 | `CC_PARSE.HC`| recursive-descent parser, direct emission      |
 | `CC.HC`     | umbrella include, `CCInit`/`CCSrc`/`CCRunFile`, `CCSave`/`CCLoad` |
+| `CC_LIB.HC` | M12 zero-arg delegation helpers (spliced into `CC.HC` after `CCCtrl cc;`) |
 | `CC_TEST.HC`| test harness (PASS/FAIL per file in `TEST/`)     |
 
 ## Milestones
@@ -285,6 +298,47 @@ Not supported — each currently fails with a compile diagnostic:
   through kernel `Prnt` via `cc->ext` staging is a possible further
   delegation, deliberately not done here (C's format-flag semantics
   would have to survive the mapping).
+ - [x] **M12** stdlib, delegated to the kernel wherever it exists.
+   Two halves. **Delegated** (parser name-dispatch in `CCExprPrimary`
+   -> `CCLibCall`): `strlen`->`StrLen`, `memcpy`->`MemCpy`, `memset`->
+   `MemSet`, `memcmp`->`MemCmp`, `malloc`->`MAlloc` (no `free` - see
+   limitations). Args are evaluated left-to-right and staged into
+   `cc->ext[]` (the M11 pattern), then `MOVABS RAX,&cc->lib[slot];
+   CALL [RAX]` invokes a zero-arg HolyC helper (CC_LIB.HC) which
+   reads `cc->ext`, calls the kernel routine, and returns the value
+   in RAX - zero-arg indirect activation, the form M11/M6c proved.
+   `CC_B_LIB` is the 7th relocation base: its quad names a TABLE
+   SLOT, so the code LOADS the helper address at call time - a
+   reloaded object (or `CCLoad`) picks up the loading session's
+   helpers with zero object-format involvement (`CCSetLib` rebinds;
+   `objstdlib` proves the round trip). **Pure prelude C** (kernel has
+   no equivalent or the semantics are C-specific): `strcmp`, `strcpy`,
+   `strchr`, `memmove`, `atoi`, `abs`, `puts`, `srand`/`rand`, spliced
+   as C source after CCItoa like CCOutByte/CCStr. `FILE *` = not yet;
+   stdout/stderr/stdin are implicit (`cc->out` IS the stdio buffer).
+   **The RDI landmine** - found the hard way through a run-to-run
+   nondeterministic `memcmp` (result 0 some boots, -1 others): every
+   JIT-compiled HolyC callee's frame-zeroing prologue is
+   `MOV RAX,RDI; MOV RCX,n; MOV AL,0; REP STOSQ` - it WRITES 8*RCX
+   bytes at the address ARRIVING IN RDI (CCFlush n=16 -> 128 bytes;
+   verified from live JIT bytes). The HolyC-to-HolyC ABI supplies a
+   scratch pointer there; generated C code has no such convention,
+   so any CALL into JIT-compiled HolyC must first `MOVABS RDI` a
+   dedicated scratch (`cc->libscr`, 512B, `CCSetScratch` - flush and
+   libcall sites both do it; without it the callee zeroed whatever
+   pointer happened to be in RDI - usually the string pool: literals
+   wiped to equal, hence the "equal" memcmp). Two kernel-ABI catches:
+   asm `MemCpy`/`MemSet` RETURN dst+cnt (the trail pointer), not the
+   C-mandated dst - helpers discard and return the staged dst
+   (`v16`/`v17` pinned the difference); and a HolyC function address
+   must be captured with `&name` - bare `f=name;` CALLs it and stores
+   the RESULT. Host-side: dbg.c now installs its fault handler for
+   SIGILL too (an illegal instruction in JIT'd/generated code lands
+   in the HolyC debugger with a backtrace instead of killing the
+   process - it caught exactly this class of bug this session):
+   58 cases (stdlib 29 checks incl. return contracts + objstdlib),
+   green twice, 8/8 in-process repeated-run determinism, clean
+   `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 

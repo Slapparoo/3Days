@@ -329,6 +329,31 @@ U0 CCPostfix(CCCtrl *cc)
   }
 }
 
+/* M12: a call to a delegated stdlib function. Arguments are evaluated
+ * left-to-right and staged into cc->ext[] (not pushed), then the
+ * zero-arg kernel-backed helper is CALLed; it reads cc->ext, calls the
+ * kernel, and returns the value in RAX. This keeps the activation
+ * zero-arg — the HolyC JIT's bookkeeping around multi-arg indirect
+ * calls is what M11 documented as unreliable, and the main-entry
+ * argc/argv bridge already proved the staging pattern end to end. */
+U0 CCLibCall(CCCtrl *cc,I64 slot,I64 argc,I64 rty)
+{
+  I64 i;
+  for (i=0;i!=argc;i++)
+  {
+    if (i)
+      CCExpect(cc,',' ,"expected ',' in stdlib call");
+    CCExprNC(cc);
+    CCPushExt(cc,i);
+  }
+  CCExpect(cc,')',"expected ')' after stdlib args");
+  CCEmitLibCall(cc,slot);
+  cc->is_addr=0;
+  cc->aty=0;
+  cc->ety=rty;
+  cc->sty=-1;
+}
+
 U0 CCExprPrimary(CCCtrl *cc)
 {
   CSym *s;
@@ -401,6 +426,34 @@ U0 CCExprPrimary(CCCtrl *cc)
         cc->aty=0;
         cc->ety=TY_INT;
         cc->sty=-1;
+        return;
+      }
+      /* M12: kernel-delegated stdlib (CC_LIB.HC helpers). Results are
+       * byte-oriented pointers (TY_CHARP): arrays and literals are
+       * byte-addressed in this model; malloc yields byte storage. */
+      if (!StrCmp(save_name,"strlen"))
+      {
+        CCLibCall(cc,CC_LIB_STRLEN,1,TY_INT);
+        return;
+      }
+      if (!StrCmp(save_name,"memcpy"))
+      {
+        CCLibCall(cc,CC_LIB_MEMCPY,3,TY_CHARP);
+        return;
+      }
+      if (!StrCmp(save_name,"memset"))
+      {
+        CCLibCall(cc,CC_LIB_MEMSET,3,TY_CHARP);
+        return;
+      }
+      if (!StrCmp(save_name,"memcmp"))
+      {
+        CCLibCall(cc,CC_LIB_MEMCMP,3,TY_INT);
+        return;
+      }
+      if (!StrCmp(save_name,"malloc"))
+      {
+        CCLibCall(cc,CC_LIB_MALLOC,1,TY_CHARP);
         return;
       }
       n=0;

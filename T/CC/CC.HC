@@ -12,6 +12,8 @@
 
 CCCtrl cc;
 
+#include "T:/CC/CC_LIB.HC"	//M12 helpers reference cc directly: splice after it
+
 U0 CCInit(CCCtrl *c)
 {
   MemSet(c,0,sizeof(CCCtrl));
@@ -79,6 +81,7 @@ Bool CCCompile(CCCtrl *c,U8 *text)
   U8 *full;
   CCInit(c);
   c->hflush=&CCFlush;	//M6c: generated putchar streams through this
+  CCSetLib(c);		//M12: stdlib delegation helper table
   //The CC runtime prelude comes first so its symbols exist and get
   //defined before user code (printf lowering) can reference them.
   plen=StrLen(CC_PRELUDE);
@@ -535,7 +538,7 @@ Bool CCLoad(U8 *fn)
   for (i=0;i!=nfix;i++)
   {
     kind=hdr[6+3*i];
-    if (((kind<0)||(kind>CC_B_HFLUSH))||((hdr[8+3*i]<0)||(hdr[8+3*i]+8>clen)))
+    if (((kind<0)||(kind>CC_B_LIB))||((hdr[8+3*i]<0)||(hdr[8+3*i]+8>clen)))
     {
       "CC ERROR: CCLoad: %s has a corrupt relocation\n",fn;
       return FALSE;
@@ -543,6 +546,7 @@ Bool CCLoad(U8 *fn)
   }
   CCInit(&cc);		//fresh arenas; all relocations target these
   cc.hflush=&CCFlush;	//M6c: rebind the flush helper to this session
+  CCSetLib(&cc);	//M12: rebind the stdlib helper table likewise
   cc.entry_off=hdr[2];
   p=data+(6+3*nfix)*8;
   MemCpy(cc.code,p,clen);

@@ -94,6 +94,17 @@
 #define CC_B_OUT	3	//harness-printed output buffer
 #define CC_B_CTRL	4	//the cc block itself (argc/argv fields)
 #define CC_B_HFLUSH	5	//the HolyC CCFlush() helper address
+#define CC_B_LIB	6	//cc->lib[] stdlib delegation helper table
+
+/* M12: cc->lib[] slots — zero-arg HolyC helpers that read staged args
+ * from cc->ext[] and call kernel routines (CC_LIB.HC). Slot order is
+ * the ABI between CCSetLib and CCEmitLibCall deltas (8*slot). */
+#define CC_LIB_STRLEN	0
+#define CC_LIB_MEMCPY	1
+#define CC_LIB_MEMSET	2
+#define CC_LIB_MEMCMP	3
+#define CC_LIB_MALLOC	4
+#define CC_LIB_SLOTS	8
 
 /* Struct tag: one table entry per `struct Name { ... }` definition.
  * Every member is one 8-byte slot (members at byte offset 8*i); a char
@@ -151,6 +162,21 @@ class CCCtrl
 			//buffer is nearly full (M6c streaming). Set by
 			//CCCompile/CCLoad; a relocation base (CC_B_HFLUSH)
 			//so saved objects rebind to the loading session.
+  U8	*lib[CC_LIB_SLOTS];	//M12 stdlib delegation helpers (CC_LIB_*);
+			//CCSetLib fills them, CC_B_LIB relocations rebase
+			//them, CCLoad rebinds them per session
+  U8	libscr[512];	//M12: dedicated scratch quads, pointed at via
+			//RDI before any CALL into JIT-compiled HolyC code.
+			//Verified from JIT bytes: a HolyC-compiled callee's
+			//frame-zeroing prologue is MOV RAX,RDI; MOV RCX,n;
+			//MOV AL,0; REP STOSQ — it WRITES 8*n bytes at the
+			//address arriving in RDI. The HolyC-to-HolyC ABI
+			//supplies a scratch pointer there; generated code
+			//must too, or the callee zeroes whatever pointer
+			//happened to be in RDI — observed un-fixed: the
+			//string pool wiped mid-run, memcmp("abc","abd")
+			//then reading both-wipe-equal as 0, correct other
+			//runs: silently run-to-run nondeterministic.
   I64	goff;		//next free byte offset in locals
   I64	lofs;		//current function's local area usage (slots)
   I64	cur_entry;	//current function is the HolyC-called entry (main)
