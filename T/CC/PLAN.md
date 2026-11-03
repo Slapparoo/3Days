@@ -47,7 +47,8 @@ Supported: `int`/`char` scalars, pointers and 1-D arrays (locals and
 globals), structs (tag definitions, `.`/`->`, struct-pointer params,
 self-referential links — see M9), string and char literals,
 `for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
-`do-while` (M14), functions (forward refs,
+`do-while` (M14), `goto`/labels and the conditional `?:` (M16),
+functions (forward refs,
 recursion, and M13 prototype declarations `int f(int a);` — undefined
 at link time is a compile error), `printf` (literal format:
 `%d %s %c %%`), `putchar`, `exit`, and the
@@ -83,11 +84,19 @@ Not supported — each currently fails with a compile diagnostic:
 - `else if` chains parse; nested `switch` works (M14 — but nested
   switches exposed the sharing bug: per-statement parse state must be
   CALL-LOCAL, the ctrl-array version let an inner switch overwrite its
-  parent's case table mid-body). `goto`/labels absent.
+  parent's case table mid-body).
 - `switch` case values must be compile-time integer constants (with
   optional leading `-`); duplicate case values are not diagnosed;
   `continue` inside a `switch` requires an enclosing loop (clean
   diagnostic — switch is not a loop).
+- M16 edges: `goto` into a block (crossing a declaration) is accepted
+  where C forbids the jump — the slot exists in the frame either way;
+  `goto case 2;` (jumping onto a case label) is "undefined label"
+  since case labels are switch-scoped parse state, not statement
+  labels; a ternary's middle arm tolerates unparenthesized commas
+  (C requires parens — we eat them as the operator, harmless); mixed-
+  type arms fold to the int model, identical-kind arms keep element
+  types and struct tags so `(c?&p1:&p2)->x` works.
 - `float`/`double`, unions, function pointers in C, multi-dimensional
   arrays.
 - `sizeof`/cast edges not supported: `sizeof` needs parentheses (and
@@ -568,6 +577,37 @@ Not supported — each currently fails with a compile diagnostic:
    cast, chained casts, truncation, `(char*)` byte aliasing of an
    int*, typedef/header size_t, pointer-array types), green twice,
    saved-object round trip 26/26/26, clean `CC TESTS: 0 failed`.
+ - [x] **M16** `goto`/labels + conditional `?:`. Labels: peeked at
+   statement level with the FULL token snapshot (a `name` token that
+   turns out not to head a label must restore the lexer EXACTLY —
+   PLAN's rewind rule; CCSnap/CCRestore exist for this), defined at
+   the current code position with duplicate rejection, and the
+   forward-goto queue patched by the definition (write rel32 straight
+   into the placeholder, CCPatchCallPos's pattern: rel =
+   label_pos-(operand_pos+4)) or reported at the function's `}`
+   ("goto to undefined label" — which catches cross-function gotos for
+   free, since label/goto tables reset per function and C functions
+   never nest, so one table per function is exact; this is the
+   NON-nesting side of the M14 nested-switch lesson). Backward gotos
+   jump directly. Queue entries park at -1 when patched, keeping them
+   out of both re-patching and the end-of-function check. Ternary: a
+   new precedence level between comma and LogOr — reached via
+   CCExprNC it upgrades parens, assignment RHSs and call args in one
+   move; the Primary paren-group arm calls it directly so `(*p?a:b)`
+   works; JZ-to-third / JMP-over-third textbook codegen, right-
+   associative by recursing into itself, both arms CCVal-normalized so
+   VALUES merge and identical-kind arms keep element types and struct
+   tags; under noemit its jumps are the -1 placeholders, so sizeof's
+   silent parse handles ternaries for free. Landmine (again): the `:`
+   between the arms — in the plan, MISSING from the written function;
+   a 3-line probe (`x=0?1:2;`) named it instantly. Error paths pinned:
+   undefined label (incl. cross-function), label redefined. Objects
+   reload identically (rel32 is self-relative). 67 cases (goto.c 10:
+   forward/backward/cross-structure exits/stacked labels/switch-in-
+   for bail; tern.c 14: unevaluated arms via a side-effect counter,
+   pointer + struct-tag arms through `->`, chained fallbacks, ternary
+   in comparison/subscript/printf arg), green twice, saved-object
+   round trips 10/10 and 14/14, clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 

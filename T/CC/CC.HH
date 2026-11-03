@@ -36,6 +36,7 @@
 #define KW_SHORT	22	//M15: folds to the single int width
 				//like unsigned/long (C 2-byte short is a
 				//documented deviation)
+#define KW_GOTO		23	//M16
 
 /* Minimal expression types (everything is a 64-bit slot; pointers
  * carry only their element size for scaling). */
@@ -130,6 +131,7 @@
 #define CC_MAX_TYPEDEF	32
 #define CC_INC_MAX	8	//nested-#include depth guard
 #define CC_SWITCH_CASES	32	//M14: case-label cap per switch statement
+#define CC_LABELS	64	//M16: labels + gotos per function
 
 /* Struct tag: one table entry per `struct Name { ... }` definition.
  * Every member is one 8-byte slot (members at byte offset 8*i); a char
@@ -209,6 +211,18 @@ class CCCtrl
   I64	in_loop;	//M14: inside a while/for/do body — `continue` in a
   			//switch must belong to an enclosing loop (CCContStmt
   			//diagnoses it otherwise); switch itself is NOT a loop.
+  /* M16: statement labels and the forward-goto queue, PER FUNCTION
+   * (reset where CCParseFun consumes '{'): C functions never nest, so
+   * one table per function is correct — the M14 nested-switch lesson
+   * was about state that must nest WITHIN a function; this does not.
+   * goto_pos entries become -1 once the label patches them; whatever
+   * is still >=0 at the closing '}' is an undefined-label error. */
+  I64	nlab;
+  U8	lab_name[CC_LABELS][CC_TOK_MAX];
+  I64	lab_pos[CC_LABELS];
+  I64	ngoto;
+  U8	goto_name[CC_LABELS][CC_TOK_MAX];
+  I64	goto_pos[CC_LABELS];
   I64	noemit;		//M15: sizeof(expr) parses the operand to learn its
   			//TYPE only — every code-writing site checks this and
   			//stays silent (CCByte choke-holds CCWord/CCHalf/CCQuad;

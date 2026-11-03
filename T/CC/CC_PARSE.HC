@@ -15,6 +15,7 @@
 extern U0 CCExpr(CCCtrl *cc);
 extern U0 CCExprNC(CCCtrl *cc);
 extern U0 CCExprLogOr(CCCtrl *cc);
+extern U0 CCExprConditional(CCCtrl *cc);
 extern U0 CCExprBitOr(CCCtrl *cc);
 extern U0 CCExprEquality(CCCtrl *cc);
 extern U0 CCExprRelational(CCCtrl *cc);
@@ -884,12 +885,14 @@ U0 CCExprPrimary(CCCtrl *cc)
   {
     //Parenthesized: keep any pending lvalue status so `(*p)=x` works;
     //commas inside are the operator, so the last operand's status wins.
-    CCExprLogOr(cc);
+    //Conditional (not LogOr): C permits `(c?a:b)` and that is where a
+    //parenthesized ternary appears inside bigger expressions.
+    CCExprConditional(cc);
     while ((!cc->errs)&&(CCTkIsPunct(cc,',')))
     {
       CCLex(cc);
       CCVal(cc);		//discard the left operand's value
-      CCExprLogOr(cc);
+      CCExprConditional(cc);
     }
     CCExpect(cc,')',"expected ')'");
     CCPostfix(cc);		//enables `(*p).m`
@@ -1677,11 +1680,56 @@ U0 CCPrintf(CCCtrl *cc)
   cc->sty=-1;
 }
 
+/* M16: `cond ? a : b`. Above the logical chain, below comma. Arms:
+ * middle is an assignment-expression (via NC: comma-free, value in
+ * RAX), third recurses into THIS level for right-associativity
+ * (`a?b:c?d:e`). Codegen is the textbook shape — value already in
+ * RAX, JZ to the third arm, JMP over it after the second. Under
+ * noemit (sizeof) CCJmp/CCJz return -1 and CCPatchJmp ignores it:
+ * the analysis tracks arm types exactly like the emit pass. Result
+ * type: the arms' if identical, else the int model. */
+U0 CCExprConditional(CCCtrl *cc)
+{
+  I64 pz,pj,mty,msty;
+  CCExprLogOr(cc);
+  if (cc->errs)
+    return;
+  if (!CCTkIsPunct(cc,'?'))
+    return;
+  CCLex(cc);
+  CCVal(cc);		//condition value (LogOr leaves addresses pending)
+  CCTestRax(cc);
+  pz=CCJz(cc);
+  CCExprNC(cc);		//second arm
+  mty=cc->ety;
+  msty=cc->sty;
+  CCExpect(cc,':',"expected ':' in conditional");
+  if (cc->errs)
+    return;
+  pj=CCJmp(cc);
+  CCPatchJmp(cc,pz);
+  CCExprConditional(cc);	//third arm, right-associative
+  CCVal(cc);		//NC normalized the middle arm; normalize this one
+  if ((mty==cc->ety)&&(msty==cc->sty))
+  {
+    //Same type both arms: it stands (pointers keep their element kind
+    //and struct tags, so `(c?p:q)->m` works when both are struct*).
+  }
+  else
+  {
+    cc->ety=TY_INT;
+    cc->sty=-1;
+  }
+  cc->is_addr=0;
+  cc->aty=0;
+  CCPatchJmp(cc,pj);
+}
+
 /* Comma-free expression: the value consumers (return, if/while cond,
  * function arguments) use. `f(a,b)` must NOT see commas as operators. */
 U0 CCExprNC(CCCtrl *cc)
 {
-  CCExprLogOr(cc);
+  CCExprConditional(cc);
   CCVal(cc);
 }
 
@@ -2038,6 +2086,91 @@ U0 CCContStmt(CCCtrl *cc)
   CCExpect(cc,';',"expected ';' after continue");
 }
 
+/* M16: `goto name;`. A defined label jumps directly (E9 rel32; the
+ * displacement is relative to the operand's END, so compute rel =
+ * target-(operand_pos+4) — the emitted-opcode-first discipline of M14
+ * in its purest form: nothing is written between the position read
+ * and CCWord). An undefined label queues an E9 with a zero operand
+ * that CCLabelHere patches when the definition arrives; leftovers are
+ * diagnosed at the function's closing brace. */
+U0 CCGotoStmt(CCCtrl *cc)
+{
+  I64 i,rel,lab;
+  U8 nm[CC_TOK_MAX];
+  CCLex(cc);		//consume 'goto'
+  if (cc->tk!=TK_IDENT)
+  {
+    CCError(cc,"goto needs a label name");
+    return;
+  }
+  StrCpy(nm,cc->tk_str);
+  CCLex(cc);
+  CCExpect(cc,';',"expected ';' after goto");
+  lab=-1;
+  for (i=0;i!=cc->nlab;i++)
+  {
+    if (!StrCmp(cc->lab_name[i],nm))
+      lab=cc->lab_pos[i];
+  }
+  if (lab>=0)
+  {
+    CCByte(cc,0xE9);
+    rel=lab-(cc->ep-cc->code)-4;
+    CCWord(cc,rel);
+    return;
+  }
+  if (cc->ngoto>=CC_LABELS)
+  {
+    CCError(cc,"too many unresolved gotos");
+    return;
+  }
+  StrCpy(cc->goto_name[cc->ngoto],nm);
+  CCByte(cc,0xE9);
+  cc->goto_pos[cc->ngoto]=cc->ep-cc->code;
+  CCWord(cc,0);		//patched by CCLabelHere (or reported dead)
+  cc->ngoto++;
+}
+
+/* Define nm at the current code position: duplicates are an error;
+ * queued gotos naming it get their rel32 written into the placeholder
+ * (CCPatchCallPos pattern) and their queue entry parked at -1 so they
+ * are neither re-patched nor flagged at function end. */
+U0 CCLabelHere(CCCtrl *cc,U8 *nm)
+{
+  I64 i,pos,rel;
+  U8 *p;
+  for (i=0;i!=cc->nlab;i++)
+  {
+    if (!StrCmp(cc->lab_name[i],nm))
+    {
+      CCError(cc,"label redefined");
+      return;
+    }
+  }
+  if (cc->nlab>=CC_LABELS)
+  {
+    CCError(cc,"too many labels");
+    return;
+  }
+  pos=cc->ep-cc->code;
+  StrCpy(cc->lab_name[cc->nlab],nm);
+  cc->lab_pos[cc->nlab]=pos;
+  cc->nlab++;
+  for (i=0;i!=cc->ngoto;i++)
+  {
+    if ((cc->goto_pos[i]>=0)&&(!StrCmp(cc->goto_name[i],nm)))
+    {
+      rel=pos-(cc->goto_pos[i]+4);
+      p=cc->code+cc->goto_pos[i];
+      p[0]=rel;
+      p[1]=rel>>8;
+      p[2]=rel>>16;
+      p[3]=rel>>24;
+      cc->goto_pos[i]=-1;
+    }
+  }
+}
+
 U0 CCBlockStmt(CCCtrl *cc)
 {
   CCLex(cc);		//consume '{'
@@ -2155,11 +2288,21 @@ U0 CCDeclStmt(CCCtrl *cc)
 
 U0 CCStmt(CCCtrl *cc)
 {
+  //M16: label-gate peek state (see the snapshot note: pc alone lies).
+  U8 *spc;
+  I64 stk,skw,snum;
+  U8 sstr[CC_TOK_MAX];
+
   if (cc->errs)
     return;
   if (CCTkIsPunct(cc,'{'))
   {
     CCBlockStmt(cc);
+    return;
+  }
+  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_GOTO))
+  {
+    CCGotoStmt(cc);
     return;
   }
   if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_IF))
@@ -2205,6 +2348,25 @@ U0 CCStmt(CCCtrl *cc)
     CCExpect(cc,';',"expected ';'");
     CCFunRet(cc,cc->cur_entry);
     return;
+  }
+  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_NONE))
+  {
+    //M16: statement label `name:` — peek with the FULL lexer state
+    //restore (PLAN: a pc-only rewind swallows the token after the
+    //rewound run; CCSnap/CCRestore are the sanctioned pair). Keyword-
+    //typed identifiers are excluded up front. A typedef name used as
+    //a label (`size_t:`) is C-legal: labels are their own namespace,
+    //and the ':' peek never collides with a declaration.
+    CCSnap(cc,&spc,&stk,&skw,&snum,sstr);
+    CCLex(cc);
+    if (CCTkIsPunct(cc,':'))
+    {
+      CCLex(cc);		//consume ':'
+      CCLabelHere(cc,sstr);
+      CCStmt(cc);		//the labeled statement (another label,
+      return;			//or any statement — C's shape)
+    }
+    CCRestore(cc,spc,stk,skw,snum,sstr);
   }
   if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_TYPEDEF))
   {
@@ -2378,6 +2540,8 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
   }
   cc->cur_argc=cc->nparam;
   cc->lofs=0;		//locals restart per function
+  cc->nlab=0;		//M16: label scope is per-function too (C functions
+  cc->ngoto=0;		//never nest, so one table per function is exact)
   f=CCSymFind(cc,name);
   if (!f)
     f=CCSymNew(cc,name,SC_FUN);
@@ -2411,6 +2575,17 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
   while ((!cc->errs)&&(cc->tk!=TK_EOF)&&!CCTkIsPunct(cc,'}'))
     CCStmt(cc);
   CCExpect(cc,'}',"expected '}'");
+  //M16: a goto whose label never arrived in this function (or names a
+  //label in ANOTHER function — labels are function-scoped, the queue
+  //reset proves it) is a compile error. Patched entries sit at -1.
+  for (i=0;i!=cc->ngoto;i++)
+  {
+    if (cc->goto_pos[i]>=0)
+    {
+      "CC ERROR: goto to undefined label %s\n",cc->goto_name[i];
+      cc->errs++;
+    }
+  }
   CCPatchImm32(cc,sub_pos,(cc->lofs*8+15)&~15);
   CCFunRet(cc,entryflag);	//fall-off end: implicit return
 }

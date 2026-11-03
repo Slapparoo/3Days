@@ -113,6 +113,8 @@ U0 CCLex(CCCtrl *cc)
       cc->tk_kw=KW_SIZEOF;
     else if (!StrCmp(cc->tk_str,"short"))
       cc->tk_kw=KW_SHORT;
+    else if (!StrCmp(cc->tk_str,"goto"))
+      cc->tk_kw=KW_GOTO;
     return;
   }
   if (*p=='"')

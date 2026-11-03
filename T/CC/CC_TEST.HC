@@ -274,6 +274,10 @@ CCAssert(20,"T:/CC/TEST/switch.c","switch");
 /* M15: sizeof (C-truth sizes, arrays via symbol, silent expr path)
  * and casts (char truncation, pointer retype, struct-tag retention). */
 CCAssert(26,"T:/CC/TEST/sizeof.c","sizeof");
+/* M16: goto/labels (forward + backward + cross-structure exits) and
+ * the conditional operator (unevaluated arms, pointer/tag unification). */
+CCAssert(10,"T:/CC/TEST/goto.c","goto");
+CCAssert(14,"T:/CC/TEST/tern.c","tern");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */
