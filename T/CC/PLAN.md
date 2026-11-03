@@ -78,7 +78,9 @@ memcmp malloc atoi abs puts srand rand` (delegated to kernel routines
 where they exist; see M12), the M12.1 batch — `strcat strncat strrchr
 strstr strncmp strncpy memchr strdup calloc` + `sprintf getchar fgetc
 getc fputc putc fputs abort` (see M12.1) — the usual operators —
-`++ -- & * []`, comma, short-circuit logic, bitwise `& | ^`, shifts
+`++ -- & * []` (M28: both spellings of `++`/`--`, prefix and postfix, on
+any modifiable lvalue the chain can produce), comma, short-circuit logic,
+bitwise `& | ^`, shifts
 `<< >>`, `~`, all ten compound assignments (`p+=n` scales), chained
 `a=b=5` — with C's full precedence chain (shift vs relational vs the
 three bitwise levels are pinned by `bitops.c`). M15 adds `sizeof`
@@ -221,7 +223,10 @@ Not supported — each currently fails with a compile diagnostic:
   forward reference diagnoses "not a compile-time constant" and a
   prototype-only name "initializer refers to a function that is not
   defined yet"; a stored fp is a raw code address:
-  NULL is the only portable sentinel (`fp==0` / `fp!=0` work).
+  NULL is the only portable sentinel (`fp==0` / `fp!=0` work). `fp++`/`++fp`
+  on a function pointer move it by 8 like any other slot pointer (M28): C
+  gives function-pointer arithmetic no meaning at all, and nothing in the
+  symbol records fp-ness, so this is the model's choice rather than a rule.
 - Scoping (M21): blocks, `for`-init clauses, switch bodies and function
   bodies are real C scopes — a waterline truncates the symbol, typedef,
   enum-constant and tag tables at the closing brace, so an inner name
@@ -255,11 +260,24 @@ Not supported — each currently fails with a compile diagnostic:
   int-shaped — `ap[1][0]` loads the pointer then indexes the QUAD at
   it, so byte access takes the temp-variable form (`p=ap[1]; p[0]`)
   or a cast (`*(char *)(ap[1])`) — the model has one pointer kind;
-  postfix on a string LITERAL (`"ab"[0]`) parses as an error (predates
-  M17 — Primary's literal arm never enters Postfix; use a variable);
+  subscripting a string LITERAL works since M19 (`"ab"[1]` is 'b', and
+  `*("ab")` too) — and it writes into the WRITABLE data arena, so
+  `++"ab"[1]` really does change that pool string for the rest of the run
+  (C: undefined behavior; a variable is the portable spelling);
   `++`/`--` on a POINTER-TO-ROW steps by element size, not row size;
   array PARAMETERS discard the first dimension (the caller owns the
   count) and keep the second; struct members may not be arrays.
+- **Pointer DIFFERENCES are byte counts, not element counts** (silent,
+  measured while verifying M28, pre-existing): `int a[4]; p=a; ++p; ++p;`
+  then `p-a` is 16 here where C says 2, because subtraction is the ordinary
+  integer subtract and nothing divides by the element scale. `++p`/`p++`
+  DO scale (by 8 for slots, by 1 for bytes — `incr.c` pins both), so the
+  walk is right and only the difference is byte-shaped. Byte pointers are
+  correct by construction (`q-w` on `char *` is the byte count C reports),
+  which is why this hides: the common `strlen`-style difference works. Until
+  it is fixed, carry an index alongside the pointer when you need an element
+  count, and note that `sizeof(*fp)` and struct-pointer steps keep their own
+  documented model sizes.
 - `sizeof`/cast edges not supported: `sizeof` needs parentheses (and
   its expression form decays arrays to pointer size there — `sizeof
   f(x)` and a bare `sizeof x` are diagnostics, and the bare-identifier
@@ -301,17 +319,24 @@ Not supported — each currently fails with a compile diagnostic:
   own 8-byte slot and only its low byte is ever read through it). The
   shared mapper reports overfull targets as "excess elements in
   initializer" (generalized from M22's array-only wording).
-- `++`/`--` is POSTFIX ONLY: prefix `++v` is not implemented at all and
-  dies at the operator with "expected number, string, variable or '('"
-  (found while probing M27; identical at HEAD, so `i++` is the idiom
-  everywhere in this compiler and its fixtures). It needs an lvalue
-  primary: `v++` and `buf[i]++` are fine, `(*p)++` needs parens support
-  the postfix pass lacks (write `*p=*p+1`). Aggregates are diagnosed, not
-  approximated (M27): `arr[0]++` and `u[0]--` report "++/-- needs a
-  modifiable scalar or pointer" — they reach the lvalue test as is_addr==1
-  elements, and bumping only the first slot would be neither C's rule nor
-  a useful approximation, and `v += 1` on a struct or array says
-  "compound assignment to an array or struct object".
+- `++`/`--` edges. Prefix `++v`/`--v` arrived at M28 (they had never
+  parsed at all — `++v` died at the operator with "expected number, string,
+  variable or '('", found while probing M27, which is why every fixture
+  written before M28 spells its loops `i++`). The same milestone moved
+  postfix into the postfix chain, so `(*p)++` and `(v)++` — the forms PLAN
+  told people to rewrite as `*p=*p+1` for a dozen milestones — now work.
+  Both spellings share ONE emitter (`CCIncDecAt`), so pointer scaling,
+  byte-vs-quad width and what survives in RAX cannot differ between them;
+  the difference is only that postfix parks the old value on the stack and
+  pops it back. `++ ++ x` parses and then diagnoses, which is what C does
+  too (the operand must be a *modifiable lvalue*, and `++x` is a value).
+  Aggregates are diagnosed, not approximated (M27): `arr[0]++` and
+  `u[0]--` report "++/-- needs a modifiable scalar or pointer" — they reach
+  the lvalue test as is_addr==1 elements, and bumping only the first slot
+  would be neither C's rule nor a useful approximation; `++m[0]` on a 2-D
+  array says "++/-- needs a modifiable object" (its operand is a row, i.e.
+  an array in C too); and `v += 1` on a struct or array says "compound
+  assignment to an array or struct object".
 - `free()` does not exist: this port's `Free()` releases whole poopalloc
   chunks and would pull shared pages out from under live arenas, so
   `malloc()` memory is permanent-by-design (see the CCSrc note in CC.HC).
@@ -1415,6 +1440,89 @@ Not supported — each currently fails with a compile diagnostic:
    calls, copying inside a loop), green x3, saved-object reloads 28/28/28 with
    fptab 31/31, decay 28/28, fptr 27/27, ptrinit 25/25 and structinit 22/22
    unchanged, clean `CC TESTS: 0 failed`.
+ - [x] **M28** prefix `++`/`--` (and the postfix forms they exposed). M27
+   was documented an hour before I noticed that `++v` does not parse at all:
+   the probe batch that pinned M27's compound-assignment wording used `++v`
+   as a control, and it died at the operator with "expected number, string,
+   variable or '('" — identically at HEAD. Since `for (i=0; i!=n; ++i)` is
+   the most common loop spelling in C, that is a bigger compatibility wall
+   than anything else on the list, so it became this milestone. Two changes:
+   a PREFIX arm at the top of `CCExprUnary` (recursing like the `-`/`!`/`~`/
+   `&`/`*` arms already do, then checking that the operand left an ADDRESS
+   pending), and the POSTFIX block MOVED OUT of Primary's identifier arm into
+   `CCPostfix`'s loop, where the operator applies to whatever the chain
+   actually produced. The move is what recovered `(*p)++` and `(v)++` — forms
+   PLAN had told readers to rewrite as `*p=*p+1` since before M17 — with no
+   new code at all: the paren group already leaves is_addr==1 for `(*p)=x` to
+   work, and the increment simply stopped being restricted to ident roots.
+   Both spellings then call ONE emitter, `CCIncDecAt(cc,inc,prefix)`, whose
+   only difference is that postfix parks the old value on the stack and pops
+   it back after the store. That is the structural win: the two spellings
+   cannot drift in pointer scale, in byte-vs-quad width, or in what they leave
+   in RAX, which is exactly the trio that has caused every increment bug in
+   this compiler's history.
+   **Landmine #1 — my own documented gotcha, new disguise.** I compressed
+   `if (byte_aty) { CCByte(cc,0x88); CCByte(cc,0x01); }` into
+   `if (byte_aty) CCByte(cc,0x88);CCByte(cc,0x01);`, which binds the guard to
+   the FIRST statement only and leaves the following `else` with no matching
+   if: "Missing expression at else", reported where the else is, not where the
+   damage is. The audit I documented (`grep -n -A1 "else$"`) does not catch
+   this shape, because the two-statement line sits BEFORE the else. Use
+   `grep -n -B2 "^[[:space:]]*else$" CC_*.HC` and flag any line above an else
+   that carries two `);` groups — or brace every guarded branch, which is what
+   the emitter does now (including the ADD/SUB pair, emitted once for both
+   spellings).
+   **Landmine #2 — a splice that ended mid-line ate a statement, and the host
+   segfaulted instead of telling me.** My python index-surgery cut the old
+   postfix block by searching for its terminating `return;`/`}` and joined a
+   replacement whose last line was a `//` comment with NO trailing newline, so
+   the next line of the file — `if (CCAccept(cc,'('))`, the head of Primary's
+   parenthesized-expression arm — was appended INTO the comment. Nothing was
+   missing at the syntax level: the arm simply became a bare block and the
+   umbrella compiled. Then every run died with a host core dump (exit 139),
+   not a `[3d] FAULT` banner — including the control `int main(){return 1;}`,
+   which is the tell that the compiler itself, not the test program, was
+   broken. `git stash push -q -- T/CC/CC_PARSE.HC` reproduced a clean run at
+   HEAD, and `diff -u` against the pre-edit snapshot showed the glued line
+   immediately. Two rules: a splice's removed region AND its replacement must
+   both end at a line boundary, and diff the whole file against the snapshot
+   after any index surgery (that diff has now caught a bad splice and a bad
+   revert anchor).
+   **Semantics pinned by the fixture:** prefix yields the NEW value, postfix
+   the OLD one, and the object moves either way; the result KEEPS the
+   operand's type (the M15 rule, untouched), so `(*(p++))==22` and `(*++p)==22`
+   both read the right slot and `++p` steps a whole 8-byte slot while
+   `++w2[0]` steps one byte; `while(n--)` tests the old value and `while(--n)`
+   the new (both pinned with the final value of `n`, so the two cannot be
+   confused); `sizeof(v++)` neither evaluates nor stores (`CCByte` is gated by
+   `noemit`, so the emitter emits nothing and `v` is unchanged afterwards);
+   and `a[++i % 4]` survives the modulo's CQO/IDIV pair, which clobbers RDX
+   and RCX AFTER the emitter has finished with them.
+   **Found while verifying, pre-existing:** pointer DIFFERENCES are byte
+   counts (`p-a` after two `++p` gives 16 where C gives 2) because subtraction
+   is the plain integer subtract and nothing divides by the element scale —
+   documented as a silent deviation rather than papered over, and deliberately
+   not fixed here (it changes a binary-operator rule, and the fixture's whole
+   point is that the WALK scales correctly). `int (*p)[3]`, which is legal C
+   (pointer to array), was rejected with M26's function-pointer wording; the
+   diagnostic now names both shapes and the supported alternative. Two helpers
+   I added in M25 (`CCArrNext`, `CCSetArrTy`) took a `CCCtrl *` they never
+   read, warning in every build; dropped rather than left.
+   Error paths pinned: `++5`, `++f()`, `++(v=1)`, `++(v?u:v)`, `++--v`,
+   `++v++`, `x++` on a struct object, `++arr[0]`, `arr[0]--`, `++a` and `a++`
+   on arrays, `++m[0]` on a 2-D row, and the fp-array declarator forms. 79
+   cases (incr.c: 41 checks + closer — prefix/postfix on int and char
+   scalars, values old-vs-new, pointer steps in both directions, `*p++` /
+   `*++p` / `++*p` / `(*p)++` / `(v)++`, char elements and byte elements
+   reached through a `char *` table, 2-D elements, struct members through a
+   pointer (including a byte member), union aliasing, a global, a `static`
+   counter across calls, `while(n--)` vs `while(--n)`, a modulo index, a call
+   argument, a condition, `sizeof` non-evaluation, and loops in both update
+   spellings), cross-checked against `gcc -std=gnu99` with 0 mismatches and
+   ONE declared adjustment (`sizeof(v++)` is 8 here, 4 in C), green x3,
+   saved-object reloads 42/42/42 with agcopy 28/28/28, fptab 31/31, decay
+   28/28, fptr 27/27, ptrinit 25/25 and structinit 22/22 unchanged, clean
+   `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 
@@ -1434,6 +1542,15 @@ Not supported — each currently fails with a compile diagnostic:
   Restructure with if/else chains (break exists and works). CC's own
   C language has continue (its parser implements it); only the HOST
   dialect lacks it — M13's prep/type code hit this three times over.
+- **A `//` comment swallows everything after it on that line**, so a
+  spliced-together line silently DELETES a statement: my edit ended a
+  replacement with a comment and no newline, `if (CCAccept(cc,'('))` landed
+  on the comment line, Primary's paren arm became a bare block, the umbrella
+  still compiled, and every run — including `int main(){return 1;}` — died
+  with a host core dump instead of a HolyC FAULT. When EVERY probe fails,
+  including your controls, suspect the umbrella and diff against the pre-edit
+  snapshot; a splice's old region and new text must each end at a line
+  boundary.
 - Classes must end with `};`.
 - **`if` and `else` guard EXACTLY ONE statement** (verified by probe:
   `if (0) x=1;x=5;` leaves x=5; `if (1) x=1; else x=2;x=7;` leaves
@@ -1546,6 +1663,15 @@ Not supported — each currently fails with a compile diagnostic:
   emitted AFTER that brace must not reference the slot. Anything that
   must live for the whole function is allocated BEFORE the scope mark
   (the switch dispatch slot is, deliberately).
+- `++`/`--` is emitted by `CCIncDecAt` and BOTH spellings call it (M28):
+  prefix from `CCExprUnary`, postfix from the arm inside `CCPostfix`'s loop,
+  because that loop is where every chain result (subscript, member, deref via
+  parens, group) lands. A new postfix arm is therefore incrementable for
+  free, and a new operator that produces a modifiable target must leave the
+  EMITTER'S PRECONDITION — is_addr==1, RAX holding the address, aty/ety
+  describing what it points at — or ++/-- will diagnose it (correctly) rather
+  than emit. Never re-inline the load/add/store sequence: the one copy is
+  what keeps pointer scale, byte width and RAX's final contents identical.
 - The M27 aggregate copy reads slot i BEFORE writing it (MOV RDX,[RAX] /
   MOV [RCX],RDX, then both pointers step), which is what makes `x=x` and
   `*p=*q` correct without a temp, and it uses RDX as the accumulator

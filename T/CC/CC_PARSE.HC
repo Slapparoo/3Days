@@ -43,8 +43,8 @@ extern I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 
 extern U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena);
 extern I64 CCInitMap(CCCtrl *cc,I64 n,I64 *vgrp,I64 *eloc,I64 A);
 extern I64 CCArrEltSize(CCCtrl *cc,I64 ael,I64 asty);
-extern U0 CCArrNext(CCCtrl *cc,I64 ael,I64 asty,I64 *pnext,I64 *pnextsty);
-extern U0 CCSetArrTy(CCCtrl *cc,CSym *s);
+extern U0 CCArrNext(I64 ael,I64 asty,I64 *pnext,I64 *pnextsty);
+extern U0 CCSetArrTy(CSym *s);
 extern U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena);
 extern I64 CCInitOne(CCCtrl *cc,I64 *pkind,I64 *pisstr);
 //M24 NOTE: CCArenaPtr's extern lives in CC.HH's forward block, NOT
@@ -1149,11 +1149,14 @@ I64 CCParseFunPtrDecl(CCCtrl *cc,U8 *name)
   CCLex(cc);
   if (CCTkIsPunct(cc,'['))
   {
-    //Brackets AFTER the closing paren are a different declarator:
-    //`int (*f)[2](int)` makes the pointer an array of FUNCTIONS, and a
-    //function returning an array is illegal C. A second dimension
-    //(`(*f[2][3])(int)`) needs row machinery this declarator lacks.
-    CCError(cc,"function-pointer arrays take one dimension, before the parameter list");
+    //Brackets AFTER the closing paren are a DIFFERENT type, and this
+    //model has no way to spell either one: `int (*p)[3]` is a POINTER TO
+    //AN ARRAY (legal C, unsupported here), and `int (*f)[2](int)` makes the
+    //pointer an array of FUNCTIONS, i.e. a function returning an array,
+    //which is illegal C. Naming only the function case sent people off to
+    //look at their parameter list, so the message names both shapes and the
+    //supported alternative.
+    CCError(cc,"brackets after '(*name)' need a pointer-to-array type, unsupported here: write int *p (and index it), or for fp ARRAYS put the brackets inside: int (*tab[N])(int)");
     return FALSE;
   }
   if (!CCTkIsPunct(cc,'('))
@@ -1249,7 +1252,7 @@ I64 CCArrEltSize(CCCtrl *cc,I64 ael,I64 asty)
  * other pointers point at slots (the model has no richer pointee
  * information to give); scalars are not subscriptable, and reporting 0
  * (unknown) hands them to the pre-M25 lenient fallback instead. */
-U0 CCArrNext(CCCtrl *cc,I64 ael,I64 asty,I64 *pnext,I64 *pnextsty)
+U0 CCArrNext(I64 ael,I64 asty,I64 *pnext,I64 *pnextsty)
 {
   if (ael==TY_CHARP)
   {
@@ -1285,17 +1288,89 @@ U0 CCArrNext(CCCtrl *cc,I64 ael,I64 asty,I64 *pnext,I64 *pnextsty)
  * `char b[4]` TY_CHAR, and `int m[2][3]` TY_INT (the INNERMOST element;
  * a row's elements are that scalar, which is what the row machinery
  * already strides by). Also clears the stale-by-recycling fields. */
-U0 CCSetArrTy(CCCtrl *cc,CSym *s)
+U0 CCSetArrTy(CSym *s)
 {
   s->ael=s->ty+1;		//M25 encoding: 0 means "not an array",
   s->aelsty=s->sty;		//TY_INT IS 0, so the stored form must
 }				//be offset (see the CC.HH note)
 
+/* M28: the ++/-- emitter, shared by BOTH forms. Precondition: RAX holds
+ * the ADDRESS of a modifiable lvalue (cc->is_addr==1) and cc->aty/cc->ety
+ * describe what it points at, which is the state Primary's chain, the
+ * subscript/member arms and the unary `*` all produce. prefix=0 yields the
+ * OLD value (POP it back after the store); prefix=1 yields the NEW one,
+ * which is the only difference — so the two spellings cannot drift apart
+ * in scaling, in byte-vs-quad width, or in what they leave in RAX.
+ * delta is the pointer scale when the operand is a pointer (so `p++` steps
+ * a slot and `tab[i]++` a byte), else 1. */
+U0 CCIncDecAt(CCCtrl *cc,I64 inc,I64 prefix)
+{
+  I64 byte_aty,scale,delta;
+
+  byte_aty=cc->aty;
+  scale=CCPtrScale(cc->ety);
+  delta=1;
+  if (scale>0)
+    delta=scale;
+  CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0xC1);	//MOV RCX,RAX
+  if (byte_aty)
+  {
+    CCByte(cc,0x48);
+    CCByte(cc,0x0F);
+    CCByte(cc,0xB6);
+    CCByte(cc,0x00);				//MOVZX RAX,BYTE[RAX]
+  }
+  else
+  {
+    CCByte(cc,0x48);
+    CCByte(cc,0x8B);
+    CCByte(cc,0x00);				//MOV RAX,[RAX]
+  }
+  //One ADD/SUB for both spellings: the postfix form parks the OLD value on
+  //the stack first and pops it back after the store, which is the ONLY
+  //difference between the two. Braces on every guarded branch — this
+  //dialect binds if/else to EXACTLY ONE statement, and the compressed
+  //`CCByte(cc,0x88);CCByte(cc,0x01);` I first wrote here left the else with
+  //no matching if ("Missing expression at else", my own documented gotcha,
+  //hit anyway).
+  if (!prefix)
+    CCByte(cc,0x50);				//PUSH RAX (old: the result)
+  CCByte(cc,0x48);
+  CCByte(cc,0x83);
+  if (inc)
+    CCByte(cc,0xC0);				//ADD RAX,delta
+  else
+    CCByte(cc,0xE8);
+  CCByte(cc,delta);
+  if (byte_aty)
+  {
+    CCByte(cc,0x88);
+    CCByte(cc,0x01);				//MOV [RCX],AL
+  }
+  else
+  {
+    CCByte(cc,0x48);
+    CCByte(cc,0x89);
+    CCByte(cc,0x01);				//MOV [RCX],RAX
+  }
+  if (!prefix)
+    CCByte(cc,0x58);				//POP RAX (old back)
+  //The result is a VALUE, but it keeps the operand's TYPE: `p++` is still
+  //a pointer, so `(p++)[0]` indexes and `p++ + 1` scales by 8. (M15-era
+  //rule, unchanged here; only the emitter moved.)
+  cc->is_addr=0;
+  cc->aty=0;
+  cc->sty=-1;
+  cc->celem=0;
+  cc->celebsty=-1;
+}
+
 U0 CCPostfix(CCCtrl *cc)
 {
-  I64 ekind,off,mi,bsty,hijack,bty,sty0,ael,aelt,asty,nxt,nxtsty;
+  I64 ekind,off,mi,bsty,hijack,bty,sty0,ael,aelt,asty,nxt,nxtsty,inc;
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&
-      ((((cc->tk_num=='[')||(cc->tk_num=='.'))||(cc->tk_num==OP_ARROW))||(cc->tk_num=='(')))
+      ((((((cc->tk_num=='[')||(cc->tk_num=='.'))||(cc->tk_num==OP_ARROW))||
+      (cc->tk_num=='('))||(cc->tk_num==OP_INC))||(cc->tk_num==OP_DEC)))
   {
     if (cc->tk_num=='(')
     {
@@ -1305,6 +1380,25 @@ U0 CCPostfix(CCCtrl *cc)
       //results and groups reach this arm.
       CCLex(cc);		//consume '('
       CCIndirectCallAt(cc);
+    }
+    else if ((cc->tk_num==OP_INC)||(cc->tk_num==OP_DEC))
+    {
+      //M28: postfix ++/-- RELOCATED here from Primary's identifier arm, so
+      //the operator applies to whatever the chain ACTUALLY produced. `v++`
+      //emits the same code as `buf[i]++`, `p->a++`, `tab[0][0]++`, and —
+      //new — `(*p)++` and `(v)++`, which PLAN had documented as unsupported
+      //for a dozen milestones because only the ident arm had the check.
+      //Aggregates are tested FIRST (M27 rule): a struct element arrives as
+      //is_addr==1, so the modifiable test alone would let `arr[0]++`
+      //through and bump only its first slot.
+      inc=(cc->tk_num==OP_INC);
+      CCLex(cc);
+      if (cc->ety==TY_STRUCT)
+        CCError(cc,"++/-- needs a modifiable scalar or pointer");
+      else if (cc->is_addr!=1)
+        CCError(cc,"++/-- needs a modifiable object");
+      else
+        CCIncDecAt(cc,inc,0);
     }
     else if (cc->tk_num=='[')
     {
@@ -1417,7 +1511,7 @@ U0 CCPostfix(CCCtrl *cc)
           else
             cc->sty=-1;
           cc->aty=(aelt==TY_CHAR);
-          CCArrNext(cc,aelt,asty,&nxt,&nxtsty);
+          CCArrNext(aelt,asty,&nxt,&nxtsty);
           cc->celem=nxt;
           cc->celebsty=nxtsty;
         }
@@ -1515,7 +1609,9 @@ U0 CCLibCall(CCCtrl *cc,I64 slot,I64 argc,I64 rty)
 U0 CCExprPrimary(CCCtrl *cc)
 {
   CSym *s,*hs;
-  I64 inc,n,delta,scale,byte_aty,cv,cn,cnext,ci;
+  I64 n,cv,cn,cnext,ci;		//M28: inc/delta/scale/byte_aty left with
+  				//the increment block (CCIncDecAt now owns
+  				//them, and one copy serves both spellings)
   U8 catbuf[CC_TOK_MAX];
   U8 save_name[CC_TOK_MAX];
   U8 *save_pc;
@@ -1862,61 +1958,9 @@ U0 CCExprPrimary(CCCtrl *cc)
     }
     cc->sty=s->sty;
     CCLex(cc);
+    //M28: the ++/-- block that used to live here moved into CCPostfix,
+    //where it covers every chain result and parenthesized base.
     CCPostfix(cc);
-    if ((!cc->errs)&&((CCTkIsPunct(cc,OP_INC))||(CCTkIsPunct(cc,OP_DEC))))
-    {
-      inc=(CCTkIsPunct(cc,OP_INC));
-      CCLex(cc);
-      if (cc->is_addr!=1)
-        CCError(cc,"++/-- needs a modifiable object");
-      else if (cc->ety==TY_STRUCT)
-        //M27: an aggregate lvalue is not incrementable — `arr[0]++` and
-        //`u[0]--` (an ARRAY ELEMENT, so is_addr==1 and the test above
-        //lets it through) would bump only the FIRST slot and leave the
-        //rest of the object behind, which is neither C's rule nor any
-        //useful approximation of it. C rejects them outright.
-        CCError(cc,"++/-- needs a modifiable scalar or pointer");
-      else
-      {
-        byte_aty=cc->aty;
-        scale=CCPtrScale(cc->ety);
-        delta=1;
-        if (scale>0)
-          delta=scale;
-        CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0xC1);	//MOV RCX,RAX
-        if (byte_aty)
-        {
-          CCByte(cc,0x48);CCByte(cc,0x0F);CCByte(cc,0xB6);CCByte(cc,0x00);
-          //MOVZX RAX,BYTE[RAX] (old value)
-        }
-        else
-        {
-          CCByte(cc,0x48);CCByte(cc,0x8B);CCByte(cc,0x00);	//MOV RAX,[RAX]
-        }
-        CCByte(cc,0x50);		//PUSH RAX (old: the expression result)
-        CCByte(cc,0x48);CCByte(cc,0x83);
-        if (inc)
-        {
-          CCByte(cc,0xC0);CCByte(cc,delta);	//ADD RAX,delta
-        }
-        else
-        {
-          CCByte(cc,0xE8);CCByte(cc,delta);	//SUB RAX,delta
-        }
-        if (byte_aty)
-        {
-          CCByte(cc,0x88);CCByte(cc,0x01);	//MOV [RCX],AL
-        }
-        else
-        {
-          CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0x01);	//MOV [RCX],RAX
-        }
-        CCByte(cc,0x58);		//POP RAX (old value back)
-        cc->is_addr=0;
-        cc->aty=0;
-        cc->sty=-1;
-      }
-    }
     return;
   }
   if (CCAccept(cc,'('))
@@ -1941,6 +1985,35 @@ U0 CCExprPrimary(CCCtrl *cc)
 
 U0 CCExprUnary(CCCtrl *cc)
 {
+  I64 inc;
+
+  if ((cc->tk==TK_PUNCT)&&((cc->tk_num==OP_INC)||(cc->tk_num==OP_DEC)))
+  {
+    //M28: PREFIX ++/--. C makes the operand a cast-expression, and the
+    //unary arms below recurse the same way, so `++ ++ x`, `++*p`,
+    //`++tab[0][0]` and `--argc` all reach a shared check: the operand
+    //parse must leave an ADDRESS pending (is_addr==1), which is what
+    //Primary's chain, a subscript, a member and the unary `*` produce.
+    //Note `-` is tried first in the chain below and cannot collide: the
+    //lexer spells `--` as one OP_DEC token, so `--x` is a decrement and
+    //`x---y` lexes as `x-- -y`, exactly as C does.
+    inc=(cc->tk_num==OP_INC);
+    CCLex(cc);
+    CCExprUnary(cc);
+    if (cc->errs)
+      return;
+    if (cc->ety==TY_STRUCT)
+      CCError(cc,"++/-- needs a modifiable scalar or pointer");
+    else if (cc->is_addr!=1)
+      //C's operand must be a modifiable lvalue: ++5, ++f(), ++(a?b:c).
+      //A pending address (is_addr==2) is an ARRAY or struct OBJECT: C
+      //forbids ++ on an array outright, and the struct case is caught
+      //above, so this message is honest about what is wrong.
+      CCError(cc,"++/-- needs a modifiable object");
+    else
+      CCIncDecAt(cc,inc,1);
+    return;
+  }
   if (CCAccept(cc,'-'))
   {
     CCExprUnary(cc);
@@ -4050,7 +4123,7 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     {				//other array: ael says its elements are
       if (fpar>0)		//pointers, CCReserveArray lays out the
         s->dim=fpar;		//slots (element 0 highest in the frame,
-      CCSetArrTy(cc,s);		//ascending in the arena), CCArrayInit
+      CCSetArrTy(s);		//ascending in the arena), CCArrayInit
       if (fpar>0)		//lands the initializer either way.
         CCReserveArray(cc,s,TY_PTR,-1,fpar,cc->spec_static);
     }
@@ -4187,7 +4260,7 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
         n=n*s->dim2;
       CCReserveArray(cc,s,base,stag,n,sstat);
     }
-    CCSetArrTy(cc,s);		//M25: MUST run before the conversion
+    CCSetArrTy(s);		//M25: MUST run before the conversion
     if (s->ty==TY_CHAR)		//below, which overwrites exactly what
       s->ty=TY_CHARP;		//is being recorded (ty becomes the
     else if (s->ty!=TY_STRUCT)	//decayed pointer shape)
@@ -4793,7 +4866,7 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         s->dim=fpar;
         CCReserveArray(cc,s,TY_PTR,-1,fpar,TRUE);
       }
-      CCSetArrTy(cc,s);
+      CCSetArrTy(s);
     }
     if (CCTkIsPunct(cc,'='))
     {
@@ -4919,7 +4992,7 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         n=n*s->dim2;
       CCReserveArray(cc,s,base,stag,n,TRUE);
     }
-    CCSetArrTy(cc,s);		//M25: element type, BEFORE the decay
+    CCSetArrTy(s);		//M25: element type, BEFORE the decay
     if (s->ty==TY_CHAR)		//conversion below erases it
       s->ty=TY_CHARP;
     else if (s->ty!=TY_STRUCT)
