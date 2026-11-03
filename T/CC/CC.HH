@@ -157,6 +157,7 @@ class CSym
   I64	sty;		//struct tag id when ty==TY_STRUCT or a pointer
  			//to one; -1 otherwise
   I64	dim;		//>1: array of that many slots/bytes at offset
+  I64	dim2;		//M17: second dimension (2-D row-major); 0 = 1-D
   I64	init;		//global constant initializer value
   I64	has_init;
   I64	patches[CC_PATCHES];	//call sites (rel32 operand pos) awaiting def
@@ -245,6 +246,9 @@ class CCCtrl
   U8	pname[CC_MAX_PARAMS*CC_TOK_MAX];	//params being parsed
   I64	pty[CC_MAX_PARAMS];	//their TY_* codes
   I64	psty[CC_MAX_PARAMS];	//their struct tag ids (-1 = not a struct ptr)
+  I64	pdim2[CC_MAX_PARAMS];	//M17: 2nd dim of array params (row scale
+  				//source); 0 = none. 1st dim of a param is
+  				//ALWAYS unknown (callers own the count).
   I64	nparam;
   I64	brk[64];	//pending break-jump patch positions
   I64	brk_cnt;
@@ -255,6 +259,17 @@ class CCCtrl
    * by the consumer (CCVal/&/=/++/--/return). 2=array name decayed to
    * its address (never loads, never assigns). aty: 1=byte at [RAX],
    * 0=8-byte slot. ety: TY_* of the last-parsed expression. */
+  /* M17: multi-dim index scales, expression state. esz2!=0 means
+   * "the value in hand decays to a ROW, not an element": the Postfix
+   * index arm then scales by esz (bytes per row) and consumes the
+   * pair (esz=esz2, esz2=0), making the row itself the new decay.
+   * Set ONLY by the ident arms (from the symbol's dim/dim2); CCVal
+   * clears esz2 so stale scales can never hijack a later plain
+   * pointer/int index — the price is that a PARENTHESIZED 2-D decay
+   * `(m)[0]` loses the row scale (documented; index without parens).
+   * 1-D arrays never set esz2 and keep today's ety-driven scales. */
+  I64	esz;
+  I64	esz2;
   I64	is_addr;
   I64	aty;
   I64	ety;

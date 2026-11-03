@@ -103,7 +103,10 @@ U0 CCVal(CCCtrl *cc)
   if (cc->ety!=TY_STRUCT)
     cc->is_addr=0;	//is_addr==2 (array decay): already an address value
   cc->aty=0;
-}
+  cc->esz2=0;		//M17: any CCVal turns the value into a plain
+}				//pointer — its row scales are spent (the
+				//Postfix index arm reads esz2 BEFORE this
+				//runs on the base; see CC.HH).
 
 /* Element size an expression addresses/points to: 1 byte or 8. */
 I64 CCPtrScale(I64 ty)
@@ -487,14 +490,25 @@ U0 CCCompareEmit(CCCtrl *cc,I64 op)
  * `struct T *m` member keeps tag T so `n->next->v` chains. */
 U0 CCPostfix(CCCtrl *cc)
 {
-  I64 ekind,off,mi,bsty;
+  I64 ekind,off,mi,bsty,hijack,bty,sty0;
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&
       (((cc->tk_num=='[')||(cc->tk_num=='.'))||(cc->tk_num==OP_ARROW)))
   {
     if (cc->tk_num=='[')
     {
       bsty=-1;
-      if (cc->ety==TY_STRUCT)
+      hijack=0;
+      bty=cc->ety;		//the decayed base type: a row keeps it
+      sty0=cc->sty;
+      if (cc->esz2)
+      {
+        //M17: first index of a 2-D decay scales a WHOLE ROW
+        //(cc->esz); must be read before the CCVal below, which is
+        //exactly what consumes esz2 for every other consumer.
+        ekind=cc->esz;
+        hijack=1;
+      }
+      else if (cc->ety==TY_STRUCT)
       {
         bsty=cc->sty;
         ekind=cc->st[bsty].size;	//element == whole struct
@@ -529,21 +543,36 @@ U0 CCPostfix(CCCtrl *cc)
         CCWord(cc,ekind);	//IMUL RAX,RAX,imm32 (struct element size)
       }
       CCByte(cc,0x48);CCByte(cc,0x01);CCByte(cc,0xC8);	//ADD RAX,RCX
-      cc->is_addr=1;		//address of the element
-      cc->aty=0;
-      if (bsty>=0)
+      if (hijack)
       {
-        cc->ety=TY_STRUCT;	//a struct element is still the struct
-        cc->sty=bsty;
+        cc->esz=cc->esz2;
+        cc->esz2=0;
+        cc->is_addr=2;
+        cc->ety=bty;
+        cc->aty=0;
+        if (bsty>=0)
+          cc->sty=bsty;
+        else
+          cc->sty=sty0;
       }
       else
       {
-        cc->sty=-1;
-        cc->aty=(ekind==1);
-        if (ekind==1)
-          cc->ety=TY_CHAR;
+        cc->is_addr=1;		//address of the element
+        cc->aty=0;
+        if (bsty>=0)
+        {
+          cc->ety=TY_STRUCT;	//a struct element is still the struct
+          cc->sty=bsty;
+        }
         else
-          cc->ety=TY_INT;		//the ELEMENT's type
+        {
+          cc->sty=-1;
+          cc->aty=(ekind==1);
+          if (ekind==1)
+            cc->ety=TY_CHAR;
+          else
+            cc->ety=TY_INT;		//the ELEMENT's type
+        }
       }
     }
     else
@@ -829,6 +858,30 @@ U0 CCExprPrimary(CCCtrl *cc)
       cc->ety=s->ty;
       cc->aty=(s->ty==TY_CHAR);
     }
+    if (s->dim2)		//M17: two-dimensional decay carries its
+    {
+      if (s->ty==TY_CHARP)	//row scales (see the CC.HH esz/esz2 note):
+      {
+        cc->esz2=1;		//esz2 = bytes per inner element, esz =
+      }
+      else if ((s->ty==TY_STRUCT)||((s->ty==TY_PTR)&&(s->sty>=0)))
+      {
+        //Struct rows — from a struct array OR a `struct T g[][2]`
+        //parameter (which decays to a struct POINTER and must carry
+        //the tag to reach this branch, or rows stride by 8.
+        cc->esz2=cc->st[s->sty].size;
+      }
+      else
+      {
+        cc->esz2=8;		//int/pointer elements: slots.
+      }
+      cc->esz=cc->esz2*s->dim2;	//row base, so the load-on-value path
+    }
+    else
+    {
+      cc->esz=0;		//is right; the scales make indexing match
+      cc->esz2=0;		//the caller's row layout either way.
+    }
     cc->sty=s->sty;
     CCLex(cc);
     CCPostfix(cc);
@@ -1078,6 +1131,8 @@ U0 CCExprUnary(CCCtrl *cc)
             else
               sz=CCSizeOfEty(cc,sym->ty,sym->sty);
             sz=sym->dim*sz;
+            if (sym->dim2)
+              sz=sz*sym->dim2;
           }
           else
             sz=CCSizeOfEty(cc,sym->ty,sym->sty);	//scalars + pointers
@@ -1374,7 +1429,8 @@ U0 CCExprLogAnd(CCCtrl *cc)
   I64 pz,fired;
   fired=0;
   CCExprBitOr(cc);
-  CCVal(cc);
+  if ((!cc->errs)&&((cc->tk==TK_PUNCT)&&(cc->tk_num==OP_AND)))
+    CCVal(cc);
   while ((!cc->errs)&&((cc->tk==TK_PUNCT)&&(cc->tk_num==OP_AND)))
   {
     fired=1;
@@ -1400,12 +1456,17 @@ U0 CCExprLogOr(CCCtrl *cc)
   I64 pz,pj,fired;
   fired=0;
   CCExprLogAnd(cc);
+  if ((!cc->errs)&&((cc->tk==TK_PUNCT)&&(cc->tk_num==OP_OR)))
+    CCVal(cc);
   while ((!cc->errs)&&((cc->tk==TK_PUNCT)&&(cc->tk_num==OP_OR)))
   {
     fired=1;
     CCLex(cc);
-    CCTestRax(cc);
-    pz=CCJz(cc);
+    CCTestRax(cc);		//MUST set flags before the short-circuit JZ —
+    pz=CCJz(cc);		//my (F) rewrite silently DROPPED this line and
+      			//every `a || b` branched on stale flags (the atoi
+      			//`(x<48)||(x>57)` mis-break — three suite checks
+      			//failed while every micro-probe stayed green).
     CCMovImmRax(cc,1);
     pj=CCJmp(cc);
     CCPatchJmp(cc,pz);
@@ -2187,7 +2248,7 @@ U0 CCBlockStmt(CCCtrl *cc)
 U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
 {
   CSym *s;
-  I64 n;
+  I64 n,n2;
   I64 ty=base;
   while (CCAccept(cc,'*'))
   {
@@ -2210,6 +2271,7 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     if ((ty==TY_STRUCT)||(ty==TY_PTR))
       s->sty=stag;
   s->dim=1;
+  s->dim2=0;
   if (CCAccept(cc,'['))
   {
     if (cc->tk!=TK_NUM)
@@ -2226,6 +2288,25 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
       return;
     }
     s->dim=n;
+    if (CCTkIsPunct(cc,'['))		//M17: second dimension (row-major)
+    {
+      CCLex(cc);
+      if (cc->tk!=TK_NUM)
+      {
+        CCError(cc,"second array size must be a number");
+        return;
+      }
+      n2=cc->tk_num;
+      CCLex(cc);
+      CCExpect(cc,']',"expected ']' after second array size");
+      if ((n2<1)||(n2>2048))
+      {
+        CCError(cc,"second array size out of range");
+        return;
+      }
+      s->dim2=n2;
+      n=n*n2;		//allocation and indexing cover ALL elements
+    }
     if (n>1)
     {
       //Frame grows DOWN from the base slot: element 0 sits at the
@@ -2453,13 +2534,9 @@ U0 CCParseParams(CCCtrl *cc)
         else
           cc->pty[cc->nparam]=TY_PTR;
       }
-      if (cc->pty[cc->nparam]==TY_STRUCT)
-      {
-        CCError(cc,"struct parameters must be pointers: struct T *p");
-        return;
-      }
       i=cc->nparam;
       cc->pname[i*CC_TOK_MAX]=0;	//empty name = anonymous parameter
+      cc->pdim2[i]=0;			//M17: cleared until proven otherwise
       if (cc->tk==TK_IDENT)
       {
         StrCpy(cc->pname+i*CC_TOK_MAX,cc->tk_str);
@@ -2468,12 +2545,36 @@ U0 CCParseParams(CCCtrl *cc)
       cc->nparam++;
       if (CCAccept(cc,'['))
       {
-        //Array parameter (char *argv[]): adjusts to a slot pointer, so
-        //a[i] indexes 8-byte elements — what an argv really is.
+        //Array parameter. The first size is ALWAYS negotiable (the
+        //caller owns the count) and ignored. Element scales come from
+        //what the elements ARE: a char t[] element is a byte (the old
+        //blanket TY_PTR made `char s[]` params stride by quads — C
+        //truth is 1; latent until the M17 probes exercised it); an
+        //int a[] element is a slot; and `t[][64]` (or [8][64]) rows
+        //scale by pdim2 — the second dim is the one that must MATCH
+        //the caller's layout, which is why it is the one recorded.
         if (cc->tk==TK_NUM)
           CCLex(cc);
         CCExpect(cc,']',"expected ']' after parameter array size");
-        cc->pty[i]=TY_PTR;
+        if (cc->pty[i]==TY_CHAR)
+          cc->pty[i]=TY_CHARP;
+        else
+          cc->pty[i]=TY_PTR;
+        if (CCTkIsPunct(cc,'['))
+        {
+          CCLex(cc);
+          if (cc->tk==TK_NUM)
+          {
+            cc->pdim2[i]=cc->tk_num;
+            CCLex(cc);
+          }
+          CCExpect(cc,']',"expected ']' after second parameter array size");
+        }
+      }
+      if (cc->pty[i]==TY_STRUCT)
+      {
+        CCError(cc,"struct parameters must be pointers: struct T *p");
+        return;
       }
       if (CCAccept(cc,','))
       {
@@ -2535,6 +2636,7 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
         s->ty=cc->pty[i];
         s->sty=cc->psty[i];	//struct pointers keep their tag
         s->dim=1;
+        s->dim2=cc->pdim2[i];	//M17: row scale source (1st dim unknown)
       }
     }
   }
@@ -2598,7 +2700,7 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
 Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
 {
   U8 name[CC_TOK_MAX];
-  I64 ty=base,val,neg,n,i,entry;
+  I64 ty=base,val,neg,n,n2,i,entry;
   U8 *gp;
   CSym *s;
 
@@ -2642,6 +2744,7 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     if ((ty==TY_STRUCT)||(ty==TY_PTR))
       s->sty=stag;
   s->dim=1;
+  s->dim2=0;
   if (CCAccept(cc,'['))
   {
     if (cc->tk!=TK_NUM)
@@ -2658,6 +2761,25 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
       return FALSE;
     }
     s->dim=n;
+    if (CCTkIsPunct(cc,'['))		//M17: second dimension
+    {
+      CCLex(cc);
+      if (cc->tk!=TK_NUM)
+      {
+        CCError(cc,"second global array size must be a number");
+        return FALSE;
+      }
+      n2=cc->tk_num;
+      CCLex(cc);
+      CCExpect(cc,']',"expected ']' after second global array size");
+      if ((n2<1)||(n2>2048))
+      {
+        CCError(cc,"second array size out of range");
+        return FALSE;
+      }
+      s->dim2=n2;
+      n=n*n2;		//arena advance covers ALL elements
+    }
     if (n>1)
     {
       //CCSymNew already claimed the first 8 bytes.

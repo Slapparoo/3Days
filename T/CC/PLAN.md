@@ -43,8 +43,8 @@ CCSave("prog.cco");                  //BEFORE running: saves the
 
 ## C subset limitations
 
-Supported: `int`/`char` scalars, pointers and 1-D arrays (locals and
-globals), structs (tag definitions, `.`/`->`, struct-pointer params,
+Supported: `int`/`char` scalars, pointers, arrays (M17: up to two
+dimensions, row-major), structs (tag definitions, `.`/`->`, struct-pointer params,
 self-referential links — see M9), string and char literals,
 `for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
 `do-while` (M14), `goto`/labels and the conditional `?:` (M16),
@@ -97,8 +97,20 @@ Not supported — each currently fails with a compile diagnostic:
   (C requires parens — we eat them as the operator, harmless); mixed-
   type arms fold to the int model, identical-kind arms keep element
   types and struct tags so `(c?&p1:&p2)->x` works.
-- `float`/`double`, unions, function pointers in C, multi-dimensional
-  arrays.
+- `float`/`double`, unions, function pointers in C.
+- Array edges (M17): THREE dimensions are rejected (symbol carries
+  dim/dim2 only); `sizeof(m[i])` on a row goes through the expression
+  path and reports the POINTER size (C's row size needs the bare
+  `sizeof m` / div by dim, or a dims-carrying symbol the expr path
+  does not read); elements of pointer-arrays (`char *ap[2]`) are
+  int-shaped — `ap[1][0]` loads the pointer then indexes the QUAD at
+  it, so byte access takes the temp-variable form (`p=ap[1]; p[0]`)
+  or a cast (`*(char *)(ap[1])`) — the model has one pointer kind;
+  postfix on a string LITERAL (`"ab"[0]`) parses as an error (predates
+  M17 — Primary's literal arm never enters Postfix; use a variable);
+  `++`/`--` on a POINTER-TO-ROW steps by element size, not row size;
+  array PARAMETERS discard the first dimension (the caller owns the
+  count) and keep the second; struct members may not be arrays.
 - `sizeof`/cast edges not supported: `sizeof` needs parentheses (and
   its expression form decays arrays to pointer size there — `sizeof
   f(x)` and a bare `sizeof x` are diagnostics, and the bare-identifier
@@ -608,6 +620,57 @@ Not supported — each currently fails with a compile diagnostic:
    pointer + struct-tag arms through `->`, chained fallbacks, ternary
    in comparison/subscript/printf arg), green twice, saved-object
    round trips 10/10 and 14/14, clean `CC TESTS: 0 failed`.
+ - [x] **M17** two-dimensional arrays. Symbols carry `dim2`; array
+   parameters carry it via `pdim2` (first dim always ignored — the
+   caller owns the count; `t[][64]` and `t[8][64]` compile identically
+   and BOTH must match the caller's row layout, which is why the
+   second dim is the recorded one). The expression state gains
+   `esz`/`esz2`: the ident-decay arms set them from the symbol
+   (esz2 = bytes per inner element, esz = per ROW; esz2!=0 IS the
+   "this decays to a row" marker), and the Postfix index arm consumes
+   the pair: first index scales by esz and the ROW becomes the new
+   decay (is_addr stays 2 — so `m[i]=x` stays "assignment to array",
+   C-true — and keeps the base type AND tag via call-locals `bty`/
+   `sty0`, because the index-EXPRESSION parse clobbers cc->ety/sty);
+   the second index runs the ordinary ety path (PTR/CHARP give 8/1 —
+   char rows are byte-stride, struct rows stride by tag size).
+   CCVal clears esz2 (any plaining of a value spends its row scales —
+   the index arm reads them BEFORE its own CCVal), which is what
+   keeps stale scales from hijacking a later pointer index. Sizes:
+   declaration allocates dims-product (frames/globals all slot-based,
+   char byte-stride inside — capacity n*8 bytes per n chars, slack
+   documented), sizeof multiplies the dims product by C-truth element
+   size. `struct pt g[][2]` params decay to struct-POINTERS and must
+   reach the struct scale branch via sty or rows stride by 8 (they
+   silently sum 33-as-36-shape garbage otherwise). Latent pre-M17 bug
+   fixed on the way: array params of char (`char s[]`) blanket-decayed
+   to TY_PTR — C truth is a BYTE-stride char*; every old fixture used
+   `char *` so it never bit until M17 probed it. **The LogOr landmine
+   — costliest bug of the compiler so far:** restructuring the
+   LogAnd/LogOr head loads (so parenthesized decays keep their state)
+   was done by hand-rebuilding each loop's text span, and the rebuilt
+   LogOr loop SILENTLY LOST `CCTestRax(cc);` before its short-circuit
+   CCJz — every `a || b` branched on STALE flags. Micro-probes stayed
+   green (no `||` in them); exactly three fixtures failed (the prelude
+   atoi's `(c<48)||(c>57)` mis-broke: atoi("1234")=0 — stdlib 46/47 +
+   hdr 8), so the fault signature pointed at atoi and the hunt ran
+   through its disassembly (correct!), the call site (correct!), pool
+   forensics, warmup theories, and a five-way selective-revert bisect
+   (all innocent — because the culprit was inside my REVERT anchors'
+   blind spot: the loop body, not the gate line). Root-caught only by
+   rebuilding the state from HEAD script-by-script and DIFFING — the
+   single deleted line jumped out. Lesson pinned: after hand-surgery
+   on a parser function, diff against the pre-surgery text and expect
+   comments + intended lines ONLY. Expectation trap #4 the same day:
+   sumrow(m2,2) was hand-pinned to 33 when rows are 3+33=36 — the
+   compiler was right, the comment even listed the elements. 68 cases
+   (array2.c: 21 checks + closer — 2-D globals/locals int+char,
+   int[][3]/char[][8]/struct[][2] params, byte-stride char[] param,
+   rows decaying through strlen/strcpy/atoi, pointer-array elements
+   via temp/cast, paren-group decay, row adjacency (strlen walks into
+   the next row exactly like C), 2-D sizeof totals), green x3, saved-
+   object reloads 22/22/22/22, `||`-and-`&&` side-effect probes 14/14,
+   clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 

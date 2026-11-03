@@ -278,6 +278,9 @@ CCAssert(26,"T:/CC/TEST/sizeof.c","sizeof");
  * the conditional operator (unevaluated arms, pointer/tag unification). */
 CCAssert(10,"T:/CC/TEST/goto.c","goto");
 CCAssert(14,"T:/CC/TEST/tern.c","tern");
+/* M17: two-dimensional arrays — row scaling, array-row params (int/
+ * char/struct), byte-stride char[] params, 2-D sizeof, paren decay. */
+CCAssert(22,"T:/CC/TEST/array2.c","array2");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */
