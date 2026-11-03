@@ -59,6 +59,8 @@ static void routine(int sig,struct siginfo_t *info,ucontext_t *ctx) {
 	vec_CHash_t *d;
 	void *fun;
 	int64_t regs[16+3];
+	fprintf(stderr,"[3d] FAULT sig=%d addr=%p rip=%p\n",sig,
+		info?((siginfo_t*)info)->si_addr:NULL,(void *)ctx->uc_mcontext.gregs[REG_RIP]);
 	if(d=map_get(&TOSLoader,"DebuggerLand")) {
 		fun=d->data[0].val;
 		regs[0]=ctx->uc_mcontext.gregs[REG_RAX];
