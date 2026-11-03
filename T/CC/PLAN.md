@@ -46,7 +46,8 @@ CCSave("prog.cco");                  //BEFORE running: saves the
 Supported: `int`/`char` scalars, pointers and 1-D arrays (locals and
 globals), structs (tag definitions, `.`/`->`, struct-pointer params,
 self-referential links — see M9), string and char literals,
-`for`/`while`/`if`/`else`/`break`/`continue`, functions (forward refs,
+`for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
+`do-while` (M14), functions (forward refs,
 recursion, and M13 prototype declarations `int f(int a);` — undefined
 at link time is a compile error), `printf` (literal format:
 `%d %s %c %%`), `putchar`, `exit`, and the
@@ -75,8 +76,14 @@ Not supported — each currently fails with a compile diagnostic:
   `int *p,*q;` and `int a=1,b=2;` all work, C's per-declarator star
   typing included.)
 - Array initializers of any kind (`int a[4]={1,2,3,4};`).
-- `else if` chains parse, but deeply nested control flow is untested;
-  `switch`, `do`, `goto` absent.
+- `else if` chains parse; nested `switch` works (M14 — but nested
+  switches exposed the sharing bug: per-statement parse state must be
+  CALL-LOCAL, the ctrl-array version let an inner switch overwrite its
+  parent's case table mid-body). `goto`/labels absent.
+- `switch` case values must be compile-time integer constants (with
+  optional leading `-`); duplicate case values are not diagnosed;
+  `continue` inside a `switch` requires an enclosing loop (clean
+  diagnostic — switch is not a loop).
 - `float`/`double`, unions, function pointers in C, `sizeof`, casts,
   multi-dimensional arrays.
 - Preprocessor pieces that lite skips: function-like `#define F(a)`
@@ -484,6 +491,37 @@ Not supported — each currently fails with a compile diagnostic:
    of M12.1's 61, all green twice, in-process repeated runs + saved
    object round trip of the header program, clean `CC TESTS: 0
    failed`).
+ - [x] **M14** control-flow completion: `switch`/`case`/`default` and
+   `do-while`. switch codegen, single pass no rewind: value parked in
+   a hidden local slot (`lofs++`, frame patched at function end), an
+   entry JMP leaps the body and lands on a dispatch chain emitted
+   AFTER it (targets known by then: per-case `MOV RAX,[slot]` +
+   `CMP RAX,imm32` — or `MOVABS RCX,imm64; CMP RAX,RCX` past int32 —
+   + `JE rel32` to the label), a final `JMP default` if one exists,
+   and switch end after the chain (breaks land there via the usual
+   frame-sliced brk list; the cont frame is deliberately untouched so
+   `continue` inside a switch still targets an enclosing loop —
+   `continue` in no loop at all is now a compile error via a new
+   `in_loop` counter maintained by while/for/do). Fallthrough is C's.
+   Four codegen landmines, each caught by a 6-line probe before the
+   suite could name it: (a) a rel32 branch displacement must be
+   computed AFTER emitting its opcode bytes — do-while's JNZ computed
+   pre-opcode landed 2 bytes into the body (SIGILL on the misaligned
+   decode); (b) the entry JMP must be patched at the CHAIN START
+   (right after the body), not after the chain — patching at the end
+   made every switch entry leap over its own dispatch, matching
+   nothing; (c) the dispatch chain sits physically after the body, so
+   a fall-off from the last case would re-run the chain and match its
+   own case forever (`switch(1){case 1:a=5;}` looped until timeout) —
+   a body-end `JMP switch_end` makes the chain entry-only code;
+   (d) the case table must be per-invocation CALL-LOCAL: as ctrl
+   arrays, an inner switch parsed mid-parent-body overwrote
+   `cval[0..]` and the parent silently matched the wrong constants.
+   64 cases (switch.c: 20 checks — grouped labels, fallthrough,
+   break/continue/fall-out in a loopmix, char/negative/>int32 case
+   values, default-before-cases, bare and braced do bodies,
+   continue-to-condition, empty switch), green twice, saved-object
+   round trip 20/20/20, clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 

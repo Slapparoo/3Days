@@ -101,6 +101,14 @@ U0 CCLex(CCCtrl *cc)
       cc->tk_kw=KW_SIGNED;
     else if (!StrCmp(cc->tk_str,"typedef"))
       cc->tk_kw=KW_TYPEDEF;
+    else if (!StrCmp(cc->tk_str,"case"))
+      cc->tk_kw=KW_CASE;
+    else if (!StrCmp(cc->tk_str,"default"))
+      cc->tk_kw=KW_DEFAULT;
+    else if (!StrCmp(cc->tk_str,"switch"))
+      cc->tk_kw=KW_SWITCH;
+    else if (!StrCmp(cc->tk_str,"do"))
+      cc->tk_kw=KW_DO;
     return;
   }
   if (*p=='"')

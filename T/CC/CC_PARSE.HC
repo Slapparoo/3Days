@@ -1418,7 +1418,9 @@ U0 CCWhileStmt(CCCtrl *cc)
   cc->brk_cnt=0;
   save_c=cc->cont_cnt;
   cc->cont_cnt=0;
+  cc->in_loop++;		//M14: continue-validity context (CCContStmt)
   CCStmt(cc);
+  cc->in_loop--;
   //continue re-tests the condition: land on the JMP-to-top.
   for (i=0;i!=cc->cont_cnt;i++)
     CCPatchJmp(cc,cc->cont[i]);
@@ -1430,6 +1432,165 @@ U0 CCWhileStmt(CCCtrl *cc)
     CCPatchJmp(cc,cc->brk[i]);
   cc->brk_cnt=save_b;
   cc->cont_cnt=save_c;
+}
+
+/* M14: `do body while (cond);` — body first, condition re-tested at
+ * the tail. continue jumps to the CONDITION (the do-while contract:
+ * the guard always runs); break exits the loop. */
+U0 CCDoStmt(CCCtrl *cc)
+{
+  I64 save_b,save_c,i,top,rel;
+  CCLex(cc);		//consume 'do'
+  save_b=cc->brk_cnt;
+  cc->brk_cnt=0;
+  save_c=cc->cont_cnt;
+  cc->cont_cnt=0;
+  top=cc->ep-cc->code;		//body top: the JNZ target
+  cc->in_loop++;
+  CCStmt(cc);		//body ({ } block, or one statement)
+  cc->in_loop--;
+  //continue lands here: on the condition.
+  for (i=0;i!=cc->cont_cnt;i++)
+    CCPatchJmp(cc,cc->cont[i]);
+  cc->cont_cnt=0;
+  if (!((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_WHILE)))
+  {
+    CCError(cc,"expected 'while' after do body");
+    return;
+  }
+  CCLex(cc);		//consume 'while'
+  CCExpect(cc,'(',"expected '(' after while");
+  CCExpr(cc);
+  CCExpect(cc,')',"expected ')' after do-while condition");
+  CCExpect(cc,';',"expected ';' after do-while condition");
+  CCTestRax(cc);
+  //JNZ rel32 back to the body top: target known, emit directly.
+  //The rel value must be computed AFTER the two opcode bytes are
+  //emitted — rel is relative to the instruction AFTER the displacement
+  //(pre-opcode arithmetic landed jumps 2 bytes late: the do-while
+  //SIGILL).
+  CCByte(cc,0x0F);
+  CCByte(cc,0x85);
+  rel=top-(cc->ep-cc->code)-4;
+  CCWord(cc,rel);
+  for (i=0;i!=cc->brk_cnt;i++)
+    CCPatchJmp(cc,cc->brk[i]);
+  cc->brk_cnt=save_b;
+  cc->cont_cnt=save_c;
+}
+
+/* M14: `switch (expr) { case K: ... default: ... }`.
+ * Single pass, no rewind: the value is parked in a hidden local slot,
+ * an entry JMP leaps over the body to a dispatch chain emitted AFTER
+ * it, so every je target is known when emitted. Values matching no
+ * case go to `default` if present, else fall out of the switch.
+ * Breaks belong to the switch; `continue` inside a switch body still
+ * targets an ENCLOSING loop (the cont frame is deliberately untouched
+ * here; CCContStmt already rejects continue with no loop at all).
+ * Fallthrough is C's: labels emit no jump-out, code flows on. */
+U0 CCSwitchStmt(CCCtrl *cc)
+{
+  I64 disp,djz,eoj,save_b,i,def,nc,v,rel,fits;
+  //Per-invocation (NESTED switches must not share a table: a ctrl-
+  //level array let an inner switch overwrite its parent's case values
+  //— cls(1,x) silently matched nothing).
+  I64 cval[CC_SWITCH_CASES];
+  I64 ctarg[CC_SWITCH_CASES];
+  CCLex(cc);		//consume 'switch'
+  CCExpect(cc,'(',"expected '(' after switch");
+  CCExpr(cc);
+  CCExpect(cc,')',"expected ')' after switch expression");
+  //Park the value in its own local slot (the frame size is patched
+  //at function end, so growing lofs here is safe).
+  cc->lofs++;
+  disp=-8*cc->lofs;
+  CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0x85);	//MOV [RBP+d32],RAX
+  CCWord(cc,disp);
+  djz=CCJmp(cc);		//to the dispatch chain (patched at the end)
+  save_b=cc->brk_cnt;		//breaks belong to this switch
+  cc->brk_cnt=0;
+  nc=0;
+  def=-1;
+  CCExpect(cc,'{',"expected '{' after switch header");
+  while ((!cc->errs)&&(cc->tk!=TK_EOF)&&!CCTkIsPunct(cc,'}'))
+  {
+    if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_CASE))
+    {
+      CCLex(cc);
+      v=1;
+      if (CCAccept(cc,'-'))
+        v=-1;
+      if (cc->tk!=TK_NUM)
+      {
+        CCError(cc,"case needs an integer constant");
+        return;
+      }
+      v=v*cc->tk_num;
+      CCLex(cc);
+      CCExpect(cc,':',"expected ':' after case value");
+      if (nc>=CC_SWITCH_CASES)
+      {
+        CCError(cc,"too many case labels");
+        return;
+      }
+      cval[nc]=v;
+      ctarg[nc]=cc->ep-cc->code;
+      nc++;
+    }
+    else if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_DEFAULT))
+    {
+      CCLex(cc);
+      CCExpect(cc,':',"expected ':' after default");
+      def=cc->ep-cc->code;
+    }
+    else
+      CCStmt(cc);
+  }
+  CCExpect(cc,'}',"expected '}' after switch body");
+  if (cc->errs)
+    return;
+  //Body execution ends here: a fall-off out of the last case must NOT
+  //run the dispatch chain sitting physically after the body (it would
+  //match its own case and loop forever). Jump to the switch end.
+  eoj=CCJmp(cc);
+  //The entry JMP lands AFTER this body-end jump — at the chain's
+  //first compare. Patching it after the chain instead made the entry
+  //leap over its own dispatch (every switch silently matched nothing).
+  CCPatchJmp(cc,djz);
+  //Dispatch chain, emitted after the body: every target is behind us.
+  for (i=0;i!=nc;i++)
+  {
+    CCByte(cc,0x48);CCByte(cc,0x8B);CCByte(cc,0x85);	//MOV RAX,[RBP+d32]
+    CCWord(cc,disp);
+    v=cval[i];
+    //HolyC integer literals are I64 already; no LL suffix exists.
+    fits=(v>=(-2147483648))&&(v<=2147483647);
+    if (fits)
+    {
+      CCByte(cc,0x48);CCByte(cc,0x3D);			//CMP RAX,imm32
+      CCWord(cc,v);
+    }
+    else
+    {
+      CCByte(cc,0x48);CCByte(cc,0xB9);			//MOVABS RCX,v
+      CCQuad(cc,v);
+      CCByte(cc,0x48);CCByte(cc,0x39);CCByte(cc,0xC8);	//CMP RAX,RCX
+    }
+    CCByte(cc,0x0F);CCByte(cc,0x84);			//JE rel32 -> label
+    rel=ctarg[i]-(cc->ep-cc->code)-4;
+    CCWord(cc,rel);
+  }
+  if (def>=0)
+  {
+    CCByte(cc,0xE9);				//JMP default (rel32)
+    rel=def-(cc->ep-cc->code)-4;
+    CCWord(cc,rel);
+  }
+  //Here = switch end: the body-end jump and all breaks land here.
+  CCPatchJmp(cc,eoj);
+  for (i=0;i!=cc->brk_cnt;i++)
+    CCPatchJmp(cc,cc->brk[i]);
+  cc->brk_cnt=save_b;
 }
 
 /* for(init;cond;step) body — init may be a declaration; empty cond
@@ -1501,7 +1662,9 @@ U0 CCForStmt(CCCtrl *cc)
   cc->cont_cnt=0;
   cc->pc=pc_after;
   CCLex(cc);
+  cc->in_loop++;		//M14: continue-validity context (CCContStmt)
   CCStmt(cc);
+  cc->in_loop--;
   pc_body=cc->pc;		//after the body: resume point
   /* pc alone points PAST the already-lexed first token after the body
    * (CCLex leaves it in tk/tk_str with pc beyond it), so resuming with
@@ -1546,6 +1709,14 @@ U0 CCBrkStmt(CCCtrl *cc)
 U0 CCContStmt(CCCtrl *cc)
 {
   CCLex(cc);		//consume 'continue'
+  if (!cc->in_loop)
+  {
+    //M14: a continue in a switch body but in NO loop (or at block
+    //level) would emit a jump that nothing ever patches.
+    CCError(cc,"continue outside of a loop");
+    CCExpect(cc,';',"expected ';' after continue");
+    return;
+  }
   if (cc->cont_cnt>=64)
     CCError(cc,"too many continues");
   else
@@ -1680,6 +1851,16 @@ U0 CCStmt(CCCtrl *cc)
   if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_IF))
   {
     CCIfStmt(cc);
+    return;
+  }
+  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_SWITCH))
+  {
+    CCSwitchStmt(cc);
+    return;
+  }
+  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_DO))
+  {
+    CCDoStmt(cc);
     return;
   }
   if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_WHILE))

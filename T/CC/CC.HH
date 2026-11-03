@@ -28,6 +28,10 @@
 #define KW_LONG		14	//M13: fold to the single int type
 #define KW_SIGNED	15	//M13: fold to the single int type
 #define KW_TYPEDEF	16	//M13: name bindings, see CCTypedefFind
+#define KW_CASE		17	//M14: switch labels (C lexer)
+#define KW_DEFAULT	18	//M14
+#define KW_SWITCH	19	//M14
+#define KW_DO		20	//M14
 
 /* Minimal expression types (everything is a 64-bit slot; pointers
  * carry only their element size for scaling). */
@@ -121,6 +125,7 @@
 #define CC_MACRO_BODY	256
 #define CC_MAX_TYPEDEF	32
 #define CC_INC_MAX	8	//nested-#include depth guard
+#define CC_SWITCH_CASES	32	//M14: case-label cap per switch statement
 
 /* Struct tag: one table entry per `struct Name { ... }` definition.
  * Every member is one 8-byte slot (members at byte offset 8*i); a char
@@ -197,6 +202,9 @@ class CCCtrl
   I64	lofs;		//current function's local area usage (slots)
   I64	cur_entry;	//current function is the HolyC-called entry (main)
   I64	cur_argc;	//current function's parameter count
+  I64	in_loop;	//M14: inside a while/for/do body — `continue` in a
+  			//switch must belong to an enclosing loop (CCContStmt
+  			//diagnoses it otherwise); switch itself is NOT a loop.
   I64	entry_off;	//code offset of 'main' after parse (-1 = none)
   I64	entry_inject;	//entry prologue should write argc/argv into the
   			//leading parameter slots (set for main only)
