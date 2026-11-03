@@ -38,6 +38,9 @@ extern U0 CCConstLogOr(CCCtrl *cc,I64 *pv);
 extern I64 CCConstExpr(CCCtrl *cc);
 extern U0 CCEraseScope(CCCtrl *cc,I64 mark,I64 base);
 extern U0 CCMakeStatic(CCCtrl *cc,CSym *s);
+extern U0 CCReserveArray(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 total,I64 use_arena);
+extern I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *pisstr);
+extern U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena);
 extern I64 CCEnumTagFind(CCCtrl *cc,U8 *nm);
 extern U0 CCEnumDef(CCCtrl *cc,U8 *tag);
 extern U0 CCSnap(CCCtrl *cc,U8 **pp,I64 *ptk,I64 *pkw,I64 *pnum,U8 *pstr);
@@ -226,6 +229,15 @@ U0 CCConstPrim(CCCtrl *cc,I64 *pv)
       return;
     }
     CCError(cc,"not a compile-time constant");
+    return;
+  }
+  if (CCTkIsPunct(cc,'{'))		//M22: `int g = {5};` — C lets a
+  {					//scalar initializer wear braces,
+    CCLex(cc);				//and the folder is what statics
+    *pv=CCConstExpr(cc);		//and globals evaluate through
+    if (cc->errs)
+      return;
+    CCExpect(cc,'}',"expected '}' after initializer");
     return;
   }
   if (CCTkIsPunct(cc,'('))
@@ -2238,11 +2250,14 @@ U0 CCExprLogOr(CCCtrl *cc)
  * `=`. Parse the RHS and store. Byte-sized when aty was set. */
 U0 CCAssignTail(CCCtrl *cc)
 {
-  I64 saty,lty,lsty;
+  I64 saty,lty,lsty,braced;
   saty=cc->aty;
   lty=cc->ety;		//lhs type, before the RHS parse overwrites it
   lsty=cc->sty;		//lhs struct tag (valid when lty==TY_PTR)
   CCLex(cc);		//consume '='
+  braced=CCTkIsPunct(cc,'{');	//M22: `int x = {5};` is C-legal for a
+  if (braced)			//scalar too
+    CCLex(cc);
   CCByte(cc,0x50);	//PUSH RAX (destination address)
   CCExprNC(cc);		//RHS value (another '=' chains right-associatively)
   CCByte(cc,0x59);	//POP RCX (address)
@@ -2267,6 +2282,8 @@ U0 CCAssignTail(CCCtrl *cc)
     cc->sty=lsty;
   else
     cc->sty=-1;
+  if (braced)
+    CCExpect(cc,'}',"expected '}' after initializer");
 }
 
 /* lhs op= rhs with the lhs address in RAX (is_addr==1).
@@ -3038,6 +3055,373 @@ U0 CCMakeStatic(CCCtrl *cc,CSym *s)
   cc->goff+=8;
 }
 
+/* M22: reserve the storage an array object needs — `total` elements.
+ * ARENA layout (globals, `static` block objects) ascends from the slot
+ * CCSymNew/CCMakeStatic already claimed; FRAME layout descends, with
+ * element 0 at the HIGHEST slot so the index path's `base + stride*i`
+ * walks upward. Both over-allocate a slot per element, so byte-strided
+ * char arrays are comfortably inside the reserved region. Used by the
+ * known-dimension path immediately and by M22 size deduction after the
+ * initializer is counted. */
+U0 CCReserveArray(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 total,I64 use_arena)
+{
+  if (total<2)
+    return;
+  if (use_arena)
+  {
+    if (base==TY_STRUCT)
+      cc->goff+=cc->st[stag].size*total-8;
+    else
+      cc->goff+=8*(total-1);
+  }
+  else
+  {
+    if (base==TY_STRUCT)
+      cc->lofs+=total*(cc->st[stag].size/8)-1;
+    else
+      cc->lofs+=total-1;
+    s->offset=cc->lofs;
+  }
+}
+
+/* M22: collect one array initializer into vals[], recording for every
+ * value WHICH brace group it came from (vgrp[k] >= 0: inside the
+ * group-ordinal-th '{' nested inside the optional outer brace; -1:
+ * written flat at the top level). Shapes accepted:
+ *   { 1, 2, 3 }            flat or braced groups, trailing comma allowed
+ *                          (C99), `{}` = all zeros
+ *   "text"                 byte-array string init: the literal's BYTES,
+ *                          NUL included (C stores the NUL only when it
+ *                          fits — the caller trims); *pisstr=1
+ *   5                      one unbraced element (`int a[2] = 1;`)
+ * Every value must FOLD (literals, enum constants, folded arithmetic):
+ * C demands constants for statics and globals, and this model applies
+ * the same rule to frame arrays (PLAN limitations). Returns the value
+ * count (string form: byte count INCLUDING the NUL) or -1 with cc->errs
+ * set. Group STRUCTURE is preserved because C uses it: a group targets
+ * the NEXT element, so for a 1-D array of scalars `{{1},{2,3},{4}}` is
+ * elements 1,2,4-with-excess — NOT a flattened list. CCArrayInit does
+ * that mapping; the collector only records where each value came from. */
+I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *pisstr)
+{
+  I64 n,depth,grp,gnext,i,ch;
+  n=0;
+  gnext=0;			//next element-group ordinal
+  grp=-1;			//-1: written flat. FLAT VALUES MUST NOT
+				//share an identity: the placer advances to
+				//the next element when one is full, and it
+				//detects "same item" by an UNCHANGED group
+				//id — a constant -2 for every flat value
+				//made {10,20,30} look like three values in
+				//one group: instant "excess elements".
+  *pisstr=0;
+  depth=0;
+  if (CCTkIsPunct(cc,'{'))
+  {
+    CCLex(cc);			//the list's own braces are not a group
+    depth=1;
+  }
+  if (cc->tk==TK_STR)
+  {
+    i=0;
+    while (i!=CC_TOK_MAX)
+    {
+      ch=cc->tk_str[i];
+      if (n>=CC_INIT_MAX)
+      {
+        CCError(cc,"array initializer too large");
+        return -1;
+      }
+      vals[n++]=ch;
+      i++;
+      if (!ch)
+        break;			//the literal's own NUL ends the list
+    }
+    CCLex(cc);
+    if (depth)
+    {
+      CCAccept(cc,',');		//`char s[4] = {"ab",};` is C-legal
+      CCExpect(cc,'}',"expected '}' after initializer");
+      if (cc->errs)
+        return -1;
+    }
+    *pisstr=1;
+    return n;
+  }
+  //No `continue` in this host dialect (PLAN gotcha): an arm that would
+  //continue simply falls out of the if-chain, and the loop re-tests the
+  //CURRENT token — which is exactly the state a continue leaves behind.
+  while ((!cc->errs)&&(cc->tk!=TK_EOF))
+  {
+    if (CCTkIsPunct(cc,'}'))
+    {
+      CCLex(cc);
+      if (depth==1)
+        break;			//the whole list is complete
+      if (!depth)
+      {
+        CCError(cc,"unexpected '}' in initializer");
+        return -1;
+      }
+      depth--;
+      if (depth<2)
+        grp=-1;			//back to flat when the element group
+				//closes; deeper braces keep its id
+      if (!CCAccept(cc,','))
+      {
+        if (!CCTkIsPunct(cc,'}'))
+        {
+          CCError(cc,"expected ',' or '}' in initializer");
+          return -1;
+        }
+        //The next token IS the outer group's '}': falling through hands
+        //it to this same arm on the next turn.
+      }
+    }
+    else if (CCTkIsPunct(cc,'{'))
+    {
+      CCLex(cc);
+      depth++;
+      if (depth==2)		//an ELEMENT-level group gets a fresh
+      {				//ordinal; `{{1,2,3},{4,5,6}}` would
+        grp=gnext;		//otherwise look like ONE group (the
+        gnext++;		//close used to reset the counter, and
+      }				//group 0 came back a second time).
+      if (depth<2)		//deeper braces inherit the id: for a
+        grp=-1;			//row they only group inside the row
+    }
+    else
+    {
+      if (n>=CC_INIT_MAX)
+      {
+        CCError(cc,"array initializer too large");
+        return -1;
+      }
+      vals[n]=CCConstExpr(cc);
+      if (cc->errs)
+        return -1;
+      vgrp[n]=grp;
+      n++;
+      if (!CCAccept(cc,','))
+      {
+        if (!depth)
+          break;		//`int a[2] = 1;` — one element, C-legal
+        if (!CCTkIsPunct(cc,'}'))
+        {
+          CCError(cc,"expected ',' or '}' in initializer");
+          return -1;
+        }
+        //A group close follows: the '}' arm spends it next turn.
+      }
+    }
+  }
+  if (cc->errs)
+    return -1;
+  return n;
+}
+
+/* M22: consume and land an aggregate initializer; '=' is already eaten
+ * and the FIRST dimension may still be unknown (pend) — deduction sizes
+ * the object from the initializer exactly like C: the number of elements
+ * touched, counted through the same mapping the stores use.
+ *
+ * Element mapping (C 6.7.9): an element of a 1-D array is a scalar
+ * (arity 1); a row of a 2-D array has arity dim2. A brace group starts
+ * the NEXT element and its values fill it in order; flat values fill the
+ * current element and roll over into the next when it is full — which is
+ * why `int m[2][3]={1,2,3,4,5,6}` and `{{1,2,3},{4,5,6}}` agree while
+ * `{{1},{2,3},{4}}` on a 1-D array is excess-elements (C's warning, our
+ * error). Overfull elements and elements past the object diagnose; C
+ * zero-fills everything the initializer leaves, and for frame objects we
+ * MUST (that memory is not pre-zeroed), so the store walk writes every
+ * element in ascending order, taking initializer values where one maps. */
+U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
+{
+  I64 vals[CC_INIT_MAX];
+  I64 vgrp[CC_INIT_MAX];
+  I64 eloc[CC_INIT_MAX];
+  I64 isstr,total,n,i,stride,v,A,e,elem,E,off,lastg,hw,vi;
+  U8 *bp;
+
+  n=CCInitCollect(cc,vals,vgrp,&isstr);
+  if (n<0)
+    return;
+  if (isstr&&(s->ty!=TY_CHARP))
+  {
+    CCError(cc,"only char arrays take string initializers");
+    return;
+  }
+  if (s->dim2)
+    A=s->dim2;			//arity of one element (a row)
+  else
+    A=1;			//scalars — a group may supply one value
+  E=0;
+  off=0;
+  lastg=-2;
+  hw=-1;
+  for (i=0;i!=n;i++)
+  {
+    if (isstr)
+      elem=i;			//the literal's bytes ARE consecutive
+    else
+    {
+      if (vgrp[i]>=0)
+      {
+        //A brace group IS an element boundary: its first value opens
+        //the next element (finishing a partially filled one first); the
+        //rest fill it in order and anything past its arity is excess.
+        if (vgrp[i]!=lastg)
+        {
+          if (off)
+          {
+            E++;
+            off=0;
+          }
+          lastg=vgrp[i];
+        }
+      }
+      else
+      {
+        //Flat values have no identity of their own (they all report
+        //-1): each one keeps filling the current element and rolls
+        //over to the next when that element is full — which is what
+        //makes {1,2,3,4,5,6} fill two rows of a [2][3] in order.
+        lastg=-1;
+        if (off>=A)
+        {
+          E++;
+          off=0;
+        }
+      }
+      if (off>=A)		//only a group can land here overfull
+      {
+        CCError(cc,"excess elements in array initializer");
+        return;
+      }
+      elem=E*A+off;
+      off++;
+    }
+    eloc[i]=elem;
+    if (elem>hw)
+      hw=elem;
+  }
+  if (pend)
+  {
+    if (hw<0)
+    {
+      CCError(cc,"array size missing: empty initializer");
+      return;
+    }
+    s->dim=(hw+1)/A;
+    if (((hw+1)%A)!=0)
+      s->dim=s->dim+1;		//a partial final row still counts
+    if ((s->dim<1)||(s->dim>2048))
+    {
+      CCError(cc,"array size out of range");
+      return;
+    }
+  }
+  total=s->dim;
+  if (s->dim2)
+    total=total*s->dim2;
+  if (isstr)
+  {
+    //C stores the NUL only when it fits: `char s[2]="ab"` is legal and
+    //unterminated; longer is the classic too-short diagnostic.
+    if (n>total)
+    {
+      if ((n==total+1)&&(vals[n-1]==0))
+        n=total;
+      else
+      {
+        CCError(cc,"initializer string too long for array");
+        return;
+      }
+    }
+  }
+  else if (n&&(eloc[n-1]>=total))
+  {
+    CCError(cc,"excess elements in array initializer");
+    return;
+  }
+  if (pend)
+    CCReserveArray(cc,s,base,stag,total,use_arena);
+  if (s->ty==TY_CHARP)
+    stride=1;
+  else
+    stride=8;
+  vi=0;
+  if (use_arena)
+  {
+    //Compile-time bytes: statics and globals hold their initial value
+    //before any call runs, and CCSave carries them into the object.
+    bp=cc->locals+s->offset;
+    for (e=0;e!=total;e++)
+    {
+      v=0;
+      if ((vi<n)&&(eloc[vi]==e))
+      {
+        v=vals[vi];
+        vi++;
+      }
+      bp[0]=v;
+      if (stride!=1)
+      {
+        bp[1]=v>>8;
+        bp[2]=v>>16;
+        bp[3]=v>>24;
+        bp[4]=v>>32;
+        bp[5]=v>>40;
+        bp[6]=v>>48;
+        bp[7]=v>>56;
+      }
+      bp+=stride;
+    }
+    return;
+  }
+  if ((cc->ep-cc->code)+16*(total+8)>CC_CODE_SIZE)
+  {
+    CCError(cc,"array initializer too large for the code buffer");
+    return;
+  }
+  //Frame object: one store per element (the initializer values where
+  //they map, zeros everywhere else), walking the base pointer up by the
+  //element stride. No expression is evaluated here, so RAX — the only
+  //register these instructions touch that the declaration needs — is
+  //free to hold the walk, and MOVABS RCX feeds the value.
+  CCVarAddr(cc,s);			//RAX = &a[0]
+  for (e=0;e!=total;e++)
+  {
+    v=0;
+    if ((vi<n)&&(eloc[vi]==e))
+    {
+      v=vals[vi];
+      vi++;
+    }
+    //RCX carries the value: the 8-bit MOV needs a NAMELESS-register
+    //ModRM reg field, and without a REX.R prefix 0x38 asks for BH (the
+    //high byte of RBX) — the first draft stored that and every char
+    //array initializer byte landed as zero. CL (reg 1, ModRM 0x08)
+    //needs no prefix, and no expression is evaluated here, so spending
+    //RCX is free.
+    CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,imm64
+    CCQuad(cc,v);
+    if (stride==1)
+    {
+      CCByte(cc,0x88);CCByte(cc,0x08);	//MOV [RAX],CL
+    }
+    else
+    {
+      CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0x08);	//MOV [RAX],RCX
+    }
+    if ((e+1)!=total)
+    {
+      CCByte(cc,0x48);CCByte(cc,0x05);	//ADD RAX,imm32
+      CCWord(cc,stride);
+    }
+  }
+}
+
 U0 CCBlockStmt(CCCtrl *cc)
 {
   //M21: block scope. Every table this parser appends to is ERASED at
@@ -3075,7 +3459,7 @@ U0 CCBlockStmt(CCCtrl *cc)
 U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
 {
   CSym *s;
-  I64 n,n2,fpok,sstat,val,vi;
+  I64 n,n2,fpok,sstat,val,vi,pend,isarr;
   I64 ty=base;
   I64 stk,skw,snum;
   U8 *spc;
@@ -3148,21 +3532,37 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
       s->sty=stag;
   s->dim=1;
   s->dim2=0;
+  pend=0;
+  isarr=0;
   if (CCAccept(cc,'['))
   {
-    n=CCConstExpr(cc);		//M20: constant expressions (enum
-    if (cc->errs)			//sizes) fold here
-      return;
-    CCExpect(cc,']',"expected ']' after array size");
-    if ((n<1)||(n>2048))
-    {
-      CCError(cc,"array size out of range");
-      return;
+    isarr=1;
+    if (CCTkIsPunct(cc,']'))		//M22: `int a[]` — the size comes
+    {					//from the initializer, so the
+      CCLex(cc);			//reservation waits for the count
+      pend=1;
     }
-    s->dim=n;
+    else
+    {
+      n=CCConstExpr(cc);		//M20: constant expressions (enum
+      if (cc->errs)			//sizes) fold here
+        return;
+      CCExpect(cc,']',"expected ']' after array size");
+      if ((n<1)||(n>2048))
+      {
+        CCError(cc,"array size out of range");
+        return;
+      }
+      s->dim=n;
+    }
     if (CCTkIsPunct(cc,'['))		//M17: second dimension (row-major)
     {
       CCLex(cc);
+      if (CCTkIsPunct(cc,']'))		//`t[][ ]` — C can only deduce a
+      {				//first dimension, never a row size
+        CCError(cc,"array size missing");
+        return;
+      }
       n2=CCConstExpr(cc);		//M20: constant expressions (enum
       if (cc->errs)			//sizes) fold here
         return;
@@ -3173,29 +3573,13 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
         return;
       }
       s->dim2=n2;
-      n=n*n2;		//allocation and indexing cover ALL elements
     }
-    if (n>1)
+    if (!pend)
     {
-      if (sstat)
-      {
-        //Arena arrays ascend from the base (global layout): element
-        //0 IS s->offset, exactly what the decay+index paths expect.
-        if (base==TY_STRUCT)
-          cc->goff+=cc->st[stag].size*n-8;
-        else
-          cc->goff+=8*(n-1);
-      }
-      else
-      {
-        //Frame grows DOWN from the base slot: element 0 sits at the
-        //highest slot number so element i lands at base+8*i.
-        if (base==TY_STRUCT)
-          cc->lofs+=n*(cc->st[stag].size/8)-1;	//structs: size*n slots
-        else
-          cc->lofs+=n-1;
-        s->offset=cc->lofs;
-      }
+      n=s->dim;			//total elements across both dims (no
+      if (s->dim2)		//ternary in the host dialect)
+        n=n*s->dim2;
+      CCReserveArray(cc,s,base,stag,n,sstat);
     }
     if (s->ty==TY_CHAR)
       s->ty=TY_CHARP;
@@ -3215,9 +3599,20 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
   }
   if (CCTkIsPunct(cc,'='))
   {
-    if ((s->dim>1)||(s->ty==TY_STRUCT))
+    if (isarr)				//M22: { constants } (nested groups
+    {					//flattened), a string literal for
+      if (base==TY_STRUCT)		//byte arrays, and the tail zeros
+      {
+        CCError(cc,"struct array initializers not supported");
+        return;
+      }
+      CCLex(cc);			//consume '='
+      CCArrayInit(cc,s,base,stag,pend,sstat);
+      return;
+    }
+    if (s->ty==TY_STRUCT)
     {
-      CCError(cc,"array/struct initializers not supported");
+      CCError(cc,"struct initializers not supported");
       return;
     }
     if (s->persist)
@@ -3238,6 +3633,8 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     cc->aty=(s->ty==TY_CHAR);
     CCAssignTail(cc);		//consumes '='; ety typed from lhs
   }
+  else if (pend)
+    CCError(cc,"array size missing");	//`int a[];` needs an initializer
 }
 
 /* <base> [*] name [n] [, ...] ;  — local declaration(s). M13: the base
@@ -3736,7 +4133,7 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
 Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
 {
   U8 name[CC_TOK_MAX];
-  I64 ty=base,val,neg,n,n2,i,entry,fpok;
+  I64 ty=base,val,neg,n,n2,i,entry,fpok,pend,isarr;
   I64 stk,skw,snum;
   U8 *spc;
   U8 sstr[CC_TOK_MAX];
@@ -3812,21 +4209,37 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
       s->sty=stag;
   s->dim=1;
   s->dim2=0;
+  pend=0;
+  isarr=0;
   if (CCAccept(cc,'['))
   {
-    n=CCConstExpr(cc);		//M20: constant expressions (enum
-    if (cc->errs)			//sizes) fold here
-      return FALSE;
-    CCExpect(cc,']',"expected ']' after global array size");
-    if ((n<1)||(n>2048))
-    {
-      CCError(cc,"array size out of range");
-      return FALSE;
+    isarr=1;
+    if (CCTkIsPunct(cc,']'))		//M22: `int g[]` — the initializer
+    {					//supplies the count
+      CCLex(cc);
+      pend=1;
     }
-    s->dim=n;
+    else
+    {
+      n=CCConstExpr(cc);		//M20: constant expressions (enum
+      if (cc->errs)			//sizes) fold here
+        return FALSE;
+      CCExpect(cc,']',"expected ']' after global array size");
+      if ((n<1)||(n>2048))
+      {
+        CCError(cc,"array size out of range");
+        return FALSE;
+      }
+      s->dim=n;
+    }
     if (CCTkIsPunct(cc,'['))		//M17: second dimension
     {
       CCLex(cc);
+      if (CCTkIsPunct(cc,']'))
+      {
+        CCError(cc,"array size missing");
+        return FALSE;
+      }
       n2=CCConstExpr(cc);		//M20: constant expressions (enum
       if (cc->errs)			//sizes) fold here
         return FALSE;
@@ -3837,15 +4250,13 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         return FALSE;
       }
       s->dim2=n2;
-      n=n*n2;		//arena advance covers ALL elements
     }
-    if (n>1)
+    if (!pend)
     {
-      //CCSymNew already claimed the first 8 bytes.
-      if (base==TY_STRUCT)
-        cc->goff+=cc->st[stag].size*n-8;
-      else
-        cc->goff+=8*(n-1);
+      n=s->dim;			//total elements across both dims (no
+      if (s->dim2)		//ternary in the host dialect)
+        n=n*s->dim2;
+      CCReserveArray(cc,s,base,stag,n,TRUE);
     }
     if (s->ty==TY_CHAR)
       s->ty=TY_CHARP;
@@ -3856,9 +4267,19 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     cc->goff+=cc->st[stag].size-8;	//claim the struct's bytes
   if (CCAccept(cc,'='))
   {
-    if ((s->dim>1)||(s->ty==TY_STRUCT))
+    if (isarr)				//M22: aggregate initializers land
+    {					//as arena bytes (CCArrayInit
+      if (base==TY_STRUCT)		//handles deduction and the tail
+      {
+        CCError(cc,"struct array initializers not supported");
+        return FALSE;
+      }
+      CCArrayInit(cc,s,base,stag,pend,TRUE);
+      return FALSE;
+    }
+    if (s->ty==TY_STRUCT)
     {
-      CCError(cc,"global array/struct initializers not supported");
+      CCError(cc,"global struct initializers not supported");
       return FALSE;
     }
     if (cc->tk==TK_STR)
@@ -3891,6 +4312,8 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     for (i=0;i!=8;i++)
       gp[i]=val>>(8*i);
   }
+  else if (pend)
+    CCError(cc,"array size missing");	//`int g[];` needs an initializer
   return FALSE;
 }
 

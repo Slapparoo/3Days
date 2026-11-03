@@ -51,7 +51,9 @@ char literals (M19: `\n \t \r \\ \" \a \b \f \v \e \xHH \ooo`),
 enums and compile-time constants (M20: enumerators fold into case labels,
 array sizes, global initializers, and every expression position; adjacent
 string literals concatenate), block scopes with C shadowing and
-`static` block objects on arena storage (M21),
+`static` block objects on arena storage (M21), aggregate initializers
+(`int a[4]={1,2,3,4};`, `int a[]`/`int m[][3]`/`char s[]` size deduction,
+`char s[]="text"` byte init) (M22),
 `for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
 `do-while` (M14), `goto`/labels and the conditional `?:` (M16),
 functions (forward refs,
@@ -88,13 +90,28 @@ Not supported — each currently fails with a compile diagnostic:
   an error — give functions their own declaration. (`int i,s=0;`,
   `int *p,*q;` and `int a=1,b=2;` all work, C's per-declarator star
   typing included.)
-- Array initializers of any kind (`int a[4]={1,2,3,4};`).
+- Initializer edges (M22): every element must be a **foldable constant**
+  — C permits variable elements in a FRAME array (`int a[2]={x,y};`),
+  this model diagnoses "not a compile-time constant" there and requires
+  constants everywhere else anyway. Brace groups follow C's element
+  semantics (a group targets the NEXT element), so `{{1,2,3},{4,5,6}}`
+  and the flat `1,2,3,4,5,6` agree for a `[2][3]`, while `{{1},{2,3},{4}}`
+  on a 1-D array is excess elements — C warns and drops, we ERROR. Braces
+  nested deeper than the array's rank diagnose for the same reason. A
+  512-value cap (CC_INIT_MAX) bounds one initializer. Designators
+  (`[0]=x`, `.x=x`) are not supported; struct arrays and function-pointer
+  arrays keep their existing rejections; a global/static array whose
+  elements need a CODE address (a function table) cannot initialize yet —
+  arena values are saved as raw bytes and only code sites carry
+  relocations. `extern int a[];` (an incomplete array declared extern) is
+  "array size missing". Braced SCALARS are accepted (`int x={5};`).
 - `else if` chains parse; nested `switch` works (M14 — but nested
   switches exposed the sharing bug: per-statement parse state must be
   CALL-LOCAL, the ctrl-array version let an inner switch overwrite its
   parent's case table mid-body).
-- `switch` case values must be compile-time integer constants (with
-  optional leading `-`); duplicate case values are not diagnosed;
+- `switch` case values must be compile-time integer constants — M20's
+  folder handles literals, enum constants and folded expressions;
+  duplicate case values are not diagnosed;
   `continue` inside a `switch` requires an enclosing loop (clean
   diagnostic — switch is not a loop).
 - M16 edges: `goto` into a block (crossing a declaration) is accepted
@@ -182,8 +199,10 @@ Not supported — each currently fails with a compile diagnostic:
   its expression form decays arrays to pointer size there — `sizeof
   f(x)` and a bare `sizeof x` are diagnostics, and the bare-identifier
   form `sizeof b` is the only route reporting array element counts);
-  `sizeof(...)` inside a global initializer is "must be a constant"
-  (only numeric literals fold there); `(struct T)` non-pointer casts
+  `sizeof(...)` inside a global initializer (or any constant-expression
+  site: case label, array size, `static` init) is "not a compile-time
+  constant" — M20's folder folds literals, enum constants and arithmetic,
+  but not `sizeof` or address values; `(struct T)` non-pointer casts
   yield the address as an int; `sizeof(function)` is a diagnostic.
 - Preprocessor pieces that lite skips: function-like `#define F(a)`
   (expands as a bare object macro and the leftover text fails to
@@ -959,6 +978,61 @@ Not supported — each currently fails with a compile diagnostic:
    scoped and 27/37/40 unchanged for fptr/enums/unionc, error paths
    pinned (out-of-scope use, same-scope redeclaration, duplicate params,
    static fp initializer), clean `CC TESTS: 0 failed`.
+ - [x] **M22** aggregate initializers. Collection is a separate pass
+   (`CCInitCollect`) that folds each element through the M20 evaluator
+   and records, per value, WHICH brace group it came from (element-level
+   groups get fresh ordinals; deeper braces inherit the current one;
+   flat values report -1). `CCArrayInit` then maps values to ELEMENT
+   indices with C 6.7.9's rule: element arity is 1 for a 1-D array and
+   dim2 for a row; a group opens the next element and fills it in order;
+   flat values keep filling and roll over when the element is full —
+   which is exactly why `int m[2][3]` accepts both `{{1,2,3},{4,5,6}}`
+   and `1,2,3,4,5,6`. Size deduction reads the same mapping (highest
+   element touched), so `int a[]`, `int m[][3]` and `char s[]="ab"` all
+   deduce like C does, including a partial final row. Landing: arena
+   bytes for globals and `static` objects (compile-time, so a saved
+   object carries the initial state and every reload starts from it),
+   and one emitted store per element for frame objects — walking the base
+   pointer up by the element stride (1 for char arrays, 8 otherwise, the
+   SAME scale the index path uses). Elements the initializer leaves are
+   zero-filled, which for frame objects is REQUIRED (that memory is not
+   pre-zeroed) and is what makes `int c[6]={1,2}` C-correct.
+   **Landmines, all three caught by probes or by the gcc cross-check:**
+   (1) flat values originally shared one group id (-2 for all of them),
+   and "same group" is how the mapper recognizes "still filling the same
+   element" — so `{10,20,30}` looked like three values in one group and
+   the first global array in the fixture died with "excess elements";
+   flat values must be positionally distinct. (2) The group ordinal was
+   RESET on every group close, so `{{1,2,3},{4,5,6}}` handed group 0 back
+   a second time and the second row overflowed the first — groups need
+   monotonically increasing ordinals from a separate counter. (3) The
+   byte store's ModRM: `MOV [RAX],RDI`-as-byte was encoded 88 38, and
+   without REX.R the reg field 111 names **BH** (the high byte of RBX),
+   so every char-array initializer byte landed as 0 while every INT
+   array worked perfectly (quad stores take REX.W and a legal reg field);
+   fixed by routing values through RCX and storing CL. Also back-to-back
+   HOST-dialect lapses (PLAN documented both and I still hit them):
+   `continue` in the new collector loop (does not exist in this dialect —
+   the arms now fall through and the loop re-tests the current token,
+   which is what a continue would have done anyway) and the ternary
+   operator in four places (host parse errors). The gcc cross-check paid
+   for itself twice over before the compiler even ran: my hand-written
+   expectations for `{{1},{2,3},{4}}` and `{{1,2},{3}}` assumed
+   FLATTENING, which C does not do — the fixture was rewritten to
+   row-group forms and the flatten-then-error semantics pinned instead.
+   Error paths pinned: excess elements (both flavors), initializer string
+   too long (with C's "NUL only if it fits" trim — `char s[2]="ab"` is
+   legal and unterminated), empty initializer with deduction, `int a[];`
+   with none, `int m[][ ]`, variable elements, a string on a non-char
+   array, designators. 73 cases (arrinit.c: 26 checks + closer — local/
+   global brace lists, deduction three ways, tail zeros, `{}`, nested row
+   groups, enum-folded elements, braced scalars (local, static, global),
+   char byte arrays incl. the unterminated form, arrays sized by enum
+   expressions, static arrays persisting across calls, pointer access to
+   an initialized array), green x2, saved-object reloads 27/27 and
+   scoped 49/49 identical, cross-checked against `gcc -std=gnu99` on a
+   copy with only the model `sizeof` numbers adjusted — 27 with the same
+   per-check increments, clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 
@@ -1061,6 +1135,13 @@ Not supported — each currently fails with a compile diagnostic:
 - Expression value always lands in RAX; binary ops `PUSH` the left
   half and `POP` it back into RCX.
 - Every emit goes through `CCByte`/`CCWord`/`CCQuad` (bounds-checked).
+- Initializer stores must use the SAME element scale the index path uses
+  (1 for char arrays, 8 otherwise) and a byte store must name a low byte
+  (CL/DL) or carry REX.R — ModRM 0x38 without a REX names BH, which
+  compiles, runs and writes the wrong byte (M22). Aggregate values are
+  landed as arena bytes for globals/statics and as emitted stores for
+  frame objects; only CODE sites carry relocations, so anything an
+  initializer needs that is a code address cannot live in the arena yet.
 - Scope waterlines: CCEraseScope is the ONLY place that truncates the
   symbol table (function body, block, for-init, switch body all call
   it) and it MUST keep SC_FUN entries — a stub created by a call to an

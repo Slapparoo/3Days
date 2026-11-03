@@ -144,6 +144,8 @@
 #define CC_MAX_TYPEDEF	32
 #define CC_MAX_CONSTS	64	//M20: enumerator names per module
 #define CC_MAX_ENUMTAGS	16	//M20: enum tags (redefinition check only)
+#define CC_INIT_MAX	512	//M22: elements (or literal bytes) in one
+				//array initializer
 #define CC_INC_MAX	8	//nested-#include depth guard
 #define CC_SWITCH_CASES	32	//M14: case-label cap per switch statement
 #define CC_LABELS	64	//M16: labels + gotos per function

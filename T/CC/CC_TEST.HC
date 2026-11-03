@@ -294,6 +294,10 @@ CCAssert(37,"T:/CC/TEST/enums.c","enums");
  * objects on arena storage: counters, arrays, structs, fps, pointers,
  * loop/switch/nested-block scopes, shadowing params. */
 CCAssert(49,"T:/CC/TEST/scoped.c","scoped");
+/* M22: aggregate initializers — brace lists (grouped by C's element
+ * rules), size deduction, string byte init, tail zero fill, globals +
+ * `static` arrays, braced scalars. */
+CCAssert(27,"T:/CC/TEST/arrinit.c","arrinit");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */
