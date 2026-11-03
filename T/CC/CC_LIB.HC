@@ -61,6 +61,14 @@ I64 CCXMalloc()
   return MAlloc(cc.ext[0]);		//ext is zeroed at CCInit, and a NULL
 }					//mem_task defaults to this task.
 
+I64 CCXGetChar()
+{
+  return GetKey();	//kernel console read — BLOCKS until a key event,
+}					//so headless -c cannot exercise it;
+					//the value is a HolyC keyboard event
+					//(ASCII in bits 0..7, SCF_* flags up
+					//top: documented deviation from C).
+
 /* Slot order is the ABI shared with CC.HH's CC_LIB_* defines,
  * CCEmitLibCall deltas, and the CCExprPrimary name dispatch. */
 U0 CCSetLib(CCCtrl *c)
@@ -70,4 +78,5 @@ U0 CCSetLib(CCCtrl *c)
   c->lib[CC_LIB_MEMSET]=&CCXMemSet;
   c->lib[CC_LIB_MEMCMP]=&CCXMemCmp;
   c->lib[CC_LIB_MALLOC]=&CCXMalloc;
+  c->lib[CC_LIB_GETCHAR]=&CCXGetChar;
 }

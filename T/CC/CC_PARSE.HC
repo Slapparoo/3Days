@@ -356,7 +356,7 @@ U0 CCLibCall(CCCtrl *cc,I64 slot,I64 argc,I64 rty)
 
 U0 CCExprPrimary(CCCtrl *cc)
 {
-  CSym *s;
+  CSym *s,*hs;
   I64 inc,n,delta,scale,byte_aty;
   U8 save_name[CC_TOK_MAX];
   U8 *save_pc;
@@ -454,6 +454,61 @@ U0 CCExprPrimary(CCCtrl *cc)
       if (!StrCmp(save_name,"malloc"))
       {
         CCLibCall(cc,CC_LIB_MALLOC,1,TY_CHARP);
+        return;
+      }
+      if (!StrCmp(save_name,"getchar"))
+      {
+        //Zero-arg: no staging, just the helper call. fgetc/getc are
+        //prelude wrappers calling this builtin (see CC_PRELUDE).
+        CCLibCall(cc,CC_LIB_GETCHAR,0,TY_INT);
+        return;
+      }
+      if (!StrCmp(save_name,"abort"))
+      {
+        //abort(): exit-shaped return to the harness with 134.
+        CCExpect(cc,')',"expected ')' after abort");
+        CCMovImmRax(cc,134);
+        CCFunRet(cc,TRUE);
+        cc->is_addr=0;
+        cc->aty=0;
+        cc->ety=TY_INT;
+        cc->sty=-1;
+        return;
+      }
+      if (!StrCmp(save_name,"sprintf"))
+      {
+        //Unlike printf, the FORMAT is interpreted at RUNTIME by the
+        //prelude engine — the user may pass a variable. dst, fmt, then
+        //up to 4 conversion args, zero-padded to the fixed 6-arg frame
+        //the engine declares (extra user args are a diagnostic).
+        hs=CCSymFind(cc,"cc_sprintf");
+        if (!hs)
+        {
+          CCError(cc,"sprintf: prelude missing");
+          return;
+        }
+        n=0;
+        while ((!cc->errs)&&(n<6))
+        {
+          CCExprNC(cc);		//dst, fmt, then conversion args
+          CCByte(cc,0x50);	//PUSH RAX
+          n++;
+          if (!CCAccept(cc,','))
+            break;
+        }
+        while (n<6)
+        {
+          CCMovImmRax(cc,0);	//pad the engine's fixed frame
+          CCByte(cc,0x50);
+          n++;
+        }
+        CCExpect(cc,')',"expected ')' after sprintf args");
+        CCCall(cc,hs);
+        CCPopArgs(cc,6);
+        cc->is_addr=0;
+        cc->aty=0;
+        cc->ety=TY_INT;
+        cc->sty=-1;
         return;
       }
       n=0;

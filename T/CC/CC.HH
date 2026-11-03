@@ -104,6 +104,7 @@
 #define CC_LIB_MEMSET	2
 #define CC_LIB_MEMCMP	3
 #define CC_LIB_MALLOC	4
+#define CC_LIB_GETCHAR	5
 #define CC_LIB_SLOTS	8
 
 /* Struct tag: one table entry per `struct Name { ... }` definition.

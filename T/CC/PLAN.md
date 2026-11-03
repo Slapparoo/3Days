@@ -50,7 +50,9 @@ self-referential links — see M9), string and char literals,
 recursion), `printf` (literal format: `%d %s %c %%`), `putchar`, `exit`, and the
 M12 stdlib subset — `strlen strcmp strcpy strchr memmove memcpy memset
 memcmp malloc atoi abs puts srand rand` (delegated to kernel routines
-where they exist; see M12) — the usual operators —
+where they exist; see M12), the M12.1 batch — `strcat strncat strrchr
+strstr strncmp strncpy memchr strdup calloc` + `sprintf getchar fgetc
+getc fputc putc fputs abort` (see M12.1) — the usual operators —
 `++ -- & * []`, comma, short-circuit logic, bitwise `& | ^`, shifts
 `<< >>`, `~`, all ten compound assignments (`p+=n` scales), chained
 `a=b=5` — with C's full precedence chain (shift vs relational vs the
@@ -77,12 +79,32 @@ Not supported — each currently fails with a compile diagnostic:
 - `free()` does not exist: this port's `Free()` releases whole poopalloc
   chunks and would pull shared pages out from under live arenas, so
   `malloc()` memory is permanent-by-design (see the CCSrc note in CC.HC).
-- Builtin names bind BUILTINS: `strlen memcpy memset memcmp malloc`
-  (like `printf`/`putchar`/`exit`) are dispatched by name before the
-  symbol table, so a user function of the same name is shadowed. The
-  pure prelude half (`strcmp strcpy strchr memmove atoi abs puts srand
-  rand` + `CCItoa`) are ordinary symbols BUT pre-reserved: redefining
-  one is a compile error (`function redefined` — verified).
+- Builtin names bind BUILTINS: `strlen memcpy memset memcmp malloc
+  getchar` (like `printf`/`putchar`/`exit`) are dispatched by name
+  before the symbol table, so a user function of the same name is
+  shadowed. The pure prelude half (`strcmp strcpy strcat strncat
+  strrchr strstr strncmp strncpy strchr memmove memchr strdup calloc
+  atoi abs puts fputs fputc putc srand rand sprintf-engine` +
+  `CCItoa`) are ordinary symbols BUT pre-reserved: redefining one is
+  a compile error (`function redefined` — verified).
+- `getchar()`/`fgetc`/`getc` return a HolyC KEYBOARD EVENT (ASCII in
+  bits 0..7 plus SCF_* modifier flags up top) and BLOCK until a key
+  arrives — headless `-c` has no console input, so the suite gates the
+  call shape compile+save only (`getcharc.c`). C byte semantics on a
+  console are documented deviation, not emulation. `fputc/putc/fputs`
+  accept a stream argument and ignore it: `cc->out` IS the stdio
+  buffer (see M12). `abort()` exits the program with 134 from any
+  depth (see the M12.1 nested-return landmine).
+- `sprintf` interprets its format AT RUNTIME (the format may be a
+  variable — the point of the engine): `%d %s %c %x %%`, at most 4
+  conversion arguments (extra user args are a diagnostic; missing ones
+  read as 0), no width/precision flags, `%x` prints the magnitude of
+  a signed value, and the return is the written-character count —
+  never pointer subtraction (arena pointers are relocated per session;
+  subtraction across a saved-object reload is a different arena).
+  `snprintf` deferred: per-write bound guards would bloat every
+  conversion site; the engine writes unguarded into the caller's
+  buffer (caller's responsibility, same as C UB territory).
 - Arg-taking C from an fp variable (`fp=CCFind("f"); fp(a,b,c)`) returns
   the right value but the HolyC JIT's stack tracking around multi-arg
   indirect calls desyncs in most statement shapes and breaks *later*
@@ -339,6 +361,48 @@ Not supported — each currently fails with a compile diagnostic:
    58 cases (stdlib 29 checks incl. return contracts + objstdlib),
    green twice, 8/8 in-process repeated-run determinism, clean
    `CC TESTS: 0 failed`.
+ - [x] **M12.1** completion batch. Builtins: `getchar()` -> slot 5
+   `CCXGetChar` -> kernel `GetKey()` (blocks headless — gated
+   compile+save, see limitations); `abort()` -> `MOV RAX,134` + the
+   exit-shaped return (below); `sprintf` -> parser pads user args to
+   the fixed 6-quad frame of the prelude engine `cc_sprintf`, which
+   parses the format AT RUNTIME (literal AND variable formats both
+   work; `%d %s %c %x %%`; `%%` via numeric literal 37 — the prelude
+   lexer gets no percent escape). Prelude C additions: strcat strncat
+   strrchr strstr strncmp strncpy memchr strdup calloc (MAlloc does
+   not zero-fill so calloc loops explicitly) + fputc/putc/fputs/
+   fgetc/getc thin stream-token-ignoring wrappers. `strstr` must NOT
+   signal a mismatch with a `needle=0` sentinel: the loop test then
+   dereferences ADDRESS ZERO — host page 0 is unmapped (this exact
+   bug produced `FAULT sig=11 addr=(nil)`; restructured to a match
+   flag + walking to the needle's own NUL). **The nested-return
+   landmine** — `exit`/`abort` below `main` has TWO traps, both found
+   via the abort-in-helper fixture. (a) The HolyC caller rebuilds its
+   frame from RBP, so a return-to-harness jump from a NESTED C
+   function must hand back a HOST-VALID RBP: helper's `LEAVE` restores
+   MAIN's rbp, a code-stack address; the HolyC epilogue then rets
+   through garbage and jumps to address 0 (`rip=(nil)`; the debugger
+   frames stop at ???). (b) The obvious fix — `POP RBP` after
+   `MOV RSP,[cc->save]` — is WRONG: saved RSP points AT the return
+   address, so the popped quad is the return address itself and the
+   following `RET` jumps to the leftover entry-address quad — main
+   re-executes forever (silent hang, no banner: the loop thrashes
+   without faulting, and block-buffered stdout hides the output of
+   the killed process). Correct shape: the entry prologue does `PUSH
+   RBP` IMMEDIATELY AFTER saving caller RSP (host quad at
+   `[cc->save]-8`), and every exit-shaped return (`CCFunRet` entry
+   branch — return-from-entry, `exit`, `abort`) restores RSP then
+   LOADS `RBP,[RSP-8]` before `RET` — loads, never pops. `abA`/`abB`/
+   `abD`/`abE` bisected the two shapes; M11's `CCFindCallN` thunks
+   LEAVE through their own frames and never take this branch, which
+   is why 60 cases passed before the fixture demanded it. Fixture
+   discipline lesson (third time): expected `strstr("foobarz","zz")`,
+   the `strncmp` difference direction, and `sprintf("%d!",7)` LENGTH
+   were hand-written WRONG (2 chars, not 3) — compute expectations
+   independently; the compiler was right all three times.
+   61 cases (stdlib 52 + sprintf 12 + abort 134 + getchar-shape),
+   green twice, in-process determinism incl. three reloads of the
+   saved stdlib object, clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 
@@ -433,8 +497,14 @@ Not supported — each currently fails with a compile diagnostic:
 - Expression value always lands in RAX; binary ops `PUSH` the left
   half and `POP` it back into RCX.
 - Every emit goes through `CCByte`/`CCWord`/`CCQuad` (bounds-checked).
-- Entry stub sequence (M2): save caller RSP -> `cc->save`, switch RSP
-  to `cc->stack` top, then frame. Returns restore RSP before RET.
+- Entry stub sequence (M2, amended by M12.1): save caller RSP ->
+  `cc->save`, `PUSH RBP` (stashes the caller's frame pointer at
+  `[cc->save]-8` on the HOST stack), switch RSP to `cc->stack` top,
+  then frame. Exit-shaped returns (return-from-entry, `exit`,
+  `abort` at any depth) restore RSP from `cc->save` and LOAD
+  `RBP,[RSP-8]` — never POP either quad — before `RET`; the HolyC
+  caller rebuilds its frame from RBP, so both values must be host-
+  valid at the moment of the jump (see the M12.1 landmine).
 - Globals: fixed arena `cc->locals` (MAlloc'ed, zeroed); accessed via
   `MOVABS RCX,addr` — the code buffer may be far from the arena, no
   32-bit absolute encodings.

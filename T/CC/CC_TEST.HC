@@ -3,6 +3,8 @@
 I64 fails=0;
 U8 *tlt;
 I64 tlgot=0;
+U8 *gt;
+I64 gg=0;
 
 U0 CCAssert(I64 want,U8 *fn,U8 *name)
 {
@@ -202,11 +204,11 @@ U0 CCM10()
     if (CCCompile(&cc,t))
       if (CCSave(obj)==0)
         got=CCRunObjFile(obj);
-  if (got==29)
-    "PASS objstdlib = 29\n";
+  if (got==52)
+    "PASS objstdlib = 52\n";
   else
   {
-    "FAIL objstdlib got %d want 29\n",got;
+    "FAIL objstdlib got %d want 52\n",got;
     fails++;
   }
 }
@@ -260,7 +262,24 @@ CCAssert(41,"T:/CC/TEST/strlink.c","strlink");
 CCM7();
 CCM10();
 CCM12();
-CCAssert(29,"T:/CC/TEST/stdlib.c","stdlib");
+CCAssert(52,"T:/CC/TEST/stdlib.c","stdlib");
+CCAssert(12,"T:/CC/TEST/sprintf.c","sprintf");
+CCAssert(134,"T:/CC/TEST/abortc.c","abort");
+/* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
+ * kernel GetKey blocks with no console input headless, but the object
+ * write proves all three call forms lowered and linked. */
+gt=CCSrc("T:/CC/TEST/getcharc.c");
+if (gt)
+  if (CCCompile(&cc,gt))
+    if (CCSave("T:/CC/TEST.OBJ")==0)
+      gg=1;
+if (gg==1)
+  "PASS getchar-shape\n";
+else
+{
+  "FAIL getchar-shape got %d\n",gg;
+  fails++;
+}
 /* CCFindCallN from a TOP-LEVEL statement: compile findargs.c, then
  * call the staged 3-arg entry. Direct activations are top-level-safe
  * (this is the shape CCRunFile/CCRunArgv have always used). */
