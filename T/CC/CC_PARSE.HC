@@ -42,6 +42,9 @@ extern U0 CCReserveArray(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 total,I64 use_
 extern I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 charr);
 extern U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena);
 extern I64 CCInitMap(CCCtrl *cc,I64 n,I64 *vgrp,I64 *eloc,I64 A);
+extern I64 CCArrEltSize(CCCtrl *cc,I64 ael,I64 asty);
+extern U0 CCArrNext(CCCtrl *cc,I64 ael,I64 asty,I64 *pnext,I64 *pnextsty);
+extern U0 CCSetArrTy(CCCtrl *cc,CSym *s);
 extern U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena);
 extern I64 CCInitOne(CCCtrl *cc,I64 *pkind,I64 *pisstr);
 //M24 NOTE: CCArenaPtr's extern lives in CC.HH's forward block, NOT
@@ -1176,11 +1179,73 @@ U0 CCIndirectCallAt(CCCtrl *cc)
   cc->ety=TY_INT;
   cc->sty=-1;
   cc->esz2=0;
+  cc->celem=0;		//M25: a call value is not an array base
+  cc->celebsty=-1;
 }
+
+/* M25: storage size of ONE element of type `ael`. This is what an index
+ * multiplies by, so it must match what the load/store widths assume:
+ * bytes for char elements, slots (8) for scalars and pointers, and the
+ * tag's size for whole-struct elements. */
+I64 CCArrEltSize(CCCtrl *cc,I64 ael,I64 asty)
+{
+  if (ael==TY_CHAR)
+    return 1;
+  if (ael==TY_STRUCT)
+    return cc->st[asty].size;
+  return 8;		//int, pointer, function pointer: slots
+}
+
+/* M25: the element type ONE LEVEL DEEPER, so `tab[0][1][2]` chains. A
+ * byte pointer points at bytes; a struct pointer points at structs;
+ * other pointers point at slots (the model has no richer pointee
+ * information to give); scalars are not subscriptable, and reporting 0
+ * (unknown) hands them to the pre-M25 lenient fallback instead. */
+U0 CCArrNext(CCCtrl *cc,I64 ael,I64 asty,I64 *pnext,I64 *pnextsty)
+{
+  if (ael==TY_CHARP)
+  {
+    *pnext=TY_CHAR+1;
+    *pnextsty=-1;
+    return;
+  }
+  if (ael==TY_PTR)
+  {
+    if (asty>=0)
+    {
+      //A struct pointer's elements ARE structs: `pa[0][1]` steps a
+      //whole tag, which is exactly how the '.' arm reads it back.
+      *pnext=TY_STRUCT+1;
+      *pnextsty=asty;
+    }
+    else
+    {
+      *pnext=TY_INT+1;
+      *pnextsty=-1;
+    }
+    return;
+  }
+  *pnext=0;
+  *pnextsty=-1;
+}
+
+/* M25: record what an array object's ELEMENTS are, taken from the
+ * declarator immediately BEFORE array-ification (which overwrites ty to
+ * the decayed pointer shape and destroys exactly this information):
+ * `char *tab[3]` has element type TY_CHARP, `int *ap[2]` TY_PTR,
+ * `struct P *pa[2]` TY_PTR + tag, `struct P ps[3]` TY_STRUCT + tag,
+ * `char b[4]` TY_CHAR, and `int m[2][3]` TY_INT (the INNERMOST element;
+ * a row's elements are that scalar, which is what the row machinery
+ * already strides by). Also clears the stale-by-recycling fields. */
+U0 CCSetArrTy(CCCtrl *cc,CSym *s)
+{
+  s->ael=s->ty+1;		//M25 encoding: 0 means "not an array",
+  s->aelsty=s->sty;		//TY_INT IS 0, so the stored form must
+}				//be offset (see the CC.HH note)
 
 U0 CCPostfix(CCCtrl *cc)
 {
-  I64 ekind,off,mi,bsty,hijack,bty,sty0;
+  I64 ekind,off,mi,bsty,hijack,bty,sty0,ael,aelt,asty,nxt,nxtsty;
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&
       ((((cc->tk_num=='[')||(cc->tk_num=='.'))||(cc->tk_num==OP_ARROW))||(cc->tk_num=='(')))
   {
@@ -1199,13 +1264,33 @@ U0 CCPostfix(CCCtrl *cc)
       hijack=0;
       bty=cc->ety;		//the decayed base type: a row keeps it
       sty0=cc->sty;
+      ael=cc->celem;		//M25: what the base's ELEMENTS are, if
+      asty=cc->celebsty;	//anyone ever said (0 = the old guess;
+      aelt=ael-1;		//encoded form, so decode once here)
       if (cc->esz2)
       {
         //M17: first index of a 2-D decay scales a WHOLE ROW
-        //(cc->esz); must be read before the CCVal below, which is
-        //exactly what consumes esz2 for every other consumer.
+        // (cc->esz); must be read before the CCVal below, which is
+        //exactly what consumes esz2 for every other consumer. The row's
+        //own element type is the ael the decay installed, and it stays:
+        //a row's elements are the array's innermost element type.
         ekind=cc->esz;
         hijack=1;
+      }
+      else if (ael)
+        ekind=CCArrEltSize(cc,aelt,asty);	//M25: sized by the element
+      else if ((cc->ety==TY_CHAR)||(cc->ety==TY_INT))
+      {
+        //C: one operand of `[]` must have pointer type. Reaching here
+        //means the base is a SCALAR VALUE — a byte result (`tab[0][0][0]`)
+        //or an int/enum (`v[0]`, `RED[0]`). The old code was lenient about
+        //int bases on the theory that `RED[0]` commutes; that theory is
+        //wrong (gcc: "subscripted value is neither array nor pointer nor
+        //vector") AND the lenient path faulted: it dereferenced the int as
+        //an address (97 for "ab"). Diagnosing is both C-faithful and the
+        //only sane reading, and nothing in the suite indexed a scalar.
+        CCError(cc,"array subscript requires a pointer or array");
+        return;
       }
       else if (cc->ety==TY_STRUCT)
       {
@@ -1223,7 +1308,9 @@ U0 CCPostfix(CCCtrl *cc)
       {
         ekind=CCPtrScale(cc->ety);
         if (!ekind)
-          ekind=8;		//lenient: index a plain int as slots
+          ekind=8;		//insurance: every scalar base is diagnosed
+        				//above, so only a pointer-shaped type
+        				//reaches the scale guess now
       }
       CCVal(cc);
       CCLex(cc);
@@ -1249,6 +1336,14 @@ U0 CCPostfix(CCCtrl *cc)
         cc->is_addr=2;
         cc->ety=bty;
         cc->aty=0;
+        //M25: the ROW keeps the base's element type (a row's elements
+        //ARE the array's innermost elements) — and it must be WRITTEN
+        //here, because parsing the index expression cleared it. Skipping
+        //that write cost `char *m2[2][2]` its third level: the guess
+        //path reappeared and m2[0][0][0] loaded a dword (25185 for "ab"
+        //instead of 'a').
+        cc->celem=ael;
+        cc->celebsty=asty;
         if (bsty>=0)
           cc->sty=bsty;
         else
@@ -1258,15 +1353,39 @@ U0 CCPostfix(CCCtrl *cc)
       {
         cc->is_addr=1;		//address of the element
         cc->aty=0;
-        if (bsty>=0)
+        if (ael)
+        {
+          //M25: the element carries its OWN type, so a second subscript
+          //sees the right scale and load width: `char *tab[]` yields a
+          //byte pointer (tab[0][1] is a char, and a store through it is
+          //a byte store), `struct P *pa[]` yields a struct POINTER (so
+          //pa[0]->a resolves, and pa[0][1] steps a whole struct), and
+          //`int *ap[]` yields a plain slot pointer. Pre-M25 every one of
+          //these was reported as TY_INT by the scale guess, which silently
+          //loaded a dword for tab[0][0] and refused pa[0]->a outright.
+          cc->ety=aelt;
+          if ((aelt==TY_STRUCT)||((aelt==TY_PTR)&&(asty>=0)))
+            cc->sty=asty;
+          else
+            cc->sty=-1;
+          cc->aty=(aelt==TY_CHAR);
+          CCArrNext(cc,aelt,asty,&nxt,&nxtsty);
+          cc->celem=nxt;
+          cc->celebsty=nxtsty;
+        }
+        else if (bsty>=0)
         {
           cc->ety=TY_STRUCT;	//a struct element is still the struct
           cc->sty=bsty;
+          cc->celem=0;
+          cc->celebsty=-1;
         }
         else
         {
           cc->sty=-1;
           cc->aty=(ekind==1);
+          cc->celem=0;
+          cc->celebsty=-1;
           if (ekind==1)
             cc->ety=TY_CHAR;
           else
@@ -1313,7 +1432,9 @@ U0 CCPostfix(CCCtrl *cc)
       cc->ety=cc->st[bsty].mty[mi];
       cc->aty=(cc->ety==TY_CHAR);
       cc->sty=cc->st[bsty].msty[mi];	//struct-pointer members chain
-      cc->is_addr=1;
+      cc->celem=0;			//M25: members are scalars, pointers
+      cc->celebsty=-1;			//or one-slot tags — never arrays,
+      cc->is_addr=1;			//so the scale guess is exact here
     }
   }
 }
@@ -1554,7 +1675,10 @@ U0 CCExprPrimary(CCCtrl *cc)
         //to clobber it) and CALL RAX.
         if ((s->ty==TY_PTR)||(s->ty==TY_CHARP))
         {
-          if (s->dim>1)
+          if ((s->dim>1)||s->ael)
+            //M25: `ael` marks ANY array object, including the
+            //one-element kind `dim>1` never saw (calling through an
+            //array of fps, or of anything else, is UB either way).
           {
             CCError(cc,"cannot call through an array of function pointers");
           }
@@ -1603,6 +1727,8 @@ U0 CCExprPrimary(CCCtrl *cc)
         cc->sty=-1;
         cc->esz=0;
         cc->esz2=0;
+        cc->celem=0;		//M25: an enum constant subscripting
+        cc->celebsty=-1;	//itself is the lenient slot case
         CCLex(cc);
         CCPostfix(cc);		//RED[0] is real C — subscripts commute
         return;
@@ -1617,10 +1743,22 @@ U0 CCExprPrimary(CCCtrl *cc)
       cc->ety=TY_PTR;		//never assigns (`f=x` stays a C error)
       cc->aty=0;
       cc->sty=-1;
+      cc->celem=0;		//M25: a function is not subscriptable
+      cc->celebsty=-1;
     }
-    else if ((s->dim>1)||(s->ty==TY_STRUCT))
+    else if ((((s->dim>1)||s->ael)&&(s->kind!=SC_PARAM))||(s->ty==TY_STRUCT))
     {
       //Array or struct name: value IS the address (decay); never load.
+      //EXCEPT an array PARAMETER: its storage is the incoming argument
+      //SLOT, which HOLDS the pointer rather than being the array, so it
+      //must keep the load-on-value path below (is_addr=1 lets CCVal read
+      //the slot and hand back the caller's address). Treating a param as
+      //a decayed object made `t[0]` read the frame slot itself: garbage
+      //element values through every `char *t[]` / `struct P *q[]` param.
+      //M25: `int a[1]` has dim==1 and was NEVER decayed pre-M25 — the
+      //else arm below typed it as a pointer VARIABLE, so `a[0]=5` loaded
+      //the slot's own contents (0) as the base address and stored through
+      //NIL: a fault that HEAD reproduces exactly.
       cc->is_addr=2;
       cc->ety=s->ty;
       cc->aty=(s->ty==TY_CHARP);
@@ -1630,6 +1768,25 @@ U0 CCExprPrimary(CCCtrl *cc)
       cc->is_addr=1;
       cc->ety=s->ty;
       cc->aty=(s->ty==TY_CHAR);
+    }
+    //M25: the element type travels with any array object (params
+    //included: they arrive through the arm above, which is correct for
+    //them, and still need their ael). Note the
+    //ARRAY PARAMETER case: its dim is 1 by design (the caller owns the
+    //count), so it arrives through the second arm above, not the decay
+    //arm — keying this off dim>1 left `q[i]->a` in a `struct P *q[]`
+    //parameter guessing from the scale (and the guess said "array of
+    //whole structs", so '->' was refused). ael is 0 for scalars and
+    //plain pointers, which keeps the old guess for those.
+    if (s->ael)
+    {
+      cc->celem=s->ael;
+      cc->celebsty=s->aelsty;
+    }
+    else
+    {
+      cc->celem=0;
+      cc->celebsty=-1;
     }
     if (s->dim2)		//M17: two-dimensional decay carries its
     {
@@ -1889,8 +2046,11 @@ U0 CCExprUnary(CCCtrl *cc)
         if (sym)
         {
           CCLex(cc);
-          if (sym->dim>1)
+          if (sym->ael)
           {
+            //M25: keyed on the array marker, not dim>1, so `sizeof(c)`
+            //for `char c[1]` is now 1 (C truth) instead of the pointer
+            //size the else arm below reports for a real pointer.
             //Arrays are stored POINTER-TYPED on the symbol (s->ty
             //decayed to CHARP/PTR at declaration; dim carries the
             //count), so element size must come from C truth here:
@@ -2292,6 +2452,8 @@ U0 CCAssignTail(CCCtrl *cc)
     cc->sty=lsty;
   else
     cc->sty=-1;
+  cc->celem=0;		//M25: an assign-expression is a scalar/pointer
+  cc->celebsty=-1;	//value, never a subscriptable array base
   if (braced)
     CCExpect(cc,'}',"expected '}' after initializer");
 }
@@ -2529,7 +2691,7 @@ U0 CCPrintf(CCCtrl *cc)
  * type: the arms' if identical, else the int model. */
 U0 CCExprConditional(CCCtrl *cc)
 {
-  I64 pz,pj,mty,msty;
+  I64 pz,pj,mty,msty,mcel,mcelsty;
   CCExprLogOr(cc);
   if (cc->errs)
     return;
@@ -2542,6 +2704,8 @@ U0 CCExprConditional(CCCtrl *cc)
   CCExprNC(cc);		//second arm
   mty=cc->ety;
   msty=cc->sty;
+  mcel=cc->celem;
+  mcelsty=cc->celebsty;
   CCExpect(cc,':',"expected ':' in conditional");
   if (cc->errs)
     return;
@@ -2559,6 +2723,14 @@ U0 CCExprConditional(CCCtrl *cc)
     cc->ety=TY_INT;
     cc->sty=-1;
   }
+  //M25: the runtime-taken arm is not the one that ran last, so an
+  //element type survives only if BOTH arms agree on it — otherwise the
+  //base falls back to the scale guess rather than to parse order.
+  if ((mcel!=cc->celem)||(mcelsty!=cc->celebsty))
+  {
+    cc->celem=0;
+    cc->celebsty=-1;
+  }
   cc->is_addr=0;
   cc->aty=0;
   CCPatchJmp(cc,pj);
@@ -2568,6 +2740,12 @@ U0 CCExprConditional(CCCtrl *cc)
  * function arguments) use. `f(a,b)` must NOT see commas as operators. */
 U0 CCExprNC(CCCtrl *cc)
 {
+  //M25: celem is meaningful ONLY as written by Primary (a chain root) or
+  //by the subscript arm. Clearing at every sub-expression entry means a
+  //residue from an earlier, unrelated subscript can never reach a base —
+  //the arms below re-write it for anything that is actually subscripted.
+  cc->celem=0;
+  cc->celebsty=-1;
   CCExprConditional(cc);
   CCVal(cc);
 }
@@ -3854,9 +4032,10 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
         n=n*s->dim2;
       CCReserveArray(cc,s,base,stag,n,sstat);
     }
-    if (s->ty==TY_CHAR)
-      s->ty=TY_CHARP;
-    else if (s->ty!=TY_STRUCT)
+    CCSetArrTy(cc,s);		//M25: MUST run before the conversion
+    if (s->ty==TY_CHAR)		//below, which overwrites exactly what
+      s->ty=TY_CHARP;		//is being recorded (ty becomes the
+    else if (s->ty!=TY_STRUCT)	//decayed pointer shape)
       s->ty=TY_PTR;
   }
   else if (s->ty==TY_STRUCT)
@@ -4187,6 +4366,8 @@ U0 CCParseParams(CCCtrl *cc)
       i=cc->nparam;
       cc->pname[i*CC_TOK_MAX]=0;	//empty name = anonymous parameter
       cc->pdim2[i]=0;			//M17: cleared until proven otherwise
+      cc->pael[i]=0;			//M25: element type cleared alongside
+      cc->paelsty[i]=-1;		//(params are recycled by nparam reuse)
       if (fpok)
       {
         StrCpy(cc->pname+i*CC_TOK_MAX,fpname);	//"" stays anonymous
@@ -4212,10 +4393,12 @@ U0 CCParseParams(CCCtrl *cc)
         if (cc->tk==TK_NUM)
           CCLex(cc);
         CCExpect(cc,']',"expected ']' after parameter array size");
-        if (cc->pty[i]==TY_CHAR)
-          cc->pty[i]=TY_CHARP;
-        else
-          cc->pty[i]=TY_PTR;
+        cc->pael[i]=cc->pty[i]+1;		//M25: what the ELEMENTS are, read
+        cc->paelsty[i]=cc->psty[i];	//before the decay rewrites pty:
+        if (cc->pty[i]==TY_CHAR)	//`char *tab[]` yields pael=TY_CHARP
+          cc->pty[i]=TY_CHARP;		//(the M17 row machinery above and
+        else				//the subscript arm are the only
+          cc->pty[i]=TY_PTR;		//consumers that need the distinction)
         if (CCTkIsPunct(cc,'['))
         {
           CCLex(cc);
@@ -4357,6 +4540,8 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
         s->sty=cc->psty[i];	//struct pointers keep their tag
         s->dim=1;
         s->dim2=cc->pdim2[i];	//M17: row scale source (1st dim unknown)
+        s->ael=cc->pael[i];		//M25: element type (a `char *tab[]`
+        s->aelsty=cc->paelsty[i];	//param must yield byte pointers)
       }
     }
   }
@@ -4549,7 +4734,8 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         n=n*s->dim2;
       CCReserveArray(cc,s,base,stag,n,TRUE);
     }
-    if (s->ty==TY_CHAR)
+    CCSetArrTy(cc,s);		//M25: element type, BEFORE the decay
+    if (s->ty==TY_CHAR)		//conversion below erases it
       s->ty=TY_CHARP;
     else if (s->ty!=TY_STRUCT)
       s->ty=TY_PTR;

@@ -306,6 +306,10 @@ CCAssert(22,"T:/CC/TEST/structinit.c","structinit");
  * names, &globals) + ARENA relocations: pointer slots inside the arena are
  * re-derived on load instead of pointing at the compile-time arena. */
 CCAssert(25,"T:/CC/TEST/ptrinit.c","ptrinit");
+/* M25: element type through array decay — char* arrays stride/byte-load,
+ * struct* arrays reach members, 1-element arrays finally decay, and 2-D
+ * pointer arrays chain three levels. */
+CCAssert(28,"T:/CC/TEST/decay.c","decay");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

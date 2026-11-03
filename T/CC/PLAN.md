@@ -56,7 +56,9 @@ string literals concatenate), block scopes with C shadowing and
 `char s[]="text"` byte init) (M22) and struct/union initializers (M23)
 — and their elements may be POINTER values: string literals, a DEFINED
 function name, or `&global` (M24: `char *tab[]={"a","b"};`,
-`int (*gf)(int)=f;`, `struct L gl={&gi,4};`)
+`int (*gf)(int)=f;`, `struct L gl={&gi,4};`), and element-faithful array
+decay (M25: `char *tab[i][j]`, `struct P *pa[i]->m`, `t[i][j]` params,
+one-element arrays, three-level chains on 2-D pointer arrays)
 `for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
 `do-while` (M14), `goto`/labels and the conditional `?:` (M16),
 functions (forward refs,
@@ -87,17 +89,24 @@ unsigned long size_t;`), a line-oriented preprocessor-lite, and the
 adapted-musl (MIT) headers in `T:/CC/INC/`: stdio.h, stdlib.h,
 string.h, stddef.h (guarded, include each other by plain name).
 
-Silent deviation (wrong result, no diagnostic): **array decay erases the
-element's type.** Subscripting a decayed pointer element a second time —
-`char *tab[2]; tab[0]="xy"; tab[0][0]` — falls back to the model's
-default element scale (4) and a 4-byte load, so it yields the string's
-low 16 bits (31096 for `"xy"`) instead of `'x'`. `tab[0][1]` is off by
-the same scale. Copying through a pointer first (`p=tab[0]; p[0]`),
-dereferencing (`*tab[0]`), `strlen(tab[0])` and single subscripts are all
-correct, and `int *ap[]` looks right by accident (the default matches an
-int element). Fixing it means carrying the element's TYPE through decay
-into the second subscript — M25's target; until then, pointer arrays are
-safe to build and pass around, less safe to subscript twice.
+Silent deviations were closed at M25: an array carries its ELEMENT TYPE
+(`s->ael`), decay and every subscript hand it on, and the subscript arm
+sizes/loads through it. What that fixes, all of it silently wrong before:
+`char *tab[2]; tab[0]="xy"; tab[0][0]` yielded the string's low 16 bits
+(31096) instead of `'x'` (int-tied 4-byte load); a STORE through `tab[0][i]`
+wrote eight bytes over the string's neighbours; `struct P *pa[2]` was
+indexed by the TAG size (its elements are pointers, not structs) and
+`pa[0]->a` was refused outright; `sizeof(c)` for `char c[1]` reported the
+pointer size; and `int a[1]` — one-element arrays were never decayed at
+all (`dim>1` gated array-ness), so `a[0]=5` loaded the slot's own contents
+as the base address and stored through nil (a fault, reproducible at
+HEAD). New C-faithful diagnostic in the same arm: subscripting a SCALAR
+(`v[0]`, `RED[0]`, `tab[0][0][0]`) is "array subscript requires a pointer
+or array" — gcc says the same thing, and the old "lenient: index a plain
+int as slots" rule dereferenced the int as an address and faulted.
+Residual model choices, both documented below: struct-pointer arithmetic
+scales by 8 while `ps[i]` strides by the tag size, and arrays of function
+pointers stay unsupported.
 
 Not supported — each currently fails with a compile diagnostic:
 
@@ -131,6 +140,17 @@ Not supported — each currently fails with a compile diagnostic:
   so mutating one through any slot works here (`wbuf[0]='Z'`); C would put
   the literal in `.rodata` and the same write is UB there — gcc segfaults
   on it, so a fixture that mutates literal bytes needs a real array.
+- Array edges (M25): subscripting a scalar is diagnosed (C agrees — the
+  model's old lenient int-indexing rule faulted in practice); 3-D arrays
+  are still unsupported (`t[2][2][2]` — the second dimension is the last);
+  arrays of FUNCTION pointers are still unsupported at declaration
+  (`int (*fptab[2])(int);`); a `char b[128]` frame object still spends one
+  8-byte slot per byte (element COUNTS and strides are byte-true since
+  M25, the frame density is not); `sizeof(char c[1])==1` and
+  `sizeof(int b[1])==8` follow the model's slot convention while pointer
+  and byte element sizes are C-true; and struct-pointer arithmetic
+  (`ps+=1`, `ps++`) scales by 8 where `ps[i]` strides by the tag size —
+  a pre-existing inconsistency, unchanged here, so prefer `ps[i]`.
 - `else if` chains parse; nested `switch` works (M14 — but nested
   switches exposed the sharing bug: per-statement parse state must be
   CALL-LOCAL, the ctrl-array version let an inner switch overwrite its
@@ -1079,6 +1099,68 @@ Not supported — each currently fails with a compile diagnostic:
    scoped 49/49 identical, cross-checked against `gcc -std=gnu99` on a
    copy with only the model `sizeof` numbers adjusted — 27 with the same
    per-check increments, clean `CC TESTS: 0 failed`.
+ - [x] **M25** element type through array decay. Every array symbol now
+   records what its ELEMENTS are (`s->ael` + `s->aelsty`, set by
+   `CCSetArrTy` from the declarator immediately BEFORE array-ification —
+   which overwrites `ty` with the decayed pointer shape and destroys
+   exactly that information), params through `pael`/`paelsty`, and the
+   parser hands the value on through decay (`cc->celem`/`cc->celebsty`)
+   and every subscript (`CCArrEltSize` sizes the index by the element:
+   1 for bytes, 8 for slots/pointers, the tag size for whole-struct
+   elements; `CCArrNext` derives the NEXT level's element type, so
+   `tab[0][1][2]` chains). Before this, the subscript arm GUESSED the
+   element type from the base's scale, which was right exactly once per
+   array: `tab[0]` produced TY_INT, so `tab[0][0]` loaded a dword and a
+   store through it wrote 8 bytes, and `struct P *pa[]` — whose ty and
+   tag look identical to `struct P ps[]`'s — was indexed by the tag size
+   and could not reach `pa[0]->a` at all.
+   **Landmine #1 — `TY_INT` is 0.** The first version stored the element
+   type raw and used 0 for "absent", so an INT element WAS the sentinel:
+   `int a[1]` looked like a non-array and kept its nil-deref bug, and
+   sizeof regressed. Element types are therefore stored +1 (encode at the
+   three write sites, decode once at consumption). A `CC_AEL(ty)` macro
+   looked tidier and does not exist in this dialect: the HOST
+   preprocessor has no FUNCTION-LIKE macros either (the very limitation
+   PLAN documents for CC's own prep-lite), and `#define CC_AEL(ty)
+   ((ty)+1)` broke the umbrella with `Invalid lval at "ty"`.
+   **Landmine #2 — array PARAMETERS are not decayed objects.** Their
+   storage is the argument slot, which HOLDS the pointer, so they need
+   the load-on-value path (`is_addr=1`); routing them through the decay
+   arm because they are arrays made `t[0]` read the frame slot itself:
+   silently wrong element values through every `char *t[]`/`struct P *q[]`
+   param (`t[0][0]` answered 96 for "hi"). Params still need `ael` — the
+   element type and the decay decision are independent questions.
+   **Landmine #3 — the 2-D hijack branch must RE-WRITE the element type.**
+   Parsing the index expression clears `celem` (that is what keeps stale
+   residues out of bases), and the row branch inherits its element type
+   from the base rather than computing it, so it has to restore the saved
+   value; skipping that cost `char *m2[2][2]` its third level.
+   **Pre-existing hole found and fixed by the fixture:** `dim>1` gated
+   array-ness at three sites (decay, `sizeof(ident)`, the call-through-an-
+   array check), so one-element arrays behaved like scalar variables and
+   `a[0]=5` stored through nil — reproduced at HEAD before being attributed
+   to M25. `s->ael` is now the array marker at all three, which also makes
+   `sizeof(char c[1])` 1 (C truth) and makes `a=5` on `int a[1]` the
+   "assignment to array" error it always should have been.
+   **Deleted rule, with evidence:** "lenient: index a plain int as slots",
+   justified by `RED[0]` commuting — gcc rejects that program ("subscripted
+   value is neither array nor pointer nor vector") and our lenient path
+   dereferenced 97 as an address and faulted. Before deleting it the suite
+   was run with int bases DIAGNOSED (76/76 green ⇒ nothing indexed a
+   scalar), so the change was proven safe rather than assumed. Error paths
+   pinned: scalar/byte-base subscripts, `pa[0].a` (C-correct "'.' needs a
+   struct object" — an array of pointers yields pointers), 1-element array
+   assignment. 76 cases (decay.c: 27 checks + closer — byte strides at both
+   indices, NULL elements, `sizeof` of element and byte, `strlen` through a
+   table, `char *t[]` walked by a param, `->` and `(*p).m` and `p[i][1]` on
+   struct arrays, struct-pointer params, int-array identity through `+=`/`-=`,
+   char-pointer `++`/`--` scaling by 1, byte stores through an element with
+   the neighbour intact, quad stores through a struct member, 2-D pointer
+   arrays at three levels, frame and static arrays), green x2, saved-object
+   reloads 28/28/28 with ptrinit 25/25, scoped 49/49, arrinit 27/27
+   unchanged, fixture cross-checked against `gcc -std=gnu99` — 28 with the
+   same per-check increments and NO size adjustments needed this time
+   (pointer and byte sizes are C-true here), clean `CC TESTS: 0 failed`.
  - [x] **M23** struct and union initializers. The M22 collector is
    reused unchanged; the element mapping was extracted into `CCInitMap`
    so aggregates share ONE rule with a different target ARITY: 1 for a
@@ -1314,6 +1396,17 @@ Not supported — each currently fails with a compile diagnostic:
   v1 objects are refused, not misread, so any change to the record layout
   means bumping it and re-checking the loader's validation of BOTH tables
   (code positions against clen, arena positions against alen).
+- Element types (M25): `s->ael`/`cc->celem` are stored +1 (TY_INT is 0, so
+  0 is free as the "unknown/not an array" marker) and `cc->celem` is only
+  meaningful immediately after a Primary or a subscript arm — every
+  expression entry clears it, so a NEW producer of a subscriptable base
+  must write it, and the 2-D hijack branch must RESTORE the saved value
+  because the index parse cleared it. Array-ness is tested with `s->ael`,
+  never `dim>1` (dim is 1 for one-element arrays AND for every array
+  parameter, whose slot holds the pointer and therefore keeps `is_addr=1`
+  instead of decaying). New cross-file helpers of this unit get their
+  prototypes in CC.HH's forward block, and no function-like macro exists
+  in the host dialect to shorten the encoding.
 - ANY new function group in the compiler unit gets file-top `extern`
   declarations like every existing chain function (M20 proof): without
   them the host COMPILES the unit but same-unit call edges into the new

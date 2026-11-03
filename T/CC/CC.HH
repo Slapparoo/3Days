@@ -54,6 +54,15 @@
 #define TY_CHAR		2	//byte-valued scalar (stored in a slot)
 #define TY_CHARP	3	//pointer to bytes (char*, char[], "str")
 #define TY_STRUCT	4	//address of an 8-byte-slot struct (tag in cc->sty)
+//M25 ELEMENT-TYPE ENCODING: an element type is stored as `ty + 1`, with
+//0 meaning "unknown/not an array". A raw type cannot serve as its own
+//absent sentinel because TY_INT is 0 — `int a[1]` read as absent and kept
+//its pre-M25 nil-deref bug. Encode with +1 at the three write sites
+//(CCSetArrTy, the array-parameter branch, CCArrNext) and decode with -1
+//where a subscript consumes it. No CC_AEL() macro: this build's host
+//preprocessor has no FUNCTION-LIKE macros (the same limitation PLAN
+//documents for CC's own prep-lite), so `#define CC_AEL(ty) ((ty)+1)`
+//fails to parse the umbrella at compile time.
 #define TY_VOID		5	//M13: `void` as written; callers fold it to
 				//the byte (TY_CHAR) model before storing
 
@@ -177,6 +186,17 @@ class CSym
  			//to one; -1 otherwise
   I64	dim;		//>1: array of that many slots/bytes at offset
   I64	dim2;		//M17: second dimension (2-D row-major); 0 = 1-D
+  I64	ael;		//M25: element TYPE of an array object (what one
+			//subscript yields: TY_CHAR/TY_PTR/TY_CHARP/
+			//TY_INT/TY_STRUCT), captured from the declarator
+			//BEFORE array-ification and stored +1 per the
+			//encoding note above. NON-ZERO IS THE TEST FOR
+			//"this symbol is an array" — dim cannot serve:
+			//it is 1 for one-element arrays and for every
+			//array parameter. 0 = not an array, so the
+			//subscript arm keeps guessing from the scale.
+  I64	aelsty;		//that element's struct tag (when it is, or
+			//points to, one), else -1
   I64	persist;	//M21: `static` block object: SC_LOCAL name,
 				//global-arena storage (value survives calls)
   I64	init;		//global constant initializer value
@@ -252,6 +272,13 @@ class CCCtrl
   I64	sym_base;	//M21: waterline of the innermost open scope:
   				//CCSymNew's dup check stops here (inner scopes
   				//may redeclare — that is shadowing)
+  I64	celem;		//M25: element type of the CURRENT array/pointer
+			//expression, set only by Primary (chain roots) and
+			//by the subscript arm; 0 = unknown, and the
+			//subscript arm then falls back to the pre-M25
+			//scale-based guess. Cleared at every expression
+			//entry so no unrelated residue can reach a base.
+  I64	celebsty;	//that element's struct tag, else -1
   I64	lofs_peak;	//M21: deepest frame slot any block reached this
   				//function: SUB RSP is patched to the peak, since
   				//closing a block rewinds the waterline
@@ -280,6 +307,10 @@ class CCCtrl
   I64	pdim2[CC_MAX_PARAMS];	//M17: 2nd dim of array params (row scale
   				//source); 0 = none. 1st dim of a param is
   				//ALWAYS unknown (callers own the count).
+  I64	pael[CC_MAX_PARAMS];	//M25: element type of array params (the
+  I64	paelsty[CC_MAX_PARAMS];	//declarator type BEFORE array-ification,
+   				//plus its struct tag): what one subscript
+   				//of the param yields
   I64	nparam;
   I64	brk[64];	//pending break-jump patch positions
   I64	brk_cnt;
