@@ -58,7 +58,10 @@ string literals concatenate), block scopes with C shadowing and
 function name, or `&global` (M24: `char *tab[]={"a","b"};`,
 `int (*gf)(int)=f;`, `struct L gl={&gi,4};`), and element-faithful array
 decay (M25: `char *tab[i][j]`, `struct P *pa[i]->m`, `t[i][j]` params,
-one-element arrays, three-level chains on 2-D pointer arrays)
+one-element arrays, three-level chains on 2-D pointer arrays), and
+whole-object struct/union assignment (M27: `v = w;` copies every member,
+shallow, same tag required, through objects, array elements, dereferences
+and by-value members)
 `for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
 `do-while` (M14), `goto`/labels and the conditional `?:` (M16),
 functions (forward refs,
@@ -182,8 +185,10 @@ Not supported — each currently fails with a compile diagnostic:
   namespace (`struct S` and `union S` collide; C keeps them separate).
   By-value members are allowed only for ONE-SLOT tags (any union, any
   single-member struct — the member IS a slot); multi-slot struct
-  members stay pointer-only (C-by-value copy needs member memcpy).
-  Union assignment (`a=b` between union objects) is not supported;
+  members stay pointer-only because members occupy one slot EACH (M19
+  layout), not for want of a copy — M27 supplies the copy, which is why
+  union assignment (`a=b` between union objects) and whole-tag member
+  copies work now;
   `sizeof` a string LITERAL answers the pointer size, not the byte
   count (the silent expression route cannot see pool lengths); a tag
   still mid-definition has size 0, so C's illegal by-value self-member
@@ -275,9 +280,15 @@ Not supported — each currently fails with a compile diagnostic:
   block comments disjoint, as real code does).
 - Structs: no by-value passing or return, no array members and no
   by-value members of MULTI-slot tags (one-slot tags — any union, any
-  single-member struct — are by-value since M19), `v = w;` whole-object
-  copies unsupported, tags must be defined before any use (no forward
-  tags), and one member may not nest a struct by value. Initializers
+  single-member struct — are by-value since M19), tags must be defined
+  before any use (no forward tags), and one member may not nest a struct
+  by value. Whole-object assignment works since M27 (`v = w;`, `arr[1]=t`,
+  `*p=t`, `w.v=z.v`): slot-by-slot, so it is SHALLOW — a pointer member is
+  copied and the two objects then alias the same target — requires the same
+  tag on both sides (C's constraint, enforced rather than approximated, so
+  `u = x;` mixing a union and a struct diagnoses even when the layouts
+  match), and it fully overwrites the destination. An assignment's value is
+  the left OBJECT, so `(x=y).a` and `x=y=z` chain. Initializers
   (M23) work for objects and 1-D arrays: members fill in declaration
   order, partial initializers zero-fill the rest (mandatory for frame
   objects), a union takes exactly ONE value (its first member — extra
@@ -290,9 +301,17 @@ Not supported — each currently fails with a compile diagnostic:
   own 8-byte slot and only its low byte is ever read through it). The
   shared mapper reports overfull targets as "excess elements in
   initializer" (generalized from M22's array-only wording).
-- Postfix `++`/`--` needs an lvalue primary: `v++` and `buf[i]++` are
-  fine, `(*p)++` needs parens support the postfix pass lacks (write
-  `*p=*p+1`).
+- `++`/`--` is POSTFIX ONLY: prefix `++v` is not implemented at all and
+  dies at the operator with "expected number, string, variable or '('"
+  (found while probing M27; identical at HEAD, so `i++` is the idiom
+  everywhere in this compiler and its fixtures). It needs an lvalue
+  primary: `v++` and `buf[i]++` are fine, `(*p)++` needs parens support
+  the postfix pass lacks (write `*p=*p+1`). Aggregates are diagnosed, not
+  approximated (M27): `arr[0]++` and `u[0]--` report "++/-- needs a
+  modifiable scalar or pointer" — they reach the lvalue test as is_addr==1
+  elements, and bumping only the first slot would be neither C's rule nor
+  a useful approximation, and `v += 1` on a struct or array says
+  "compound assignment to an array or struct object".
 - `free()` does not exist: this port's `Free()` releases whole poopalloc
   chunks and would pull shared pages out from under live arenas, so
   `malloc()` memory is permanent-by-design (see the CCSrc note in CC.HC).
@@ -1319,6 +1338,84 @@ Not supported — each currently fails with a compile diagnostic:
    struct member, element and array `sizeof`, NULL-vs-address identity,
    the same function twice yielding the same address, and a typedef'd
    `binop tab[3]`), green x2, clean `CC TESTS: 0 failed`.
+ - [x] **M27** whole-object assignment. `v = w;` copies a struct or union
+   slot by slot, and so does every aggregate-lvalue form the parser can
+   already produce: an array element (`arr[1]=t`), a dereference (`*p=t`,
+   `*p=*q`), a by-value member (`w=v`, `w.x=z.x`), a `static` or global
+   object, and either direction of a frame<->arena copy. All of it lives in
+   `CCAssignTail`: by the time it runs, BOTH sides are addresses (a struct
+   lvalue IS its address — Primary never loads one — and the pending-address
+   convention already has the destination on the stack), so the copy is a
+   straight quad walk between RCX and RAX with nothing else live, unrolled
+   at emit time because a tag's size is a compile-time constant. The guard
+   is where the real insight is: `is_addr==2` covers arrays AND struct
+   objects, because both are names that yield their own address. Pre-M27
+   that meant `struct P x; x=y;` was refused with "assignment to array",
+   while `*p=y` and `v=s` silently stored the struct's ADDRESS — read back
+   as a huge number, so the program looked like it worked. The array case
+   is now excluded BY TYPE, which is exactly the distinction C draws: an
+   array is not modifiable, a struct is.
+   **Deliberate non-delegation:** the obvious move was to emit a call to the
+   `memcpy` builtin, and inline is better here. The builtin needs the
+   argument-push sequence and a runtime length; the walk is 8 bytes per slot,
+   records no relocation, scales by nothing that can be mis-scaled, and costs
+   one instruction per slot. Delegating to the kernel is the rule when the
+   kernel has the harder problem (sorting, printing, the FFI); copying two
+   known quads is not it.
+   **Landmine — `MOV RAX,[RAX]` destroys the source pointer.** That is the
+   shorter encoding and the form every other load in this compiler uses, and
+   it was wrong: iteration 1 replaces the source address with the value it
+   loaded, so iteration 2 dereferences *that* (address 8, because an
+   uninitialized first member is 0). It hid behind the tag size — a ONE-slot
+   union copy ran perfectly, so the failure looked like a bug about multi-slot
+   tags rather than about register lifetime. RDX is the accumulator instead.
+   The safety argument, not the luck: live C values in this model live in
+   RAX, on the stack, or in hidden frame slots; the only other RDX consumer
+   is the CQO/IDIV pair behind `%`, which completes before the assignment
+   tail runs. Grep the register (`grep -n "RDX" CC_*.HC`) before claiming it
+   as scratch.
+   **Fault mapping, since generated code needs it:** compile inside a driver
+   that prints `cc.code` and `cc.entry_off`, dump the function's bytes, then
+   run THE SAME image in the same session — a fault line's `rip` maps back as
+   `rip - cc.code - entry_off`, a byte offset into the dump, which capstone
+   decodes to the offending instruction. An attempt that dumped one source's
+   bytes and then ran a different one pointed at a `push` two statements away
+   from the truth: right method, wrong pairing.
+   Also: the walk finishes on the LAST slot, and an assignment's value is the
+   LEFT object, so RCX must step back `ADD RCX,-8*(ns-1)` before
+   `MOV RAX,RCX` hands it over — `CCWord` truncates, so the negative immediate
+   emits as a correct 2's-complement imm32.
+   **C rules enforced rather than approximated:** both sides must carry the
+   SAME tag (C makes differing tags a constraint violation even for identical
+   layouts, so `union U u; struct P x; u=x;` diagnoses), a struct into a
+   non-aggregate diagnoses where it used to store the address, and compound
+   assignment and `++`/`--` on aggregates diagnose (the old messages called a
+   struct an array, and `arr[0]++` passed the is_addr==1 lvalue test and would
+   have bumped one slot of three). The copy is shallow, like C: two objects
+   share the pointee, and retargeting one leaves the other pointed at the
+   original — the fixture pins both directions of that. Reading slot i before
+   writing it is what makes `x=x` and `*p=*q` safe without a temporary.
+   **Found while probing (documented, not fixed): prefix `++`/`--` do not
+   exist.** `++v` dies at the operator with "expected number, string,
+   variable or '('", identically at HEAD — postfix only. It surfaced while
+   testing the compound-assignment wording, and PLAN had never said so.
+   Verification: 27 checks cross-run against `gcc -std=gnu99` with 0
+   mismatches and ONE declared model adjustment (check 7 asserts
+   `sizeof(x)==24` — `{int,char,int}` as three slots — where C reports 12;
+   aggregate target sizes are the M15 slot convention, and the fixture says
+   so in its comment). Error paths pinned: differing tags both ways, struct
+   into a scalar, scalar into a struct, `x=y=5`, `x=v` (struct from an int
+   array), `arr[0]++`, `u[0]++`, `x+=1`, `x++`, and the self-copy/aliasing
+   forms that must NOT diagnose. 78 cases (agcopy.c: 27 checks + closer — the
+   assignment-expression value `(x=y).a`, every member type including a char
+   and a negative int, full overwrite, value semantics in both directions,
+   copy of a copy, array elements and self-copy, three dereference shapes,
+   pointer members with shallow aliasing and retargeting, union copies that
+   alias a byte, frame<->global both ways, `static` objects assigned across
+   calls, copying inside a loop), green x3, saved-object reloads 28/28/28 with
+   fptab 31/31, decay 28/28, fptr 27/27, ptrinit 25/25 and structinit 22/22
+   unchanged, clean `CC TESTS: 0 failed`.
+
 ## HolyC dialect gotchas (all verified in this build)
 
 - **Prototypes of functions defined in ANOTHER CC_*.HC belong in CC.HH's
@@ -1433,8 +1530,9 @@ Not supported — each currently fails with a compile diagnostic:
   (CL/DL) or carry REX.R — ModRM 0x38 without a REX names BH, which
   compiles, runs and writes the wrong byte (M22). Aggregate values are
   landed as arena bytes for globals/statics and as emitted stores for
-  frame objects; only CODE sites carry relocations, so anything an
-  initializer needs that is a code address cannot live in the arena yet.
+  frame objects. Since M24 both tables carry relocations (arena pointer
+  slots included), so a code address CAN initialize an arena object — a
+  function table is the case that needs it most.
 - Scope waterlines: CCEraseScope is the ONLY place that truncates the
   symbol table (function body, block, for-init, switch body all call
   it) and it MUST keep SC_FUN entries — a stub created by a call to an
@@ -1448,6 +1546,18 @@ Not supported — each currently fails with a compile diagnostic:
   emitted AFTER that brace must not reference the slot. Anything that
   must live for the whole function is allocated BEFORE the scope mark
   (the switch dispatch slot is, deliberately).
+- The M27 aggregate copy reads slot i BEFORE writing it (MOV RDX,[RAX] /
+  MOV [RCX],RDX, then both pointers step), which is what makes `x=x` and
+  `*p=*q` correct without a temp, and it uses RDX as the accumulator
+  because `MOV RAX,[RAX]` would overwrite the SOURCE pointer with the
+  value just loaded (the shorter form faults on the second slot). Before
+  treating any register as scratch, grep its consumers: RDX belongs to the
+  CQO/IDIV pair behind `%`, which finishes before an assignment tail runs.
+  The copy's result state is is_addr==2 with TY_STRUCT (the lhs address),
+  so `(x=y).m` and `x=y=z` chain; is_addr==2 therefore means "array OR
+  struct object", and code that equates it with arrays must test the type
+  (M27 fixed the assignment guard; compound assignment/`++` deliberately
+  reject both).
 - Any POINTER value written into the arena (a global, a `static`, or an
   initializer slot) goes through `CCArenaPtr(cc,off,kind,addr)`, never raw
   bytes: the arena is a fresh allocation on every `CCInit`, so an absolute

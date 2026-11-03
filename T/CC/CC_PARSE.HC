@@ -1869,6 +1869,13 @@ U0 CCExprPrimary(CCCtrl *cc)
       CCLex(cc);
       if (cc->is_addr!=1)
         CCError(cc,"++/-- needs a modifiable object");
+      else if (cc->ety==TY_STRUCT)
+        //M27: an aggregate lvalue is not incrementable — `arr[0]++` and
+        //`u[0]--` (an ARRAY ELEMENT, so is_addr==1 and the test above
+        //lets it through) would bump only the FIRST slot and leave the
+        //rest of the object behind, which is neither C's rule nor any
+        //useful approximation of it. C rejects them outright.
+        CCError(cc,"++/-- needs a modifiable scalar or pointer");
       else
       {
         byte_aty=cc->aty;
@@ -2235,9 +2242,13 @@ U0 CCExprMul(CCCtrl *cc)
   {
     if (!cc->is_addr)
       CCError(cc,"assignment to non-lvalue");
-    else if (cc->is_addr==2)
+    else if ((cc->is_addr==2)&&(cc->ety!=TY_STRUCT))
       CCError(cc,"assignment to array");
     else
+      //M27: is_addr==2 also covers a STRUCT object (its name is its
+      //address, so Primary never loads it) — and unlike an array, a
+      //struct IS modifiable: `=` copies it. The array case is excluded
+      //above by type, which is exactly the distinction C draws.
       CCAssignTail(cc);
     return;
   }
@@ -2247,8 +2258,12 @@ U0 CCExprMul(CCCtrl *cc)
   {
     if (!cc->is_addr)
       CCError(cc,"compound assignment to non-lvalue");
-    else if (cc->is_addr==2)
-      CCError(cc,"compound assignment to array");
+    else if ((cc->is_addr==2)||(cc->ety==TY_STRUCT))
+      //M27: is_addr==2 covers arrays AND struct objects; is_addr==1 with
+      //ety==TY_STRUCT is a struct ARRAY ELEMENT or dereference. None of
+      //them take `+=` in C (an aggregate is not arithmetically
+      //convertible), and quietly bumping one slot would be a lie.
+      CCError(cc,"compound assignment to an array or struct object");
     else
       CCCompoundAssign(cc,cc->tk_num);
     return;
@@ -2468,7 +2483,7 @@ U0 CCExprLogOr(CCCtrl *cc)
  * `=`. Parse the RHS and store. Byte-sized when aty was set. */
 U0 CCAssignTail(CCCtrl *cc)
 {
-  I64 saty,lty,lsty,braced;
+  I64 saty,lty,lsty,braced,rty,rsty,ns,i;
   saty=cc->aty;
   lty=cc->ety;		//lhs type, before the RHS parse overwrites it
   lsty=cc->sty;		//lhs struct tag (valid when lty==TY_PTR)
@@ -2478,7 +2493,72 @@ U0 CCAssignTail(CCCtrl *cc)
     CCLex(cc);
   CCByte(cc,0x50);	//PUSH RAX (destination address)
   CCExprNC(cc);		//RHS value (another '=' chains right-associatively)
+  rty=cc->ety;		//the RHS's own type, before the result re-types
+  rsty=cc->sty;		//the expression below
   CCByte(cc,0x59);	//POP RCX (address)
+  if (lty==TY_STRUCT)
+  {
+    //M27: whole-object assignment. Both sides are ADDRESSES here (a
+    //struct lvalue is its address, is_addr 1 or 2, never a load), so the
+    //copy is a straight quad walk: RCX is the destination, RAX the
+    //source, and nothing else is live. `x = y` where x is a struct ARRAY
+    //ELEMENT (`arr[1]=t`), a DEREFERENCE (`*p=t`), a by-value one-slot
+    //MEMBER (`f.v=w`) or a plain object takes the same shape, and a union
+    //is just a one-slot tag, so it copies too. C requires the same tag on
+    //both sides (struct A = struct B is a constraint violation even when
+    //the shapes match), so that is diagnosed rather than approximated.
+    if ((rty!=TY_STRUCT)||(rsty!=lsty))
+    {
+      CCError(cc,"struct assignment needs a right-hand struct of the same tag");
+      return;
+    }
+    ns=cc->st[lsty].size/8;		//tag size is a multiple of 8 here
+    for (i=0;i!=ns;i++)
+    {
+      //RDX is the accumulator: `MOV RAX,[RAX]` would be shorter but it
+      //OVERWRITES the source pointer with the loaded value, so the
+      //second iteration dereferenced that value (0 for an uninitialized
+      //member — a fault at address 8). RDX is free here: live values in
+      //this model live in RAX, on the stack, or in hidden frame slots,
+      //and the only other RDX user is the CQO/IDIV pair behind `%`,
+      //which finished before the RHS value was even produced.
+      CCByte(cc,0x48);CCByte(cc,0x8B);CCByte(cc,0x10);	//MOV RDX,[RAX]
+      CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0x11);	//MOV [RCX],RDX
+      if ((i+1)!=ns)
+      {
+        CCByte(cc,0x48);CCByte(cc,0x05);CCWord(cc,8);	//ADD RAX,8
+        CCByte(cc,0x48);CCByte(cc,0x81);CCByte(cc,0xC1);	//ADD RCX,8
+        CCWord(cc,8);
+      }
+    }
+    if (ns>1)
+    {
+      //The walk left RCX on the LAST slot. The value of an assignment is
+      //the LEFT OBJECT, so walk it back to the base before handing it
+      //over (ADD r64,imm32 sign-extends, and CCWord emits a negative
+      //value as a correct 2's-complement imm32).
+      CCByte(cc,0x48);CCByte(cc,0x81);CCByte(cc,0xC1);	//ADD RCX,
+      CCWord(cc,-(8*(ns-1)));				//  -8*(ns-1)
+    }
+    CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0xC8);	//MOV RAX,RCX
+    cc->is_addr=2;			//the assign-expression's value is
+    cc->aty=0;				//the LEFT object: a struct lvalue
+    cc->ety=TY_STRUCT;			//IS its address (Primary says the
+    cc->sty=lsty;			//same thing), so `(a=b).m` and
+    cc->celem=0;			//`x=y=z` chain.
+    cc->celebsty=-1;
+    if (braced)
+      CCExpect(cc,'}',"expected '}' after initializer");
+    return;
+  }
+  if (rty==TY_STRUCT)
+  {
+    //C: `int x; struct S s; x = s;` is a constraint violation. Before
+    //M27 this stored the struct's ADDRESS, which read back as a huge
+    //number and looked like a working program.
+    CCError(cc,"cannot assign a struct value to a non-aggregate");
+    return;
+  }
   if (saty)
   {
     CCByte(cc,0x88);CCByte(cc,0x01);	//MOV [RCX],AL

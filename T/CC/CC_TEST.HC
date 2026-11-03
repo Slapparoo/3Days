@@ -314,6 +314,9 @@ CCAssert(28,"T:/CC/TEST/decay.c","decay");
  * passed as params, called via tab[i](x) / (*tab[i])(x) / (tab[i])(x), with
  * code-address elements that relocate on reload. */
 CCAssert(31,"T:/CC/TEST/fptab.c","fptab");
+/* M27: whole-object assignment — structs and unions copy slot by slot:
+ * objects, array elements, dereferences, chained, frame<->arena, statics. */
+CCAssert(28,"T:/CC/TEST/agcopy.c","agcopy");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */
