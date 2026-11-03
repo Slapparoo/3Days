@@ -47,7 +47,9 @@ Supported: `int`/`char` scalars, pointers and 1-D arrays (locals and
 globals), structs (tag definitions, `.`/`->`, struct-pointer params,
 self-referential links — see M9), string and char literals,
 `for`/`while`/`if`/`else`/`break`/`continue`, functions (forward refs,
-recursion), `printf` (literal format: `%d %s %c %%`), `putchar`, `exit`, and the
+recursion, and M13 prototype declarations `int f(int a);` — undefined
+at link time is a compile error), `printf` (literal format:
+`%d %s %c %%`), `putchar`, `exit`, and the
 M12 stdlib subset — `strlen strcmp strcpy strchr memmove memcpy memset
 memcmp malloc atoi abs puts srand rand` (delegated to kernel routines
 where they exist; see M12), the M12.1 batch — `strcat strncat strrchr
@@ -56,7 +58,15 @@ getc fputc putc fputs abort` (see M12.1) — the usual operators —
 `++ -- & * []`, comma, short-circuit logic, bitwise `& | ^`, shifts
 `<< >>`, `~`, all ten compound assignments (`p+=n` scales), chained
 `a=b=5` — with C's full precedence chain (shift vs relational vs the
-three bitwise levels are pinned by `bitops.c`).
+three bitwise levels are pinned by `bitops.c`). M13 adds the type
+keywords `const` (no-op qualifier), `unsigned`/`long`/`signed` (fold to
+the single 64-bit int — no width distinction), `void` (folds to the
+byte model: `void *` is a byte pointer like memcpy's contract;
+`f(void)` is the zero-arg idiom; anonymous parameters and `...` in
+prototypes parse), `typedef` for scalar/pointer aliases (`typedef
+unsigned long size_t;`), a line-oriented preprocessor-lite, and the
+adapted-musl (MIT) headers in `T:/CC/INC/`: stdio.h, stdlib.h,
+string.h, stddef.h (guarded, include each other by plain name).
 
 Not supported — each currently fails with a compile diagnostic:
 
@@ -67,8 +77,17 @@ Not supported — each currently fails with a compile diagnostic:
 - Array initializers of any kind (`int a[4]={1,2,3,4};`).
 - `else if` chains parse, but deeply nested control flow is untested;
   `switch`, `do`, `goto` absent.
-- `float`/`double`, preprocessor, unions, function pointers in C,
-  `sizeof`, casts, multi-dimensional arrays.
+- `float`/`double`, unions, function pointers in C, `sizeof`, casts,
+  multi-dimensional arrays.
+- Preprocessor pieces that lite skips: function-like `#define F(a)`
+  (expands as a bare object macro and the leftover text fails to
+  parse — loudly, by design), `#elif`/`#error`/`#line`, expressions
+  in `#if` (only literal `0`/`1`), `defined(X)`, includes relative to
+  the includer's directory (plain names resolve ONLY against
+  `T:/CC/INC/`; drive-qualified or leading-`/` paths are opened as
+  written), line-continuation backslashes, and `#if` interacting
+  inside block comments (prep is line-shaped; keep conditionals and
+  block comments disjoint, as real code does).
 - Structs: no by-value passing or return, no struct/array or by-value
   struct members (only `struct T *m` pointers), no initializers,
   `v = w;` copies unsupported, tags must be defined before any use
@@ -105,6 +124,14 @@ Not supported — each currently fails with a compile diagnostic:
   `snprintf` deferred: per-write bound guards would bloat every
   conversion site; the engine writes unguarded into the caller's
   buffer (caller's responsibility, same as C UB territory).
+- `typedef` binds a name to a base type ONLY in type position, and an
+  existing symbol (variable, function) shadows the typedef there, like
+  C's ordinary-namespace rule. Struct typedefs are not implemented
+  (the tag table is name-keyed and single-sourced at file scope).
+  Declaring a header prototype for a builtin (`strlen`) or prelude
+  name (`puts`) is inert and legal: builtins dispatch before the
+  symbol table, and a prototype after a definition is a no-op merge.
+  `EOF`/`NULL`/`EXIT_*` arrive as object macros from the headers.
 - Arg-taking C from an fp variable (`fp=CCFind("f"); fp(a,b,c)`) returns
   the right value but the HolyC JIT's stack tracking around multi-arg
   indirect calls desyncs in most statement shapes and breaks *later*
@@ -122,7 +149,9 @@ Not supported — each currently fails with a compile diagnostic:
 | `CC_SYM.HC` | symbol table, variable load/store                |
 | `CC_PARSE.HC`| recursive-descent parser, direct emission      |
 | `CC.HC`     | umbrella include, `CCInit`/`CCSrc`/`CCRunFile`, `CCSave`/`CCLoad` |
+| `CC_PREP.HC`| M13 preprocessor-lite (`#include`/`#define`/conditionals), runs on user text before the prelude is prepended |
 | `CC_LIB.HC` | M12 zero-arg delegation helpers (spliced into `CC.HC` after `CCCtrl cc;`) |
+| `INC/*.h`   | M13 adapted-musl (MIT) headers: `stdio.h` `stdlib.h` `string.h` `stddef.h` — guarded, trimmed to the implemented surface |
 | `CC_TEST.HC`| test harness (PASS/FAIL per file in `TEST/`)     |
 
 ## Milestones
@@ -403,9 +432,69 @@ Not supported — each currently fails with a compile diagnostic:
    61 cases (stdlib 52 + sprintf 12 + abort 134 + getchar-shape),
    green twice, in-process determinism incl. three reloads of the
    saved stdlib object, clean `CC TESTS: 0 failed`.
+ - [x] **M13** preprocessor-lite + type keywords + adapted-musl headers.
+   `CCPrep` runs on the USER text before the prep-free prelude is
+   prepended; it is a line-shaped scanner (never CCLex): literals are
+   opaque (macro names inside them don't expand), comments copy raw
+   for the real lexer, skipped regions emit one newline per dropped
+   line so source shape survives. Directives: `#include` (`"x.h"`/
+   `<x.h>` resolve against `T:/CC/INC/`; paths containing a drive or
+   leading `/` open as written; depth-capped), object-like `#define`
+   (bodies re-expand, depth-bounded rescans) / `#undef`, `#ifdef`/
+   `#ifndef`/`#else`/`#endif` (three-bit frames: emit/chain-taken/
+   parent-emit — an inner `#else` cannot resurrect an outer-skipped
+   region), `#if 0`/`#if 1`, `#pragma`; anything else is a loud error.
+   Tables (macros, typedefs) live in CCCtrl, are compile-time only,
+   and never touch the object format — a header-using program
+   save/reloads identically (`objhdr` probe: 16/16 across reloads).
+   Keywords fold in ONE place (`CCAcceptBase`) feeding every type
+   position (top level, locals, params, for-init, typedefs, function
+   returns): const/signed no-op, unsigned/long/int fold to TY_INT
+   (single 64-bit width), `void` → the byte (TY_CHAR) model so
+   `void *` IS the memcpy-contract byte pointer, `typedef` binds
+   scalar/pointer aliases with existing symbols shadowing them in
+   type position. Prototypes (`int f(int a);`) register/merge SC_FUN
+   at offset -1 (arity set; a definition wins; a prototype after a
+   definition is inert; a never-defined forward is the
+   `call to undefined function` compile error — all three probed);
+   `f(void)`, anonymous params and `...` parse. Headers (musl, MIT,
+   trimmed): stddef/stdio/stdlib/string — size_t, NULL, EOF, EXIT_*,
+   `typedef long FILE` (stream tokens; see M12's stdio note).
+   Landmines this milestone stepped on, all pinned by probes: (a) the prep
+   literal copier ended regions with `n=0` instead of `break` —
+   every `char *s="hi\n";` LOST THE TEXT AFTER ITS CLOSING QUOTE
+   (the `;` died with it; 8 fixtures failed at once) — the cure for
+   opaque-text stages: hexdump-prep-vs-source identity check, which
+   showed 77→66 bytes before any of it made sense; (b) `#define`
+   forgot to skip the space before the name; (c) scanning text lines
+   from the '#' detection cursor stripped indentation (harmless but
+   breaks byte-identity — scan from line start); (d) the `f(void)`
+   zero-arg branch hijacked `void *dst` as memcpy's FIRST parameter
+   (void handling must fork INSIDE the param loop: `)` follows →
+   zero-arg, else it is just a base type); (e) `TY_VOID` needed its
+   own code — TY_INT is 0, indistinguishable from "folded nothing",
+   so CCAcceptBase signals "not a type" as -1; (f) a parenthesized
+   boolean with a miscount killed the kernel parse with an error
+   lines away from the cause — dispatch gates use staged ifs, not
+   one-line boolean monsters; (g) `CIsAlpha`/`CIsDigit` are CC_LEX's
+   OWN helpers, not kernel — bisect probes that include only CC.HH
+   flake on them; (h) HolyC has no `continue` (see the gotcha above)
+   — prep scan, CCAcceptBase and the param binding all had to be
+   written as if/else chains. 63 cases (preproc 12 + hdr 16 on top
+   of M12.1's 61, all green twice, in-process repeated runs + saved
+   object round trip of the header program, clean `CC TESTS: 0
+   failed`).
 
 ## HolyC dialect gotchas (all verified in this build)
 
+- **There is NO `continue` keyword in this HolyC dialect.** The kernel
+  source never uses it (grep T/*.HC: effectively zero hits), and
+  `continue;` anywhere in host-side `.HC` code — even inside a plain
+  `while` — dies with "Invalid lval"/"Undefined identifier at ";"",
+  sometimes reported at a LATER brace line than the actual culprit.
+  Restructure with if/else chains (break exists and works). CC's own
+  C language has continue (its parser implements it); only the HOST
+  dialect lacks it — M13's prep/type code hit this three times over.
 - Classes must end with `};`.
 - **`if` and `else` guard EXACTLY ONE statement** (verified by probe:
   `if (0) x=1;x=5;` leaves x=5; `if (1) x=1; else x=2;x=7;` leaves

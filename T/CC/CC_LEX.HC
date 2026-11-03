@@ -89,6 +89,18 @@ U0 CCLex(CCCtrl *cc)
       cc->tk_kw=KW_CONTINUE;
     else if (!StrCmp(cc->tk_str,"struct"))
       cc->tk_kw=KW_STRUCT;
+    else if (!StrCmp(cc->tk_str,"const"))
+      cc->tk_kw=KW_CONST;
+    else if (!StrCmp(cc->tk_str,"void"))
+      cc->tk_kw=KW_VOID;
+    else if (!StrCmp(cc->tk_str,"unsigned"))
+      cc->tk_kw=KW_UNSIGNED;
+    else if (!StrCmp(cc->tk_str,"long"))
+      cc->tk_kw=KW_LONG;
+    else if (!StrCmp(cc->tk_str,"signed"))
+      cc->tk_kw=KW_SIGNED;
+    else if (!StrCmp(cc->tk_str,"typedef"))
+      cc->tk_kw=KW_TYPEDEF;
     return;
   }
   if (*p=='"')

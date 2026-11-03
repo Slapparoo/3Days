@@ -114,6 +114,170 @@ I64 CCPtrScale(I64 ty)
   return 0;		//not pointer-like
 }
 
+/* M13 type layer. The compiler has ONE int width (8-byte slots) and a
+ * byte model for char, so unsigned/long/signed fold to TY_INT, const
+ * is a no-op qualifier, and void maps to the byte (char) model —
+ * `void *` then behaves exactly like memcpy's byte-pointer contract.
+ * typedef names bind a TY_* base and are consulted ONLY in type
+ * position: an existing symbol of any kind shadows a typedef name
+ * (C's dominance rule, approximately). */
+I64 CCTypedefFind(CCCtrl *cc,U8 *nm)
+{
+  I64 i;
+  if (CCSymFind(cc,nm))
+    return -1;		//a real variable/function owns the name
+  for (i=0;i!=cc->tn;i++)
+    if (!StrCmp(cc->tname[i],nm))
+      return i;
+  return -1;
+}
+
+/* TRUE when the current token can START a declaration/function type.
+ * Drives the dispatch gates that used to test for int/char/struct. */
+I64 CCTokTypeStart(CCCtrl *cc)
+{
+  I64 kw;
+  if (cc->tk!=TK_IDENT)
+    return FALSE;
+  kw=cc->tk_kw;
+  if ((kw==KW_INT)||(kw==KW_CHAR))
+    return TRUE;
+  if ((kw==KW_STRUCT)||(kw==KW_CONST))
+    return TRUE;
+  if ((kw==KW_VOID)||(kw==KW_UNSIGNED))
+    return TRUE;
+  if ((kw==KW_SIGNED)||(kw==KW_LONG))
+    return TRUE;
+  if (kw==KW_NONE)
+    return CCTypedefFind(cc,cc->tk_str)>=0;
+  return FALSE;
+}
+
+/* Consume a full type-specifier sequence and return its base type, or
+ * -1 when the current token starts none (so the caller can fall back
+ * to an expression). *pstag receives the struct tag id, else -1.
+ * Sequences like `unsigned long int` collapse; mixing char with the
+ * int family, or void with anything, is an error. */
+I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
+{
+  I64 ty=-1,ti;
+  *pstag=-1;
+  //No `continue` in HolyC (the keyword does not exist in this dialect):
+  //the fold is one if/else chain per token, and each arm advances or
+  //breaks. See PLAN.
+  while (cc->tk==TK_IDENT)
+  {
+    if ((cc->tk_kw==KW_CONST)||(cc->tk_kw==KW_SIGNED))
+      CCLex(cc);
+    else if ((cc->tk_kw==KW_UNSIGNED)||(cc->tk_kw==KW_LONG)||(cc->tk_kw==KW_INT))
+    {
+      if (ty==TY_CHAR)
+      {
+        CCError(cc,"type keyword conflict (char with int/long/unsigned)");
+        return -1;
+      }
+      ty=TY_INT;
+      CCLex(cc);
+    }
+    else if (cc->tk_kw==KW_CHAR)
+    {
+      if ((ty==TY_INT)||(ty==TY_VOID))
+      {
+        CCError(cc,"type keyword conflict");
+        return -1;
+      }
+      ty=TY_CHAR;
+      CCLex(cc);
+    }
+    else if (cc->tk_kw==KW_VOID)
+    {
+      if (ty>=0)
+      {
+        CCError(cc,"void cannot combine with another type");
+        return -1;
+      }
+      ty=TY_VOID;
+      CCLex(cc);
+    }
+    else if (cc->tk_kw==KW_STRUCT)
+    {
+      if (ty>=0)
+      {
+        CCError(cc,"struct cannot combine with another type");
+        return -1;
+      }
+      CCLex(cc);
+      if (cc->tk!=TK_IDENT)
+      {
+        CCError(cc,"expected struct tag name");
+        return -1;
+      }
+      ti=CCStagFind(cc,cc->tk_str);
+      if (ti<0)
+      {
+        CCError(cc,"undefined struct tag");
+        return -1;
+      }
+      *pstag=ti;
+      ty=TY_STRUCT;
+      CCLex(cc);
+      break;		//tag consumed: the declarator follows
+    }
+    else
+    {
+      //Plain identifier: only a typedef name here is a type; anything
+      //else (a variable, a call target) leaves the declarator/expression
+      //for the caller.
+      ti=CCTypedefFind(cc,cc->tk_str);
+      if (ti<0)
+        break;
+      ty=cc->tty[ti];
+      CCLex(cc);
+      break;		//the typedef supplies the whole base type
+    }
+  }
+  return ty;
+}
+
+/* typedef <base> [*] Name ; — registers Name as a type alias. Struct
+ * typedefs are not implemented (the tag system is name-keyed and
+ * single-sourced at file scope; see M9). */
+U0 CCParseTypedef(CCCtrl *cc)
+{
+  I64 ty,stag;
+  CCLex(cc);			//consume 'typedef'
+  ty=CCAcceptBase(cc,&stag);
+  if (ty<0)
+  {
+    CCError(cc,"typedef needs a supported base type");
+    return;
+  }
+  if (ty==TY_VOID)
+    ty=TY_CHAR;		//typedef void *vp: vp is a byte pointer
+  while (CCAccept(cc,'*'))
+  {
+    if (ty==TY_CHAR)
+      ty=TY_CHARP;
+    else
+      ty=TY_PTR;
+  }
+  if (cc->tk!=TK_IDENT)
+  {
+    CCError(cc,"expected typedef name");
+    return;
+  }
+  if (cc->tn>=CC_MAX_TYPEDEF)
+  {
+    CCError(cc,"too many typedefs");
+    return;
+  }
+  StrCpy(cc->tname[cc->tn],cc->tk_str);
+  cc->tty[cc->tn]=ty;
+  cc->tn++;
+  CCLex(cc);
+  CCExpect(cc,';',"expected ';' after typedef");
+}
+
 U0 CCBinEmit(CCCtrl *cc,I64 op)
 {
   I64 rem;
@@ -1285,7 +1449,7 @@ U0 CCForStmt(CCCtrl *cc)
   pc_after=NULL;
   CCLex(cc);		//consume 'for'
   CCExpect(cc,'(',"expected '(' after for");
-  if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_CHAR)))
+  if (CCTokTypeStart(cc))
     CCDeclStmt(cc);		//consumes its ';'
   else if (CCAccept(cc,';'))
   {
@@ -1479,36 +1643,20 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
   }
 }
 
-/* int|char|struct decl [, decl]* ;  — local declaration(s). */
+/* <base> [*] name [n] [, ...] ;  — local declaration(s). M13: the base
+ * comes from CCAcceptBase, so const/unsigned/long/void/typedef names
+ * parse here exactly like at file scope. */
 U0 CCDeclStmt(CCCtrl *cc)
 {
-  I64 ty=TY_INT,stag=-1;
-  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_CHAR))
+  I64 ty,stag;
+  ty=CCAcceptBase(cc,&stag);
+  if (ty<0)
   {
-    ty=TY_CHAR;
-    CCLex(cc);
+    CCError(cc,"bad declaration");
+    return;
   }
-  else if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_STRUCT))
-  {
-    //Local struct declarations must name an EXISTING tag: definitions
-    //belong at file scope (CCParseTop), keeping layouts single-sourced.
-    CCLex(cc);			//consume 'struct'
-    if (cc->tk!=TK_IDENT)
-    {
-      CCError(cc,"expected struct tag name");
-      return;
-    }
-    stag=CCStagFind(cc,cc->tk_str);
-    if (stag<0)
-    {
-      CCError(cc,"undefined struct tag");
-      return;
-    }
-    ty=TY_STRUCT;
-    CCLex(cc);			//consume the tag name
-  }
-  else
-    CCLex(cc);			//consume 'int'
+  if (ty==TY_VOID)
+    ty=TY_CHAR;		//void scalar / void* in the byte model
   while ((!cc->errs)&&(cc->tk!=TK_EOF))
   {
     CCDeclOne(cc,ty,stag);
@@ -1563,7 +1711,12 @@ U0 CCStmt(CCCtrl *cc)
     CCFunRet(cc,cc->cur_entry);
     return;
   }
-  if ((cc->tk==TK_IDENT)&&(((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_CHAR))||(cc->tk_kw==KW_STRUCT)))
+  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_TYPEDEF))
+  {
+    CCParseTypedef(cc);		//block-scope typedef: legal in C
+    return;
+  }
+  if (CCTokTypeStart(cc))
   {
     CCDeclStmt(cc);
     return;
@@ -1574,51 +1727,66 @@ U0 CCStmt(CCCtrl *cc)
   CCExpect(cc,';',"expected ';'");
 }
 
-/* Body of `int name(...) {...}`; '(' already consumed. entry is the
- * code offset; the private-stack stub is emitted only for 'main'. */
-U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
+/* Parse a function parameter list; '(' already consumed, stops after
+ * ')'. M13: bases fold through CCAcceptBase (const/unsigned/long/void/
+ * typedef names); `f(void)` is the zero-parameter idiom C headers use;
+ * anonymous parameters and a trailing `...` (printf-style prototypes)
+ * are accepted — arity records the NAMED count, and every variadic
+ * name on the header surface is a parser-dispatched builtin anyway. */
+U0 CCParseParams(CCCtrl *cc)
 {
-  I64 sub_pos,i,entryflag,t;
-  CSym *f,*s;
+  I64 base,stag,i;
 
   cc->nparam=0;
   if (!CCTkIsPunct(cc,')'))
   {
     while ((!cc->errs)&&(cc->tk!=TK_EOF))
     {
-      if (!((cc->tk==TK_IDENT)&&(((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_CHAR))||(cc->tk_kw==KW_STRUCT))))
+      stag=-1;
+      base=-1;
+      if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_VOID))
       {
-        CCError(cc,"only int/char/struct-pointer parameters supported");
+        CCLex(cc);
+        if (CCTkIsPunct(cc,')'))
+          break;		//`f(void)` idiom: zero parameters
+        base=TY_CHAR;		//`void *p` as first param: byte pointer
+      }
+      if ((cc->tk==TK_PUNCT)&&(cc->tk_num=='.'))
+      {
+        //`...`: consume the remaining two dots; named arity stands.
+        CCLex(cc);
+        if ((cc->tk!=TK_PUNCT)||(cc->tk_num!='.'))
+        {
+          CCError(cc,"bad '...' in parameter list");
+          return;
+        }
+        CCLex(cc);
+        if ((cc->tk!=TK_PUNCT)||(cc->tk_num!='.'))
+        {
+          CCError(cc,"bad '...' in parameter list");
+          return;
+        }
+        CCLex(cc);
+        break;
+      }
+      if (cc->nparam>=CC_MAX_PARAMS)
+      {
+        CCError(cc,"too many parameters");
         return;
       }
-      cc->psty[cc->nparam]=-1;
-      if (cc->tk_kw==KW_STRUCT)
+      if (base<0)
       {
-        //struct parameters are pass-by-pointer only: `struct T *p`.
-        CCLex(cc);		//consume 'struct'
-        if (cc->tk!=TK_IDENT)
+        base=CCAcceptBase(cc,&stag);
+        if (base<0)
         {
-          CCError(cc,"expected struct tag in parameter");
+          CCError(cc,"unsupported parameter type");
           return;
         }
-        t=CCStagFind(cc,cc->tk_str);
-        if (t<0)
-        {
-          CCError(cc,"undefined struct tag");
-          return;
-        }
-        cc->psty[cc->nparam]=t;
-        cc->pty[cc->nparam]=TY_STRUCT;
-        CCLex(cc);
+        if (base==TY_VOID)
+          base=TY_CHAR;		//`void *p`: byte pointer (M13 model)
       }
-      else
-      {
-        if (cc->tk_kw==KW_CHAR)
-          cc->pty[cc->nparam]=TY_CHAR;
-        else
-          cc->pty[cc->nparam]=TY_INT;
-        CCLex(cc);
-      }
+      cc->psty[cc->nparam]=stag;
+      cc->pty[cc->nparam]=base;
       while (CCAccept(cc,'*'))
       {
         //char* -> byte pointer; any further pointer (char**, int**) —
@@ -1633,19 +1801,14 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
         CCError(cc,"struct parameters must be pointers: struct T *p");
         return;
       }
-      if (cc->tk!=TK_IDENT)
+      i=cc->nparam;
+      cc->pname[i*CC_TOK_MAX]=0;	//empty name = anonymous parameter
+      if (cc->tk==TK_IDENT)
       {
-        CCError(cc,"expected parameter name");
-        return;
+        StrCpy(cc->pname+i*CC_TOK_MAX,cc->tk_str);
+        CCLex(cc);
       }
-      if (cc->nparam>=CC_MAX_PARAMS)
-      {
-        CCError(cc,"too many parameters");
-        return;
-      }
-      StrCpy(cc->pname+cc->nparam*CC_TOK_MAX,cc->tk_str);
       cc->nparam++;
-      CCLex(cc);
       if (CCAccept(cc,'['))
       {
         //Array parameter (char *argv[]): adjusts to a slot pointer, so
@@ -1653,7 +1816,7 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
         if (cc->tk==TK_NUM)
           CCLex(cc);
         CCExpect(cc,']',"expected ']' after parameter array size");
-        cc->pty[cc->nparam-1]=TY_PTR;
+        cc->pty[i]=TY_PTR;
       }
       if (CCAccept(cc,','))
       {
@@ -1664,16 +1827,58 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
     }
   }
   CCExpect(cc,')',"expected ')' after parameters");
-  CCExpect(cc,'{',"expected '{'");
+}
+
+/* Body of `int name(...) {...}` — or a prototype `int name(...);`
+ * (M13: the path every #include'd C declaration takes). '(' already
+ * consumed. entry is the code offset; the private-stack stub is
+ * emitted only for 'main'. */
+U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
+{
+  I64 sub_pos,i,entryflag,t;
+  CSym *f,*s;
+
+  CCParseParams(cc);
+  if (cc->errs)
+    return;
+  if (!CCTkIsPunct(cc,'{'))
+  {
+    //Prototype declaration: no body. Register (or merge with a
+    //forward-call stub) so calls and CCFind see the arity; a real
+    //definition may still follow and wins. A prototype after a
+    //definition is C-legal and inert. main() declared but never
+    //defined does NOT satisfy the harness (entry_off stays unset).
+    CCExpect(cc,';',"expected ';' after function declaration");
+    if (cc->errs)
+      return;
+    f=CCSymFind(cc,name);
+    if (!f)
+    {
+      f=CCSymNew(cc,name,SC_FUN);
+      f->offset=-1;		//CCSymNew leaves 0; -1 = undefined yet
+    }
+    if (f->kind!=SC_FUN)
+      CCError(cc,"name already a variable");
+    else
+    {
+      if (f->offset<0)
+        f->fargc=cc->nparam;	//definition overwrites on merge
+    }
+    return;
+  }
+  CCLex(cc);			//consume '{'
   for (i=0;i!=cc->nparam;i++)
   {
-    s=CCSymNew(cc,cc->pname+i*CC_TOK_MAX,SC_PARAM);
-    if (s)
+    if (cc->pname[i*CC_TOK_MAX])	//anonymous parameters bind no name
     {
-      s->offset=i;	//CCSymNew leaves 0; index drives the RBP disp
-      s->ty=cc->pty[i];
-      s->sty=cc->psty[i];	//struct pointers keep their tag
-      s->dim=1;
+      s=CCSymNew(cc,cc->pname+i*CC_TOK_MAX,SC_PARAM);
+      if (s)
+      {
+        s->offset=i;	//CCSymNew leaves 0; index drives the RBP disp
+        s->ty=cc->pty[i];
+        s->sty=cc->psty[i];	//struct pointers keep their tag
+        s->dim=1;
+      }
     }
   }
   cc->cur_argc=cc->nparam;
@@ -1959,6 +2164,11 @@ U0 CCParseTop(CCCtrl *cc)
   I64 ty=TY_INT,first=TRUE,stag=-1,t;
   U8 tag[CC_TOK_MAX];
 
+  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_TYPEDEF))
+  {
+    CCParseTypedef(cc);
+    return;
+  }
   if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_STRUCT))
   {
     CCLex(cc);			//consume 'struct'
@@ -1998,14 +2208,17 @@ U0 CCParseTop(CCCtrl *cc)
     CCExpect(cc,';',"expected ';' after struct declaration");
     return;
   }
-  if (!((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_CHAR))))
+  //M13: any foldable type sequence opens a top-level statement; the
+  //struct-with-body case was already handled above, so CCAcceptBase
+  //here only ever folds keywords/typedef names (TY_STRUCT cannot).
+  ty=CCAcceptBase(cc,&stag);
+  if (ty<0)
   {
-    CCError(cc,"expected `int`, `char` or `struct` at top level");
+    CCError(cc,"expected a type at top level");
     return;
   }
-  if (cc->tk_kw==KW_CHAR)
-    ty=TY_CHAR;
-  CCLex(cc);
+  if (ty==TY_VOID)
+    ty=TY_CHAR;		//`void *f();` etc: byte-pointer model
   while ((!cc->errs)&&(cc->tk!=TK_EOF))
   {
     //Only the first declarator of a statement may become a function:

@@ -8,6 +8,7 @@
 #include "T:/CC/CC_LEX.HC"
 #include "T:/CC/CC_EMIT.HC"
 #include "T:/CC/CC_SYM.HC"
+#include "T:/CC/CC_PREP.HC"
 #include "T:/CC/CC_PARSE.HC"
 
 CCCtrl cc;
@@ -82,6 +83,11 @@ Bool CCCompile(CCCtrl *c,U8 *text)
   CCInit(c);
   c->hflush=&CCFlush;	//M6c: generated putchar streams through this
   CCSetLib(c);		//M12: stdlib delegation helper table
+  //M13: expand the USER text first; the prelude below is prep-free,
+  //and #include bodies land fully expanded in the same translation.
+  text=CCPrep(c,text);
+  if (!text)
+    return FALSE;		//diagnostic already printed
   //The CC runtime prelude comes first so its symbols exist and get
   //defined before user code (printf lowering) can reference them.
   plen=StrLen(CC_PRELUDE);

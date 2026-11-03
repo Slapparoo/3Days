@@ -22,6 +22,12 @@
 #define KW_FOR		8
 #define KW_CONTINUE	9
 #define KW_STRUCT	10
+#define KW_CONST	11	//M13: qualifier, no-op in the byte/slot model
+#define KW_VOID		12	//M13: maps to the byte (char) model
+#define KW_UNSIGNED	13	//M13: fold to the single int type
+#define KW_LONG		14	//M13: fold to the single int type
+#define KW_SIGNED	15	//M13: fold to the single int type
+#define KW_TYPEDEF	16	//M13: name bindings, see CCTypedefFind
 
 /* Minimal expression types (everything is a 64-bit slot; pointers
  * carry only their element size for scaling). */
@@ -30,6 +36,8 @@
 #define TY_CHAR		2	//byte-valued scalar (stored in a slot)
 #define TY_CHARP	3	//pointer to bytes (char*, char[], "str")
 #define TY_STRUCT	4	//address of an 8-byte-slot struct (tag in cc->sty)
+#define TY_VOID		5	//M13: `void` as written; callers fold it to
+				//the byte (TY_CHAR) model before storing
 
 /* Two-char punct tokens (single chars come through as their ASCII). */
 #define OP_EQ		200
@@ -106,6 +114,13 @@
 #define CC_LIB_MALLOC	4
 #define CC_LIB_GETCHAR	5
 #define CC_LIB_SLOTS	8
+/* M13 preprocessor-lite + typedef tables (compile-time only: a saved
+ * object carries code and relocations, never source-level names, so
+ * CCSave/CCLoad ignore all of these). */
+#define CC_MAX_MACROS	32
+#define CC_MACRO_BODY	256
+#define CC_MAX_TYPEDEF	32
+#define CC_INC_MAX	8	//nested-#include depth guard
 
 /* Struct tag: one table entry per `struct Name { ... }` definition.
  * Every member is one 8-byte slot (members at byte offset 8*i); a char
@@ -221,6 +236,15 @@ class CCCtrl
   I64	fix_pos[CC_FIXUPS];	//code offset of the 8-byte absolute
   I64	fix_kind[CC_FIXUPS];	//CC_B_* base
   I64	fix_delta[CC_FIXUPS];	//byte offset from that base
+  /* M13: object-like macros (name -> text) filled by the prep pass,
+   * and typedef bindings (name -> TY_* base) filled by the parser.
+   * Both reset with CCInit and live only for the source translation. */
+  I64	mn;
+  U8	mname[CC_MAX_MACROS][CC_TOK_MAX];
+  U8	mbody[CC_MAX_MACROS][CC_MACRO_BODY];
+  I64	tn;
+  U8	tname[CC_MAX_TYPEDEF][CC_TOK_MAX];
+  I64	tty[CC_MAX_TYPEDEF];
 };
 
 /* Forward declarations MUST use `extern` here: with a plain prototype,
@@ -264,6 +288,14 @@ extern U8 *CC_PRELUDE;
 /* Parser (M1: one function whose body is `return <int-expr>;`).
  * Emits code; returns entry offset or -1 on error. */
 extern I64 CCParse(CCCtrl *cc);
+
+/* M13 preprocessor-lite: runs on the USER text before the prelude is
+ * prepended. Handles #include (T:/CC/INC/<name> or an explicit path),
+ * object-like #define/#undef, #ifdef/#ifndef/#else/#endif, #if 0/1,
+ * #pragma. Macro names expand inside token text but never inside
+ * literals. Returns the expanded NUL-terminated text (MAlloced) or
+ * NULL after printing the diagnostic. */
+extern U8 *CCPrep(CCCtrl *cc,U8 *text);
 
 /* Symbol table. */
 extern CSym *CCSymFind(CCCtrl *cc,U8 *name);

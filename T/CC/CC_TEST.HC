@@ -265,6 +265,10 @@ CCM12();
 CCAssert(52,"T:/CC/TEST/stdlib.c","stdlib");
 CCAssert(12,"T:/CC/TEST/sprintf.c","sprintf");
 CCAssert(134,"T:/CC/TEST/abortc.c","abort");
+/* M13: preprocessor-lite (guards/chained includes/macros/#if arms)
+ * and the adapted-musl headers from T:/CC/INC/ against this compiler. */
+CCAssert(12,"T:/CC/TEST/preproc.c","preproc");
+CCAssert(16,"T:/CC/TEST/hdr.c","hdr");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */
