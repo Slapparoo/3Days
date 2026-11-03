@@ -32,6 +32,10 @@
 #define KW_DEFAULT	18	//M14
 #define KW_SWITCH	19	//M14
 #define KW_DO		20	//M14
+#define KW_SIZEOF	21	//M15
+#define KW_SHORT	22	//M15: folds to the single int width
+				//like unsigned/long (C 2-byte short is a
+				//documented deviation)
 
 /* Minimal expression types (everything is a 64-bit slot; pointers
  * carry only their element size for scaling). */
@@ -205,6 +209,15 @@ class CCCtrl
   I64	in_loop;	//M14: inside a while/for/do body — `continue` in a
   			//switch must belong to an enclosing loop (CCContStmt
   			//diagnoses it otherwise); switch itself is NOT a loop.
+  I64	noemit;		//M15: sizeof(expr) parses the operand to learn its
+  			//TYPE only — every code-writing site checks this and
+  			//stays silent (CCByte choke-holds CCWord/CCHalf/CCQuad;
+  			//CCQuadAbs skips its fixup RECORD too, else the saved
+  			//position would patch live code at link time; jumps
+  			//return -1 and CCPatchJmp ignores -1; CCCall skips,
+  			//which also keeps forward-call bookkeeping clean).
+  			//String pooling and symbol lookups still happen: the
+  			//region allocates a little unused pool, by design.
   I64	entry_off;	//code offset of 'main' after parse (-1 = none)
   I64	entry_inject;	//entry prologue should write argc/argv into the
   			//leading parameter slots (set for main only)

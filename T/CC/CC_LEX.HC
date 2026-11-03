@@ -109,6 +109,10 @@ U0 CCLex(CCCtrl *cc)
       cc->tk_kw=KW_SWITCH;
     else if (!StrCmp(cc->tk_str,"do"))
       cc->tk_kw=KW_DO;
+    else if (!StrCmp(cc->tk_str,"sizeof"))
+      cc->tk_kw=KW_SIZEOF;
+    else if (!StrCmp(cc->tk_str,"short"))
+      cc->tk_kw=KW_SHORT;
     return;
   }
   if (*p=='"')

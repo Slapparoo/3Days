@@ -59,9 +59,13 @@ getc fputc putc fputs abort` (see M12.1) — the usual operators —
 `++ -- & * []`, comma, short-circuit logic, bitwise `& | ^`, shifts
 `<< >>`, `~`, all ten compound assignments (`p+=n` scales), chained
 `a=b=5` — with C's full precedence chain (shift vs relational vs the
-three bitwise levels are pinned by `bitops.c`). M13 adds the type
-keywords `const` (no-op qualifier), `unsigned`/`long`/`signed` (fold to
-the single 64-bit int — no width distinction), `void` (folds to the
+three bitwise levels are pinned by `bitops.c`). M15 adds `sizeof`
+(C-truth sizes — see M15) and C casts (`(char)` truncates, `(char*)`/
+`(int*)` retype pointers, `(struct T *)` keeps the tag for `->`).
+M13 adds the type
+keywords `const` (no-op qualifier), `unsigned`/`long`/`signed`/`short`
+(fold to the single 64-bit int — no width distinction; note C-truth
+`sizeof(short)` is 2, ours is 8), `void` (folds to the
 byte model: `void *` is a byte pointer like memcpy's contract;
 `f(void)` is the zero-arg idiom; anonymous parameters and `...` in
 prototypes parse), `typedef` for scalar/pointer aliases (`typedef
@@ -84,8 +88,15 @@ Not supported — each currently fails with a compile diagnostic:
   optional leading `-`); duplicate case values are not diagnosed;
   `continue` inside a `switch` requires an enclosing loop (clean
   diagnostic — switch is not a loop).
-- `float`/`double`, unions, function pointers in C, `sizeof`, casts,
-  multi-dimensional arrays.
+- `float`/`double`, unions, function pointers in C, multi-dimensional
+  arrays.
+- `sizeof`/cast edges not supported: `sizeof` needs parentheses (and
+  its expression form decays arrays to pointer size there — `sizeof
+  f(x)` and a bare `sizeof x` are diagnostics, and the bare-identifier
+  form `sizeof b` is the only route reporting array element counts);
+  `sizeof(...)` inside a global initializer is "must be a constant"
+  (only numeric literals fold there); `(struct T)` non-pointer casts
+  yield the address as an int; `sizeof(function)` is a diagnostic.
 - Preprocessor pieces that lite skips: function-like `#define F(a)`
   (expands as a bare object macro and the leftover text fails to
   parse — loudly, by design), `#elif`/`#error`/`#line`, expressions
@@ -522,6 +533,41 @@ Not supported — each currently fails with a compile diagnostic:
    values, default-before-cases, bare and braced do bodies,
    continue-to-condition, empty switch), green twice, saved-object
    round trip 20/20/20, clean `CC TESTS: 0 failed`.
+ - [x] **M15** `sizeof` + casts. Sizes are C truth: char 1, struct the
+   tag byte total, everything else the 8-byte quad. Four routes:
+   `sizeof(type)` (speculative `CCTrySpec` scan — same fold table as
+   CCAcceptBase but silent — +stars +dims); bare `sizeof(ident)`
+   (exact symbol answer: THE route that sees array dims — and note
+   array symbols are stored POINTER-TYPED from the declaration,
+   char[128] is (TY_CHARP, dim 128), so element size must be re-derived
+   from C truth here: 1 for CHARP arrays; forgetting that made
+   `sizeof(char b[128])` report 1024); `sizeof(expr)` via the NOEMIT
+   parse (below); typedef names (`sizeof(size_t)` from the header).
+   Casts: speculative spec-scan inside Primary decides cast-vs-group
+   (rewind on failure), `(char)` emits MOVZX (truncates: 321→65, -1→
+   255), `*` retype keeps char*-ness (byte aliasing works: write
+   `(char*)&int` then poke bytes), and `(struct T *)` KEEPS THE TAG so
+   `->` continues to work through `(void*)` round-trips — single
+   struct-star only, `**` drops it. `short` joins the fold family.
+   The **noemit** knob (cc->noemit): every code-writing site is gated
+   — CCByte (which choke-holds CCWord/CCHalf/CCQuad), CCQuadAbs ALSO
+   skips its fixup RECORD (a recorded position during frozen-pointer
+   parsing would relocate bytes of live code at object link), CCCall
+   skips (keeping the forward-call patch queue clean too), CCJmp/CCJz
+   return -1 and CCPatchJmp ignores -1; jumps inside sizeof(expr) are
+   emitted-then-unpatched-free since nothing moves. Landmine: the
+   expression chain's LogAnd/LogOr tails normalized `ety=TY_INT`
+   UNCONDITIONALLY — harmless for every previous consumer (they read
+   RAX and the LHS's type, and CCExprNC re-adds CCVal), but it erased
+   the operand type the silent sizeof parse exists to read (`sizeof
+   (*cp)` said 8 for a char*). The tails now fire only when `&&`/`||`
+   actually ran — the standard fired-flag pattern the other levels
+   already used inside their operator loops. `sizeof` in a global
+   initializer stays a loud "must be a constant" diagnostic. 65 cases
+   (sizeof.c: 25 checks + closer — dims, struct symbols, deref-of-
+   cast, chained casts, truncation, `(char*)` byte aliasing of an
+   int*, typedef/header size_t, pointer-array types), green twice,
+   saved-object round trip 26/26/26, clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 
@@ -624,6 +670,15 @@ Not supported — each currently fails with a compile diagnostic:
 - Expression value always lands in RAX; binary ops `PUSH` the left
   half and `POP` it back into RCX.
 - Every emit goes through `CCByte`/`CCWord`/`CCQuad` (bounds-checked).
+- Type analysis for `sizeof(expr)`/cast decisions runs the REAL parser
+  with `cc->noemit=1` (M15): CCByte refuses everything (so CCWord/
+  CCHalf/CCQuad inherit the freeze), CCQuadAbs refuses its FIXUP
+  RECORD too (a phantom relocation into live code is worse than no
+  code), CCCall refuses to emit or queue patches, CCJmp/CCJz hand
+  back -1 and CCPatchJmp ignores it. Type state (ety/sty/aty/is_addr)
+  is still written normally — that IS the analysis. The expression
+  chain's logical tails may normalize ety ONLY when their operator
+  fired.
 - Entry stub sequence (M2, amended by M12.1): save caller RSP ->
   `cc->save`, `PUSH RBP` (stashes the caller's frame pointer at
   `[cc->save]-8` on the HOST stack), switch RSP to `cc->stack` top,

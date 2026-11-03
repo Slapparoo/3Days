@@ -521,6 +521,8 @@ U8 *CC_PRELUDE=
 U0 CCByte(CCCtrl *cc,I64 b)
 
 {
+  if (cc->noemit)		//M15: sizeof-type analysis emits nothing
+    return;
   if (cc->ep>=cc->code+CC_CODE_SIZE)
   {
     CCError(cc,"code buffer overflow");
@@ -584,6 +586,10 @@ I64 CCBase(CCCtrl *cc,I64 kind)
  * emitting the MOVABS opcode bytes (0x48 + 0xB8+reg). */
 U0 CCQuadAbs(CCCtrl *cc,I64 kind,I64 addr)
 {
+  //noemit also suppresses the fixup RECORD: a recorded position during
+  //frozen-pointer parsing would relocate bytes of LIVE code at link.
+  if (cc->noemit)		//M15
+    return;
   CCQuad(cc,addr);
   if (cc->nfix>=CC_FIXUPS)
     CCError(cc,"too many absolute-address sites");
@@ -691,6 +697,8 @@ U0 CCCall(CCCtrl *cc,CSym *f)
 {
   I64 pos;
 
+  if (cc->noemit)		//M15: sizeof(f(x)) needs only the type;
+    return;			//skipping also keeps the patch queue clean
   CCByte(cc,0xE8);
   pos=cc->ep-cc->code;
   CCWord(cc,0);
@@ -859,6 +867,8 @@ U0 CCSetccRax(CCCtrl *cc,I64 op)
 I64 CCJmp(CCCtrl *cc)
 {
   I64 pos;
+  if (cc->noemit)		//M15: no patch slot in silent mode
+    return -1;
   CCByte(cc,0xE9);
   pos=cc->ep-cc->code;
   CCWord(cc,0);
@@ -868,6 +878,8 @@ I64 CCJmp(CCCtrl *cc)
 I64 CCJz(CCCtrl *cc)
 {
   I64 pos;
+  if (cc->noemit)		//M15: no patch slot in silent mode
+    return -1;
   CCByte(cc,0x0F);CCByte(cc,0x84);
   pos=cc->ep-cc->code;
   CCWord(cc,0);
@@ -877,8 +889,12 @@ I64 CCJz(CCCtrl *cc)
 /* Point the rel32 at pos to the current emit position. */
 U0 CCPatchJmp(CCCtrl *cc,I64 pos)
 {
-  I64 rel=(cc->ep-cc->code)-pos-4;
-  U8 *p=cc->code+pos;
+  I64 rel;
+  U8 *p;
+  if (pos<0)			//M15: silent-mode placeholder
+    return;
+  rel=(cc->ep-cc->code)-pos-4;
+  p=cc->code+pos;
   p[0]=rel;
   p[1]=rel>>8;
   p[2]=rel>>16;

@@ -148,6 +148,8 @@ I64 CCTokTypeStart(CCCtrl *cc)
     return TRUE;
   if ((kw==KW_SIGNED)||(kw==KW_LONG))
     return TRUE;
+  if (kw==KW_SHORT)
+    return TRUE;
   if (kw==KW_NONE)
     return CCTypedefFind(cc,cc->tk_str)>=0;
   return FALSE;
@@ -169,7 +171,7 @@ I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
   {
     if ((cc->tk_kw==KW_CONST)||(cc->tk_kw==KW_SIGNED))
       CCLex(cc);
-    else if ((cc->tk_kw==KW_UNSIGNED)||(cc->tk_kw==KW_LONG)||(cc->tk_kw==KW_INT))
+    else if ((cc->tk_kw==KW_UNSIGNED)||((cc->tk_kw==KW_LONG)||((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_SHORT))))
     {
       if (ty==TY_CHAR)
       {
@@ -276,6 +278,100 @@ U0 CCParseTypedef(CCCtrl *cc)
   cc->tn++;
   CCLex(cc);
   CCExpect(cc,';',"expected ';' after typedef");
+}
+
+/* M15: element size in bytes under C truth: char is 1, a struct is
+ * its tag's byte total, every other scalar/pointer is the 8-byte
+ * quad. sizeof reports C's answer, not the frame footprint (char
+ * arrays occupy 8 bytes per byte in the frame — a separate matter). */
+I64 CCSizeOfEty(CCCtrl *cc,I64 ty,I64 sty)
+{
+  if (ty==TY_CHAR)
+    return 1;
+  if ((ty==TY_STRUCT)&&(sty>=0))
+    return cc->st[sty].size;
+  return 8;
+}
+
+/* Silent speculative type-specifier scan, shared by sizeof(type) and
+ * casts (CCExprUnary). Like CCAcceptBase but returns -1 IN SILENCE
+ * when the token run is not a clean type; the caller rewinds with the
+ * standard full token-state snapshot. */
+I64 CCTrySpec(CCCtrl *cc,I64 *pstag)
+{
+  I64 ty=-1,ti;
+  *pstag=-1;
+  while (cc->tk==TK_IDENT)
+  {
+    if ((cc->tk_kw==KW_CONST)||(cc->tk_kw==KW_SIGNED))
+      CCLex(cc);
+    else if ((cc->tk_kw==KW_UNSIGNED)||((cc->tk_kw==KW_LONG)||((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_SHORT))))
+    {
+      if (ty==TY_CHAR)
+        return -1;
+      ty=TY_INT;
+      CCLex(cc);
+    }
+    else if (cc->tk_kw==KW_CHAR)
+    {
+      if ((ty==TY_INT)||(ty==TY_VOID))
+        return -1;
+      ty=TY_CHAR;
+      CCLex(cc);
+    }
+    else if (cc->tk_kw==KW_VOID)
+    {
+      if (ty>=0)
+        return -1;
+      ty=TY_VOID;
+      CCLex(cc);
+    }
+    else if (cc->tk_kw==KW_STRUCT)
+    {
+      if (ty>=0)
+        return -1;
+      CCLex(cc);
+      if (cc->tk!=TK_IDENT)
+        return -1;
+      ti=CCStagFind(cc,cc->tk_str);
+      if (ti<0)
+        return -1;
+      *pstag=ti;
+      ty=TY_STRUCT;
+      CCLex(cc);
+      break;
+    }
+    else
+    {
+      ti=CCTypedefFind(cc,cc->tk_str);
+      if (ti<0)
+        break;
+      ty=cc->tty[ti];
+      CCLex(cc);
+      break;
+    }
+  }
+  return ty;
+}
+
+/* Rewind support for the speculative scans: the FULL lexer state
+ * (PLAN: pc alone swallows the first token past the rewind). */
+U0 CCSnap(CCCtrl *cc,U8 **pp,I64 *ptk,I64 *pkw,I64 *pnum,U8 *pstr)
+{
+  *pp=cc->pc;
+  *ptk=cc->tk;
+  *pkw=cc->tk_kw;
+  *pnum=cc->tk_num;
+  StrCpy(pstr,cc->tk_str);
+}
+
+U0 CCRestore(CCCtrl *cc,U8 *p,I64 tk,I64 kw,I64 num,U8 *str)
+{
+  cc->pc=p;
+  cc->tk=tk;
+  cc->tk_kw=kw;
+  cc->tk_num=num;
+  StrCpy(cc->tk_str,str);
 }
 
 U0 CCBinEmit(CCCtrl *cc,I64 op)
@@ -881,6 +977,214 @@ U0 CCExprUnary(CCCtrl *cc)
     }
     return;
   }
+  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_SIZEOF))
+  {
+    //M15 sizeof: compile-time constant, C-truth sizes. Three routes:
+    //  sizeof(type)      speculative clean token run -> sizes table
+    //  sizeof(identifier) exact symbol answer (arrays! structs!)
+    //  sizeof(expr)      silent noemit parse, size of the RESULT type
+    //                    (arrays here decay to pointer size — the bare
+    //                    identifier path is what reports 128 for
+    //                    `char b[128]`; sizeof needs parentheses).
+    I64 sz,ty,stag,ty2,n,stars,ti;
+    I64 stk,skw,snum;
+    I64 stk2,skw2,snum2;
+    U8 *spc;
+    U8 *spc2;
+    U8 sstr[CC_TOK_MAX];
+    U8 sstr2[CC_TOK_MAX];
+    CSym *sym;
+    CCLex(cc);		//consume 'sizeof'
+    if (!CCTkIsPunct(cc,'('))
+    {
+      CCError(cc,"sizeof needs parentheses");
+      return;
+    }
+    CCLex(cc);		//consume '('
+    CCSnap(cc,&spc,&stk,&skw,&snum,sstr);
+    ty=CCTrySpec(cc,&stag);
+    if (ty>=0)
+    {
+      stars=0;
+      ty2=ty;
+      while (CCAccept(cc,'*'))
+      {
+        stars=1;
+        if (ty2==TY_CHAR)
+          ty2=TY_CHARP;
+        else
+          ty2=TY_PTR;
+      }
+      n=1;
+      if (CCTkIsPunct(cc,'['))
+      {
+        CCLex(cc);
+        if (cc->tk!=TK_NUM)
+        {
+          CCError(cc,"sizeof array dimension must be a number");
+          return;
+        }
+        n=cc->tk_num;
+        CCLex(cc);
+        CCExpect(cc,']',"expected ']' in sizeof type");
+      }
+      if (CCTkIsPunct(cc,')'))
+      {
+        CCLex(cc);
+        sz=CCSizeOfEty(cc,ty,stag);
+        if (stars)
+          sz=8;		//a pointer element, whatever it pointed at
+        sz=sz*n;		//sizeof(char[64])==64, sizeof(int[4])==32,
+        		//sizeof(char*[4])==32
+        CCMovImmRax(cc,sz);
+        cc->is_addr=0;
+        cc->aty=0;
+        cc->ety=TY_INT;
+        cc->sty=-1;
+        return;
+      }
+      //Not a clean `sizeof(type)`: rewind and read it as an expression.
+      CCRestore(cc,spc,stk,skw,snum,sstr);
+    }
+    //Exact answer for a bare identifier: array dims and struct sizes
+    //live on the symbol, where no expression parse can recover them.
+    if (cc->tk==TK_IDENT)
+    {
+      //Snapshot (token = the identifier) so a non-matching shape can
+      //rewind and fall through to the silent expression parse.
+      CCSnap(cc,&spc2,&stk2,&skw2,&snum2,sstr2);
+      CCLex(cc);
+      if (CCTkIsPunct(cc,')'))
+      {
+        sym=CCSymFind(cc,sstr2);
+        if (sym)
+        {
+          CCLex(cc);
+          if (sym->dim>1)
+          {
+            //Arrays are stored POINTER-TYPED on the symbol (s->ty
+            //decayed to CHARP/PTR at declaration; dim carries the
+            //count), so element size must come from C truth here:
+            //a char array is 1 byte per element (the frame spends 8
+            //per byte — a separate, documented matter), a struct
+            //array is size*n, anything else 8. This is the ONLY
+            //route that sees dims: sizeof(b)=128 for char b[128];
+            //sizeof(msg) stays 8 because msg really is a pointer.
+            if (sym->ty==TY_CHARP)
+              sz=1;
+            else
+              sz=CCSizeOfEty(cc,sym->ty,sym->sty);
+            sz=sym->dim*sz;
+          }
+          else
+            sz=CCSizeOfEty(cc,sym->ty,sym->sty);	//scalars + pointers
+          CCMovImmRax(cc,sz);
+          cc->is_addr=0;
+          cc->aty=0;
+          cc->ety=TY_INT;
+          cc->sty=-1;
+          return;
+        }
+        ti=CCTypedefFind(cc,sstr2);	//sizeof(size_t): C reads it as the TYPE
+        if (ti>=0)
+        {
+          CCLex(cc);
+          CCMovImmRax(cc,CCSizeOfEty(cc,cc->tty[ti],-1));
+          cc->is_addr=0;
+          cc->aty=0;
+          cc->ety=TY_INT;
+          cc->sty=-1;
+          return;
+        }
+      }
+      CCRestore(cc,spc2,stk2,skw2,snum2,sstr2);
+    }
+    //Silent type-analysis parse: emits nothing (see cc->noemit).
+    cc->noemit=1;
+    CCExprNC(cc);
+    sz=CCSizeOfEty(cc,cc->ety,cc->sty);
+    cc->noemit=0;
+    CCExpect(cc,')',"expected ')' after sizeof expression");
+    CCMovImmRax(cc,sz);
+    cc->is_addr=0;
+    cc->aty=0;
+    cc->ety=TY_INT;
+    cc->sty=-1;
+    return;
+  }
+  if (CCTkIsPunct(cc,'('))
+  {
+    //M15 cast: `(type) operand`. Speculative silent scan decides
+    //cast-vs-grouping: a clean spec (+stars) run ending in ')' is a
+    //cast; anything else rewinds and Primary handles the paren group.
+    //Names must not collide with the sizeof arm above: HolyC local
+    //scope is function-flat ("Duplicate member" otherwise).
+    I64 cty,cstag,cty2,cstars;
+    I64 ctk,ckw,cnum;
+    U8 *cpc;
+    U8 cstr[CC_TOK_MAX];
+    CCSnap(cc,&cpc,&ctk,&ckw,&cnum,cstr);
+    CCLex(cc);		//tentative: past '('
+    cty=CCTrySpec(cc,&cstag);
+    cstars=0;
+    if (cty>=0)
+    {
+      cty2=cty;
+      while (CCAccept(cc,'*'))
+      {
+        cstars=cstars+1;	//counted: `(struct T**)` must NOT keep
+        if (cty2==TY_CHAR)	//the tag, only single struct* does
+          cty2=TY_CHARP;
+        else
+          cty2=TY_PTR;
+      }
+      if (!CCTkIsPunct(cc,')'))
+      {
+        cty=-1;		//not a cast after all
+        cstars=0;
+      }
+    }
+    if (cty<0)
+    {
+      CCRestore(cc,cpc,ctk,ckw,cnum,cstr);
+      //CCExprPrimary already applies postfix chains on every arm,
+      //so the rewind must NOT add another CCPostfix (double-parsing
+      //the same `[0][1]` tail).
+      CCExprPrimary(cc);
+      return;
+    }
+    CCLex(cc);		//consume ')' of the cast
+    CCExprUnary(cc);
+    CCVal(cc);
+    cc->is_addr=0;
+    cc->aty=0;
+    cc->sty=-1;
+    if (cstars)
+    {
+      cc->ety=cty2;		//char* stays a byte pointer; deeper is a slot pointer
+      if ((cty==TY_STRUCT)&&(cstars==1))
+        cc->sty=cstag;		//(struct T *)p keeps the tag: `->` must work
+      return;
+    }
+    if (cty==TY_CHAR)
+    {
+      CCByte(cc,0x0F);CCByte(cc,0xB6);CCByte(cc,0xC0);	//MOVZX RAX,AL
+      cc->ety=TY_CHAR;		//C truncates: (char)321 == 65
+      return;
+    }
+    if (cty==TY_STRUCT)
+    {
+      cc->ety=TY_INT;		//a struct-typed value in this model is its base address
+      return;
+    }
+    if (cty==TY_VOID)
+    {
+      cc->ety=TY_INT;		//`(void)x` discards; the value is inert
+      return;
+    }
+    cc->ety=TY_INT;
+    return;
+  }
   CCExprPrimary(cc);
 }
 
@@ -1064,11 +1368,13 @@ U0 CCExprBitOr(CCCtrl *cc)
 //otherwise RAX = normalized right.
 U0 CCExprLogAnd(CCCtrl *cc)
 {
-  I64 pz;
+  I64 pz,fired;
+  fired=0;
   CCExprBitOr(cc);
   CCVal(cc);
   while ((!cc->errs)&&((cc->tk==TK_PUNCT)&&(cc->tk_num==OP_AND)))
   {
+    fired=1;
     CCLex(cc);
     CCTestRax(cc);
     pz=CCJz(cc);
@@ -1078,17 +1384,22 @@ U0 CCExprLogAnd(CCCtrl *cc)
     CCSetccRax(cc,CC_OPC_NE);
     CCPatchJmp(cc,pz);
   }
-  cc->ety=TY_INT;
-  cc->sty=-1;
+  if (fired)		//M15: normalization ONLY when && actually ran —
+  {			//sizeof(expr) parses through this chain and needs
+    cc->ety=TY_INT;	//the operand's own type intact when there was
+    cc->sty=-1;		//no operator at all.
+  }
 }
 
 //a || b:  true left yields 1; otherwise normalized right.
 U0 CCExprLogOr(CCCtrl *cc)
 {
-  I64 pz,pj;
+  I64 pz,pj,fired;
+  fired=0;
   CCExprLogAnd(cc);
   while ((!cc->errs)&&((cc->tk==TK_PUNCT)&&(cc->tk_num==OP_OR)))
   {
+    fired=1;
     CCLex(cc);
     CCTestRax(cc);
     pz=CCJz(cc);
@@ -1101,8 +1412,11 @@ U0 CCExprLogOr(CCCtrl *cc)
     CCSetccRax(cc,CC_OPC_NE);
     CCPatchJmp(cc,pj);
   }
-  cc->ety=TY_INT;
-  cc->sty=-1;
+  if (fired)		//same rule as CCExprLogAnd (see M15 note there)
+  {
+    cc->ety=TY_INT;
+    cc->sty=-1;
+  }
 }
 
 /* RAX holds the destination address (is_addr==1); the current token is
