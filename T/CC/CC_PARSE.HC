@@ -36,6 +36,8 @@ extern U0 CCConstBitOr(CCCtrl *cc,I64 *pv);
 extern U0 CCConstLogAnd(CCCtrl *cc,I64 *pv);
 extern U0 CCConstLogOr(CCCtrl *cc,I64 *pv);
 extern I64 CCConstExpr(CCCtrl *cc);
+extern U0 CCEraseScope(CCCtrl *cc,I64 mark,I64 base);
+extern U0 CCMakeStatic(CCCtrl *cc,CSym *s);
 extern I64 CCEnumTagFind(CCCtrl *cc,U8 *nm);
 extern U0 CCEnumDef(CCCtrl *cc,U8 *tag);
 extern U0 CCSnap(CCCtrl *cc,U8 **pp,I64 *ptk,I64 *pkw,I64 *pnum,U8 *pstr);
@@ -617,6 +619,7 @@ I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
   had_int=0;
   had_char=0;
   tent=0;
+  cc->spec_static=0;		//M21: the static PROMISE is per-spec;
   //No `continue` in HolyC (the keyword does not exist in this dialect):
   //the fold is one if/else chain per token, and each arm advances or
   //breaks. See PLAN.
@@ -632,8 +635,10 @@ I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
   {
     if ((cc->tk_kw==KW_CONST)||((cc->tk_kw==KW_SIGNED)||((cc->tk_kw==KW_EXTERN)||((cc->tk_kw==KW_STATIC)||((cc->tk_kw==KW_REGISTER)||((cc->tk_kw==KW_AUTO)||((cc->tk_kw==KW_VOLATILE)||(cc->tk_kw==KW_INLINE))))))))
     {
-      if (ty<0)
-      {
+      if (cc->tk_kw==KW_STATIC)
+        cc->spec_static=1;	//M21: CCDeclOne reads this after the
+      if (ty<0)			//base folds — static block objects get
+      {				//arena slots (see CCDeclOne)
         ty=TY_INT;		//default-int promise; bases overwrite
         tent=1;			//...but it is a PROMISE only: void
         CCLex(cc);		//and struct take it over below
@@ -2659,7 +2664,7 @@ U0 CCDoStmt(CCCtrl *cc)
  * Fallthrough is C's: labels emit no jump-out, code flows on. */
 U0 CCSwitchStmt(CCCtrl *cc)
 {
-  I64 disp,djz,eoj,save_b,i,def,nc,v,rel,fits;
+  I64 disp,djz,eoj,save_b,i,def,nc,v,rel,fits,smark,sbase,slofs;
   //Per-invocation (NESTED switches must not share a table: a ctrl-
   //level array let an inner switch overwrite its parent's case values
   //— cls(1,x) silently matched nothing).
@@ -2681,6 +2686,10 @@ U0 CCSwitchStmt(CCCtrl *cc)
   nc=0;
   def=-1;
   CCExpect(cc,'{',"expected '{' after switch header");
+  smark=cc->sym_cnt;			//M21: the switch body is its
+  sbase=cc->sym_base;			//own scope (C: declarations
+  cc->sym_base=smark;			//between `{` and the first
+  slofs=cc->lofs;			//case live there)
   while ((!cc->errs)&&(cc->tk!=TK_EOF)&&!CCTkIsPunct(cc,'}'))
   {
     if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_CASE))
@@ -2709,6 +2718,10 @@ U0 CCSwitchStmt(CCCtrl *cc)
       CCStmt(cc);
   }
   CCExpect(cc,'}',"expected '}' after switch body");
+  CCEraseScope(cc,smark,sbase);		//M21: erase switch-body declarations
+  if (cc->lofs>cc->lofs_peak)
+    cc->lofs_peak=cc->lofs;
+  cc->lofs=slofs;
   if (cc->errs)
     return;
   //Body execution ends here: a fall-off out of the last case must NOT
@@ -2766,12 +2779,19 @@ U0 CCSwitchStmt(CCCtrl *cc)
 U0 CCForStmt(CCCtrl *cc)
 {
   I64 top,pz,save_b,save_c,i,depth;
-  I64 save_tk,save_kw,save_num;
+  I64 save_tk,save_kw,save_num,lmark,lbase,llofs;
   U8 save_str[CC_TOK_MAX];
   U8 *pc_step,*pc_after,*pc_body;
   pc_after=NULL;
   CCLex(cc);		//consume 'for'
   CCExpect(cc,'(',"expected '(' after for");
+  //M21: C99 for-init declarations are scoped to the LOOP: mark before
+  //the init clause, erase after the whole statement (the step re-scan
+  //still sees j; the code after the loop must not).
+  lmark=cc->sym_cnt;
+  lbase=cc->sym_base;
+  llofs=cc->lofs;
+  cc->sym_base=lmark;
   if (CCTokTypeStart(cc))
     CCDeclStmt(cc);		//consumes its ';'
   else if (CCAccept(cc,';'))
@@ -2856,6 +2876,10 @@ U0 CCForStmt(CCCtrl *cc)
     CCPatchJmp(cc,cc->brk[i]);
   cc->brk_cnt=save_b;
   cc->cont_cnt=save_c;
+  CCEraseScope(cc,lmark,lbase);		//M21: the for-init scope closes here
+  if (cc->lofs>cc->lofs_peak)
+    cc->lofs_peak=cc->lofs;
+  cc->lofs=llofs;
 }
 
 U0 CCBrkStmt(CCCtrl *cc)
@@ -2971,12 +2995,76 @@ U0 CCLabelHere(CCCtrl *cc,U8 *nm)
   }
 }
 
+/* M21: close a scope. Params, locals, block statics, typedefs and tags
+ * all vanish with the brace (the waterline truncation IS the scope
+ * mechanism), but a FUNCTION symbol is a special case: a call to a name
+ * not yet declared auto-creates its stub, and that stub is created
+ * INSIDE whatever window the call happened in. C treats such a function
+ * as a file-scope entity — its identity, its queued rel32 call patches
+ * and its M18 address queue must outlive the brace, or a later
+ * definition creates a SECOND symbol and never patches the queued call
+ * (mutual recursion without prototypes: is_even/is_odd, each body
+ * stubbing the other — the placeholder rel32 was left dangling and the
+ * fixture returned garbage). Compact the SC_FUN entries down onto the
+ * mark and keep them. */
+U0 CCEraseScope(CCCtrl *cc,I64 mark,I64 base)
+{
+  I64 w,i;
+  w=mark;
+  i=mark;
+  while (i!=cc->sym_cnt)
+  {
+    if (cc->syms[i].kind==SC_FUN)
+    {
+      if (i!=w)
+        MemCpy(&cc->syms[w],&cc->syms[i],sizeof(CSym));
+      w++;
+    }
+    i++;
+  }
+  cc->sym_cnt=w;
+  cc->sym_base=base;
+}
+
+/* M21: the `static` block-object conversion, shared by the ordinary
+ * declarator path and the function-pointer path: hand back the frame
+ * slot CCSymNew reserved and take an arena slot instead (C's contract
+ * is that the value survives between calls). */
+U0 CCMakeStatic(CCCtrl *cc,CSym *s)
+{
+  cc->lofs--;
+  s->persist=1;
+  s->offset=cc->goff;
+  cc->goff+=8;
+}
+
 U0 CCBlockStmt(CCCtrl *cc)
 {
+  //M21: block scope. Every table this parser appends to is ERASED at
+  //the closing brace by restoring its waterline — symbols, frame-slot
+  //waterline, typedefs, enum constants+tags, struct/union tags. That
+  //IS the scope mechanism: reverse-scan lookup already resolves to
+  //the newest name, so erasure alone gives correct shadowing AND
+  //makes out-of-scope names undefined again. The frame high-water
+  //mark lets a block that peaked deep release its slots while SUB RSP
+  //at function end still covers the deepest point the function hit.
+  I64 m_sym,m_lofs,m_tn,m_ncnst,m_netag,m_nst,m_base;
+  m_sym=cc->sym_cnt;		m_lofs=cc->lofs;
+  m_base=cc->sym_base;		cc->sym_base=m_sym;
+  m_tn=cc->tn;			m_ncnst=cc->ncnst;
+  m_netag=cc->netag;		m_nst=cc->nst;
   CCLex(cc);		//consume '{'
   while ((!cc->errs)&&((cc->tk!=TK_EOF)&&!CCTkIsPunct(cc,'}')))
     CCStmt(cc);
   CCExpect(cc,'}',"expected '}'");
+  CCEraseScope(cc,m_sym,m_base);	//truncate: declarations vanish
+  if (cc->lofs>cc->lofs_peak)
+    cc->lofs_peak=cc->lofs;	//slots released, but the frame pays
+  cc->lofs=m_lofs;		//for the peak
+  cc->tn=m_tn;
+  cc->ncnst=m_ncnst;
+  cc->netag=m_netag;
+  cc->nst=m_nst;
 }
 
 /* One declarator within an `int|char` (or `struct Tag`) declaration:
@@ -2987,7 +3075,7 @@ U0 CCBlockStmt(CCCtrl *cc)
 U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
 {
   CSym *s;
-  I64 n,n2,fpok;
+  I64 n,n2,fpok,sstat,val,vi;
   I64 ty=base;
   I64 stk,skw,snum;
   U8 *spc;
@@ -3007,6 +3095,20 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     s=CCSymNew(cc,fpname,SC_LOCAL);
     if (!s)
       return;
+    if (cc->spec_static)
+    {
+      //M21: a `static` function pointer needs arena storage like any
+      //other block static. An initializer here would be an EMITTED
+      //store (function addresses are not foldable constants), which
+      //would re-assign the target on every call — C initializes a
+      //static exactly once — so it is refused rather than approximated.
+      CCMakeStatic(cc,s);
+      if (CCTkIsPunct(cc,'='))
+      {
+        CCError(cc,"static function-pointer initializers not supported");
+        return;
+      }
+    }
     s->ty=TY_PTR;
     s->sty=-1;
     s->dim=1;
@@ -3035,6 +3137,10 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
   s=CCSymNew(cc,cc->tk_str,SC_LOCAL);
   if (!s)
     return;
+  sstat=cc->spec_static;	//M21: `static` block object — arena
+  if (sstat)			//storage, block-scoped name (CCMakeStatic
+    CCMakeStatic(cc,s);		//notes). Initializers must fold (checked
+				//at the init site).
   CCLex(cc);
   s->ty=ty;
   if (base==TY_STRUCT)
@@ -3071,13 +3177,25 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     }
     if (n>1)
     {
-      //Frame grows DOWN from the base slot: element 0 sits at the
-      //highest slot number so element i lands at base+8*i.
-      if (base==TY_STRUCT)
-        cc->lofs+=n*(cc->st[stag].size/8)-1;	//structs: size*n slots
+      if (sstat)
+      {
+        //Arena arrays ascend from the base (global layout): element
+        //0 IS s->offset, exactly what the decay+index paths expect.
+        if (base==TY_STRUCT)
+          cc->goff+=cc->st[stag].size*n-8;
+        else
+          cc->goff+=8*(n-1);
+      }
       else
-        cc->lofs+=n-1;
-      s->offset=cc->lofs;
+      {
+        //Frame grows DOWN from the base slot: element 0 sits at the
+        //highest slot number so element i lands at base+8*i.
+        if (base==TY_STRUCT)
+          cc->lofs+=n*(cc->st[stag].size/8)-1;	//structs: size*n slots
+        else
+          cc->lofs+=n-1;
+        s->offset=cc->lofs;
+      }
     }
     if (s->ty==TY_CHAR)
       s->ty=TY_CHARP;
@@ -3087,14 +3205,32 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
   else if (s->ty==TY_STRUCT)
   {
     //Bare struct object: reserve its slots, base at the highest.
-    cc->lofs+=cc->st[stag].size/8-1;
-    s->offset=cc->lofs;
+    if (sstat)
+      cc->goff+=cc->st[stag].size-8;	//persist: arena (global layout)
+    else
+    {
+      cc->lofs+=cc->st[stag].size/8-1;
+      s->offset=cc->lofs;
+    }
   }
   if (CCTkIsPunct(cc,'='))
   {
     if ((s->dim>1)||(s->ty==TY_STRUCT))
     {
       CCError(cc,"array/struct initializers not supported");
+      return;
+    }
+    if (s->persist)
+    {
+      //C requires a constant for static init — the folder enforces
+      //it; the bytes go straight into the arena (the initial value
+      //is there before any call runs, and reloads with the object).
+      CCLex(cc);
+      val=CCConstExpr(cc);
+      if (cc->errs)
+        return;
+      for (vi=0;vi!=8;vi++)
+        cc->locals[s->offset+vi]=val>>(8*vi);
       return;
     }
     CCVarAddr(cc,s);
@@ -3441,7 +3577,7 @@ U0 CCParseParams(CCCtrl *cc)
  * emitted only for 'main'. */
 U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
 {
-  I64 sub_pos,i,entryflag,t,apv;
+  I64 sub_pos,i,entryflag,t,apv,fmark,fbase,nframe;
   U8 *app;
   CSym *f,*s;
 
@@ -3474,25 +3610,14 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
     return;
   }
   CCLex(cc);			//consume '{'
-  for (i=0;i!=cc->nparam;i++)
-  {
-    if (cc->pname[i*CC_TOK_MAX])	//anonymous parameters bind no name
-    {
-      s=CCSymNew(cc,cc->pname+i*CC_TOK_MAX,SC_PARAM);
-      if (s)
-      {
-        s->offset=i;	//CCSymNew leaves 0; index drives the RBP disp
-        s->ty=cc->pty[i];
-        s->sty=cc->psty[i];	//struct pointers keep their tag
-        s->dim=1;
-        s->dim2=cc->pdim2[i];	//M17: row scale source (1st dim unknown)
-      }
-    }
-  }
-  cc->cur_argc=cc->nparam;
-  cc->lofs=0;		//locals restart per function
-  cc->nlab=0;		//M16: label scope is per-function too (C functions
-  cc->ngoto=0;		//never nest, so one table per function is exact)
+  //M21: the FUNCTION symbol is registered ABOVE the scope waterline.
+  //Params and locals are erased at '}'; the function's own name must
+  //SURVIVE (forward calls and M18 address queues were resolved against
+  //it, and every later function/reference needs it — erasing it made
+  //each subsequent use re-queue, which is what broke cross-function
+  //code after the waterline landed). The mark is taken after this
+  //registration, so params clash only against each other and a param
+  //may legally shadow the function's own name.
   f=CCSymFind(cc,name);
   if (!f)
     f=CCSymNew(cc,name,SC_FUN);
@@ -3539,6 +3664,34 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
     }
   }
   f->napatch=0;
+  //M21: scope mark for the BODY: params+locals are erased at '}';
+  //the function symbol registered above stays. The dup-check bound
+  //during param binding starts here, so a param may shadow any
+  //file-scope name (and even the function itself) but not another
+  //param.
+  fmark=cc->sym_cnt;
+  fbase=cc->sym_base;
+  cc->sym_base=fmark;
+  for (i=0;i!=cc->nparam;i++)
+  {
+    if (cc->pname[i*CC_TOK_MAX])	//anonymous parameters bind no name
+    {
+      s=CCSymNew(cc,cc->pname+i*CC_TOK_MAX,SC_PARAM);
+      if (s)
+      {
+        s->offset=i;	//CCSymNew leaves 0; index drives the RBP disp
+        s->ty=cc->pty[i];
+        s->sty=cc->psty[i];	//struct pointers keep their tag
+        s->dim=1;
+        s->dim2=cc->pdim2[i];	//M17: row scale source (1st dim unknown)
+      }
+    }
+  }
+  cc->cur_argc=cc->nparam;
+  cc->lofs=0;		//locals restart per function
+  cc->lofs_peak=0;
+  cc->nlab=0;		//M16: label scope is per-function too (C functions
+  cc->ngoto=0;		//never nest, so one table per function is exact)
   entryflag=!StrCmp(name,"main");
   cc->cur_entry=entryflag;
   //main(int argc,char *argv[]...): the harness bridge fills those slots.
@@ -3554,6 +3707,9 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
   while ((!cc->errs)&&(cc->tk!=TK_EOF)&&!CCTkIsPunct(cc,'}'))
     CCStmt(cc);
   CCExpect(cc,'}',"expected '}'");
+  CCEraseScope(cc,fmark,fbase);	//params + locals leave the table
+  if (cc->lofs>cc->lofs_peak)
+    cc->lofs_peak=cc->lofs;
   //M16: a goto whose label never arrived in this function (or names a
   //label in ANOTHER function — labels are function-scoped, the queue
   //reset proves it) is a compile error. Patched entries sit at -1.
@@ -3565,7 +3721,10 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
       cc->errs++;
     }
   }
-  CCPatchImm32(cc,sub_pos,(cc->lofs*8+15)&~15);
+  nframe=cc->lofs;
+  if (cc->lofs_peak>nframe)
+    nframe=cc->lofs_peak;	//M21: blocks released slots, but the
+  CCPatchImm32(cc,sub_pos,(nframe*8+15)&~15);	//deepest one was paid for
   CCFunRet(cc,entryflag);	//fall-off end: implicit return
 }
 

@@ -173,6 +173,8 @@ class CSym
  			//to one; -1 otherwise
   I64	dim;		//>1: array of that many slots/bytes at offset
   I64	dim2;		//M17: second dimension (2-D row-major); 0 = 1-D
+  I64	persist;	//M21: `static` block object: SC_LOCAL name,
+				//global-arena storage (value survives calls)
   I64	init;		//global constant initializer value
   I64	has_init;
   I64	patches[CC_PATCHES];	//call sites (rel32 operand pos) awaiting def
@@ -242,6 +244,13 @@ class CCCtrl
   I64	ngoto;
   U8	goto_name[CC_LABELS][CC_TOK_MAX];
   I64	goto_pos[CC_LABELS];
+  I64	spec_static;	//M21: CCAcceptBase saw `static` in this spec
+  I64	sym_base;	//M21: waterline of the innermost open scope:
+  				//CCSymNew's dup check stops here (inner scopes
+  				//may redeclare — that is shadowing)
+  I64	lofs_peak;	//M21: deepest frame slot any block reached this
+  				//function: SUB RSP is patched to the peak, since
+  				//closing a block rewinds the waterline
   I64	noemit;		//M15: sizeof(expr) parses the operand to learn its
   			//TYPE only — every code-writing site checks this and
   			//stays silent (CCByte choke-holds CCWord/CCHalf/CCQuad;

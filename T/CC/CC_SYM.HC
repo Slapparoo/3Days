@@ -18,12 +18,38 @@ CSym *CCSymFind(CCCtrl *cc,U8 *name)
 CSym *CCSymNew(CCCtrl *cc,U8 *name,I64 kind)
 {
   CSym *s;
+  I64 i;
   if (cc->sym_cnt>=CC_SYMS)
   {
     CCError(cc,"symbol table full");
     return NULL;
   }
+  if (((kind==SC_LOCAL)||(kind==SC_PARAM))&&(!cc->noemit))
+  {
+    //M21: C forbids redeclaring a name in the SAME scope; a nested
+    //scope may redeclare freely (that is shadowing, and reverse-scan
+    //CCSymFind resolves to the inner one). The scan is bounded by the
+    //open scope's waterline — outer names are shadowed, not clashes.
+    for (i=cc->sym_cnt-1;i!=cc->sym_base-1;i--)
+    {
+      if (!StrCmp(cc->syms[i].name,name))
+      {
+        //C-faithful diagnostic, then hand back the EXISTING symbol:
+        //callers keep dereferencing the return value, and returning
+        //NULL here would turn one clean error into a host fault. errs
+        //is set, so the translation unwinds anyway.
+        CCError(cc,"redeclaration in this scope");
+        return &cc->syms[i];
+      }
+      if (i==0)
+        break;
+    }
+  }
+  //M21: scope waterlines TRUNCATE the table, so these indices are
+  //recycled — a fresh symbol must not inherit the dead one's dim/persist/
+  //patch queues. Zero the whole entry, then set what matters.
   s=&cc->syms[cc->sym_cnt++];
+  MemSet(s,0,sizeof(CSym));
   StrCpy(s->name,name);
   s->kind=kind;
   s->sty=-1;		//struct decls overwrite when relevant
@@ -85,7 +111,14 @@ I64 CCMemberFind(CCCtrl *cc,I64 t,U8 *mname)
  * parser's job (pending-lvalue model: see CCCtrl is_addr). */
 U0 CCVarAddr(CCCtrl *cc,CSym *s)
 {
-  if ((s->kind==SC_LOCAL)||(s->kind==SC_PARAM))
+  if (s->persist)
+  {
+    //M21: `static` block object: absolute arena addressing like a
+    //global; the NAME is block-scoped through the symbol table.
+    CCByte(cc,0x48);CCByte(cc,0xB8);			//MOVABS RAX,addr
+    CCQuadAbs(cc,CC_B_LOCALS,cc->locals+s->offset);
+  }
+  else if ((s->kind==SC_LOCAL)||(s->kind==SC_PARAM))
   {
     CCByte(cc,0x48);CCByte(cc,0x8D);CCByte(cc,0x85);	//LEA RAX,[RBP+d32]
     CCWord(cc,CCRbpDisp(cc,s));

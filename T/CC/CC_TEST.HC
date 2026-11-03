@@ -290,6 +290,10 @@ CCAssert(40,"T:/CC/TEST/unionc.c","unionc");
 /* M20: enum constants + the compile-time constant folder (case labels,
  * array sizes, global inits, folded expressions) + literal concat. */
 CCAssert(37,"T:/CC/TEST/enums.c","enums");
+/* M21: block scopes (shadowing + waterline erasure) and `static` block
+ * objects on arena storage: counters, arrays, structs, fps, pointers,
+ * loop/switch/nested-block scopes, shadowing params. */
+CCAssert(49,"T:/CC/TEST/scoped.c","scoped");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

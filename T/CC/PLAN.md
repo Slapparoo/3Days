@@ -50,7 +50,8 @@ by-value single-slot members, arrays and array-row params), string and
 char literals (M19: `\n \t \r \\ \" \a \b \f \v \e \xHH \ooo`),
 enums and compile-time constants (M20: enumerators fold into case labels,
 array sizes, global initializers, and every expression position; adjacent
-string literals concatenate),
+string literals concatenate), block scopes with C shadowing and
+`static` block objects on arena storage (M21),
 `for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
 `do-while` (M14), `goto`/labels and the conditional `?:` (M16),
 functions (forward refs,
@@ -108,10 +109,8 @@ Not supported — each currently fails with a compile diagnostic:
 - M19 edges: qualifier keywords (`extern static register auto volatile
   inline`, added to `const`) are accepted and folded — with C's
   default-int PROMISE when they stand alone (`static x;` is `static
-  int x`), which a real base overwrites; consequences: `static` locals
-  are ordinary slots (no persistence — C would keep the value between
-  calls), `extern` globals get their own arena slot (no cross-module
-  link), and `signed char` is indistinguishable from `char` (the byte
+  int x`), which a real base overwrites; consequences: `extern` globals
+  get their own arena slot (no cross-module link), and `signed char` is indistinguishable from `char` (the byte
   model ZERO-EXTENDS: `sb=-3; sb==253` is TRUE here, C-truth -3 — the
   deviation the unionc fixture pins). Struct/union TAGS share one
   namespace (`struct S` and `union S` collide; C keeps them separate).
@@ -138,10 +137,23 @@ Not supported — each currently fails with a compile diagnostic:
   like any C use); global fp initializers stay in the constant-only
   club — assign in a function body; a stored fp is a raw code address:
   NULL is the only portable sentinel (`fp==0` / `fp!=0` work).
-- Nested-scope shadowing is absent: a block redeclaring an outer name
-  ALIASES the outer slot (C would bind a fresh variable) — frames are a
-  flat per-function arena, so this is a model-level backlog item, not
-  a parser fix.
+- Scoping (M21): blocks, `for`-init clauses, switch bodies and function
+  bodies are real C scopes — a waterline truncates the symbol, typedef,
+  enum-constant and tag tables at the closing brace, so an inner name
+  shadows the outer one (its own slot), out-of-scope names are
+  undefined again, and a same-scope redeclaration diagnoses
+  (`redeclaration in this scope`, duplicate PARAMETER names included,
+  which C99 also rejects). `static` block objects get ARENA storage —
+  counters survive calls, folded initializers, arrays, structs, fps and
+  pointers all work — with block-scoped NAMES: independent twins per
+  function, and a static may shadow a global of the same name.
+  Remaining scope deviations: a block-scope `extern int x;` becomes an
+  ordinary local (it does not link to a file-scope x); `static`
+  function-pointer initializers are refused outright (an initializer
+  there is an EMITTED store, which would re-assign the target on every
+  call where C initializes exactly once); file-scope tentative double
+  definitions (`int g; int g;`) still claim two arena slots where C
+  merges one.
 - Enum edges (M20): `enum x;` consumes `x` as a TAG (C's incomplete-type
   object declaration needs a separate declarator); enumerators cap at 64
   per module (CC_MAX_CONSTS), tags at 16; the constants table is flat
@@ -887,6 +899,66 @@ Not supported — each currently fails with a compile diagnostic:
    paths pinned (non-constant case, enumerator/variable conflict,
    constant div0, enum tag redefined, function address in a constant),
    clean `CC TESTS: 0 failed`.
+ - [x] **M21** block scopes + `static` block objects. Scope mechanism:
+   every construct that C gives a scope (function body, `{ }` block,
+   `for`-init clause, switch body) records a waterline for each table
+   the parser appends to — sym_cnt/sym_base, the frame-slot count lofs,
+   typedefs (tn), enum constants + tags (ncnst/netag), struct tags
+   (nst) — and restores them at the closing brace. Reverse-scan
+   CCSymFind already resolves to the newest binding, so ERASURE alone
+   gives correct shadowing, correct "undefined again" behaviour, and
+   releases frame slots; `cc->lofs_peak` remembers the deepest point
+   the function reached so `SUB RSP` at function end still pays for a
+   block that peaked deep and then rewound. CCSymNew gains the same-
+   scope dup check (scan bounded by sym_base ⇒ nested scopes redeclare
+   freely), and function bodies bind params UNDER the function symbol
+   registration so a param may shadow the function itself (e21a) but
+   not another param (e21c: C99 agrees, "redeclaration in this scope").
+   `static` block objects: CCMakeStatic hands back the frame slot and
+   takes an ARENA slot (name stays block-scoped through the table,
+   storage outlives the call) — counters, arrays (arena ascent, global
+   layout), structs, pointers through `&`, and fps all work; the
+   initializer is folded by the M20 constant evaluator and written as
+   ARENA BYTES at compile time (never an emitted store ⇒ "exactly
+   once" is structural, and a saved object carries the initial value).
+   **Landmine #1 — function symbols must outlive the brace:** the first
+   waterline version truncated the table to the mark blindly, and a call
+   to a not-yet-declared function auto-creates its stub INSIDE whatever
+   window the call sits in. Erasing that stub means the later definition
+   creates a SECOND symbol, and the queued rel32 patch never lands —
+   `mutual` (is_even/is_odd, no prototypes) silently returned garbage.
+   C makes such a function a file-scope entity, so CCEraseScope (the
+   single place that truncates the table) compacts SC_FUN entries down
+   onto the mark instead of dropping them. The related ordering trap:
+   registering the function symbol itself after the mark erased the
+   function's OWN name at `}` — every later reference re-queued.
+   **Landmine #2 — recycled entries:** truncation makes indices reusable,
+   so a fresh symbol inherited a dead one's dim/persist/patch queues;
+   CCSymNew now MemSets the entry before filling it (any NEW CSym field
+   must be reset there). **Landmine #3 (my own C-code, host-visible):**
+   the first draft called `MemSet(s,0,…)` BEFORE `s` was assigned — every
+   compile in the process died with a host FAULT inside CCCompile, which
+   reads like a compiler bug but is a garbage-pointer wipe. **Landmine
+   #4:** the dup check first returned NULL, and callers of CCSymNew
+   dereference the result unconditionally — one clean diagnostic became
+   a fault storm; it now reports the error and hands back the EXISTING
+   symbol (errs is set, the translation unwinds anyway). Expectation
+   trap #9, compiler right again: two calls to a stateful function in
+   ONE expression sum 103+104=207, not 206 (and C leaves even the order
+   unspecified — stateful calls go on separate fixture lines). New
+   verification habit for this milestone: the fixture was cross-checked
+   against `gcc -std=gnu99` on a copy with only the model-specific
+   `sizeof` numbers adjusted — both answer 49. 72 cases (scoped.c: 48
+   checks + closer — nested shadowing chains, static counters with
+   folded inits and per-function twins, static arrays/structs/pointers/
+   fps, statics declared in loops and nested blocks, a static shadowing
+   a global, for-init + switch-body scopes with shadowing inside,
+   params shadowing globals and their own function, an in-block
+   function stub patched at definition, pointer access to a frame slot
+   and shadowed `sizeof`), green x2, saved-object reloads 49/49 for
+   scoped and 27/37/40 unchanged for fptr/enums/unionc, error paths
+   pinned (out-of-scope use, same-scope redeclaration, duplicate params,
+   static fp initializer), clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 
@@ -989,6 +1061,19 @@ Not supported — each currently fails with a compile diagnostic:
 - Expression value always lands in RAX; binary ops `PUSH` the left
   half and `POP` it back into RCX.
 - Every emit goes through `CCByte`/`CCWord`/`CCQuad` (bounds-checked).
+- Scope waterlines: CCEraseScope is the ONLY place that truncates the
+  symbol table (function body, block, for-init, switch body all call
+  it) and it MUST keep SC_FUN entries — a stub created by a call to an
+  undeclared name inside any window has to survive to its definition,
+  or its queued call patches dangle (mutual recursion). If a new
+  per-scope table is added, give it waterline handling at all four
+  sites, and remember CCSymNew zeroes recycled CSym entries.
+- Hidden locals (`cc->lofs++` spills: switch dispatch slot, fp call
+  target) allocated INSIDE a block are released by the block's
+  waterline: the frame is still sized for them via lofs_peak, but code
+  emitted AFTER that brace must not reference the slot. Anything that
+  must live for the whole function is allocated BEFORE the scope mark
+  (the switch dispatch slot is, deliberately).
 - ANY new function group in the compiler unit gets file-top `extern`
   declarations like every existing chain function (M20 proof): without
   them the host COMPILES the unit but same-unit call edges into the new

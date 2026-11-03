@@ -97,9 +97,13 @@ int main()
     tot=tot+((d.first.i==77)&&(d.tail==8));    /* 24 block def whose member is a union */
     tot=tot+(sizeof(struct Deep)==16);         /* 25 */
   }
-  for(int j=0;j!=4;j++)
-    tot=tot+0;
-  tot=tot+(j==4);                              /* 26 for-init declaration */
+  {
+    int acc;
+    acc=0;
+    for(int j=0;j!=4;j++)
+      acc=acc+1;                                /*  26 for-init declaration, */
+    tot=tot+(acc==4);                           /*  26 j lives only inside the loop */
+  }
   tot=tot+("hello"[1]=='e');                    /* 27 string literal indexed */
   tot=tot+(("ab"+1)[0]=='b');                   /* 28 offset then index */
   tot=tot+(sizeof("ab")==8);                   /* 29 literal is pointer-sized (documented) */
