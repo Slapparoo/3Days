@@ -17,6 +17,27 @@ extern U0 CCExprNC(CCCtrl *cc);
 extern U0 CCExprLogOr(CCCtrl *cc);
 extern U0 CCExprConditional(CCCtrl *cc);
 extern I64 CCParseFunPtrDecl(CCCtrl *cc,U8 *name);
+/* M20: the constant-eval chain + enum machinery need the SAME extern
+ * declarations every other parser chain carries — this JIT misbinds
+ * same-unit calls without them (CCConstUnary's call into CCConstPrim
+ * silently executed nothing: no value, no token consumed, no error).
+ * See the unit rule at the top of CC.HH. */
+extern I64 CCConstFind(CCCtrl *cc,U8 *nm,I64 *pval);
+extern U0 CCConstPrim(CCCtrl *cc,I64 *pv);
+extern U0 CCConstUnary(CCCtrl *cc,I64 *pv);
+extern U0 CCConstMul(CCCtrl *cc,I64 *pv);
+extern U0 CCConstAdd(CCCtrl *cc,I64 *pv);
+extern U0 CCConstShift(CCCtrl *cc,I64 *pv);
+extern U0 CCConstRel(CCCtrl *cc,I64 *pv);
+extern U0 CCConstEq(CCCtrl *cc,I64 *pv);
+extern U0 CCConstBitAnd(CCCtrl *cc,I64 *pv);
+extern U0 CCConstBitXor(CCCtrl *cc,I64 *pv);
+extern U0 CCConstBitOr(CCCtrl *cc,I64 *pv);
+extern U0 CCConstLogAnd(CCCtrl *cc,I64 *pv);
+extern U0 CCConstLogOr(CCCtrl *cc,I64 *pv);
+extern I64 CCConstExpr(CCCtrl *cc);
+extern I64 CCEnumTagFind(CCCtrl *cc,U8 *nm);
+extern U0 CCEnumDef(CCCtrl *cc,U8 *tag);
 extern U0 CCSnap(CCCtrl *cc,U8 **pp,I64 *ptk,I64 *pkw,I64 *pnum,U8 *pstr);
 extern I64 CCStructDef(CCCtrl *cc,U8 *tag,I64 is_union);
 extern U0 CCRestore(CCCtrl *cc,U8 *p,I64 tk,I64 kw,I64 num,U8 *str);
@@ -143,6 +164,418 @@ I64 CCTypedefFind(CCCtrl *cc,U8 *nm)
 
 /* TRUE when the current token can START a declaration/function type.
  * Drives the dispatch gates that used to test for int/char/struct. */
+/* ---- M20: compile-time constant folding + enum constants -----------
+ * The evaluator is a mini recursive-descent parser over the same
+ * precedence ladder the code-emitting parser uses — but it PRODUCES
+ * I64 VALUES instead of code, over literals and enum constants only.
+ * It feeds: enum bodies (`B = PREV*2`), case labels (`case GREEN:`
+ * and `case 1+1:`), global initializers, and array sizes. Division
+ * by zero is a diagnostic — the HOST JIT would fault on it, and a
+ * compiler crash on legal-ish input is never acceptable here.
+ * Enumerator names live in their own flat table; a variable/function
+ * of the same name wins everywhere they compete (C shares the
+ * namespace), and CCConstFind refuses to answer for those names at
+ * all. Enum TAGS are a separate tiny table: `enum Color` folds to
+ * the int model, so a tag only exists to catch redefinition. */
+/* ---- M20: compile-time constant folding + enum constants -----------
+ * The evaluator is a mini recursive-descent parser over the same
+ * precedence ladder the code-emitting parser uses — but it PRODUCES
+ * I64 VALUES instead of code, over literals and enum constants only.
+ * It feeds: enum bodies (`B = PREV*2`), case labels (`case GREEN:`
+ * and `case 1+1:`), global initializers, and array sizes. Division
+ * by zero is a diagnostic — the HOST JIT would fault on it, and a
+ * compiler crash on a legal-ish input is never acceptable here.
+ * Enumerator names live in their own flat table; a variable/function
+ * of the same name wins everywhere they compete (C shares the
+ * namespace), and CCConstFind refuses to answer for those names at
+ * all. Enum TAGS are a separate tiny table: `enum Color` folds to
+ * the int model, so a tag only exists to catch redefinition. */
+I64 CCConstFind(CCCtrl *cc,U8 *nm,I64 *pval)
+{
+  I64 i;
+  if (CCSymFind(cc,nm))
+    return FALSE;		//a real variable/function owns the name
+  for (i=0;i!=cc->ncnst;i++)
+  {
+    if (!StrCmp(cc->cname[i],nm))
+    {
+      *pval=cc->cvalue[i];
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+U0 CCConstPrim(CCCtrl *cc,I64 *pv)
+{
+  I64 v;
+  if (cc->tk==TK_NUM)
+  {
+    *pv=cc->tk_num;
+    CCLex(cc);
+    return;
+  }
+  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_NONE))
+  {
+    if (CCConstFind(cc,cc->tk_str,&v))
+    {
+      *pv=v;
+      CCLex(cc);
+      return;
+    }
+    CCError(cc,"not a compile-time constant");
+    return;
+  }
+  if (CCTkIsPunct(cc,'('))
+  {
+    CCLex(cc);
+    *pv=CCConstExpr(cc);	//defined below; extern at the top
+    if (cc->errs)
+      return;
+    CCExpect(cc,')',"expected ')' in constant expression");
+    return;
+  }
+  CCError(cc,"not a compile-time constant");
+}
+
+U0 CCConstUnary(CCCtrl *cc,I64 *pv)
+{
+  if (CCTkIsPunct(cc,'-'))
+  {
+    CCLex(cc);
+    CCConstUnary(cc,pv);	//unary chains fold: `- -3` is 3
+    if (cc->errs)
+      return;
+    *pv=-*pv;
+    return;
+  }
+  if (CCTkIsPunct(cc,'+'))
+  {
+    CCLex(cc);
+    CCConstUnary(cc,pv);
+    return;
+  }
+  if ((cc->tk==TK_PUNCT)&&(cc->tk_num=='!'))
+  {
+    CCLex(cc);
+    CCConstUnary(cc,pv);
+    if (cc->errs)
+      return;
+    if (*pv)
+      *pv=0;
+    else
+      *pv=1;
+    return;
+  }
+  if ((cc->tk==TK_PUNCT)&&(cc->tk_num=='~'))
+  {
+    CCLex(cc);
+    CCConstUnary(cc,pv);
+    if (cc->errs)
+      return;
+    *pv=(0-*pv)-1;		//~v == -v-1 in two's complement;
+    return;			//spelled so the fold never depends on
+  }				//host ~ semantics
+  CCConstPrim(cc,pv);
+}
+
+U0 CCConstMul(CCCtrl *cc,I64 *pv)
+{
+  I64 r,op;
+  CCConstUnary(cc,pv);
+  while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&(((cc->tk_num=='*')||(cc->tk_num=='/'))||(cc->tk_num=='%')))
+  {
+    op=cc->tk_num;
+    CCLex(cc);
+    CCConstUnary(cc,&r);
+    if (cc->errs)
+      return;
+    if (op=='*')
+      *pv=*pv*r;
+    else if (op=='/')
+    {
+      if (!r)
+      {
+        CCError(cc,"constant expression divides by zero");
+        return;
+      }
+      *pv=*pv/r;
+    }
+    else
+    {
+      if (!r)
+      {
+        CCError(cc,"constant expression divides by zero");
+        return;
+      }
+      *pv=*pv%r;
+    }
+  }
+}
+
+U0 CCConstAdd(CCCtrl *cc,I64 *pv)
+{
+  I64 r,op;
+  CCConstMul(cc,pv);
+  while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&((cc->tk_num=='+')||(cc->tk_num=='-')))
+  {
+    op=cc->tk_num;
+    CCLex(cc);
+    CCConstMul(cc,&r);
+    if (cc->errs)
+      return;
+    if (op=='+')
+      *pv=*pv+r;
+    else
+      *pv=*pv-r;
+  }
+}
+
+U0 CCConstShift(CCCtrl *cc,I64 *pv)
+{
+  I64 r,op;
+  CCConstAdd(cc,pv);
+  while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&((cc->tk_num==OP_SHL)||(cc->tk_num==OP_SHR)))
+  {
+    op=cc->tk_num;
+    CCLex(cc);
+    CCConstAdd(cc,&r);
+    if (cc->errs)
+      return;
+    if (op==OP_SHL)
+      *pv=*pv<<r;
+    else
+      *pv=*pv>>r;		//arithmetic shift: matches the signed
+  }				//I64 model everywhere else
+}
+
+U0 CCConstRel(CCCtrl *cc,I64 *pv)
+{
+  I64 r,op;
+  CCConstShift(cc,pv);
+  while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&((((cc->tk_num=='<')||(cc->tk_num=='>'))||(cc->tk_num==OP_LE))||(cc->tk_num==OP_GE)))
+  {
+    op=cc->tk_num;
+    CCLex(cc);
+    CCConstShift(cc,&r);
+    if (cc->errs)
+      return;
+    if (op=='<')
+    {
+      if (*pv<r)
+        *pv=1;
+      else
+        *pv=0;
+    }
+    else if (op=='>')
+    {
+      if (*pv>r)
+        *pv=1;
+      else
+        *pv=0;
+    }
+    else if (op==OP_LE)
+    {
+      if (*pv<=r)
+        *pv=1;
+      else
+        *pv=0;
+    }
+    else
+    {
+      if (*pv>=r)
+        *pv=1;
+      else
+        *pv=0;
+    }
+  }
+}
+
+U0 CCConstEq(CCCtrl *cc,I64 *pv)
+{
+  I64 r,op;
+  CCConstRel(cc,pv);
+  while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&((cc->tk_num==OP_EQ)||(cc->tk_num==OP_NE)))
+  {
+    op=cc->tk_num;
+    CCLex(cc);
+    CCConstRel(cc,&r);
+    if (cc->errs)
+      return;
+    if ((op==OP_EQ)&&(*pv==r))
+      *pv=1;
+    else if ((op==OP_NE)&&(*pv!=r))
+      *pv=1;
+    else
+      *pv=0;
+  }
+}
+
+U0 CCConstBitAnd(CCCtrl *cc,I64 *pv)
+{
+  I64 r;
+  CCConstEq(cc,pv);
+  while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&(cc->tk_num=='&'))
+  {
+    CCLex(cc);
+    CCConstEq(cc,&r);
+    if (cc->errs)
+      return;
+    *pv=*pv&r;
+  }
+}
+
+U0 CCConstBitXor(CCCtrl *cc,I64 *pv)
+{
+  I64 r;
+  CCConstBitAnd(cc,pv);
+  while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&(cc->tk_num=='^'))
+  {
+    CCLex(cc);
+    CCConstBitAnd(cc,&r);
+    if (cc->errs)
+      return;
+    *pv=*pv^r;
+  }
+}
+
+U0 CCConstBitOr(CCCtrl *cc,I64 *pv)
+{
+  I64 r;
+  CCConstBitXor(cc,pv);
+  while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&(cc->tk_num=='|'))
+  {
+    CCLex(cc);
+    CCConstBitXor(cc,&r);
+    if (cc->errs)
+      return;
+    *pv=*pv|r;
+  }
+}
+
+U0 CCConstLogAnd(CCCtrl *cc,I64 *pv)
+{
+  I64 r;
+  CCConstBitOr(cc,pv);
+  while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&(cc->tk_num==OP_AND))
+  {
+    CCLex(cc);
+    CCConstBitOr(cc,&r);
+    if (cc->errs)
+      return;
+    if (*pv&&r)		//both sides are always evaluable here, so
+      *pv=1;		//skipping a short-circuit fold is safe
+    else
+      *pv=0;
+  }
+}
+
+U0 CCConstLogOr(CCCtrl *cc,I64 *pv)
+{
+  I64 r;
+  CCConstLogAnd(cc,pv);
+  while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&(cc->tk_num==OP_OR))
+  {
+    CCLex(cc);
+    CCConstLogAnd(cc,&r);
+    if (cc->errs)
+      return;
+    if (*pv||r)
+      *pv=1;
+    else
+      *pv=0;
+  }
+}
+
+/* Entry: fold a full constant expression; returns the value and
+ * leaves cc->errs set on any diagnostic. */
+I64 CCConstExpr(CCCtrl *cc)
+{
+  I64 v;
+  v=0;
+  CCConstLogOr(cc,&v);
+  return v;
+}
+
+I64 CCEnumTagFind(CCCtrl *cc,U8 *nm)
+{
+  I64 i;
+  for (i=0;i!=cc->netag;i++)
+  {
+    if (!StrCmp(cc->etag[i],nm))
+      return i;
+  }
+  return -1;
+}
+
+/* `enum [Tag] { NAME [= const-expr], ... }` with '{' current. The tag
+ * is optional in definition position. Auto-increments from the previous
+ * value (starting at 0) exactly like C. Trailing commas are C-legal.
+ * Enumerator names must be unique in the translation unit AND must not
+ * collide with a variable/function name (C shares the namespace: we
+ * enforce it in both directions — see CCConstFind for the other). */
+U0 CCEnumDef(CCCtrl *cc,U8 *tag)
+{
+  I64 next,val;
+  U8 nm[CC_TOK_MAX];
+  if (tag[0])
+  {
+    if (CCEnumTagFind(cc,tag)>=0)
+    {
+      CCError(cc,"enum tag redefined");
+      return;
+    }
+    if (cc->netag>=CC_MAX_ENUMTAGS)
+    {
+      CCError(cc,"too many enum tags");
+      return;
+    }
+    StrCpy(cc->etag[cc->netag],tag);
+    cc->netag++;
+  }
+  CCLex(cc);		//consume '{'
+  next=0;
+  while ((!cc->errs)&&(cc->tk!=TK_EOF)&&!CCTkIsPunct(cc,'}'))
+  {
+    if (cc->tk!=TK_IDENT)
+    {
+      CCError(cc,"expected enumerator name");
+      return;
+    }
+    StrCpy(nm,cc->tk_str);
+    CCLex(cc);
+    val=next;
+    if (CCAccept(cc,'='))
+    {
+      val=CCConstExpr(cc);
+      if (cc->errs)
+        return;
+    }
+    if (CCSymFind(cc,nm))
+    {
+      CCError(cc,"enumerator conflicts with a variable or function name");
+      return;
+    }
+    if (CCConstFind(cc,nm,&val))
+    {
+      CCError(cc,"enumerator redefined");
+      return;
+    }
+    if (cc->ncnst>=CC_MAX_CONSTS)
+    {
+      CCError(cc,"too many enum constants");
+      return;
+    }
+    StrCpy(cc->cname[cc->ncnst],nm);
+    cc->cvalue[cc->ncnst]=val;
+    cc->ncnst++;
+    next=val+1;
+    if (!CCAccept(cc,','))
+      break;
+  }
+  CCExpect(cc,'}',"expected '}' after enum members");
+}
+
 I64 CCTokTypeStart(CCCtrl *cc)
 {
   I64 kw;
@@ -158,6 +591,8 @@ I64 CCTokTypeStart(CCCtrl *cc)
   if ((kw==KW_AUTO)||(kw==KW_VOLATILE))
     return TRUE;
   if (kw==KW_INLINE)
+    return TRUE;
+  if (kw==KW_ENUM)
     return TRUE;
   if ((kw==KW_VOID)||(kw==KW_UNSIGNED))
     return TRUE;
@@ -252,6 +687,21 @@ I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
       tent=0;			//to void — `const void *v` is the
       CCLex(cc);		//headers' idiom and must fold
     }
+    else if (cc->tk_kw==KW_ENUM)
+    {
+      if ((ty>=0)&&(tent==0))
+      {
+        CCError(cc,"enum cannot combine with another type");
+        return -1;
+      }
+      tent=0;
+      CCLex(cc);		//consume 'enum'
+      if (cc->tk==TK_IDENT)
+      {
+        CCLex(cc);		//its tag, when present — a separate
+      }				//namespace from structs', incomplete
+      ty=TY_INT;		//tags C-legal, and we fold to the int
+    }				//model anyway, so a tag need not exist
     else if ((cc->tk_kw==KW_STRUCT)||(cc->tk_kw==KW_UNION))
     {
       if ((ty>=0)&&(tent==0))
@@ -426,6 +876,16 @@ I64 CCTrySpec(CCCtrl *cc,I64 *pstag)
       ty=TY_VOID;
       tent=0;
       CCLex(cc);
+    }
+    else if (cc->tk_kw==KW_ENUM)
+    {
+      if ((ty>=0)&&(tent==0))
+        return -1;
+      tent=0;
+      CCLex(cc);
+      if (cc->tk==TK_IDENT)
+        CCLex(cc);
+      ty=TY_INT;
     }
     else if ((cc->tk_kw==KW_STRUCT)||(cc->tk_kw==KW_UNION))
     {
@@ -859,7 +1319,8 @@ U0 CCLibCall(CCCtrl *cc,I64 slot,I64 argc,I64 rty)
 U0 CCExprPrimary(CCCtrl *cc)
 {
   CSym *s,*hs;
-  I64 inc,n,delta,scale,byte_aty;
+  I64 inc,n,delta,scale,byte_aty,cv,cn,cnext,ci;
+  U8 catbuf[CC_TOK_MAX];
   U8 save_name[CC_TOK_MAX];
   U8 *save_pc;
   U8 *sp;
@@ -879,14 +1340,37 @@ U0 CCExprPrimary(CCCtrl *cc)
   }
   if (cc->tk==TK_STR)
   {
-    sp=CCStrAlloc(cc,cc->tk_str);
+    //M20: C concatenates ADJACENT literals at parse time. Collect in a
+    //scratch buffer and allocate the pool entry ONCE — appending into
+    //the first literal's entry would scribble on whatever the pool
+    //cursor placed next to it (and dedupe could hand back an unrelated
+    //address for the second literal anyway).
+    StrCpy(catbuf,cc->tk_str);
+    cn=StrLen(catbuf);
+    CCLex(cc);
+    while (cc->tk==TK_STR)
+    {
+      cnext=StrLen(cc->tk_str);
+      if (cn+cnext+1>CC_TOK_MAX)
+      {
+        CCError(cc,"concatenated string literal too long");
+        return;
+      }
+      //HolyC has no StrCat in this build: copy bytes by hand into the
+      //scratch buffer (the length check above bounds it; the NUL rides
+      //along on purpose).
+      for (ci=0;ci!=cnext+1;ci++)
+        catbuf[cn+ci]=cc->tk_str[ci];
+      cn=cn+cnext;
+      CCLex(cc);
+    }
+    sp=CCStrAlloc(cc,catbuf);
     CCByte(cc,0x48);CCByte(cc,0xB8);	//MOVABS RAX,string
     CCQuadAbs(cc,CC_B_LOCALS,sp);
     cc->is_addr=0;
     cc->aty=0;
     cc->ety=TY_CHARP;
     cc->sty=-1;
-    CCLex(cc);
     CCPostfix(cc);		//M19: `"ab"[1]` and friends — the literal
     return;			//is a pointer VALUE; Postfix indexes it
   }				//with byte scale, no new machinery.
@@ -1080,6 +1564,22 @@ U0 CCExprPrimary(CCCtrl *cc)
     s=CCSymFind(cc,cc->tk_str);
     if (!s)
     {
+      //M20: enum constant — a compile-time VALUE, not storage. No
+      //emit gate needed: CCMovImmRax is gated like every emitter.
+      cv=0;
+      if ((cc->tk_kw==KW_NONE)&&(CCConstFind(cc,cc->tk_str,&cv)))
+      {
+        CCMovImmRax(cc,cv);
+        cc->is_addr=0;
+        cc->aty=0;
+        cc->ety=TY_INT;
+        cc->sty=-1;
+        cc->esz=0;
+        cc->esz2=0;
+        CCLex(cc);
+        CCPostfix(cc);		//RED[0] is real C — subscripts commute
+        return;
+      }
       CCError(cc,"undefined variable");
       return;
     }
@@ -2186,16 +2686,9 @@ U0 CCSwitchStmt(CCCtrl *cc)
     if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_CASE))
     {
       CCLex(cc);
-      v=1;
-      if (CCAccept(cc,'-'))
-        v=-1;
-      if (cc->tk!=TK_NUM)
-      {
-        CCError(cc,"case needs an integer constant");
-        return;
-      }
-      v=v*cc->tk_num;
-      CCLex(cc);
+      v=CCConstExpr(cc);	//M20: literals, enum constants, and
+      if (cc->errs)		//folded expressions (`case ROW*2:`)
+        return;			//all qualify — anything else diagnoses
       CCExpect(cc,':',"expected ':' after case value");
       if (nc>=CC_SWITCH_CASES)
       {
@@ -2551,13 +3044,9 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
   s->dim2=0;
   if (CCAccept(cc,'['))
   {
-    if (cc->tk!=TK_NUM)
-    {
-      CCError(cc,"array size must be a number");
+    n=CCConstExpr(cc);		//M20: constant expressions (enum
+    if (cc->errs)			//sizes) fold here
       return;
-    }
-    n=cc->tk_num;
-    CCLex(cc);
     CCExpect(cc,']',"expected ']' after array size");
     if ((n<1)||(n>2048))
     {
@@ -2568,13 +3057,9 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     if (CCTkIsPunct(cc,'['))		//M17: second dimension (row-major)
     {
       CCLex(cc);
-      if (cc->tk!=TK_NUM)
-      {
-        CCError(cc,"second array size must be a number");
+      n2=CCConstExpr(cc);		//M20: constant expressions (enum
+      if (cc->errs)			//sizes) fold here
         return;
-      }
-      n2=cc->tk_num;
-      CCLex(cc);
       CCExpect(cc,']',"expected ']' after second array size");
       if ((n2<1)||(n2>2048))
       {
@@ -2624,7 +3109,7 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
  * parse here exactly like at file scope. */
 U0 CCDeclStmt(CCCtrl *cc)
 {
-  I64 ty,stag,t,isu;
+  I64 ty,stag,t,isu,isenu;
   I64 stk,skw,snum;
   U8 *spc;
   U8 sstr[CC_TOK_MAX];
@@ -2634,17 +3119,40 @@ U0 CCDeclStmt(CCCtrl *cc)
   //definition path (CCDeclOne reserves frame slots for declarators after
   //the body). Peeked with the full snapshot: `struct L l;` (a USE) must
   //rewind to run through CCAcceptBase unchanged.
-  if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_STRUCT)||(cc->tk_kw==KW_UNION)))
+  if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_STRUCT)||((cc->tk_kw==KW_UNION)||(cc->tk_kw==KW_ENUM))))
   {
     CCSnap(cc,&spc,&stk,&skw,&snum,sstr);
     isu=(cc->tk_kw==KW_UNION);
+    isenu=(cc->tk_kw==KW_ENUM);
     CCLex(cc);
-    if (cc->tk==TK_IDENT)
-    {
-      StrCpy(tag,cc->tk_str);
-      CCLex(cc);
+    tag[0]=0;
+    if ((cc->tk==TK_IDENT)||isenu)	//struct/union REQUIRE a tag here
+    {				//(anonymous definitions rewind to the
+      if (cc->tk==TK_IDENT)	//ordinary error path); enum's tag is
+      {				//optional — `enum { A } x;` is the
+        StrCpy(tag,cc->tk_str);	//common shape
+        CCLex(cc);
+      }
       if (CCTkIsPunct(cc,'{'))
       {
+        if (isenu)
+        {
+          CCEnumDef(cc,tag);
+          if (cc->errs)
+            return;
+          if (CCAccept(cc,';'))
+            return;		//pure definition; constants are table-bound
+          while ((!cc->errs)&&(cc->tk!=TK_EOF))
+          {
+            CCDeclOne(cc,TY_INT,-1);	//`enum E { A } x;` — the int model
+            if (cc->errs)
+              return;
+            if (!CCAccept(cc,','))
+              break;
+          }
+          CCExpect(cc,';',"expected ';' after declaration");
+          return;
+        }
         t=CCStructDef(cc,tag,isu);
         if (t<0)
           return;
@@ -2902,10 +3410,11 @@ U0 CCParseParams(CCCtrl *cc)
         if (CCTkIsPunct(cc,'['))
         {
           CCLex(cc);
-          if (cc->tk==TK_NUM)
-          {
-            cc->pdim2[i]=cc->tk_num;
-            CCLex(cc);
+          if (!CCTkIsPunct(cc,']'))	//M20: an OFFERED second size must
+          {				//fold (enum ROW sizes work now;
+            cc->pdim2[i]=CCConstExpr(cc);	//`t[]` stays negotiable)
+            if (cc->errs)
+              return;
           }
           CCExpect(cc,']',"expected ']' after second parameter array size");
         }
@@ -3146,13 +3655,9 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
   s->dim2=0;
   if (CCAccept(cc,'['))
   {
-    if (cc->tk!=TK_NUM)
-    {
-      CCError(cc,"global array size must be a number");
+    n=CCConstExpr(cc);		//M20: constant expressions (enum
+    if (cc->errs)			//sizes) fold here
       return FALSE;
-    }
-    n=cc->tk_num;
-    CCLex(cc);
     CCExpect(cc,']',"expected ']' after global array size");
     if ((n<1)||(n>2048))
     {
@@ -3163,13 +3668,9 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     if (CCTkIsPunct(cc,'['))		//M17: second dimension
     {
       CCLex(cc);
-      if (cc->tk!=TK_NUM)
-      {
-        CCError(cc,"second global array size must be a number");
+      n2=CCConstExpr(cc);		//M20: constant expressions (enum
+      if (cc->errs)			//sizes) fold here
         return FALSE;
-      }
-      n2=cc->tk_num;
-      CCLex(cc);
       CCExpect(cc,']',"expected ']' after second global array size");
       if ((n2<1)||(n2>2048))
       {
@@ -3216,18 +3717,13 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     }
     else
     {
-      neg=FALSE;
-      if (CCAccept(cc,'-'))
-        neg=TRUE;
-      if (cc->tk!=TK_NUM)
-      {
-        CCError(cc,"global initializer must be a constant");
+      //M20: literals, enum constants, and folded expressions
+      //(`g=RED*2+1`) initialize globals. Anything that is not a
+      //compile-time constant — a variable, a call, a function
+      //address — still diagnoses loudly here.
+      val=CCConstExpr(cc);
+      if (cc->errs)
         return FALSE;
-      }
-      val=cc->tk_num;
-      if (neg)
-        val=-val;
-      CCLex(cc);
     }
     s->init=val;
     s->has_init=TRUE;
@@ -3428,12 +3924,50 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag,I64 is_union)
 U0 CCParseTop(CCCtrl *cc)
 {
   I64 ty=TY_INT,first=TRUE,stag=-1,t,isunion;
+  I64 stk,skw,snum;
+  U8 *spc;
+  U8 sstr[CC_TOK_MAX];
   U8 tag[CC_TOK_MAX];
 
   if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_TYPEDEF))
   {
     CCParseTypedef(cc);
     return;
+  }
+  //M20: top-level enum DEFINITION (`enum [Tag] { ... }` — tag
+  //optional). The use form (`enum E x;` — foldable through the
+  //CCAcceptBase enum arm below) rewinds via the snapshot; declarators
+  //after a body land in the ordinary global-declarator loop with the
+  //int model as their base.
+  if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_ENUM))
+  {
+    CCSnap(cc,&spc,&stk,&skw,&snum,sstr);
+    CCLex(cc);		//consume 'enum'
+    tag[0]=0;
+    if (cc->tk==TK_IDENT)
+    {
+      StrCpy(tag,cc->tk_str);
+      CCLex(cc);
+    }
+    if (CCTkIsPunct(cc,'{'))
+    {
+      CCEnumDef(cc,tag);
+      if (cc->errs)
+        return;
+      if (CCAccept(cc,';'))
+        return;		//pure definition
+      while ((!cc->errs)&&(cc->tk!=TK_EOF))
+      {
+        CCGlobalOne(cc,TY_INT,FALSE,-1);	//functions after an enum body
+        if (cc->errs)			//keep their own statement
+          return;
+        if (!CCAccept(cc,','))
+          break;
+      }
+      CCExpect(cc,';',"expected ';' after enum declaration");
+      return;
+    }
+    CCRestore(cc,spc,stk,skw,snum,sstr);	//use form: CCAcceptBase below
   }
   if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_STRUCT)||(cc->tk_kw==KW_UNION)))
   {

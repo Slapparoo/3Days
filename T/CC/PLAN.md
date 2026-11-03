@@ -48,6 +48,9 @@ dimensions, row-major), structs (tag definitions, `.`/`->`, struct-pointer param
 self-referential links — see M9), unions (M19: one-slot aliased tags,
 by-value single-slot members, arrays and array-row params), string and
 char literals (M19: `\n \t \r \\ \" \a \b \f \v \e \xHH \ooo`),
+enums and compile-time constants (M20: enumerators fold into case labels,
+array sizes, global initializers, and every expression position; adjacent
+string literals concatenate),
 `for`/`while`/`if`/`else`/`break`/`continue`/`switch`/`case`/`default`/
 `do-while` (M14), `goto`/labels and the conditional `?:` (M16),
 functions (forward refs,
@@ -135,6 +138,21 @@ Not supported — each currently fails with a compile diagnostic:
   like any C use); global fp initializers stay in the constant-only
   club — assign in a function body; a stored fp is a raw code address:
   NULL is the only portable sentinel (`fp==0` / `fp!=0` work).
+- Nested-scope shadowing is absent: a block redeclaring an outer name
+  ALIASES the outer slot (C would bind a fresh variable) — frames are a
+  flat per-function arena, so this is a model-level backlog item, not
+  a parser fix.
+- Enum edges (M20): `enum x;` consumes `x` as a TAG (C's incomplete-type
+  object declaration needs a separate declarator); enumerators cap at 64
+  per module (CC_MAX_CONSTS), tags at 16; the constants table is flat
+  file-scope like C's shared namespace, but a global later claiming an
+  enumerator's name SHADOWS rather than diagnoses; `case (0 && (1/0))`
+  errors where C short-circuits (the folder evaluates both sides — it
+  refuses constant div/mod by zero loudly instead of faulting the host
+  JIT); enum constants do not fold in `#if` (prep arithmetic predates
+  the tables); `sizeof(enum E)` and `sizeof(ENUM_CONST)` are the quad
+  model. Enum tags live in their own table (`struct S` and `enum S` do
+  not collide — C-faithful here, unlike struct-vs-union which share).
 - Array edges (M17): THREE dimensions are rejected (symbol carries
   dim/dim2 only); `sizeof(m[i])` on a row goes through the expression
   path and reports the POINTER size (C's row size needs the bare
@@ -814,6 +832,61 @@ Not supported — each currently fails with a compile diagnostic:
    paths pinned (int-char conflicts, duplicate char, tag redefined,
    by-value self-member, shared-tag collision), clean
    `CC TESTS: 0 failed`.
+ - [x] **M20** enums + compile-time constant folding + literal
+   concatenation. The folder is a mini recursive-descent parser over
+   the SAME precedence ladder as the code-emitting chain (Prim/Unary/
+   Mul/Add/Shift/Rel/Eq/BitAnd/BitXor/BitOr/LogAnd/LogOr), but it
+   produces I64 values instead of code: enum bodies (`BLUE=GREEN*2`,
+   chained auto-increment from the previous value), case labels
+   (`case GREEN:`, `case 1+1:` — replacing the old `[-]TK_NUM`-only
+   parse), global initializers (`folded=PLAIN+FANCY*10` — literals,
+   constants, folded expressions; non-constants still diagnose), array
+   sizes (all four dim sites + the negotiable param 2nd-dim), and any
+   live expression via the Primary constant branch (a constant is an
+   immediate, not storage). Div/mod by zero is a LOUD diagnostic: the
+   host JIT would fault, and a compiler crash on edge input is never
+   acceptable. `~` folds as `-v-1` spelled to avoid host-~ dependence.
+   Enum machinery: constants in a flat table (enumerator names must be
+   TU-unique — C's shared namespace — and CCConstFind refuses any name
+   a variable/function owns, so locals shadow correctly); tags in a
+   separate 16-entry table (`enum Color` folds to the int model, the
+   tag only catches redefinition; struct/union tags live in THEIR own
+   table, so `struct S` + `enum S` coexist C-faithfully); definition
+   shape (tag OPTIONAL: `enum { A } x;`) hooked at top level and in
+   CCDeclStmt behind the full CCSnap/CCRestore pair; use form falls
+   through the CCAcceptBase enum arm (blind tag consumption — C-legal
+   for incomplete tags; `enum x;` misreads x as the tag: documented).
+   Adjacent string literals concatenate: scratch-buffer collect (the
+   HolyC unit has NO StrCat — hand-rolled byte copy) then ONE pool
+   allocation — appending into the first literal's entry would scribble
+   on the pool's next placement, and dedupe could hand back an unrelated
+   address anyway.
+   **The binding landmine — strangest of the compiler so far:** with
+   only `CCConstExpr` extern-declared (needed for Prim's upward call —
+   without even that the HOST refuses to compile the unit), every call
+   edge INSIDE the new chain executed NOTHING — no value, no token
+   consumed, no error, no callee-entry print (proven by a DBG print at
+   Prim's top: dead from inside Unary, alive when the same call came
+   from a probe-file wrapper). The file compiles clean; the edges are
+   just silently dead. Adding extern declarations for the WHOLE new
+   chain at the top — the pattern every existing parser chain function
+   already carries — made it deterministically correct (5/5 + suites).
+   Rule pinned: any new function group in this unit gets its extern
+   declarations, even ones defined before their callers. (Secondary
+   debugging trap: single-token sources make `pc`-advance an unusable
+   consumption signal — pc is already past the token after the first
+   lex; use multi-token sources or value observation.) Expectation
+   trap #8 (compiler right, author wrong): `PLAIN+FANCY*10` is 40,
+   pinned 41 in the probe. A shadowing probe (inner `int x` aliasing
+   the outer slot, rc=15) put scoped symbols on the backlog. 71 cases
+   (enums.c: 36 checks + closer — auto-increment chains, anonymous
+   enums, tag-typed globals/locals, constants as case labels/subscripts/
+   sizes/global inits, the full live expression fold set, three concat
+   forms), green x3, saved-object reload 37/37/37 identical (constants
+   bake as immediates; folded globals ride the arena snapshot), error
+   paths pinned (non-constant case, enumerator/variable conflict,
+   constant div0, enum tag redefined, function address in a constant),
+   clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 
@@ -916,6 +989,11 @@ Not supported — each currently fails with a compile diagnostic:
 - Expression value always lands in RAX; binary ops `PUSH` the left
   half and `POP` it back into RCX.
 - Every emit goes through `CCByte`/`CCWord`/`CCQuad` (bounds-checked).
+- ANY new function group in the compiler unit gets file-top `extern`
+  declarations like every existing chain function (M20 proof): without
+  them the host COMPILES the unit but same-unit call edges into the new
+  functions execute NOTHING — silently, deterministically wrong, zero
+  diagnostics. Check the extern list matches the definitions exactly.
 - Absolute code addresses (fp values, M18) relocate through base kind
   CC_B_CODE (CCLoad validates `kind>CC_B_CODE`); forward uses queue
   operand positions on the symbol and resolve AT DEFINITION — both the

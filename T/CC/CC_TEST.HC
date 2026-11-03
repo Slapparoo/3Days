@@ -287,6 +287,9 @@ CCAssert(27,"T:/CC/TEST/fptr.c","fptr");
 /* M19: qualifier keywords, unsigned/signed char, unions (slot-aliased
  * tags, by-value one-slot members), escapes, literal indexing. */
 CCAssert(40,"T:/CC/TEST/unionc.c","unionc");
+/* M20: enum constants + the compile-time constant folder (case labels,
+ * array sizes, global inits, folded expressions) + literal concat. */
+CCAssert(37,"T:/CC/TEST/enums.c","enums");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

@@ -129,6 +129,8 @@ U0 CCLex(CCCtrl *cc)
       cc->tk_kw=KW_VOLATILE;
     else if (!StrCmp(cc->tk_str,"inline"))
       cc->tk_kw=KW_INLINE;
+    else if (!StrCmp(cc->tk_str,"enum"))
+      cc->tk_kw=KW_ENUM;
     return;
   }
   if (*p=='"')

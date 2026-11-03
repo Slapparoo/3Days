@@ -45,6 +45,7 @@
 #define KW_AUTO		28
 #define KW_VOLATILE		29
 #define KW_INLINE		30
+#define KW_ENUM		31	//M20: constants + int-model tag
 
 /* Minimal expression types (everything is a 64-bit slot; pointers
  * carry only their element size for scaling). */
@@ -141,6 +142,8 @@
 #define CC_MAX_MACROS	32
 #define CC_MACRO_BODY	256
 #define CC_MAX_TYPEDEF	32
+#define CC_MAX_CONSTS	64	//M20: enumerator names per module
+#define CC_MAX_ENUMTAGS	16	//M20: enum tags (redefinition check only)
 #define CC_INC_MAX	8	//nested-#include depth guard
 #define CC_SWITCH_CASES	32	//M14: case-label cap per switch statement
 #define CC_LABELS	64	//M16: labels + gotos per function
@@ -310,6 +313,16 @@ class CCCtrl
   I64	tn;
   U8	tname[CC_MAX_TYPEDEF][CC_TOK_MAX];
   I64	tty[CC_MAX_TYPEDEF];
+  /* M20: enumerator constants (flat name->value table: enumerator names
+   * must be TU-unique, mirroring C's shared ordinary-identifier
+   * namespace; a variable of the same name WINS via CCSymFind checks)
+   * and enum tags (fold to the int model, so a tag only exists to
+   * catch redefinition). Both reset with CCInit. */
+  I64	ncnst;
+  U8	cname[CC_MAX_CONSTS][CC_TOK_MAX];
+  I64	cvalue[CC_MAX_CONSTS];
+  I64	netag;
+  U8	etag[CC_MAX_ENUMTAGS][CC_TOK_MAX];
 };
 
 /* Forward declarations MUST use `extern` here: with a plain prototype,
