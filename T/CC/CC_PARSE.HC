@@ -802,6 +802,14 @@ U0 CCParseTypedef(CCCtrl *cc)
   }
   if (fpok)
   {
+    if (cc->fpdim)
+    {
+      //M26: `typedef int (*tab[2])(int);` DECLARES an array rather than
+      //naming a type, and this model's typedefs store one type code —
+      //`typedef int (*fp)(int); fp tab[2];` is the way to get the table.
+      CCError(cc,"typedefs of function-pointer arrays are not supported: typedef the fp, then declare the array");
+      return;
+    }
     if (cc->tn>=CC_MAX_TYPEDEF)
     {
       CCError(cc,"too many typedefs");
@@ -1088,14 +1096,50 @@ U0 CCCompareEmit(CCCtrl *cc,I64 op)
 I64 CCParseFunPtrDecl(CCCtrl *cc,U8 *name)
 {
   I64 depth;
-  name[0]=0;
-  CCLex(cc);			//consume '('
-  if (!CCAccept(cc,'*'))
+  cc->fpdim=0;			//M26: reset for EVERY attempt — a peek
+  name[0]=0;			//that fails gets rewound by its caller,
+  CCLex(cc);			//consume '('	//so stale declarator state
+  if (!CCAccept(cc,'*'))		//must not survive into the next one
     return FALSE;		//`(x)` etc: caller rewinds the one token
   if (cc->tk==TK_IDENT)
   {
     StrCpy(name,cc->tk_str);
     CCLex(cc);
+  }
+  if (CCTkIsPunct(cc,'['))		//M26: `int (*tab[2])(int)`. C puts
+  {				//the array brackets INSIDE the parens:
+    CCLex(cc);			//they bind to *tab before the
+    if (CCTkIsPunct(cc,']'))		//parameter list, so the shape this
+    {				//function already handled is simply the
+      CCLex(cc);		//no-brackets case and `[n]` here is the
+      cc->fpdim=-1;		//ARRAY count (']' MUST be consumed in
+						//the empty case: leaving it
+						//current made an unsized
+						//fp PARAM fail one token
+						//later at ')')
+    }				//ARRAY count. Its elements are function
+    else				//pointers, which the consumers record
+    {				//as ael so `tab[i](x)` and
+      cc->fpdim=CCConstExpr(cc);	//`tab[i][j]`-style element typing
+      if (cc->errs)		//work; -1 means the size comes from
+        return FALSE;		//the initializer or is unknown (a
+      if ((cc->fpdim<1)||(cc->fpdim>2048))
+      {
+        CCError(cc,"function-pointer array size out of range");
+        return FALSE;
+      }
+      CCExpect(cc,']',"expected ']' after function-pointer array size");
+      if (cc->errs)
+        return FALSE;
+      if (CCTkIsPunct(cc,'['))
+      {
+        //`(*t[2][3])(int)`: a second dimension needs the row machinery
+        //this declarator does not have (and this model caps arrays at
+        //two dimensions anyway). Say which bracket is the problem.
+        CCError(cc,"function-pointer arrays take one dimension");
+        return FALSE;
+      }
+    }
   }
   if (!CCTkIsPunct(cc,')'))
   {
@@ -1105,7 +1149,11 @@ I64 CCParseFunPtrDecl(CCCtrl *cc,U8 *name)
   CCLex(cc);
   if (CCTkIsPunct(cc,'['))
   {
-    CCError(cc,"function-pointer arrays not supported: keep one (*f)");
+    //Brackets AFTER the closing paren are a different declarator:
+    //`int (*f)[2](int)` makes the pointer an array of FUNCTIONS, and a
+    //function returning an array is illegal C. A second dimension
+    //(`(*f[2][3])(int)`) needs row machinery this declarator lacks.
+    CCError(cc,"function-pointer arrays take one dimension, before the parameter list");
     return FALSE;
   }
   if (!CCTkIsPunct(cc,'('))
@@ -3890,7 +3938,7 @@ U0 CCBlockStmt(CCCtrl *cc)
 U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
 {
   CSym *s;
-  I64 n,n2,fpok,sstat,val,vi,pend,isarr,ivk,iisstr;
+  I64 n,n2,fpok,sstat,val,vi,pend,isarr,ivk,iisstr,fpar;
   I64 ty=base;
   I64 stk,skw,snum;
   U8 *spc;
@@ -3917,12 +3965,23 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     s->sty=-1;
     s->dim=1;
     s->dim2=0;
+    fpar=cc->fpdim;		//M26: an ARRAY of function pointers
+    if (fpar)			//shares the array machinery with every
+    {				//other array: ael says its elements are
+      if (fpar>0)		//pointers, CCReserveArray lays out the
+        s->dim=fpar;		//slots (element 0 highest in the frame,
+      CCSetArrTy(cc,s);		//ascending in the arena), CCArrayInit
+      if (fpar>0)		//lands the initializer either way.
+        CCReserveArray(cc,s,TY_PTR,-1,fpar,cc->spec_static);
+    }
     if (cc->spec_static)
     {
       //M21: a `static` function pointer needs arena storage like any
       //other block static (an emitted store would re-run every call,
       //and C initializes a static exactly once).
       CCMakeStatic(cc,s);
+      if (fpar&&(fpar>0))
+        CCReserveArray(cc,s,TY_PTR,-1,fpar,TRUE);
       if (CCTkIsPunct(cc,'='))
       {
         //M24: a `static` fp CAN initialize now. A defined function's
@@ -3930,6 +3989,14 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
         //one-time store C requires is structural (no emitted store that
         //would re-run every call), and 0 (NULL) lands as plain bytes.
         CCLex(cc);
+        if (fpar)
+        {
+          //M26: brace list of DEFINED function names (or 0): the arena
+          //path writes each slot through CCArenaPtr, so a saved object
+          //re-derives every entry after the code buffer moves.
+          CCArrayInit(cc,s,TY_PTR,-1,(fpar<0),TRUE);
+          return;
+        }
         val=CCInitOne(cc,&ivk,&iisstr);
         if (cc->errs)
           return;
@@ -3950,12 +4017,20 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     }
     if (CCTkIsPunct(cc,'='))		//fp=add; — the RHS yields the
     {
-      CCVarAddr(cc,s);			//code address (M18 SC_FUN
+      if (fpar)				//M26: an fp ARRAY takes a brace
+      {
+        CCLex(cc);			//list (or one unbraced address,
+        CCArrayInit(cc,s,TY_PTR,-1,(fpar<0),FALSE);	//which C permits); frame slots
+        return;				//get emitted stores whose
+      }					//MOVABS operand relocates with
+      CCVarAddr(cc,s);			//the code buffer (M24)
       cc->is_addr=1;			//value), stored one quad
       cc->aty=0;
       CCAssignTail(cc);
     }
-    return;
+    else if (fpar&&(fpar<0))
+      CCError(cc,"array size missing");	//`int (*t[])(int);` needs an
+    return;				//initializer to say how many
   }
   while (CCAccept(cc,'*'))
   {
@@ -4373,6 +4448,17 @@ U0 CCParseParams(CCCtrl *cc)
         StrCpy(cc->pname+i*CC_TOK_MAX,fpname);	//"" stays anonymous
         cc->pty[i]=TY_PTR;
         cc->psty[i]=-1;
+        if (cc->fpdim)
+        {
+          //M26: `run(int (*tab[])(int))` — an ARRAY of fps as a
+          //parameter: pael (stored +1, see the CC.HH encoding note)
+          //marks both the array-ness and that the elements are
+          //pointers, so `tab[i](x)` types the element correctly. The
+          //count is ignored: a param array decays and the caller owns
+          //the length, exactly as for `int t[]`.
+          cc->pael[i]=TY_PTR+1;
+          cc->paelsty[i]=-1;
+        }
       }
       else if (cc->tk==TK_IDENT)
       {
@@ -4594,7 +4680,7 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
 Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
 {
   U8 name[CC_TOK_MAX];
-  I64 ty=base,val,n,n2,i,entry,fpok,pend,isarr,ivk,iisstr;
+  I64 ty=base,val,n,n2,i,entry,fpok,pend,isarr,ivk,iisstr,fpar;
   I64 stk,skw,snum;
   U8 *spc;
   U8 sstr[CC_TOK_MAX];
@@ -4619,12 +4705,29 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     s->sty=-1;
     s->dim=1;
     s->dim2=0;
+    fpar=cc->fpdim;		//M26: `int (*gt[2])(int)` — an fp array
+    if (fpar)			//is an array whose elements are
+    {				//pointers: same layout, ael and
+      if (fpar>0)		//initializer machinery as any other
+      {
+        s->dim=fpar;
+        CCReserveArray(cc,s,TY_PTR,-1,fpar,TRUE);
+      }
+      CCSetArrTy(cc,s);
+    }
     if (CCTkIsPunct(cc,'='))
     {
       //M24: a global fp CAN initialize. A DEFINED function's address is
       //an arena pointer with a relocation (so a saved object re-derives
       //it after a code-buffer move), and NULL lands as plain bytes.
       CCLex(cc);
+      if (fpar)
+      {
+        //M26: the brace-list form goes through the aggregate placer,
+        //which records an arena relocation per pointer slot.
+        CCArrayInit(cc,s,TY_PTR,-1,(fpar<0),TRUE);
+        return FALSE;
+      }
       val=CCInitOne(cc,&ivk,&iisstr);
       if (cc->errs)
         return FALSE;
@@ -4642,7 +4745,9 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         return FALSE;
       }
     }
-    return FALSE;		//FALSE = "declarator done, ';' follows"
+    else if (fpar&&(fpar<0))
+      CCError(cc,"array size missing");	//`int (*gt[])(int);` is an
+    return FALSE;		//incomplete type with no initializer
   }
   while (CCAccept(cc,'*'))
   {
@@ -4846,6 +4951,11 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag,I64 is_union)
       }
       if (fpok)
       {
+        if (cc->fpdim)
+        {
+          CCError(cc,"struct members may not be arrays");
+          return -1;
+        }
         mty=TY_PTR;		//an fp member is a plain slot
         msty=-1;		//address: no tag involved
       }
@@ -4892,7 +5002,14 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag,I64 is_union)
           CCRestore(cc,spc,stk,skw,snum,sstr);
       }
       if (fpok)
+      {
+        if (cc->fpdim)		//M26: one slot per member (M19), so an
+        {
+          CCError(cc,"struct members may not be arrays");
+          return -1;
+        }
         mty=TY_PTR;
+      }
       else
       {
         while (CCAccept(cc,'*'))

@@ -310,6 +310,10 @@ CCAssert(25,"T:/CC/TEST/ptrinit.c","ptrinit");
  * struct* arrays reach members, 1-element arrays finally decay, and 2-D
  * pointer arrays chain three levels. */
 CCAssert(28,"T:/CC/TEST/decay.c","decay");
+/* M26: arrays of function pointers — declared everywhere, deduced or sized,
+ * passed as params, called via tab[i](x) / (*tab[i])(x) / (tab[i])(x), with
+ * code-address elements that relocate on reload. */
+CCAssert(31,"T:/CC/TEST/fptab.c","fptab");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

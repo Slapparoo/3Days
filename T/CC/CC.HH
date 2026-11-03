@@ -268,6 +268,12 @@ class CCCtrl
   I64	ngoto;
   U8	goto_name[CC_LABELS][CC_TOK_MAX];
   I64	goto_pos[CC_LABELS];
+  I64	fpdim;		//M26: CCParseFunPtrDecl's array count, for
+  				//`int (*tab[2])(int)`: 0 = no brackets,
+  				//-1 = `[]` (size from the initializer or
+  				//unknown, i.e. a parameter), n = count.
+  				//Reset at every declarator entry, since a
+  				//failed peek gets rewound by the caller.
   I64	spec_static;	//M21: CCAcceptBase saw `static` in this spec
   I64	sym_base;	//M21: waterline of the innermost open scope:
   				//CCSymNew's dup check stops here (inner scopes

@@ -65,7 +65,10 @@ functions (forward refs,
 recursion, and M13 prototype declarations `int f(int a);` — undefined
 at link time is a compile error), function pointers (M18: declared in
 any position, assigned from a name or `&name`, called directly or
-through `(*fp)`/`(fp)`/member/typedef/param forms), `printf` (literal format:
+through `(*fp)`/`(fp)`/member/typedef/param forms) and ARRAYS of them
+(M26: `int (*tab[2])(int)` / `int (*tab[])(int)={f,g}` tables at file,
+block and `static` scope, passed as parameters, called via
+`tab[i](x)`/`(*tab[i])(x)`/`(tab[i])(x)`), `printf` (literal format:
 `%d %s %c %%`), `putchar`, `exit`, and the
 M12 stdlib subset — `strlen strcmp strcpy strchr memmove memcpy memset
 memcmp malloc atoi abs puts srand rand` (delegated to kernel routines
@@ -123,8 +126,9 @@ Not supported — each currently fails with a compile diagnostic:
   on a 1-D array is excess elements — C warns and drops, we ERROR. Braces
   nested deeper than the array's rank diagnose for the same reason. A
   512-value cap (CC_INIT_MAX) bounds one initializer. Designators
-  (`[0]=x`, `.x=x`) are not supported; struct arrays and function-pointer
-  arrays keep their existing rejections; pointer elements work since M24
+  (`[0]=x`, `.x=x`) are not supported; struct arrays keep their existing
+  rejections; function-pointer arrays initialize since M26
+  (`int (*gt[3])(int)={inc,dbl,neg};`); pointer elements work since M24
   (strings, defined function names, `&globals`) because the arena slots
   they fill carry relocations of their own. `extern int a[];` (an incomplete array declared extern) is
   "array size missing". Braced SCALARS are accepted (`int x={5};`).
@@ -143,8 +147,7 @@ Not supported — each currently fails with a compile diagnostic:
 - Array edges (M25): subscripting a scalar is diagnosed (C agrees — the
   model's old lenient int-indexing rule faulted in practice); 3-D arrays
   are still unsupported (`t[2][2][2]` — the second dimension is the last);
-  arrays of FUNCTION pointers are still unsupported at declaration
-  (`int (*fptab[2])(int);`); a `char b[128]` frame object still spends one
+  a `char b[128]` frame object still spends one
   8-byte slot per byte (element COUNTS and strides are byte-true since
   M25, the frame density is not); `sizeof(char c[1])==1` and
   `sizeof(int b[1])==8` follow the model's slot convention while pointer
@@ -190,9 +193,19 @@ Not supported — each currently fails with a compile diagnostic:
 - Function-pointer edges (M18): arity is NOT checked — `int (*f)(int)`
   called with the wrong arg count against a mismatched callee is as
   undefined as the C it mirrors (mismatched types at assignment are
-  likewise silent — the declarator swallows params wholesale); arrays
-  of function pointers are rejected with a clean diagnostic (one
-  `(*f)` per variable); calling a HOLYC-JIT function through a C fp is
+  likewise silent — the declarator swallows params wholesale); ARRAYS of
+  function pointers work since M26 (declaration, brace-list init with
+  deduced sizes and zero-filled tails, `static`, globals, params
+  `int (*t[])(int)`, and calls via `t[i](x)` / `(*t[i])(x)` / `(t[i])(x)`),
+  with edges of their own: ONE dimension, and it must sit INSIDE the
+  parentheses (`(*t[2][3])(int)` and `(*t)[2](int)` diagnose — C's grammar
+  agrees, since a function returning an array is illegal); struct members
+  may not be arrays (one slot each, M19); `typedef int (*tab[2])(int);` is
+  refused because it DECLARES an array rather than naming a type — the
+  supported route is `typedef int (*fp)(int); fp tab[2];`, which works;
+  a parameter's written count is ignored (param arrays decay, the caller
+  owns the length) and an unsized array with no initializer is "array size
+  missing"; calling a HOLYC-JIT function through a C fp is
   unsupported (Callees must be CC-compiled: plain `ret` + caller-side
   pops — HolyC's epilogue differs); `sizeof(*fp)` reports 8 where C
   rejects a function type; a function address used before its
@@ -1099,68 +1112,6 @@ Not supported — each currently fails with a compile diagnostic:
    scoped 49/49 identical, cross-checked against `gcc -std=gnu99` on a
    copy with only the model `sizeof` numbers adjusted — 27 with the same
    per-check increments, clean `CC TESTS: 0 failed`.
- - [x] **M25** element type through array decay. Every array symbol now
-   records what its ELEMENTS are (`s->ael` + `s->aelsty`, set by
-   `CCSetArrTy` from the declarator immediately BEFORE array-ification —
-   which overwrites `ty` with the decayed pointer shape and destroys
-   exactly that information), params through `pael`/`paelsty`, and the
-   parser hands the value on through decay (`cc->celem`/`cc->celebsty`)
-   and every subscript (`CCArrEltSize` sizes the index by the element:
-   1 for bytes, 8 for slots/pointers, the tag size for whole-struct
-   elements; `CCArrNext` derives the NEXT level's element type, so
-   `tab[0][1][2]` chains). Before this, the subscript arm GUESSED the
-   element type from the base's scale, which was right exactly once per
-   array: `tab[0]` produced TY_INT, so `tab[0][0]` loaded a dword and a
-   store through it wrote 8 bytes, and `struct P *pa[]` — whose ty and
-   tag look identical to `struct P ps[]`'s — was indexed by the tag size
-   and could not reach `pa[0]->a` at all.
-   **Landmine #1 — `TY_INT` is 0.** The first version stored the element
-   type raw and used 0 for "absent", so an INT element WAS the sentinel:
-   `int a[1]` looked like a non-array and kept its nil-deref bug, and
-   sizeof regressed. Element types are therefore stored +1 (encode at the
-   three write sites, decode once at consumption). A `CC_AEL(ty)` macro
-   looked tidier and does not exist in this dialect: the HOST
-   preprocessor has no FUNCTION-LIKE macros either (the very limitation
-   PLAN documents for CC's own prep-lite), and `#define CC_AEL(ty)
-   ((ty)+1)` broke the umbrella with `Invalid lval at "ty"`.
-   **Landmine #2 — array PARAMETERS are not decayed objects.** Their
-   storage is the argument slot, which HOLDS the pointer, so they need
-   the load-on-value path (`is_addr=1`); routing them through the decay
-   arm because they are arrays made `t[0]` read the frame slot itself:
-   silently wrong element values through every `char *t[]`/`struct P *q[]`
-   param (`t[0][0]` answered 96 for "hi"). Params still need `ael` — the
-   element type and the decay decision are independent questions.
-   **Landmine #3 — the 2-D hijack branch must RE-WRITE the element type.**
-   Parsing the index expression clears `celem` (that is what keeps stale
-   residues out of bases), and the row branch inherits its element type
-   from the base rather than computing it, so it has to restore the saved
-   value; skipping that cost `char *m2[2][2]` its third level.
-   **Pre-existing hole found and fixed by the fixture:** `dim>1` gated
-   array-ness at three sites (decay, `sizeof(ident)`, the call-through-an-
-   array check), so one-element arrays behaved like scalar variables and
-   `a[0]=5` stored through nil — reproduced at HEAD before being attributed
-   to M25. `s->ael` is now the array marker at all three, which also makes
-   `sizeof(char c[1])` 1 (C truth) and makes `a=5` on `int a[1]` the
-   "assignment to array" error it always should have been.
-   **Deleted rule, with evidence:** "lenient: index a plain int as slots",
-   justified by `RED[0]` commuting — gcc rejects that program ("subscripted
-   value is neither array nor pointer nor vector") and our lenient path
-   dereferenced 97 as an address and faulted. Before deleting it the suite
-   was run with int bases DIAGNOSED (76/76 green ⇒ nothing indexed a
-   scalar), so the change was proven safe rather than assumed. Error paths
-   pinned: scalar/byte-base subscripts, `pa[0].a` (C-correct "'.' needs a
-   struct object" — an array of pointers yields pointers), 1-element array
-   assignment. 76 cases (decay.c: 27 checks + closer — byte strides at both
-   indices, NULL elements, `sizeof` of element and byte, `strlen` through a
-   table, `char *t[]` walked by a param, `->` and `(*p).m` and `p[i][1]` on
-   struct arrays, struct-pointer params, int-array identity through `+=`/`-=`,
-   char-pointer `++`/`--` scaling by 1, byte stores through an element with
-   the neighbour intact, quad stores through a struct member, 2-D pointer
-   arrays at three levels, frame and static arrays), green x2, saved-object
-   reloads 28/28/28 with ptrinit 25/25, scoped 49/49, arrinit 27/27
-   unchanged, fixture cross-checked against `gcc -std=gnu99` — 28 with the
-   same per-check increments and NO size adjustments needed this time
-   (pointer and byte sizes are C-true here), clean `CC TESTS: 0 failed`.
  - [x] **M23** struct and union initializers. The M22 collector is
    reused unchanged; the element mapping was extracted into `CCInitMap`
    so aggregates share ONE rule with a different target ARITY: 1 for a
@@ -1257,6 +1208,117 @@ Not supported — each currently fails with a compile diagnostic:
    `gcc -std=gnu99` (25, after the fixture was changed to a writable
    array), clean `CC TESTS: 0 failed`.
 
+ - [x] **M25** element type through array decay. Every array symbol now
+   records what its ELEMENTS are (`s->ael` + `s->aelsty`, set by
+   `CCSetArrTy` from the declarator immediately BEFORE array-ification —
+   which overwrites `ty` with the decayed pointer shape and destroys
+   exactly that information), params through `pael`/`paelsty`, and the
+   parser hands the value on through decay (`cc->celem`/`cc->celebsty`)
+   and every subscript (`CCArrEltSize` sizes the index by the element:
+   1 for bytes, 8 for slots/pointers, the tag size for whole-struct
+   elements; `CCArrNext` derives the NEXT level's element type, so
+   `tab[0][1][2]` chains). Before this, the subscript arm GUESSED the
+   element type from the base's scale, which was right exactly once per
+   array: `tab[0]` produced TY_INT, so `tab[0][0]` loaded a dword and a
+   store through it wrote 8 bytes, and `struct P *pa[]` — whose ty and
+   tag look identical to `struct P ps[]`'s — was indexed by the tag size
+   and could not reach `pa[0]->a` at all.
+   **Landmine #1 — `TY_INT` is 0.** The first version stored the element
+   type raw and used 0 for "absent", so an INT element WAS the sentinel:
+   `int a[1]` looked like a non-array and kept its nil-deref bug, and
+   sizeof regressed. Element types are therefore stored +1 (encode at the
+   three write sites, decode once at consumption). A `CC_AEL(ty)` macro
+   looked tidier and does not exist in this dialect: the HOST
+   preprocessor has no FUNCTION-LIKE macros either (the very limitation
+   PLAN documents for CC's own prep-lite), and `#define CC_AEL(ty)
+   ((ty)+1)` broke the umbrella with `Invalid lval at "ty"`.
+   **Landmine #2 — array PARAMETERS are not decayed objects.** Their
+   storage is the argument slot, which HOLDS the pointer, so they need
+   the load-on-value path (`is_addr=1`); routing them through the decay
+   arm because they are arrays made `t[0]` read the frame slot itself:
+   silently wrong element values through every `char *t[]`/`struct P *q[]`
+   param (`t[0][0]` answered 96 for "hi"). Params still need `ael` — the
+   element type and the decay decision are independent questions.
+   **Landmine #3 — the 2-D hijack branch must RE-WRITE the element type.**
+   Parsing the index expression clears `celem` (that is what keeps stale
+   residues out of bases), and the row branch inherits its element type
+   from the base rather than computing it, so it has to restore the saved
+   value; skipping that cost `char *m2[2][2]` its third level.
+   **Pre-existing hole found and fixed by the fixture:** `dim>1` gated
+   array-ness at three sites (decay, `sizeof(ident)`, the call-through-an-
+   array check), so one-element arrays behaved like scalar variables and
+   `a[0]=5` stored through nil — reproduced at HEAD before being attributed
+   to M25. `s->ael` is now the array marker at all three, which also makes
+   `sizeof(char c[1])` 1 (C truth) and makes `a=5` on `int a[1]` the
+   "assignment to array" error it always should have been.
+   **Deleted rule, with evidence:** "lenient: index a plain int as slots",
+   justified by `RED[0]` commuting — gcc rejects that program ("subscripted
+   value is neither array nor pointer nor vector") and our lenient path
+   dereferenced 97 as an address and faulted. Before deleting it the suite
+   was run with int bases DIAGNOSED (76/76 green ⇒ nothing indexed a
+   scalar), so the change was proven safe rather than assumed. Error paths
+   pinned: scalar/byte-base subscripts, `pa[0].a` (C-correct "'.' needs a
+   struct object" — an array of pointers yields pointers), 1-element array
+   assignment. 76 cases (decay.c: 27 checks + closer — byte strides at both
+   indices, NULL elements, `sizeof` of element and byte, `strlen` through a
+   table, `char *t[]` walked by a param, `->` and `(*p).m` and `p[i][1]` on
+   struct arrays, struct-pointer params, int-array identity through `+=`/`-=`,
+   char-pointer `++`/`--` scaling by 1, byte stores through an element with
+   the neighbour intact, quad stores through a struct member, 2-D pointer
+   arrays at three levels, frame and static arrays), green x2, saved-object
+   reloads 28/28/28 with ptrinit 25/25, scoped 49/49, arrinit 27/27
+   unchanged, fixture cross-checked against `gcc -std=gnu99` — 28 with the
+   same per-check increments and NO size adjustments needed this time
+   (pointer and byte sizes are C-true here), clean `CC TESTS: 0 failed`.
+ - [x] **M26** arrays of function pointers. `CCParseFunPtrDecl` learned
+   the ONE bracket pair C puts INSIDE the parentheses — `(*tab[N])(int)` —
+   because that is where the declarator grammar binds the array to `*tab`
+   before the parameter list; the shape it already accepted is therefore
+   exactly the no-brackets case. The count surfaces as `cc->fpdim` (reset
+   at EVERY entry: callers peek with a snapshot and rewind on FALSE, so
+   residue from a failed attempt is a lie to the next one), where -1 means
+   `[]` — size from the initializer, or unknown because it is a parameter.
+   Everything after the declarator is machinery that already existed:
+   `CCReserveArray` lays the slots out (frame descending, arena ascending),
+   `CCSetArrTy` records "the elements are pointers" (M25 — that is what
+   makes `t[i]` a callable value instead of an int), `CCArrayInit` lands
+   brace lists with deduced sizes, zero tails and excess-element errors
+   (M22/M23), M24 records an arena relocation per code-address slot or an
+   emitted store whose MOVABS operand relocates, and M18's
+   `CCIndirectCallAt` performs the call. Calling itself did not change:
+   an fp array is one type declaration getting the same treatment in three
+   storage classes. The array PARAMETER needed one extra line (pael)
+   because its brackets are consumed inside the declarator, so the ordinary
+   array-parameter branch never sees them.
+   Landmines, both small and both real: the empty-`[]` branch set `fpdim`
+   without CONSUMING the `]`, so an unsized fp PARAMETER died one token
+   later at `)` with "expected ')'"; and my first C cross-check of this
+   milestone proved nothing because I wrote `%d` rather than `%%d` inside
+   the SHELL printf that built the C file — the shell substituted zeros, so
+   gcc "agreed" with an empty format, and the same file then printed
+   `H=23376` on one run and `H=25213` on the next: not a difference between
+   engines but an UNINITIALIZED `c` in my own probe (C leaves it garbage;
+   our zeroed arenas make it look deterministic). Two rules for next time:
+   build C probes with a heredoc, and when a number changes between runs in
+   ONE engine, suspect UB in the probe before believing a compiler bug.
+   Verification: 30 checks cross-run against `gcc -std=gnu99` with ZERO
+   model adjustments (pointer sizes are C-true) and 0 mismatches check by
+   check. The reload protocol is the point of this milestone: an fp table
+   is the first arena object whose bytes are CODE addresses, so fptab was
+   saved once and run three times — 31 31 31, with decay 28/28, fptr 27/27
+   and ptrinit 25/25 unchanged (a stale entry would have called into the
+   previous session's code buffer, which is a different address every load).
+   Error paths pinned: `(*t[2][3])(int)`, `(*t)[2](int)`, size 0, `(*t[])`
+   with no initializer, `typedef int (*tab[2])(int);`, fp-array struct
+   members, excess elements, `b=a` on arrays. 77 cases (fptab.c: 30 checks
+   + closer — sized and deduced frame tables, global sized and deduced, a
+   `static` table that persists across calls and keeps a retargeted element,
+   zero-filled tail, retargeting an element at run time, all three call
+   spellings, loop dispatch through a table, `int (*t[])(int)` and
+   `int (*t[2])(int)` parameters, a table element feeding a scalar fp and a
+   struct member, element and array `sizeof`, NULL-vs-address identity,
+   the same function twice yielding the same address, and a typedef'd
+   `binop tab[3]`), green x2, clean `CC TESTS: 0 failed`.
 ## HolyC dialect gotchas (all verified in this build)
 
 - **Prototypes of functions defined in ANOTHER CC_*.HC belong in CC.HH's
@@ -1407,6 +1469,13 @@ Not supported — each currently fails with a compile diagnostic:
   instead of decaying). New cross-file helpers of this unit get their
   prototypes in CC.HH's forward block, and no function-like macro exists
   in the host dialect to shorten the encoding.
+- `cc->fpdim` (M26) is transient declarator OUTPUT, reset at the top of
+  CCParseFunPtrDecl: every caller peeks with a snapshot and rewinds on
+  FALSE, so residue from a failed attempt is a lie to the next one (the
+  same discipline as `noemit`/`spec_static`). An fp-array symbol gets its
+  element type from CCSetArrTy like any other array — an fp is TY_PTR, so
+  `ael` is what makes `t[i]` callable — and its storage comes from
+  CCReserveArray, never from a hand-rolled offset bump.
 - ANY new function group in the compiler unit gets file-top `extern`
   declarations like every existing chain function (M20 proof): without
   them the host COMPILES the unit but same-unit call edges into the new
