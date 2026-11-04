@@ -53,7 +53,11 @@ array sizes, global initializers, and every expression position; adjacent
 string literals concatenate), block scopes with C shadowing and
 `static` block objects on arena storage (M21), aggregate initializers
 (`int a[4]={1,2,3,4};`, `int a[]`/`int m[][3]`/`char s[]` size deduction,
-`char s[]="text"` byte init) (M22) and struct/union initializers (M23)
+`char s[]="text"` byte init) (M22), struct/union initializers (M23) and
+DESIGNATORS (M30: `int a[8]={[0]=1,[3]=5};`, `int m[][3]={[1][2]=9};`,
+`struct P p={.c=7};`, `struct P ps[2]={[0].a=1,[1]={.a=2,.c=3};`,
+`struct W w={.v.i=5};`, `union U u={.ch='x'};`, out-of-order and mixed with
+sequential items, indices folded as constant expressions)
 — and their elements may be POINTER values: string literals, a DEFINED
 function name, or `&global` (M24: `char *tab[]={"a","b"};`,
 `int (*gf)(int)=f;`, `struct L gl={&gi,4};`), and element-faithful array
@@ -130,14 +134,22 @@ Not supported — each currently fails with a compile diagnostic:
 - Initializer edges (M22): every element must be a **foldable constant**
   — C permits variable elements in a FRAME array (`int a[2]={x,y};`),
   this model diagnoses "not a compile-time constant" there and requires
-  constants everywhere else anyway. Brace groups follow C's element
-  semantics (a group targets the NEXT element), so `{{1,2,3},{4,5,6}}`
-  and the flat `1,2,3,4,5,6` agree for a `[2][3]`, while `{{1},{2,3},{4}}`
-  on a 1-D array is excess elements — C warns and drops, we ERROR. Braces
-  nested deeper than the array's rank diagnose for the same reason. A
-  512-value cap (CC_INIT_MAX) bounds one initializer. Designators
-  (`[0]=x`, `.x=x`) are not supported; struct arrays keep their existing
-  rejections; function-pointer arrays initialize since M26
+  constants everywhere else anyway. Brace groups follow C's SUBOBJECT walk
+  (M30 restated it correctly; M22's "a group opens the next element" was
+  right only when the cursor sits at an element boundary): an enclosure takes
+  the next subobject in order, which is a whole element at an element
+  boundary and the NEXT SINGLE SLOT partway through one — `int m[2][3]`
+  accepts `{{1,2,3},{4,5,6}}` and the flat `1,2,3,4,5,6` alike, `{{5},9}` puts
+  9 in m[1][0] (the closed group finished row 0) and `{1,{5}}` puts 5 in
+  m[0][1] (the group took the next slot of the row being filled). Over-full
+  targets ERROR: `{{1},{2,3},{4}}` on a 1-D array and `{{5},{9},8}` on a
+  `[2][3]` are excess elements — C warns and drops, we ERROR (the same stance
+  M22 took, and C's "initializer-string for char array is too long" for a
+  too-long row literal is a third case). A 512-value cap (CC_INIT_MAX) bounds
+  one initializer. A 2-D tag array DECLARS since M25 but its initializer
+  still diagnoses ("one dimension only"); 1-D tag arrays initialize as
+  ordinary aggregates.
+  function-pointer arrays initialize since M26
   (`int (*gt[3])(int)={inc,dbl,neg};`); pointer elements work since M24
   (strings, defined function names, `&globals`) because the arena slots
   they fill carry relocations of their own. `extern int a[];` (an incomplete array declared extern) is
@@ -322,11 +334,17 @@ Not supported — each currently fails with a compile diagnostic:
   (M23) work for objects and 1-D arrays: members fill in declaration
   order, partial initializers zero-fill the rest (mandatory for frame
   objects), a union takes exactly ONE value (its first member — extra
-  values in its group are excess, like C), and a by-value one-slot
-  member takes the one quad that IS that sub-object. Designators
-  (`{.a=1}`, `[0]=x`) are not supported anywhere; a 2-D array of structs
-  diagnoses; a function-pointer member initializes from a DEFINED
-  function name (M24 arena relocations made arena code addresses
+  values in its group are excess, like C) and since M30 a member
+  DESIGNATOR names which member that value belongs to, though every union
+  member still lands on the one slot the tag occupies, and a by-value
+  one-slot member takes the one quad that IS that sub-object (M30: a
+  designation written on a scalar tag object names a MEMBER, so
+  `{.b={5}}` writes b, and a group inside such an object takes ONE member
+  slot rather than the tag — `struct Box gb={{77},8}` puts 8 in `gb.t`,
+  which M23's fixture pins). Only a 2-D tag array's INITIALIZER diagnoses (the
+  declaration itself works since M25); a
+  function-pointer member initializes from a DEFINED function name (M24
+  arena relocations made arena code addresses
   portable); char members land as full quads (harmless: each member has its
   own 8-byte slot and only its low byte is ever read through it). The
   shared mapper reports overfull targets as "excess elements in
@@ -1122,8 +1140,13 @@ Not supported — each currently fails with a compile diagnostic:
    dim2 for a row; a group opens the next element and fills it in order;
    flat values keep filling and roll over when the element is full —
    which is exactly why `int m[2][3]` accepts both `{{1,2,3},{4,5,6}}`
-   and `1,2,3,4,5,6`. Size deduction reads the same mapping (highest
-   element touched), so `int a[]`, `int m[][3]` and `char s[]="ab"` all
+   and `1,2,3,4,5,6`. **[M30 restated this mapping as C's subobject walk:
+   "a group opens the next element" holds only at an element boundary of
+   an array, and a closed group resumes AFTER the element. The two rules
+   coincide for arity 1, which is why every M22 fixture agreed with C
+   without proving the general form — see M30.]** Size deduction reads
+   the same mapping (highest element touched), so `int a[]`, `int m[][3]`
+   and `char s[]="ab"` all
    deduce like C does, including a partial final row. Landing: arena
    bytes for globals and `static` objects (compile-time, so a saved
    object carries the initial state and every reload starts from it),
@@ -1159,8 +1182,10 @@ Not supported — each currently fails with a compile diagnostic:
    too long (with C's "NUL only if it fits" trim — `char s[2]="ab"` is
    legal and unterminated), empty initializer with deduction, `int a[];`
    with none, `int m[][ ]`, variable elements, a string on a non-char
-   array, designators. 73 cases (arrinit.c: 26 checks + closer — local/
-   global brace lists, deduction three ways, tail zeros, `{}`, nested row
+   array, and the designator forms M22 rejected (all of them implemented
+   by M30, where the same shapes became C-truth checks). 73 cases
+   (arrinit.c: 26 checks + closer — local/global brace lists, deduction
+   three ways, tail zeros, `{}`, nested row
    groups, enum-folded elements, braced scalars (local, static, global),
    char byte arrays incl. the unterminated form, arrays sized by enum
    expressions, static arrays persisting across calls, pointer access to
@@ -1173,8 +1198,10 @@ Not supported — each currently fails with a compile diagnostic:
    so aggregates share ONE rule with a different target ARITY: 1 for a
    scalar element, `dim2` for a row, `nmem` for a struct, and **1 for a
    union** (its first member — extra values in its group are excess, as
-   in C). Tags gained an `isu` flag, written on BOTH definition paths
-   because the M21 waterlines RECYCLE tag slots: a flag set only in the
+   in C; M30 adds member designators, which validate the name and then all
+   land on the union's single slot). Tags gained an `isu` flag, written
+   on BOTH definition paths because the M21 waterlines RECYCLE tag slots:
+   a flag set only in the
    union branch would inherit a stale value from a dead tag (the same
    class of bug as recycled symbol entries, which M21 had to fix).
    `CCStructInit` walks targets in ascending order like `CCArrayInit`
@@ -1613,6 +1640,103 @@ Not supported — each currently fails with a compile diagnostic:
    32 checks + closer), green x3, saved-object reloads 33/33/33 with agcopy
    28/28/28, incr 42/42/42, fptab 31/31, decay 28/28, fptr 27/27, ptrinit
    25/25 and structinit 22/22 unchanged, clean `CC TESTS: 0 failed`.
+ - [x] **M30** initializer designators, and the brace-elision rule they
+   exposed. `CCInitDesign` parses one designation chain (`[0]`, `[0][1]`, `.a`,
+   `.v.i`) and resolves it against the TARGET SHAPE the writer owns — a 6-slot
+   bundle (`CC_KI_SCALAR`/`ARR`/`TAG`/`UNION`, outer and element descriptors
+   plus `charr` and the mapper's arity) — because whether `[i]` is legal depends
+   on the type of the object the value sits in, and a chain crosses from one kind
+   to the other exactly as the declarator does: `[1].a` needs the array to pick
+   the element and the tag to pick the member. Two levels travel because a brace
+   group has already descended one (C 6.7.9/20), so a designation inside a group
+   can only choose a slot inside the element the group opened. Coordinates stay
+   -1 when the chain does not set them, which is what lets an undesignated value
+   FOLLOW a designated one (`{[2]=1, 7}` → a[3]) as C specifies; `=` after a
+   designation is optional in C and consumed here. A designation is
+   **pending until a value is recorded**, and `dfl[]` records WHETHER the slot
+   position was named outside the enclosure that owns the value: `[0]={...}`
+   moves the cursor before the group classifies its target, `.b={5}` does too,
+   `{[1]=5}` does not — the brace has already chosen. **The insight: the mapper
+   had to be restated as C's subobject walk.** An enclosure takes the NEXT
+   subobject, which is a whole element only at an element boundary of an ARRAY
+   and otherwise the ONE slot under the cursor; a closed element group resumes
+   at the NEXT element even with slots left empty. M22's "a group opens the next
+   element" was correct only for arity 1, where a group can target nothing else
+   — which is why no fixture from M22 through M29 ever reached the divergence.
+   `int m[2][3]={{5},9}` puts 9 in m[1][0] and `{1,{5}}` puts 5 in m[0][1];
+   `struct Box gb={{77},8}` (Box=`{union v; int t;}`) puts 8 in gb.t while
+   `struct P ps[2]={{1},5}` puts 5 in ps[1].a, because there the group took a
+   whole element. Designators move the SAME cursor, so an approximate cursor
+   made `{[1]={5},9}` — excess in C — look like a legal position. C's element
+   COUNT (`narr`) is passed in so a group may only take a whole element, and a
+   flat value may only roll, if another element exists: a scalar tag object is
+   ONE aggregate, and filling its last member ends the walk rather than rolling
+   into a phantom second element (`struct L gl={.k=7,.p="seven"}` works for this
+   reason). Writers walk targets ASCENDING, so `CCInitOrder` insertion-sorts the
+   collected list whenever any designation appeared — without it a value that
+   falls behind the walk never matches again and every later element silently
+   zero-fills — and the sort makes duplicate detection free, which is where the
+   C-permissive override shapes (`{1,[0]=2}`, `.i=1,.ch=2`) get diagnosed instead
+   of silently taking the last value. The excess test moved from "last value
+   written" to `hw` (highest index touched) because designators make the last
+   source value the lowest target. A string literal now contributes ONE ROW for
+   byte arrays with arity > 1 (`char t[2][3]={"ab","cd"}`, `{[1]="hi"}`) by
+   taking a fresh group id and closing it, retiring M22's whole-object-only
+   literal path for that shape; a literal aimed at a single char subobject is
+   diagnosed where the old code stored its address truncated to one byte.
+   **Landmine — group classification happens after a designation written BEFORE
+   the brace and before one written INSIDE it.** Inverting that order is what
+   made `struct P gp[2]={[0]={.a=9,.c=2}}` report `.c` as excess: the group was
+   classed as a one-slot leaf group using the cursor the previous value had left,
+   so `.c` looked like a second value crammed into `.a`. `dfl[]` exists to keep
+   the two orders straight, and neither fixture shape is obvious enough to catch
+   it without the other (`{[1]=5}` needs the inside-order).
+   **Landmine — a designation may be followed by a brace group or a row literal,
+   not only by a value.** The first version read a value anyway, which sent `{`
+   to `CCInitOne` and reported "expected '}' after initializer" about an ordinary
+   designated sub-aggregate; the second version routed `{` but not a literal, and
+   `{[1]="hi"}` on a sized `char t[2][3]` stored 144 where C says 'h' — the
+   literal's address truncated to one byte, a WRONG VALUE with no diagnostic.
+   The same shape on a DEDUCED `char t[][3]` took a different path and happened
+   to work, which is why the bug survived the first probe round.
+   **Landmine — the descriptor descent must follow the STEP, not the resulting
+   state.** Deciding it from `pe[0]>=0` after the branch is also true when an
+   EARLIER component set `pe`, so `[0][1]` left the descriptor pointing at the
+   element type instead of its elements and a third bracket would have been
+   accepted against a scalar (gcc: "array index in non-array initializer" for
+   `[0][0][0]`). Same class: `gcap` describes the OPEN subobject and must return
+   to A when a group closes — leaving it at a leaf group's cap made the next flat
+   value look over-full, which is how `{{77},8}` failed on its first run.
+   **Landmine — a `//` comment on the `{` line that follows a multi-line
+   `if`/`while` condition makes the HOST fail to parse the condition** ("Missing
+   ')' at '{'"), and so does a comment inside such a condition when a brace
+   follows; a comment after `{` on a ONE-line condition, or on a `}` line, is
+   fine. Verified by four probe files. The roll guards are two-term and long, so
+   the prose lives above them and the condition stays on one line.
+   **Landmine — a splice whose replacement re-includes text still present in the
+   file duplicates it.** A comma tail I re-emitted beside the copy the file
+   already had made ordinary `int a[8]={1,2};` fail with "expected ',' or '}' in
+   initializer" for the rest of the session; the diff against the pre-milestone
+   snapshot is what named it. Divergences from C, all deliberate: an initializer
+   that OVERRIDES an earlier one (`{1,[0]=2}`, `.i=1,.ch=2` — gcc accepts, last
+   wins, `-Woverride-init` warns) and a union given two named members are
+   diagnosed rather than silently resolved, and over-full targets ERROR where C
+   warns ("excess elements", "initializer-string for array of chars is too
+   long") — M22's stance, kept. gcc's `-Wmissing-braces` has no analogue here and
+   changes no value. Error paths pinned against `gcc -std=gnu99
+   -pedantic-errors -Wall`: 18 of 21 shapes reach the SAME verdict (index on a
+   non-array at both chain levels, `.name` on a non-record, unknown member at
+   both levels, `[-1]`, `[5]`, third bracket on a row, `[0]=` bare, a string
+   aimed at a char subobject, excess in a scalar/struct/array initializer, an
+   over-long row literal), and the 3 remaining are the two override shapes above
+   plus a cosmetic `-Wmissing-braces` on `{{5},9,8,7` whose VALUES agree.
+   Verification: desig.c is 42 checks + closer, and unlike every earlier fixture
+   it needed **no model adjustment at all** — all 42 cross-checked increments
+   match `gcc -std=gnu99` exactly, marks counted on both sides (42 = 42). Suite
+   81 PASS x3, clean `CC TESTS: 0 failed`, no new `WARN: Unused var` entries;
+   saved-object reloads 43/43/43 with agcopy 28/28/28, ptrmath 33/33/33, incr
+   42/42/42, fptab 31/31, decay 28/28, fptr 27/27, ptrinit 25/25 and structinit
+   22/22 unchanged.
 
 ## HolyC dialect gotchas (all verified in this build)
 
@@ -1624,6 +1748,15 @@ Not supported — each currently fails with a compile diagnostic:
   the file the umbrella splices first). Missing prototype → a call that
   silently runs nothing (M20); too-late prototype → a link failure (M24).
   When a brand-new call site misbehaves, grep its output for "at &".
+- **A `//` comment on the `{` line that follows a multi-line `if`/`while`
+  condition breaks the host parse**, reported as `ERROR: Missing ')' at "{"`
+  pointing at the line AFTER the brace. A comment inside such a
+  condition, on the line that closes its parentheses, is fatal the same way.
+  Comments after `{` following a ONE-line condition, and comments on a `}`
+  line, are fine (all four shapes probed). So: put the prose ABOVE a
+  multi-line condition and keep the brace line bare — a long two-term roll
+  guard with an inline comment is enough to trigger it, which cost two host
+  parse failures during M30.
 - **There is NO `continue` keyword in this HolyC dialect.** The kernel
   source never uses it (grep T/*.HC: effectively zero hits), and
   `continue;` anywhere in host-side `.HC` code — even inside a plain
@@ -1753,6 +1886,21 @@ Not supported — each currently fails with a compile diagnostic:
   frame objects. Since M24 both tables carry relocations (arena pointer
   slots included), so a code address CAN initialize an arena object — a
   function table is the case that needs it most.
+- Initializer TARGETS are produced by one walk, not by two rules (M30): the
+  cursor `CCInitMap` maintains moves over SUBOBJECTS in flattened order and
+  BOTH a brace enclosure and a designation move it — an enclosure takes a whole
+  element only when the cursor is at an element boundary OF AN ARRAY (`narr`
+  says how many elements exist; -1 for a scalar tag, 0 while a length is being
+  deduced) and otherwise takes the single slot under the cursor, and a closed
+  element group resumes AFTER the element, never in its empty slots. Any new
+  initializer syntax must move that cursor, not compute a position beside it,
+  or the two disagree for arity > 1 (which is how `{{5},9}` landed in m[1][0]
+  while `{[1]={5},9}` looked legal). A designation written BEFORE its brace
+  moves the cursor before the group classifies its target and one written
+  INSIDE it moves the cursor after (`dfl[]` carries the difference); both orders
+  are load-bearing. Because both writers take values by ASCENDING target index,
+  a designated list must pass `CCInitOrder` first, and the excess test is the
+  HIGHEST index touched, not the last value in the source.
 - Scope waterlines: CCEraseScope is the ONLY place that truncates the
   symbol table (function body, block, for-init, switch body all call
   it) and it MUST keep SC_FUN entries — a stub created by a call to an

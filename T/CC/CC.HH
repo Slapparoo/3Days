@@ -155,6 +155,29 @@
 #define CC_MAX_ENUMTAGS	16	//M20: enum tags (redefinition check only)
 #define CC_INIT_MAX	512	//M22: elements (or literal bytes) in one
 				//array initializer
+/* M30: the initializer TARGET SHAPE bundle. The writer that owns the object
+ * builds it and CCInitCollect reads it to resolve DESIGNATORS, because the
+ * legality of a designation depends on the type of the object the value sits
+ * in: `[i]` applies only where that object is an array, `.name` only where it
+ * is a struct or union, and a chain like `[1].a` crosses from one kind to the
+ * other exactly as the declarator does. Two levels travel because a brace
+ * group has already descended one level (C 6.7.9/20-21), so a designation
+ * inside a group addresses the element the group opened.
+ *   [0] outer level kind   [1] its tag id, else -1
+ *   [2] element level kind [3] its tag id, else -1
+ *   [4] charr (byte elements: a string literal IS its bytes)
+ *   [5] A, the mapper's target arity (members per element, or row length)
+ * The mapper is also told NARR, the number of ELEMENTS the object has: A
+ * brace enclosure takes a whole element only when the level above is an ARRAY,
+ * and a flat value may only roll into a new element if one exists. NARR is -1
+ * for a scalar tag object (one aggregate, whose subobjects are its member
+ * slots), 0 for an array whose length the initializer will DEDUCE, and the
+ * length otherwise. */
+#define CC_KI_SCALAR	0	//nothing below this can be designated
+#define CC_KI_ARR	1	//`[i]` designates an element of it
+#define CC_KI_TAG	2	//`.name` designates one of its members
+#define CC_KI_UNION	3	//`.name` validates; every member IS the slot
+
 #define CC_INC_MAX	8	//nested-#include depth guard
 #define CC_SWITCH_CASES	32	//M14: case-label cap per switch statement
 #define CC_LABELS	64	//M16: labels + gotos per function

@@ -39,9 +39,11 @@ extern I64 CCConstExpr(CCCtrl *cc);
 extern U0 CCEraseScope(CCCtrl *cc,I64 mark,I64 base);
 extern U0 CCMakeStatic(CCCtrl *cc,CSym *s);
 extern U0 CCReserveArray(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 total,I64 use_arena);
-extern I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 charr);
+extern I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 *shp,I64 *dE,I64 *doff,I64 *dfl);
 extern U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena);
-extern I64 CCInitMap(CCCtrl *cc,I64 n,I64 *vgrp,I64 *eloc,I64 A);
+extern I64 CCInitMap(CCCtrl *cc,I64 n,I64 *vgrp,I64 *eloc,I64 A,I64 narr,I64 *dE,I64 *doff,I64 *dfl,I64 *pdesig);
+extern U0 CCInitDesign(CCCtrl *cc,I64 *shp,I64 ingrpid,I64 *pe,I64 *po);
+extern Bool CCInitOrder(CCCtrl *cc,I64 n,I64 *vals,I64 *vk,I64 *eloc);
 extern I64 CCArrEltSize(CCCtrl *cc,I64 ael,I64 asty);
 extern U0 CCArrNext(I64 ael,I64 asty,I64 *pnext,I64 *pnextsty);
 extern U0 CCSetArrTy(CSym *s);
@@ -3821,6 +3823,186 @@ I64 CCInitOne(CCCtrl *cc,I64 *pkind,I64 *pisstr)
   return CCConstExpr(cc);
 }
 
+/* M30: parse one DESIGNATION — C's designator list (`[0]`, `[0][1]`, `.a`,
+ * `.v.i`) — and resolve it against the target SHAPE the writer supplied,
+ * writing the coordinates it designates into pend_e/pend_off. A designation
+ * is how an initializer says WHICH part of an aggregate a value belongs to,
+ * and the answer depends on the type of the object the value sits in: an
+ * index designation is legal only where that object is an array, a member
+ * designation only where it is a struct or union, and a chain like `[1].a`
+ * crosses from one kind to the other exactly as the declarator does. Hence
+ * shp[] (outer and element descriptors, see CC.HH) and `ingrpid`: a brace
+ * group has already descended into the element (C 6.7.9/20), so a designation
+ * inside one addresses the element the group opened and can only choose a
+ * slot inside that element, never a different element.
+ * Coordinates stay -1 when the chain does not set them, which is what lets
+ * the mapper keep its sequential cursor: `{[2]=1, 7}` puts 7 in a[3] because
+ * an undesignated value follows the designated one, exactly as C specifies.
+ * The '=' a designation may carry is optional in C and consumed here. */
+U0 CCInitDesign(CCCtrl *cc,I64 *shp,I64 ingrpid,I64 *pe,I64 *po)
+{
+  I64 kind,stag,mi,v,nm[CC_TOK_MAX];
+
+  if (ingrpid>=0)
+  {
+    kind=shp[2];		//inside a group the current object is the
+    stag=shp[3];		//ELEMENT the group opened
+  }
+  else
+  {
+    kind=shp[0];		//flat: it is the aggregate the initializer
+    stag=shp[1];		//as a whole is building
+  }
+  while (!cc->errs)
+  {
+    if (CCTkIsPunct(cc,'['))
+    {
+      if (kind!=CC_KI_ARR)
+      {
+        //`int a[2]={[0][1]=x}` reaches here with the ELEMENT descriptor (an
+        //int), and `struct P p={[0]=x}` with the struct: C calls both "array
+        //index in non-array initializer", and one message covers both because
+        //the answer is the same — the object under the designation is not an
+        //array, so it has no elements to number.
+        CCError(cc,"array index designator needs an array to designate");
+        return;
+      }
+      CCLex(cc);		//consume '['
+      v=CCConstExpr(cc);	//a designator index must FOLD, like every
+      if (cc->errs)		//other constant site (case label, array size,
+        return;		//global initializer), so enum constants work
+      CCExpect(cc,']',"expected ']' after designator index");
+      if (cc->errs)		//for free
+        return;
+      if (v<0)
+      {
+        //gcc: "array index in initializer exceeds array bounds" for [-1].
+        CCError(cc,"array designator index cannot be negative");
+        return;
+      }
+      //The descent belongs INSIDE the branch that moved the cursor, and that
+      //is not a style point: my first version decided it afterwards from
+      //`pe[0]>=0`, which is also true when an EARLIER component set pe — so
+      //`[0][1]` left the descriptor pointing at the element type instead of
+      //its elements, and a third bracket would then have been accepted
+      //against a scalar. gcc calls that "array index in non-array
+      //initializer", so the descent has to follow the step, not the state.
+      if ((pe[0]<0)&&(ingrpid<0))
+      {
+        pe[0]=v;		//the first index of a FLAT chain numbers the
+        kind=shp[2];		//element; continue against the element's own
+        stag=shp[3];		//type (a row, or a tag)
+      }
+      else if (po[0]<0)
+      {
+        po[0]=v;		//an index inside a group, or the second
+        kind=CC_KI_SCALAR;	//bracket of a flat chain, picks inside the
+        stag=-1;		//element: this model sees an element's
+      }			//elements only as scalars (a row is deepest)
+      else
+        CCError(cc,"too many index designators for one element");
+      if (cc->errs)
+        return;
+    }
+    else if (CCTkIsPunct(cc,'.'))
+    {
+      if ((kind!=CC_KI_TAG)&&(kind!=CC_KI_UNION))
+      {
+        //gcc: "field name not in record or union initializer". Covers `.x` on
+        //an array, on a pointer element and on a scalar, which includes
+        //`.a.b` where a is an int.
+        CCError(cc,"member designator needs a struct or union to designate");
+        return;
+      }
+      CCLex(cc);
+      if (cc->tk!=TK_IDENT)
+      {
+        CCError(cc,"expected member name after '.'");
+        return;
+      }
+      StrCpy(nm,cc->tk_str);	//copy it: CCLex below overwrites the token
+      mi=CCMemberFind(cc,stag,nm);
+      if (mi<0)
+      {
+        CCError(cc,"no such struct member in a designator");
+        return;
+      }
+      CCLex(cc);
+      if (po[0]<0)
+      {
+        if (kind==CC_KI_UNION)
+          po[0]=0;		//every union member IS the single slot this
+        else			//model gives the tag, so `.i` and `.ch` write
+          po[0]=mi;		//the same store — which is what they do at
+      }				//run time, aliasing included
+      //Descend into the member's own type. Only a BY-VALUE tag member has one
+      //(M19: any union, any single-member struct), and such a member occupies
+      //the SAME slot as its own first member, so a deeper name in the chain
+      //validates and deliberately does not move the coordinate: `.v.i` writes
+      //the slot that `.v` selected. A pointer member ends the chain (kind
+      //becomes scalar) even though C would let `.p->x` go on — the model has
+      //no slot for the pointee here.
+      if ((cc->st[stag].mty[mi]==TY_STRUCT)&&(cc->st[stag].msty[mi]>=0))
+      {
+        kind=CC_KI_TAG;
+        stag=cc->st[stag].msty[mi];
+      }
+      else
+      {
+        kind=CC_KI_SCALAR;
+        stag=-1;
+      }
+    }
+    else
+      break;			//the designation list is over; a value or a
+  }				//brace group follows
+  CCAccept(cc,'=');		//C: `= ` after a designation is optional
+}
+
+/* M30: order the collected values by TARGET index before a writer walks the
+ * object. Designators let an initializer run backwards (`int a[4]={3,[0]=1}`)
+ * and both writers walk targets ASCENDING, taking one value per target, so an
+ * unsorted list is not merely wrong further along: once an entry falls behind
+ * the walk, eloc[] never matches again and every remaining element zero-fills.
+ * Sorting makes duplicate detection free (two values on one target end up
+ * adjacent). C permits an initializer to override an earlier one — gcc warns
+ * "initialized field overwritten" and the LAST value wins — and we diagnose
+ * instead: picking a winner silently is the sort of approximation this model
+ * avoids, and the shapes that trigger it (`{1,[0]=2}`, `.i=1,.ch=2`) are
+ * questions about intent, not about layout. Insertion sort because designators
+ * usually produce ascending order, so it costs one pass in the common case. */
+Bool CCInitOrder(CCCtrl *cc,I64 n,I64 *vals,I64 *vk,I64 *eloc)
+{
+  I64 i,j,ve,vv,el;
+
+  for (i=1;i!=n;i++)
+  {
+    el=eloc[i];
+    ve=vals[i];
+    vv=vk[i];
+    j=i-1;
+    while ((j>=0)&&(eloc[j]>el))
+    {
+      eloc[j+1]=eloc[j];
+      vals[j+1]=vals[j];
+      vk[j+1]=vk[j];
+      j--;
+    }
+    eloc[j+1]=el;
+    vals[j+1]=ve;
+    vk[j+1]=vv;
+  }
+  for (i=1;i!=n;i++)
+  {
+    if (eloc[i]==eloc[i-1])
+    {
+      CCError(cc,"two initializers for the same element");
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
 /* M22: collect one array initializer into vals[], recording for every
  * value WHICH brace group it came from (vgrp[k] >= 0: inside the
  * group-ordinal-th '{' nested inside the optional outer brace; -1:
@@ -3839,10 +4021,23 @@ I64 CCInitOne(CCCtrl *cc,I64 *pkind,I64 *pisstr)
  * the NEXT element, so for a 1-D array of scalars `{{1},{2,3},{4}}` is
  * elements 1,2,4-with-excess — NOT a flattened list. CCArrayInit does
  * that mapping; the collector only records where each value came from. */
-I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 charr)
+I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 *shp,I64 *dE,I64 *doff,I64 *dfl)
 {
-  I64 n,depth,grp,gnext,i,ch,ek;
+  I64 n,depth,grp,gnext,i,ch,ek,n0,pend_e,pend_off,pend_ofl,charr,A,after;
+  charr=shp[4];		//M30: everything the collector needs to know about
+  A=shp[5];			//what it is collecting FOR now arrives in shp[]
   n=0;
+  pend_e=-1;		//M30: a designation applies to the value AFTER it,
+  pend_off=-1;		//which may be an ordinary value or the first value of
+  pend_ofl=0;		//a brace group, so the coordinates wait here until
+			//some value is recorded and flushed below. pend_ofl
+			//says whether the waiting SLOT position was named at
+			//this level rather than inside a group, and the mapper
+			//needs that: an enclosure takes the subobject the cursor
+			//points at WHEN IT OPENS, so `[0]={...}` and `.b={5}`
+			//(written before the brace) move the cursor first, while
+			//`{[1]=5}` names a slot inside a subobject the brace has
+			//already chosen.
   gnext=0;			//next element-group ordinal
   grp=-1;			//-1: written flat. FLAT VALUES MUST NOT
 				//share an identity: the placer advances to
@@ -3858,9 +4053,13 @@ I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 charr)
     CCLex(cc);			//the list's own braces are not a group
     depth=1;
   }
-  if (charr&&(cc->tk==TK_STR))
+  if (charr&&(cc->tk==TK_STR)&&(A<=1))
   {
     //A byte array initialized from a literal: the BYTES are the values.
+    //M30: this whole-object form is kept for A<=1 only. A 2-D char array has
+    //A=dim2, and there a literal belongs to ONE ROW (`char t[2][3]={"ab",
+    //"cd"}` gives two rows), which the loop's string arm handles by giving
+    //the bytes a group id of their own.
     //(charr comes from the target: `char *tab[]={"a"}` has pointer
     //elements and its strings fall through to CCInitOne as addresses.)
     i=0;
@@ -3930,6 +4129,75 @@ I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 charr)
       if (depth<2)		//deeper braces inherit the id: for a
         grp=-1;			//row they only group inside the row
     }
+    else if (charr&&(cc->tk==TK_STR))
+    {
+      //M30: a string literal whose target is a byte ARRAY — a row of a 2-D
+      //char array, designated (`{[1]="hi"}`) or not (`{"ab","cd"}`) —
+      //contributes its BYTES to that one target. It does so by taking a
+      //FRESH group id, which is exactly the mechanism a brace group uses to
+      //open a target, so the mapper fills the row and an over-long literal is
+      //"excess" like C's initializer-string-too-long. Where the target is a
+      //SINGLE char (`char s[6]={[2]="hi"}`, or a group around one) C rejects
+      //it — a char subobject cannot be initialized by a string — and so do
+      //we, instead of the old fall-through to CCInitOne, which stored the
+      //literal's ADDRESS into a one-byte slot and truncated it.
+      if (A<=1)
+      {
+        //A char SUBOBJECT cannot take a string: C rejects `char s[4]=`
+        //{[0]="ab"}` ("initialization of char from char *"), and falling
+        //through to CCInitOne stored the literal's ADDRESS in the slot
+        //instead — truncated to one byte, which is a wrong value with no
+        //diagnostic at all.
+        CCError(cc,"a string literal initializes a char array, not one char element");
+        return -1;
+      }
+      grp=gnext;
+      gnext++;
+      n0=n;
+      i=0;
+      while (i!=CC_TOK_MAX)
+      {
+        ch=cc->tk_str[i];
+        if (n>=CC_INIT_MAX)
+        {
+          CCError(cc,"array initializer too large");
+          return -1;
+        }
+        vals[n]=ch;
+        vgrp[n]=grp;
+        vk[n]=-1;		//bytes are values, never relocated pointers
+        dE[n]=-1;
+        doff[n]=-1;
+        dfl[n]=0;		//bytes inside one literal are sequential
+        n++;
+        i++;
+        if (!ch)
+          break;		//the literal's own NUL ends the row
+      }
+      CCLex(cc);
+      grp=-1;		//the literal is ONE item: the enclosure its group id
+			//stands for closes with it, and leaving grp pointing
+			//at it made the NEXT flat value look like another
+			//value inside the same row — `char t[2][3]={"ab",7}`
+			//reported "excess elements" for a perfectly ordinary
+			//second row.
+      dE[n0]=pend_e;		//a designation before the literal named the
+      doff[n0]=pend_off;	//ROW, so it lands on the first byte of it
+      dfl[n0]=pend_ofl;
+      pend_e=-1;
+      pend_off=-1;
+      pend_ofl=0;
+      if (!CCAccept(cc,','))
+      {
+        if (!depth)
+          break;
+        if (!CCTkIsPunct(cc,'}'))
+        {
+          CCError(cc,"expected ',' or '}' in initializer");
+          return -1;
+        }
+      }
+    }
     else
     {
       if (n>=CC_INIT_MAX)
@@ -3937,21 +4205,67 @@ I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 charr)
         CCError(cc,"array initializer too large");
         return -1;
       }
-      vals[n]=CCInitOne(cc,&vk[n],&ek);		//M24: constants, strings
-      if (cc->errs)				//and function/global
-        return -1;				//addresses all arrive here
-      vgrp[n]=grp;
-      n++;
-      if (!CCAccept(cc,','))
+      after=0;
+      if ((cc->tk==TK_PUNCT)&&((cc->tk_num=='[')||(cc->tk_num=='.')))
       {
-        if (!depth)
-          break;		//`int a[2] = 1;` — one element, C-legal
-        if (!CCTkIsPunct(cc,'}'))
-        {
-          CCError(cc,"expected ',' or '}' in initializer");
+        //M30: a designation. Both kinds are unambiguous here: '[' is not how
+        //any initializer VALUE starts, and neither is '.' once a float
+        //literal is out of the picture, so reaching this arm with either
+        //token means the user is naming a target rather than a value.
+        //
+        //A designation may be followed by a BRACE GROUP instead of a value
+        //(`{[1]={1,2}}`, `{[0]={.a=9}}`), and then the group arm below must
+        //get to open it: the coordinates wait in pend_e/pend_off, and the
+        //group's first value flushes them. Reading a value anyway is what my
+        //first version did, which sent '{' to CCInitOne and reported
+        //"expected '}' after initializer" about a perfectly ordinary
+        //designated sub-aggregate. C also requires SOMETHING after a
+        //designation, so a ',' or '}' here is diagnosed rather than left to
+        //the value arms below (which would report a different problem).
+        CCInitDesign(cc,shp,grp,&pend_e,&pend_off);
+        if (cc->errs)
           return -1;
+        if ((grp<0)&&(pend_off>=0))
+          pend_ofl=1;	//this level named the slot, so it moves the cursor
+			//ahead of any enclosure that follows it
+        if (CCTkIsPunct(cc,'{')||(charr&&(cc->tk==TK_STR)))
+        {
+          after=1;		//fall out: the group arm, or the literal arm
+        }				//below — they own the item that follows. 
+        else				//through to the value read is what my first
+        {				//two versions did, and it cost two bugs:
+          if (CCTkIsPunct(cc,'}')||CCTkIsPunct(cc,','))
+          {
+            //C requires an initializer after a designation.
+            CCError(cc,"a designation must be followed by an initializer");
+            return -1;
+          }
         }
-        //A group close follows: the '}' arm spends it next turn.
+      }
+      if (!after)
+      {
+        vals[n]=CCInitOne(cc,&vk[n],&ek);	//M24: constants, strings
+        if (cc->errs)				//and function/global
+          return -1;				//addresses all arrive here
+        vgrp[n]=grp;
+        dE[n]=pend_e;		//M30: flush the designation onto this value
+        doff[n]=pend_off;	//(-1 in both means "sequential position")
+        dfl[n]=pend_ofl;	//and record which level named the slot
+        pend_e=-1;
+        pend_off=-1;
+        pend_ofl=0;
+        n++;
+        if (!CCAccept(cc,','))
+        {
+          if (!depth)
+            break;		//`int a[2] = 1;` — one element, C-legal
+          if (!CCTkIsPunct(cc,'}'))
+          {
+            CCError(cc,"expected ',' or '}' in initializer");
+            return -1;
+          }
+          //A group close follows: the '}' arm spends it next turn.
+        }
       }
     }
   }
@@ -3961,51 +4275,159 @@ I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 charr)
 }
 
 /* Map collected initializer values onto TARGET indices per C 6.7.9.
- * The target arity A comes from what is being initialized: 1 for a 1-D
- * array of scalars, dim2 for a row, nmem for a struct, 1 for a union.
- * A brace group OPENS the next target and fills it in order; flat values
- * keep filling the current target and roll over when it is full — which
- * is why `int m[2][3]={1,2,3,4,5,6}` and `{{1,2,3},{4,5,6}}` agree while
- * `{{1},{2,3},{4}}` on a 1-D array is excess. eloc[] receives each
- * value's target index; the result is the highest index touched (-1 on a
- * diagnostic). Flat values must stay positionally distinct: the mapper
- * recognizes "same target" as an UNCHANGED group id, so every flat value
- * reports -1 and the rollover test runs for each — M22 originally let
+ * The target arity A comes from what is being initialized: 1 for a 1-D array
+ * of scalars, dim2 for a row, nmem for a struct, 1 for a union. GSPAN says how
+ * many slots a brace enclosure consumes when it opens at the start of a
+ * subobject: A when the level above is an ARRAY (its subobjects are whole
+ * elements — a row, a struct), and 1 when the object being built IS the
+ * aggregate (a scalar struct or union, whose subobjects are its member slots,
+ * each one slot here). That distinction is not pedantry: `struct Box gb={{77},
+ * 8}` with Box={union v; int t;} must put 8 in gb.t — the group took member v
+ * and closed — while `struct P ps[2]={{1},5}` must put 5 in ps[1].a, because
+ * there the group took the whole element ps[0]. M23's fixture pins the first
+ * and C's H5 probe pins the second.
+ *
+ * The cursor is a walk over SUBOBJECTS in flattened order, and both a brace
+ * enclosure and a designation move it the way C moves it. An enclosure takes
+ * the NEXT subobject: if the cursor is at an element boundary, that subobject
+ * is a whole element (the group fills its slots from the first, and when the
+ * group closes the walk resumes at the NEXT element even if the group left
+ * slots empty — `int m[2][3]={{5},9}` puts 9 in m[1][0], and gcc calls
+ * `{{5},{9},8` excess for the same reason); if the cursor is already INSIDE an
+ * element, the subobject is the single slot under it, so `int m[2][3]={1,{5}}`
+ * fills m[0][1] and a second value in that group is C's "excess elements in
+ * scalar initialization". The M22 mapper instead let every group start a new
+ * element and let a flat value continue inside a group that had already
+ * closed: that agrees with C whenever A==1 (there a group can only take the
+ * whole element, so the two rules coincide — which is why M22's fixtures never
+ * saw the difference) and differs quietly for A>1, where `{{1},{5}}` and
+ * `{1,{5}}` landed in the next row here and in the next slot in C. M30 states
+ * it as a walk because designators move the SAME cursor, and an approximate
+ * cursor is what makes `{[1]={5}, 9}` — excess in C — look like a position.
+ *
+ * A designation OVERRIDES where the walk has got to (it is the only thing that
+ * can move it BACKWARDS: `{3, [0]=1}`), and designating an element resets the
+ * in-element cursor to 0 unless the chain also named a slot inside it: that is
+ * what makes `{[1]={1,2}}` start the row at its first element while
+ * `{[2]=1, 7}` continues from the designated one into a[3].
+ *
+ * eloc[] receives each value's target index; the result is the highest index
+ * touched (-1 on a diagnostic). Flat values must stay positionally distinct:
+ * the walk recognizes "same target" as an UNCHANGED group id, so every flat
+ * value reports -1 and the rollover test runs for each — M22 originally let
  * all flat values share -2, which made {10,20,30} look like three values
- * crammed into one scalar target and killed the first global in the
- * fixture with a spurious "excess elements". */
-I64 CCInitMap(CCCtrl *cc,I64 n,I64 *vgrp,I64 *eloc,I64 A)
+ * crammed into one scalar target and killed the first global in the fixture
+ * with a spurious "excess elements". */
+I64 CCInitMap(CCCtrl *cc,I64 n,I64 *vgrp,I64 *eloc,I64 A,I64 narr,I64 *dE,I64 *doff,I64 *dfl,I64 *pdesig)
 {
-  I64 i,E,off,lastg,hw,elem;
+  I64 i,E,off,lastg,hw,elem,gkind,gcap,gspan,opening;
   E=0;
   off=0;
   lastg=-2;
   hw=-1;
+  gkind=-1;		//-1: not inside a group; 0: the open group took a
+  gcap=A;		//whole ELEMENT; 1: it took one SLOT, and gcap is the
+			//first index past it (an element group's cap is A).
+  if (narr>=0)		//NARR is how many ELEMENTS sit above this walk. An
+  {			//array's subobjects ARE elements, so a group at an
+    gspan=A;		//element boundary consumes A slots and a flat value may
+  }			//roll into the next element. A scalar tag object has ONE
+  else			//aggregate whose subobjects are its member SLOTS: there
+  {			//a group takes one slot wherever the cursor is, and
+    gspan=1;		//running off the member list ENDS the walk — rolling
+  }			//would invent a second element to overflow.
+  *pdesig=0;
   for (i=0;i!=n;i++)
   {
+    opening=0;
     if (vgrp[i]>=0)
     {
       if (vgrp[i]!=lastg)
       {
-        if (off)		//a group opens the next target, finishing
-        {			//a partially filled one first
-          E++;
-          off=0;
+        //The first value written inside a group: this group has just opened,
+        //so the group that enclosed it — if there was one — has closed.
+        if (gkind==0)
+        {
+          E++;		//an element group is a finished subobject: C resumes
+          off=0;	//AFTER it, not in its empty slots ({{5},9} → m[1][0])
         }
-        lastg=vgrp[i];
+        opening=1;	//its target gets chosen below, once any designation
+        lastg=vgrp[i];	//written BEFORE the brace has moved the cursor
       }
     }
     else
     {
-      lastg=-1;		//flat: keep filling, roll over when full
-      if (off>=A)
+      //Written flat, at the top level: any group that was open has closed.
+      if (gkind==0)
+      {
+        E++;		//resume after the element that group finished, not at
+        off=0;		//its first empty slot: `int m[2][3]={{5},9}` puts 9 in
+      }			//m[1][0], which is also why C calls `{{5},{9},8` excess.
+      gkind=-1;		//A LEAF group, by contrast, already left the cursor
+      gcap=A;		//on the slot after the one it took, and the cap
+      //The cap belongs to the OPEN subobject, so it comes back to A here too:
+      //leaving it at a leaf group's cap made the next flat value look
+      //over-full, which is how `{{77},8}` failed on its first run. And the
+      //second half of this test is why `struct L gl={.k=7,.p="seven"}` works:
+      //a scalar tag has ONE aggregate, so filling its last member ends the
+      //walk instead of rolling into a second element that a later member
+      //designation could not aim at. (A comment on the '{' line that follows a
+      //multi-line condition, or one inside such a condition, makes this host
+      //report "Missing ')' at '{'" — verified by probe, and the reason the
+      //condition below is kept on one line.)
+      if ((off>=A)&&((narr==0)||(narr>E+1)))
       {
         E++;
         off=0;
       }
     }
-    if (off>=A)		//only a group can land here overfull
+    if (dE[i]>=0)
     {
+      E=dE[i];		//a designation overrides where the walk has got to —
+      off=0;		//it is the only thing that moves it BACKWARDS — and
+      *pdesig=1;	//naming an element restarts inside it unless the chain
+    }			//also named a slot (see the header comment).
+    if (dfl[i]&&(doff[i]>=0))
+    {
+      off=doff[i];
+      *pdesig=1;	//a slot named OUTSIDE the enclosure is part of where
+    }			//that enclosure begins, so it lands before the group
+    if (opening)	//picks its target; a slot named INSIDE the enclosure is
+    {			//not, and waits until after that choice. Getting this
+      //A designated element that opens a group starts that element fresh, so
+      //the walk may already have arrived here by rolling past the previous
+      //element; the same guard stops it rolling past the last one.
+      if ((off>=A)&&((narr==0)||(narr>E+1)))
+      {
+        E++;
+        off=0;
+      }
+      if (!off&&(gspan>1))
+      {
+        gkind=0;	//at the start of an element of an ARRAY: the
+        gcap=A;		//enclosure takes that whole element.
+      }
+      else
+      {
+        gkind=1;	//mid-element, or a level whose subobjects ARE single
+        gcap=off+1;	//slots (a member of a scalar tag, an element of a 1-D
+      }			//array): the enclosure takes ONE slot, which for
+			//`{{77},8}` is why 8 lands on the NEXT member rather
+			//than past the object.
+    }
+    if ((!dfl[i])&&(doff[i]>=0))
+    {
+      off=doff[i];
+      *pdesig=1;
+    }
+    if (off>=gcap)
+    {
+      //One test covers three shapes: a group holding more values than the
+      //subobject it opened (an element group overflowing its element; a leaf
+      //group holding a second value, which C calls "excess elements in scalar
+      //initialization"), and a designator index at or past the end of the
+      //subobject being built (gcc: "exceeds array bounds"). All three are a
+      //value that belongs to a slot this object does not have.
       CCError(cc,"excess elements in initializer");
       return -1;
     }
@@ -4037,14 +4459,36 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
   I64 vgrp[CC_INIT_MAX];
   I64 eloc[CC_INIT_MAX];
   I64 vk[CC_INIT_MAX];		//per-value base kind (-1 = a plain
-  I64 isstr,total,n,i,stride,v,A,e,hw,vi,kind,charr;
+  I64 dE[CC_INIT_MAX];		//M30: per-value designator coordinates
+  I64 doff[CC_INIT_MAX];		//(-1 = "no designation: sequential")
+  I64 dfl[CC_INIT_MAX];		//M30: 1 when the slot came from a designation
+  I64 shp[6];			//M30: written BEFORE its brace, see CCInitMap
+  I64 isstr,total,n,i,stride,v,A,e,hw,vi,kind,charr,desig,narr;
   U8 *bp;
 
   if (s->ty==TY_CHARP)
     charr=1;			//byte elements: a literal IS the values
   else
     charr=0;			//pointer elements: a literal is an
-  n=CCInitCollect(cc,vals,vgrp,vk,&isstr,charr);	//ADDRESS (M24)
+  shp[0]=CC_KI_ARR;		//M30: this object IS an array, so a
+  shp[1]=-1;			//designation written flat numbers one of its
+  if (s->dim2)			//elements and `[i][j]` reaches inside the
+  {				//element it picked. A tag never reaches this
+    shp[2]=CC_KI_ARR;		//writer (an array of tags goes to
+    shp[3]=-1;			//CCStructInit), so an element is either a
+  }				//row or a scalar, and nothing below a row can
+  else				//be designated.
+  {
+    shp[2]=CC_KI_SCALAR;
+    shp[3]=-1;
+  }
+  shp[4]=charr;
+  if (s->dim2)
+    A=s->dim2;			//arity of one element (a row)
+  else
+    A=1;			//scalars — a group may supply one value
+  shp[5]=A;
+  n=CCInitCollect(cc,vals,vgrp,vk,&isstr,shp,dE,doff,dfl);	//ADDRESS (M24)
   if (n<0)
     return;
   if (n==0)
@@ -4056,19 +4500,29 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
     CCError(cc,"only char arrays take string initializers");
     return;
   }
-  if (s->dim2)
-    A=s->dim2;			//arity of one element (a row)
-  else
-    A=1;			//scalars — a group may supply one value
   if (isstr)
   {
     for (i=0;i!=n;i++)
+    {
       eloc[i]=i;		//the literal's bytes ARE consecutive
+      dE[i]=-1;			//elements: no designation was parsed, and
+      doff[i]=-1;		//the mapper is skipped entirely for this
+      dfl[i]=0;			//form, but the ordering pass below tests it
+    }
+    desig=0;
     hw=n-1;			//elements
   }
   else
   {
-    hw=CCInitMap(cc,n,vgrp,eloc,A);
+    //M30: this object is an ARRAY, so a group at an element boundary takes a
+    //whole element (A slots) and a flat value may roll into the next one. The
+    //element count is passed so the walk can stop rolling when they run out;
+    //0 means the initializer is DEDUCING the length, so it never runs out.
+    if (pend)
+      narr=0;
+    else
+      narr=s->dim;
+    hw=CCInitMap(cc,n,vgrp,eloc,A,narr,dE,doff,dfl,&desig);
     if (hw<0)
       return;
   }
@@ -4106,10 +4560,23 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
       }
     }
   }
-  else if (n&&(eloc[n-1]>=total))
+  else if (n&&(hw>=total))
   {
+    //M30: tests the HIGHEST index touched, not the last value written: with
+    //designators the last value in the source can be the lowest target
+    //(`{[3]=1, [0]=2}`), and an out-of-range index (`int a[2]={[5]=1}`) is
+    //the same failure from the target's side.
     CCError(cc,"excess elements in initializer");
     return;
+  }
+  if (desig)
+  {
+    //M30: a designated list can run backwards, and both writers take values
+    //by ascending target index, so the list must be ordered before them (and
+    //two values on one target are diagnosed there rather than silently
+    //overriding, which is C-with-a-warning).
+    if (!CCInitOrder(cc,n,vals,vk,eloc))
+      return;
   }
   if (pend)
     CCReserveArray(cc,s,base,stag,total,use_arena);
@@ -4217,13 +4684,48 @@ U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
   I64 vgrp[CC_INIT_MAX];
   I64 eloc[CC_INIT_MAX];
   I64 vk[CC_INIT_MAX];		//per-value base kind (-1 = a plain
-  I64 isstr,n,hw,A,total,e2,vi,v,memb,off2,prev,kind;
+  I64 dE[CC_INIT_MAX];		//M30: per-value designator coordinates
+  I64 doff[CC_INIT_MAX];
+  I64 dfl[CC_INIT_MAX];		//M30: designation written before its brace
+  I64 shp[6];			//M30: the target shape, see CC.HH
+  I64 isstr,n,hw,A,total,e2,vi,v,memb,off2,prev,kind,desig,ekind,narr;
   U8 *bp;
 
   //Members are never byte arrays (struct members may not be arrays), so
   //charr=0: a string element is a POINTER value, which is exactly what
   //a pointer member wants (M24) rather than the byte-list form.
-  n=CCInitCollect(cc,vals,vgrp,vk,&isstr,0);
+  if (cc->st[stag].isu)
+  {
+    A=1;			//a union initializes ONE member
+    ekind=CC_KI_UNION;		//and every one of them IS that slot, so a
+  }				//member designator validates and then points
+  else				//at offset 0 whatever its name
+  {
+    A=cc->st[stag].nmem;	//a struct fills its members in order
+    ekind=CC_KI_TAG;
+  }
+  if (s->ael)
+  {
+    //M30: an ARRAY of tags. The M25 array marker is what tells it from a
+    //scalar object, since s->dim is 1 for a scalar AND for a one-element
+    //array. The object level is an array (so `[i]` numbers elements) and the
+    //level below it is the tag (so `[i].m`, or `.m` inside a group, picks a
+    //member slot).
+    shp[0]=CC_KI_ARR;
+    shp[1]=-1;
+    shp[2]=ekind;
+    shp[3]=stag;
+  }
+  else
+  {
+    shp[0]=ekind;		//the object IS a tag: `.name` designates its
+    shp[1]=stag;		//members, and a brace group begins one member,
+    shp[2]=CC_KI_SCALAR;	//whose innards this model cannot designate
+    shp[3]=-1;
+  }
+  shp[4]=0;
+  shp[5]=A;
+  n=CCInitCollect(cc,vals,vgrp,vk,&isstr,shp,dE,doff,dfl);
   if (n<0)
     return;
   if (s->dim2)
@@ -4231,11 +4733,23 @@ U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
     CCError(cc,"struct initializers support one dimension only");
     return;
   }
-  if (cc->st[stag].isu)
-    A=1;			//a union initializes ONE member
+  //M30: an array of tags walks ELEMENTS (a group consumes the tag's whole
+  //nmem slots); a scalar tag object walks MEMBERS, so a group takes one slot
+  //and a following flat value continues with the next member (`{{77},8}` puts
+  //8 in gb.t). NARR=-1 says "one aggregate, never roll"; for an array it is
+  //the element count, or 0 while the length is being deduced.
+  if (s->ael)
+  {
+    if (pend)
+      narr=0;
+    else
+      narr=s->dim;
+  }
   else
-    A=cc->st[stag].nmem;	//a struct fills its members in order
-  hw=CCInitMap(cc,n,vgrp,eloc,A);
+  {
+    narr=-1;
+  }
+  hw=CCInitMap(cc,n,vgrp,eloc,A,narr,dE,doff,dfl,&desig);
   if (hw<0)
     return;
   if (pend)
@@ -4255,10 +4769,19 @@ U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
     }
   }
   total=s->dim*A;
-  if (n&&(eloc[n-1]>=total))
+  if (n&&(hw>=total))
   {
+    //M30: the HIGHEST index touched, not the last value written (see
+    //CCArrayInit). For a tag this also catches a member index past the last
+    //member, which eloc[n-1] alone would have let through as a member of the
+    //NEXT element.
     CCError(cc,"excess elements in initializer");
     return;
+  }
+  if (desig)
+  {
+    if (!CCInitOrder(cc,n,vals,vk,eloc))
+      return;
   }
   if (pend)
     CCReserveArray(cc,s,TY_STRUCT,stag,total,use_arena);

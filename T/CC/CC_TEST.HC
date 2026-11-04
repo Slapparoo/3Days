@@ -323,6 +323,10 @@ CCAssert(42,"T:/CC/TEST/incr.c","incr");
 /* M29: pointer arithmetic — p+n and n+p scale by the element step, p-q is an
  * element count, struct arrays step tags, 2-D arrays step rows. */
 CCAssert(33,"T:/CC/TEST/ptrmath.c","ptrmath");
+/* M30: initializer designators, and the brace-elision cursor they share:
+ * enclosures take the next SUBOBJECT (a whole element only at an element
+ * boundary), designations move that same cursor, and ordering is by target. */
+CCAssert(43,"T:/CC/TEST/desig.c","desig");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */
