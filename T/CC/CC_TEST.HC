@@ -263,7 +263,7 @@ CCM7();
 CCM10();
 CCM12();
 CCAssert(52,"T:/CC/TEST/stdlib.c","stdlib");
-CCAssert(12,"T:/CC/TEST/sprintf.c","sprintf");
+CCAssert(15,"T:/CC/TEST/sprintf.c","sprintf");
 CCAssert(134,"T:/CC/TEST/abortc.c","abort");
 /* M13: preprocessor-lite (guards/chained includes/macros/#if arms)
  * and the adapted-musl headers from T:/CC/INC/ against this compiler. */

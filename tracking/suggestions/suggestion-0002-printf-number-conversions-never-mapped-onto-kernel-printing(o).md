@@ -7,8 +7,9 @@ Proposed
 **Severity:** P2 — no output is wrong *because the delegation is missing*, and no
 build is broken. What is missing is the **mapping**: nobody has written down,
 flag by flag, whether the kernel's formatter can produce C's output. The cost is
-therefore latent and it is about to be paid for real: M35 (C `double` via
-delegated F64 arithmetic) needs a `%f`, and under today's arrangement that means
+therefore latent and it is about to be paid for real: M35 landed C `double` as
+the delegated F64 value model and shipped no printing, so `%f` is now M36's
+first item (`T:/CC/PLAN.md:839-841`), and under today's arrangement it means
 writing a decimal-float conversion in the prelude — in the C subset that lite
 itself compiles — when the host already has one. Measured here, the kernel's
 formatter matches C on every explicit-precision `%f` shape tried (1–15
@@ -16,26 +17,33 @@ fractional digits, width, sign, ties); a later 255-case sweep (see *A wider swee
 after M35 landed*) agrees with that for `%f` and adds the shapes that do NOT
 survive — the flags `-`, `+`, ` ` and `#`, `inf` and `nan`, and all of `%e`,
 `%E`, `%g` and `%G` — so the blanket reason recorded at
-`T:/CC/PLAN.md:751-755` is true in general and false for the specific shapes
-M35 needs. See *Not claimed* for the one shape measured as wrong **today**,
-which is a defect and deliberately not what this file is.
+`T:/CC/PLAN.md:834-838` is true in general and false for the specific shapes
+M36 needs. See *Not claimed* for the one shape measured as wrong at filing time
+(which the post-fix tree no longer reproduces), which is a defect and
+deliberately not what this file is.
 
 ## Finding
 
 `printf` is lowered at compile time into calls into a tiny pure-C runtime that
 CC prepends to every module as C source — `CC_PRELUDE`, `T:/CC/CC_EMIT.HC:9`,
-prepended in `CCCompile` (`T:/CC/CC.HC:101-107`), described at `PLAN.md:592-604`
-(M6b) and reserved in the symbol table at `PLAN.md:499-507`. Decimal digit
-generation lives inside that string: `CCItoa` (`T:/CC/CC_EMIT.HC:24-36`) is what
-`%d` compiles to (`CCPrintf`, `T:/CC/CC_PARSE.HC:3068-3196`), and a **second**
-decimal generator `cc_dig` (`T:/CC/CC_EMIT.HC:386-398`) plus a hex one `cc_hexd`
-(400-414) serve the `sprintf` engine (its `%d` arm at 471-484, `%x` arm at
-485-495). So "turn a number into decimal text" is implemented twice inside the
-compiler, in C (both in one string, `CC_EMIT.HC:9`), and a third time in the host.
+prepended in `CCCompile` (`T:/CC/CC.HC:101-107`), described at `PLAN.md:674-686`
+(M6b — `592-604` as filed) and reserved in the symbol table at `PLAN.md:581-588`
+(`499-507` as filed). Decimal digit generation lives inside that string: the
+walker behind `%d` is `CCItoa` (`T:/CC/CC_EMIT.HC:24-36` as filed — post-fix
+`CCItoa` is 41-49 and the walk is `CCItoaNeg` at 34-40), which `%d` compiles to (`CCPrintf`,
+`T:/CC/CC_PARSE.HC:3679-3803`, comment at 3674-3678; `3068-3196` as filed), and
+a **second** decimal generator `cc_dig` (`T:/CC/CC_EMIT.HC:386-398` as filed —
+post-fix 403-416) plus a hex one `cc_hexd` (printed as 400-414, though it ends at
+421 — post-fix 423-450) serve the `sprintf` engine (its `%d` arm at 471-484 —
+post-fix 500-516 — and `%x` arm at 485-495 — post-fix 517-523). So
+"turn a number into decimal text" is implemented twice inside the compiler, in C
+(both in one string, `CC_EMIT.HC:9`), and a third time in the host.
 
-The host's is `StrPrintJoin` (`T:/CC/STRPRINT.HC:208`, extern'd at
-`T:/CC/KERNELA.HH:5355`, reachable as `StrPrint`/`MStrPrint` at
-`KERNELA.HH:4302-4307`), and it is the engine behind HolyC's own `""` print. It
+The host's is `StrPrintJoin` (`T:/STRPRINT.HC:208`, extern'd at
+`T:/KERNELA.HH:5355`, reachable as `StrPrint`/`MStrPrint` at
+`KERNELA.HH:4302-4307`) — this filing wrote the first two paths with a `T:/CC/`
+prefix, and neither `T:/CC/STRPRINT.HC` nor `T:/CC/KERNELA.HH` exists; the line
+numbers were right — and it is the engine behind HolyC's own `""` print. It
 parses C-shaped flags today: `-` at `STRPRINT.HC:239`, `0` at 244, decimal width
 at 248, `*` width from an argument at 250 and 261, `.`+precision at
 257-267, with the flag bits declared at `KERNELA.HH:4087-4098`; its conversion
@@ -45,40 +53,49 @@ floating point with width **and** precision natively: `T:/KERNELA.HH:3284` is
 `F64 x format "\dDA-TRM,A=\"X Spacing:%6.3f\"\d\n"`.
 
 M6c already named this exact open half and left it open
-(`PLAN.md:726-755`, note at 751-755): "`%d` digit conversion still runs in
-compiled-C (CCItoa); routing conversions through kernel `Prnt` via `cc->ext`
-staging is a possible further delegation, deliberately not done here (C's
-format-flag semantics would have to survive the mapping)." Console output itself
-is already delegated: the flush is the zero-arg HolyC helper `CCFlush`
-(`T:/CC/CC.HC:70-84`, bound as relocation base `CC_B_HFLUSH`, `CC.HH:131`) and it
-"does what the kernel does for HolyC programs" — `"%s",cc.out+8;` at
-`T:/CC/CC.HC:81` — so all console I/O, formatting delegation aside, is the
-kernel's own Print path (`PLAN.md:739-742`).
+(`PLAN.md:808-838`, note at 833-838): "`%d` digit conversion still runs in
+compiled-C (CCItoa); routing conversions through the kernel's format engine
+(`StrPrintJoin`, T:/STRPRINT.HC, extern'd in KERNELA.HH) via `cc->ext` staging is
+a possible further delegation, deliberately not done here (C's format-flag
+semantics would have to survive the mapping)." As filed the quoted middle read
+"through kernel `Prnt`"; M35 rewrote that line to name `StrPrintJoin`, and the
+same commit appended a bracketed addendum to this note (`PLAN.md:839-855`) whose
+answers are in *A wider sweep* below. Console output itself is already delegated:
+the flush is the zero-arg HolyC helper `CCFlush` (`T:/CC/CC.HC:70-84`, bound as
+relocation base `CC_B_HFLUSH`, `CC.HH:165`) and it "does what the kernel does for
+HolyC programs" — `"%s",cc.out+8;` at `T:/CC/CC.HC:81` — so all console I/O,
+formatting delegation aside, is the kernel's own Print path (`PLAN.md:820-822`).
 
 The delegation mechanism is built and proven. `CCLibCall` stages arguments left
 to right into `cc->ext[]` and then emits `MOVABS RAX,&cc->lib[slot]; CALL
-[RAX]` (`T:/CC/CC_PARSE.HC:1672-1692` → `CCEmitLibCall`,
-`T:/CC/CC_EMIT.HC:859-866`); the helper is a zero-arg HolyC function that reads
-`cc->ext`, calls the kernel, and returns in RAX (`T:/CC/CC_LIB.HC:1-30`, table
-installed by `CCSetLib`, `CC_LIB.HC:74-82`). M12 runs five stdlib functions on
-it and `PLAN.md:764-770` records the saved-object round trip as proven
-(`CCSetLib` rebinds; `objstdlib`). So the machinery is not the open question.
-The open questions are (i) whether C's flags survive the mapping — never probed,
-and (ii) the staging width, which is a real number: `cc->ext` is `I64 ext[4]`
-(`CC.HH:358`; `CCExtStub` refuses "more than 4 staged args", `CC.HC:322`) and
-`cc->lib` has `CC_LIB_SLOTS 8` with slots 0-5 used (`CC.HH:140-147`), i.e. two
-free slots and room for two staged quads per call — a per-conversion call fits,
+[RAX]` (`T:/CC/CC_PARSE.HC:1964-1987` → `CCEmitLibCall`,
+`T:/CC/CC_EMIT.HC:887-893` — `859-866` as filed, the same function before the
+in-flight printing fix added 28 lines above it); the helper is a zero-arg
+HolyC function that reads `cc->ext`, calls the kernel, and returns in RAX
+(`T:/CC/CC_LIB.HC:1-30`, table installed by `CCSetLib`, `CC_LIB.HC:294-315`).
+M12 runs five stdlib functions on it and `PLAN.md:864-870` records the
+saved-object round trip as proven (`CCSetLib` rebinds; `objstdlib`). So the
+machinery is not the open question. The open questions are (i) whether C's flags
+survive the mapping — never probed, and (ii) the staging width, which is a real
+number: `cc->ext` is `I64 ext[4]` (`CC.HH:474`; `CCExtStub` refuses "more than 4
+staged args", `CC.HC:322`) and `cc->lib` is `U8 *lib[CC_LIB_SLOTS]` with
+`CC_LIB_SLOTS 32` (`CC.HH:381`, `CC.HH:203`) — M35 grew it from the 8 this filing
+printed (`CC.HH:140-147` then, slots 0-5) and added the float family at slots
+6-18, so `CCSetLib` now installs 19 (`CC.HH:175-202`,
+`CC_LIB.HC:296-314`) and 13 are free (the comment on `CC.HH:203` says "13 in
+use", which does not match the 19 installed). Slots are therefore no longer the
+binding constraint; four staged quads per call are — a per-conversion call fits,
 one call carrying a format string plus 8 arguments does not.
 
 What has changed is the rule. The owner agreed, during M34, that **"Delegation
 is the default, because this is an adapter layer, not a standalone C
 implementation"** is a Correctness-policy rule, to be written into
-`T:/CC/PLAN.md`'s `## Correctness policy` section (`PLAN.md:44-85`, before
-`## C subset limitations` at 86), and that a non-delegation is allowed only with
-an argument, in two cases: the host cannot do the job, or the delegation costs
-more than the thing it replaces. **As committed, that paragraph is not yet in
-the file** — see *Not claimed* — so this filing cites the decision, not a PLAN
-line.
+`T:/CC/PLAN.md`'s `## Correctness policy` section, and that a non-delegation is
+allowed only with an argument, in two cases: the host cannot do the job, or the
+delegation costs more than the thing it replaces. **As filed, that paragraph was
+not yet in the file** — see *Not claimed* — so this filing cited the decision
+and not a PLAN line. It is in the file now: `6fed45c` committed it, the section
+runs `PLAN.md:44-117` and `## C subset limitations` follows at 118.
 
 ## The cost today
 
@@ -86,39 +103,47 @@ line.
   `cc_dig` (prelude, for `sprintf`) and the kernel's `StrPrintJoin`. Only the
   first two are covered by the suite's fixtures, and their expected values come
   from C's documented `printf` behaviour; `gcc -std=gnu99` cross-checking — the
-  habit PLAN records from M21 on (`PLAN.md:1269`, and the run of entries at
-  1340, 1381, 1445, 1509, 1543, 1622, 1716, 1790, 1989) — appears in no entry
-  before M21, so the `printf`/`sprintf` fixtures from M6b/M12.1 have no recorded
-  gcc-derived value either (the same gap `suggestion-0001` files for `unionc.c`).
+  habit PLAN records from M21 on — `PLAN.md:1369` now, and every milestone-log
+  number in this file from M12's entry (`756` as filed) onward has moved by the
+  same +100, so the 1269 and the run at 1340, 1381, 1445, 1509, 1543, 1622, 1716,
+  1790 and 1989 that this filing printed all read 100 low — appears in no entry
+  before M21, so the `printf`/`sprintf` fixtures from M6b/M12.1 have
+  no recorded gcc-derived value either (the same gap `suggestion-0001` files for
+  `unionc.c`).
   The kernel's formatter has **no** comparison against C's flags at all, in
   either direction.
 - **C's flags are not expressible in lite's `printf` today.** `printf("%8d|",5);`
   is refused: `CC ERROR: printf: unsupported format` (measured; the conversion
-  set is `%d %s %c %%` and the refusal is `CC_PARSE.HC:3183`). So the widths and
-  precisions M35's `%f` needs — C's `%w.pf`, and C's implicit precision of 6 —
+  set is `%d %s %c %%` and the refusal is `CC_PARSE.HC:3789`). So the widths and
+  precisions M36's `%f` needs — C's `%w.pf`, and C's implicit precision of 6 —
   are net-new work in the prelude regardless, while the kernel has all of them
   already.
-- **And the prelude cannot currently spell a float at all**: `float`/`double` are
-  listed as unsupported (`PLAN.md:253`), so a C-side dtoa waits on M35's own
-  arithmetic landing, then has to be written correctly (digit extraction across
-  a decimal point, rounding, subnormals, inf/NaN, magnitudes past 2^53) inside
-  the subset lite compiles. The kernel path already has an inf arm
-  (`STRPRINT.HC:534`), a scaled-integer path for magnitudes the 64-bit digits
+- **And nothing in the prelude can print a float yet.** M35 landed the values:
+  `float`/`double` are supported — one width, every value from the host's F64
+  (`PLAN.md:190-201` in "C subset limitations", and the bullet "Floating point
+  (M35)" at `PLAN.md:301-335`) — so the thing missing from C's `printf` is not
+  `double`, it is `%f`: that bullet ends "`printf` has no `%f`"
+  (`PLAN.md:333-334`) and puts the whole list on M36 (`PLAN.md:335`). A C-side
+  dtoa is therefore still unwritten, and has to be written correctly (digit
+  extraction across a decimal point, rounding, subnormals, inf/NaN, magnitudes
+  past 2^53) inside the subset lite compiles. The kernel path already has an inf
+  arm (`STRPRINT.HC:534`), a scaled-integer path for magnitudes the 64-bit digits
   cannot hold (`sp_out_f:` 555, `n=Log10(d)` 558) and its own
   documented limit ("In float formatting, do not exceed 18-digits before or
   after the decimal point because the numbers … are stored in 64-bits",
   `STRPRINT.HC:210-217`). A new C dtoa starts behind that.
-- **The exception is recorded as a blanket, not per-flag.** `PLAN.md:754-755`
+- **The exception is recorded as a blanket, not per-flag.** `PLAN.md:837-838`
   says "format-flag semantics would have to survive the mapping" and stops. M27
   shows what the policy now asks for instead: a named, argued non-delegation
   with the cost spelled out ("Delegating to the kernel is the rule when the
   kernel has the harder problem (sorting, printing, the FFI); copying two known
-  quads is not it", `PLAN.md:1578-1585`). For `printf` nobody can currently tell
+  quads is not it", `PLAN.md:1678-1685`). For `printf` nobody can currently tell
   whether the exception is earned, because the flag-level answer does not exist.
   Under the new default, an unargued blanket is the shape that is out of policy.
 - **The divergence is not hypothetical.** It is already measurable between the
-  two prelude generators and the kernel, and one shape is already wrong in lite
-  (see *Not claimed*: `%d` of the most negative quad). Float row 13 below shows a
+  two prelude generators and the kernel, and one shape was already wrong in lite
+  at filing time (see *Not claimed*: `%d` of the most negative quad; the post-fix
+  tree no longer reproduces it). Float row 13 below shows a
   magnitude where the kernel path is badly wrong and the C path is right; float
   rows 1-8 show where the kernel is right and a fresh C dtoa would have to earn
   it.
@@ -128,14 +153,14 @@ line.
 Partly, and this filing does not reopen it:
 
 - **M6c considered this exact delegation and declined it**
-  (`PLAN.md:751-755`), for the flag-semantics reason. That decision stands as
+  (`PLAN.md:833-838`), for the flag-semantics reason. That decision stands as
   far as it goes: nothing here says M6c should have done it in that milestone.
-- **M27 declined a different delegation with an argument** (`PLAN.md:1578-1585`),
+- **M27 declined a different delegation with an argument** (`PLAN.md:1678-1685`),
   and M12 records both directions in one entry — five functions delegated to
-  kernel routines (`strlen memcpy memset memcmp malloc`, `PLAN.md:757-760`) and
+  kernel routines (`strlen memcpy memset memcmp malloc`, `PLAN.md:857-860`) and
   the rest kept in pure-prelude C because "the kernel has no equivalent or the
   semantics are C-specific" (nine named there: `strcmp strcpy strchr memmove atoi
-  abs puts srand rand`, `PLAN.md:769-772`). The pattern of *arguing* the
+  abs puts srand rand`, `PLAN.md:869-872`). The pattern of *arguing* the
   exception is established practice.
 - **What changed is the default.** As of the M34 agreement the rule is
   delegation-first, and the exception has to be argued in one of the two named
@@ -159,8 +184,24 @@ formatted into a buffer with `MStrPrint` and dumped as hex bytes, so padding and
 NUL bytes are visible (see *Reproduction traps* 5 — console text hides both).
 "C" is gcc's own `printf` on the same shape. lite's `int` is one quad
 (`PLAN.md:138-141`), so the C column for wide values uses gcc's `long long`
-spelling, which is the quad-width reading. Every cell in both tables is a run, not
-a recollection. The two runs use different field delimiters (`|` on the kernel
+spelling, which is the quad-width reading. Every `PLAN.md:<lines>` citation in
+this file is as of filing time, when `T:/CC/PLAN.md` was clean against `68e4f34`
+(see *Not claimed*); `6fed45c` then added lines in nine places and a
+review-time correction added six more, so the filing-time numbers now read low
+by a fixed amount that depends on where in PLAN they sat: 0 up to 77, +6 for
+82-85, +32 for 86-157 (`## C subset limitations` 86 → 118), +44 for 158-240,
++46 for 242-251, +82 for 254-752 (its `518` → 600, `551` → 633, M11 at
+`687-725` → 769-807), +100 for 756-2298 (M12 `756-795` → 856-895, M14
+`907-937` → 1007-1037, the M21 habit line `1269` → 1369, M34 `2182` → 2282) and
++369 below M35's entry, which is new at 2399. Where a paragraph was rewritten at
+review time its PLAN numbers were re-derived against the current tree and are
+not filing-time; that is *Severity*, the *Finding*'s delegation, staging and
+`StrPrintJoin` paragraphs, the `%f` bullet in *The cost today*, the gcc-habit
+entry cited above, the *Already decided?* paragraphs naming M6c, M12 and M27,
+and the *Not claimed* bullet about the delegation rule; everywhere else they are
+as filed and the mapping above converts them. The milestone names and section
+headings are the durable handles throughout. Every cell in both tables is a run,
+not a recollection. The two runs use different field delimiters (`|` on the kernel
 side, `[]` on some gcc runs), so the columns are compared on the field content,
 not on the punctuation.
 
@@ -172,10 +213,10 @@ not on the punctuation.
 | 2 | `%8d` −5 | `      -5\|` | `      -5\|` | ✓ width incl. sign |
 | 3 | `%08d` −5 | `-0000005\|` | `-0000005\|` | ✓ 0-pad after sign |
 | 4 | `%03d` 7 | `007\|` | `007\|` | ✓ |
-| 5 | `%d` −(2^63−1)−1 | `-9223372036854775808\|` | `-9223372036854775808\|` | ✓ kernel and C agree; **lite prints `-(`** |
+| 5 | `%d` −(2^63−1)−1 | `-9223372036854775808\|` | `-9223372036854775808\|` | ✓ kernel and C agree; **lite printed `-(`** (filing time; the post-fix tree prints the C string) |
 | 6 | `%x` 255 | `ff\|` | `ff\|` | ✓ lowercase |
 | 7 | `%X` 255 | `FF\|` | `FF` | ✓ hex case available |
-| 8 | `%x` −1 (quad) | 16 × `f` | `ffffffffffffffff` | ✓ kernel matches the quad reading; lite's `sprintf` gives `1` (documented: `%x` prints the magnitude, `PLAN.md:518`, `CC_EMIT.HC:485`) |
+| 8 | `%x` −1 (quad) | 16 × `f` | `ffffffffffffffff` | ✓ kernel matches the quad reading; lite's `sprintf` printed `1` at filing time (documented then as `%x` prints the magnitude — `PLAN.md:518`, `CC_EMIT.HC:485`); the post-fix `cc_hexd` (`CC_EMIT.HC:423-450`) prints the unsigned reading, so lite matches now, and the bullet that documented the magnitude rule (`PLAN.md:600` as cited above) was rewritten in the same change to state the unsigned reading (`## C subset limitations`, `PLAN.md:610-613`) |
 | 9 | `%08x` 255 | `000000ff\|` | `000000ff\|` | ✓ |
 | 10 | `%u` −1 | `18446744073709551615\|` | `18446744073709551615` (`%llu`) | ✓ |
 | 11 | `%8s` "ab" | `      ab\|` | `      ab\|` | ✓ |
@@ -190,7 +231,7 @@ not on the punctuation.
 | 20 | `%%` | `\|%d\|` from `"%d\|%%d\|"` → `1\|%d\|` | `1\|%d\|` | ✓ |
 | 21 | `%ld` −5 | `-5\|` | `-5\|` | ✓ (`l` is inert: `STRPRINT.HC:286`) |
 | 22 | `%hd` 7 | `7.000000000 \|` | `7\|` | ✗ **`h` is not C's `hh`** — it sets `PRTF_AUX_FMT_NUM` (engineering notation), `STRPRINT.HC:292-294` |
-| 23 | `"50% done\|%d\|"` | `50done\|1\|` | `50 1one\|<garbage>\|` (C reads `%<sp>d` as a conversion) | ✗ three-way; and lite **refuses** this format at compile time (`CC_PARSE.HC:3183`) while the kernel silently drops the `%` |
+| 23 | `"50% done\|%d\|"` | `50done\|1\|` | `50 1one\|<garbage>\|` (C reads `%<sp>d` as a conversion) | ✗ three-way; and lite **refuses** this format at compile time (`CC_PARSE.HC:3789`) while the kernel silently drops the `%` |
 
 `%-8d` and `%-8x` fail for one structural reason that a fix in one place would
 remove: `PRTF_LEFT_JUSTIFY` is consulted only inside `OutStr`
@@ -202,7 +243,8 @@ no warning channel and treats a compile-time refusal as the tool (`PLAN.md:58-64
 and delegation moves that refusal into the runtime engine, which drops output
 instead.
 
-**2. Float shapes (M35's target).** "C" is gcc's `printf` on the same value.
+**2. Float shapes (M36's `%f`; measured as M35's target at filing time).** "C"
+is gcc's `printf` on the same value.
 
 | # | shape | value | kernel (measured) | C (gcc, measured) | verdict |
 |---|---|---|---|---|---|
@@ -224,7 +266,7 @@ Read as a mapping answer rather than as a list of bugs: the kernel's `%f` is
 C-faithful for `%w.pf` with 0 ≤ p ≤ 15, for negative values and for
 half-even ties, and it breaks for absent precision (cheap for lite to repair at
 compile time), for p ≥ 16 (measured), and for magnitudes whose integer part needs
-more than the 18 digits the engine documents (float row 13 is one). M35's `%f`,
+more than the 18 digits the engine documents (float row 13 is one). M36's `%f`,
 whose C default precision is 6, lands in the good zone. By rows 9-13 the honest
 answer is "delegable for the common range, with the precision spelled explicitly
 and kept at or below 15, and the
@@ -276,14 +318,15 @@ and it says plainly which parts of the conversion lite would still have to own.
 
 **3. What the mechanism would carry.** A conversion helper added the M12 way
 costs, per call site: `CCSetScratch` + `MOVABS RAX,&lib[slot]` + `CALL [RAX]`
-(`CC_EMIT.HC:859-866`) against today's plain `CCCall` into the module's own code
-(`CC_PARSE.HC:3169-3177`), i.e. ~14 extra bytes and an RDI-scratch touch per
+(`CC_EMIT.HC:887-893`) against today's plain `CCCall` into the module's own code
+(`CC_PARSE.HC:3775-3783`), i.e. ~14 extra bytes and an RDI-scratch touch per
 conversion, plus 2 staged quads (the value, and either the pointer to a
 per-directive format quad the compiler already builds or the dst pointer) out of
 `ext[4]`. It buys: one fewer prelude function, no recursion on the module's
-private C stack (`CCItoa` recurses ~20 deep, `CC_EMIT.HC:31-33`), and free
+private C stack (`CCItoa` recurses ~20 deep, `CC_EMIT.HC:31-33` as filed —
+post-fix the recursion is `CCItoaNeg` at 36-38), and free
 rebinding for saved objects through the `CC_B_LIB` slot indirection — the
-property M12 verified with `objstdlib` (`PLAN.md:764-770`, `CC_TEST.HC:196-201`).
+property M12 verified with `objstdlib` (`PLAN.md:864-870`, `CC_TEST.HC:196-201`).
 It does **not** change console semantics for NUL bytes or DolDoc markup: both
 paths end at the kernel's `"%s"` print (`CC.HC:81` for mid-run flushes,
 `CC.HC:119-130` at exit), so markup in output is interpreted today exactly as it
@@ -292,8 +335,8 @@ would be after delegation.
 ## Directions (recorded, not implemented)
 
 **(a) Finish the probe before touching code.** Shape by shape, against C, the
-set `printf` actually accepts (`%d %s %c %%`, up to 8 args, `CC_PARSE.HC:3068`
-and the 8-arg ceiling at 3098-3101) plus whatever M35 adds. Rows 1-23 and the
+set `printf` actually accepts (`%d %s %c %%`, up to 8 args, `CC_PARSE.HC:3674`
+and the 8-arg ceiling at 3704-3707) plus whatever M36 adds. Rows 1-23 and the
 float table above are the first batch, done at filing time. Still unprobed:
 `%+d`, `%<space>d`, `%08.3f`-style combinations, `%-` on `%f`, precision 19 and
 above (1..15 measured exact for 1/3, 16/17/18 measured divergent), `inf`/`NaN`,
@@ -304,7 +347,8 @@ letter does to a *variable* `sprintf` format. Cost: about a dozen loader runs an
 no code change. Output to write down: which flags survive, per flag.
 
 **(b) If the mapping holds, delegate and delete the duplicate.** New slot
-(`CC_LIB_FMT 6`), a zero-arg HolyC helper in `CC_LIB.HC` beside `CCXStrLen`, a
+(`CC_LIB_FMT 19` — the float family took 6-18, so the 6 this filing proposed is
+`CC_LIB_FADD` now), a zero-arg HolyC helper in `CC_LIB.HC` beside `CCXStrLen`, a
 line in `CCSetLib`, and `CCPrintf`'s `%d` arm emitting `CCPushExt` +
 `CCEmitLibCall` instead of `CCCall(hi)`; then `CCItoa` comes out of
 `CC_PRELUDE`, and `cc_dig`/`cc_hexd` follow for `sprintf` once the same rows are
@@ -316,12 +360,12 @@ either the helper bounds the write against `CC_OUT_SIZE` itself or it formats
 into `cc->libscr`-class scratch and the compiler copies; and two staged quads
 per call means the whole `printf` cannot become one call, so `CCStr`/`CCOutByte`
 stay for the literal runs no matter what. Benefits: rows 1-8 of the float table
-come free for M35 instead of a new C dtoa (and row 10's divergence is cured by
+come free for M36 instead of a new C dtoa (and row 10's divergence is cured by
 spelling the precision), and the exception list shrinks to the
 flags that genuinely fail.
 
 **(c) If it does not hold for a flag, keep the C path for that flag and say so
-per flag** — the shape M27's note has (`PLAN.md:1578-1585`), not M6c's blanket.
+per flag** — the shape M27's note has (`PLAN.md:1678-1685`), not M6c's blanket.
 The three failures measured here have three different homes, which is why the
 record has to be per-flag and not per-function: `%-` on numeric arms is a
 10-line fix in the kernel's two padding blocks (457-487, 493-514) that
@@ -330,13 +374,13 @@ is a statement about today's kernel, not forever; `%c` of a value whose low byte
 is NUL, or whose high bytes are non-zero, is a semantic difference the kernel
 should keep (HolyC wants the string-shaped reading) and C should not, so those
 cases stay in C — or, cheaper, `CCPrintf` can mask the argument to one byte and
-emit `CCOutByte`, which it already does for `%%` (`CC_PARSE.HC:3155-3161`);
+emit `CCOutByte`, which it already does for `%%` (`CC_PARSE.HC:3761-3767`);
 `%h` is not a numeric-shape problem at all, it is a **letter-collision** problem,
 and the answer there is a rule about the format string, not about the helper: the
 compiler must reject or rewrite the modifier letters the kernel engine gives a
 different meaning (`h` 292-294, `,` 280, `t` 283, `/` 277, `?`, and the
 `*` slots). Write whichever answer is taken into `## C subset limitations`
-(`PLAN.md:86`) beside the existing `printf` bullet, since that is the section a
+(`PLAN.md:118`) beside the existing `printf` bullet, since that is the section a
 reader of a `%h` surprise will be sent to.
 
 (a) is worth doing whether (b) or (c) follows: under the new rule the thing that
@@ -357,15 +401,15 @@ has to exist is the argument, and today it does not.
    `fp(arg)` to invoke a helper will hit a parse error and mistake it for a
    calling-convention problem.
 2. **The helper bodies live in `T:/CC/CC_LIB.HC`, and that file is HolyC, not C.**
-   It is `#include`d into `CC.HC` immediately after `CCCtrl cc;` (`CC.HC:17`, and
-   the layout row at `PLAN.md:551`) because the helpers reference `cc` directly;
+   It is `#include`d into `CC.HC` immediately after `CCCtrl cc;` (`CC.HC:16`, and
+   the layout row at `PLAN.md:633`) because the helpers reference `cc` directly;
    its own header calls them "zero-arg HolyC helpers" (`CC_LIB.HC:1`). The
    **pure C** half is the `CC_PRELUDE` string in `CC_EMIT.HC:9`, which lite
    compiles itself and which cannot call a kernel routine. The handover for this
    filing described `CC_LIB.HC` as "pure C … NOT a HolyC file", which is the
    wrong way round; the distinction is load-bearing, because the helpers are
    JIT-compiled HolyC callees and that is precisely why `CCSetScratch` exists
-   (the RDI frame-zeroing landmine, `CC.HH:288-299`, `CC_LIB.HC:6-8`). A change
+   (the RDI frame-zeroing landmine, `CC.HH:384-395`, `CC_LIB.HC:6-8`). A change
    in `CC_LIB.HC` therefore needs the HolyC image rebuilt (`HCRT.BIN`), while a
    change in `CC_PRELUDE` is recompiled with each module.
 3. **`-c` hands its file to the HolyC compiler, not to lite.** Running a `.c`
@@ -419,41 +463,70 @@ precision sweep at `k9.HC`/`k10.HC`/`k11.HC`), `c1.c`/`c2.c`/`c3.c` with
 
 ## Not claimed, and one thing deliberately not filed
 
-- **`%d` of the most negative quad prints `-(` in lite today** (measured:
-  `printf("%d|",-9223372036854775807-1);` → `-(|`, and the same via `sprintf`
-  → `-(`, count 2) where both C and the kernel print
+- **`%d` of the most negative quad printed `-(` in lite at filing time**
+  (measured: `printf("%d|",-9223372036854775807-1);` → `-(|`, and the same via
+  `sprintf` → `-(`, count 2) where both C and the kernel print
   `-9223372036854775808` (measured, 20 digits). The mechanism follows from the
   prelude source: `cc_v=-cc_v` overflows back to the same negative
   (`CC_EMIT.HC:26-29`), so `if (cc_v>=10)` (`:31`) skips the recursion and
   `48+cc_v-(cc_v/10*10)` (`:33`) evaluates to 40, `(`. `cc_dig` has the same
-  shape (`389`, `397`). That is wrong output today, so by the tracking rule it is
+  shape (`389`, `397`). That is wrong output, so by the tracking rule it is
   a defect and belongs in a `BUG-NNNN(o).md`, not here; this filing was scoped to
   one suggestion, so it is recorded as evidence and left unfiled. There was no
-  `tracking/bugs/` directory in this checkout at filing time.
-  **[Filed since, and cross-linked both ways:
-  `tracking/bugs/BUG-0001-printf-d-of-the-most-negative-quad-prints-minus-paren(o).md`,
-  status `Open`, severity P1. It re-runs the measurement, adds the
+  `tracking/bugs/` directory in this checkout at filing time. Those four line
+  ranges and the negate-first shape they describe are the tree as filed; in the
+  post-fix `CC_PRELUDE` the walker is `CCItoaNeg` (`CC_EMIT.HC:34-40`) and
+  `cc_dig` is 403-416, and neither negates the value it walks — so the measurement
+  above no longer reproduces, and is kept because it is what the filing measured.
+  **[Filed since, and cross-linked both ways while the report existed:
+  `tracking/bugs/BUG-0001-printf-d-of-the-most-negative-quad-prints-minus-paren(o).md`
+  — `Open`, severity P1, when filed, and fixed by M36 now: per the lifecycle a
+  fixed bug is deleted rather than renamed to `(c)`, so that path is now gone.
+  It re-ran the measurement, added the
   kernel-formatter byte witness and the `sprintf` return-count witness (2
-  against C's 20), and pins the mechanism line by line; it also corrects one
+  against C's 20), and pinned the mechanism line by line; it also corrected one
   line of this bullet's evidence — the host's `%d` of a `long`-typed argument
   prints `0`, not the 20-digit string, because `%d` converts an `int`
   (`gcc -std=gnu99 -Wall` names the mismatch outright), so the sound host
-  comparisons are `%ld`/`%lld` on the same value. The bug's direction (d) is
-  this file's direction (b): delegating `%d` to `StrPrintJoin` deletes
-  `CCItoa`, and with it the cause.]** It remains the strongest available
-  argument that the two implementations already disagree.
+  comparisons are `%ld`/`%lld` on the same value. Of the directions it recorded,
+  (b)'s shape and (e)'s answer are the ones that landed: the sign is chosen by
+  the caller, by negating the non-negative side, and the walker takes values `<=
+  0` (`CCItoaNeg`, `CC_EMIT.HC:34-40`, with `cc_dig` at 403-416 as its
+  buffer-and-count twin), and `%x` prints the quad's unsigned reading instead of
+  a magnitude. Direction (d) — this file's direction (b): delegate `%d` to
+  `StrPrintJoin` and delete `CCItoa` — was not taken, so the conversion is still
+  a second implementation inside the adapter, now a correct one, and what this
+  file actually asks remains open. A report is the only record of its own
+  finding, so with the file deleted the record is `T:/CC/PLAN.md`: the M6c
+  addendum's "filed separately as a bug and closed by M36" (`PLAN.md:868`), the
+  M36 milestone entry (`PLAN.md:2684`+), and the `%x` bullet of `## C subset
+  limitations`, rewritten in that same change (`PLAN.md:610-613`). The deleted
+  report reads back from `6fed45c` — the only commit that ever held it (`git
+  ls-tree HEAD tracking/bugs/` lists it, and a `--diff-filter=A` log over that
+  directory names the same commit), which is also its deletion commit's parent
+  once the deletion is committed — and what reads back is the text as of
+  `6fed45c`: the citation corrections a later review pass made in that file were
+  never committed, so they survive only as a scratch copy at
+  `/tmp/opencode/BUG-0001-deleted-2026-11-05.md`, outside the repo and not
+  durable. The measurement above stays the strongest available argument, for the
+  tree it measured, that the two implementations disagreed; what M36 removed was
+  the disagreement, not the argument.]**
 - **The "Delegation is the default" paragraph was not in the file at filing
-  time.** `T:/CC/PLAN.md` is clean against `68e4f34` ("CC: M34 …"), its
-  `## Correctness policy` section (44-85) ends at the gcc-as-witness paragraph,
+  time.** `T:/CC/PLAN.md` was then clean against `68e4f34` ("CC: M34 …"), its
+  `## Correctness policy` section (44-85) ended at the gcc-as-witness paragraph,
   `grep -rn "Delegation is the default"` and `grep -rn adapter` over the tree
-  return nothing, and the last milestone entry is M34 (`PLAN.md:2182`) with no
-  M35 entry at all. So the rule is cited here as the owner's M34 decision as
-  relayed, and it is marked as such; the measurements do not depend on the
-  wording. Nothing outside `tracking/` was touched by this filing, so the
-  paragraph and the M35 entry are still to be written by whoever has PLAN.md in
-  flight. Also: `Prnt` — the routine M6c's note names (`PLAN.md:753`) — does not
-  exist under that name in this tree; `grep -rn Prnt T/` returns only that PLAN
-  line. The engine to name is `StrPrintJoin`.
+  returned nothing, and the last milestone entry was M34 (`PLAN.md:2182` then)
+  with no M35 entry at all. So the rule was cited here as the owner's M34
+  decision as relayed, and it is marked as such; the measurements do not depend
+  on the wording. **Superseded at review time:** `6fed45c` wrote both — the
+  paragraph is `PLAN.md:92-116` and the M35 entry is `PLAN.md:2399` — and
+  *Severity* and the *Finding* above were re-derived to match. The naming point
+  stands, and is now PLAN's own: the same commit rewrote M6c's note from
+  "through kernel `Prnt`" to "through the kernel's format engine (`StrPrintJoin`,
+  T:/STRPRINT.HC, extern'd in KERNELA.HH)", and `grep -rn Prnt T/` now returns
+  two lines — `PLAN.md:98` and `PLAN.md:113`, both in the new paragraph — neither
+  of them a routine that exists under that name in this tree. The engine to name
+  is `StrPrintJoin`.
 - **Not probed:** precision 19 and above (1..15 measured exact for 1/3, 16..18
   measured divergent); `inf`/`NaN`; `%e`, `%g`, `%i`, `%n`, `%p`, `%a`; `%+d` and
   `%<sp>d` beyond the
@@ -466,7 +539,7 @@ precision sweep at `k9.HC`/`k10.HC`/`k11.HC`), `c1.c`/`c2.c`/`c3.c` with
   the values tried (1.5, 0.0, −1.25, 2.5, 0.125, 1/3, 2/3) and one 17-digit integer
   value; it is not a proof for all doubles, and subnormal and near-tie inputs at
   high precision were not exercised.
-- **Nothing here says M35's `%f` should be delegated.** It says the question has
+- **Nothing here says M36's `%f` should be delegated.** It says the question has
   a cheap answer, records a first batch of that answer, and says which flags the
   batch says do and do not survive.
 
@@ -479,4 +552,5 @@ the deletion commit's parent — unlike the assumption the tracking skill carrie
 elsewhere. Per the lifecycle a suggestion is never deleted regardless: whichever
 direction lands, this file stays, renamed to `(c)` with status `Implemented` or
 `Declined`, and keeps its reasoning. Filed on `bugfix/build-isssues` in the
-primary checkout `/mnt/d/Source/3Days`, staged not committed.
+primary checkout `/mnt/d/Source/3Days` and committed at `6fed45c` (M35), which
+also committed `tracking/bugs/` for the first time.

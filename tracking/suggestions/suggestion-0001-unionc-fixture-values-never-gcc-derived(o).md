@@ -26,9 +26,13 @@ This is a suggestion, not a defect: no output is wrong. Measured here, on a copy
 whose C-forbidden lines are rewritten, **gcc returns 36, and the 4-point gap
 between C and the fixture's 40 is exactly four checks — the fixture's own 8, 10,
 15 and 29 — each false under C for a reason PLAN already documents as a model
-deviation** (below). Nothing in the tree records that mapping. The 40 is PLAN's
-recorded value, not a number this filing re-ran (see *Evidence 6*); the gcc half
-was re-run in full. See also *Not claimed*, at the end.
+deviation** (below). At filing time nothing in the tree recorded that mapping;
+`T:/CC/PLAN.md` now does, at 82-85, in the sentence this file's *Already decided?*
+bullet quotes — which four checks and which four model areas — but only at that
+coarse grain: what PLAN does not carry is the per-check evidence below (the
+marked-copy run, and which half of each failing conjunction is C-true). The 40 is
+PLAN's recorded value, not a number this filing re-ran (see *Evidence 6*); the gcc
+half was re-run in full. See also *Not claimed*, at the end.
 
 ## The cost today
 
@@ -61,11 +65,26 @@ Partly, and this filing does not reopen it:
 
 - The discipline (every fixture cross-checked against `gcc -std=gnu99`, per
   check) is recorded in `T:/CC/PLAN.md` and is not disputed here.
-- The reason unionc.c lacks it — and the 36-vs-40 gap itself — are already
-  written in the M34 milestone entry (`T:/CC/PLAN.md:2232-2246`), which says
-  outright that the gap "is filed as a suggestion rather than glossed over".
-  This file is that filing. It adds the per-check mapping, which PLAN does not
-  have.
+- The reason unionc.c lacks it — and the 36-vs-40 gap itself — have exactly one
+  record outside `tracking/`: `T:/CC/PLAN.md`'s `## Correctness policy` section,
+  the paragraph on gcc's own semantics (`PLAN.md:75-90` as it stands now, the
+  unionc sentence running 78-85; re-derived at review time, since PLAN has moved
+  twice since this filing). What PLAN said there at filing time was that the
+  fixture "scores 40 here and 36 under gcc because three of its constructs are
+  things C forbids at file scope and M19 folds by design" — PLAN's reason, not
+  this filing's, and *Evidence* 1-3 show it is the wrong reason. The sentence
+  this bullet used to quote ("is filed as a suggestion rather than glossed
+  over", cited to `T:/CC/PLAN.md:2232-2246`) is not in PLAN: `grep -n glossed`
+  returns nothing in the committed file or in `68e4f34`'s copy, and the only line
+  of the committed M34 entry that states this fixture's score
+  (`PLAN.md:2395-2396`) records just that `unionc.c` 40 is unchanged — its other
+  unionc mention, 2376-2377, is about `extern int eg` and not about the gap — so
+  that citation was pointing at text this filing never
+  re-read (PLAN was mid-edit during it; see the *Evidence* preamble). PLAN has
+  since been corrected to the measured shape — it now says the file does not
+  build as written, that 36 needs two lines rewritten plus `-fgnu89-inline`,
+  that the 4 points are checks 8, 10, 15 and 29, and it names this file for the
+  per-check run. What PLAN still does not have is the mapping below.
 - The "adjusted copy" technique (M21, and again at `PLAN.md:1290`) is the
   precedent for how to close the gap without pretending the fixture is C-clean.
 - What is NOT decided is which of the two directions below to take, and whether
@@ -79,7 +98,25 @@ same ABI the C host uses.
 
 `T:/CC/PLAN.md` was being edited during this filing, so every `PLAN.md:<lines>`
 citation below is as of filing time; the bullet and milestone NAMES are the
-durable handles.
+durable handles. PLAN has moved twice since — M35 landed in `6fed45c` (269 lines
+of new milestone entry, plus the additions to `## C subset limitations`), and a
+review-time correction added six lines inside `## Correctness policy` — so these
+numbers now read low, and they cannot all be converted by one offset: the file
+this filing read was a working-tree state that no commit holds, which puts
+`## Milestones` at `PLAN.md:505` where `68e4f34` has 555 and the tree at
+correction time has 637. None of the PLAN citations below was re-derived,
+because none carries a finding on its own. For the handful that matter, matched
+by quoted text rather than by arithmetic, the numbers this filing printed now
+sit at: M21's cross-check habit `1218-1220` → `1369-1371`; M21's adjusted copy
+`1290` → `1441`; M19's entry `1059-1115` and its `39 checks + closer` line
+`1107-1111` → the entry begins at `1209` and that line is `1258`; the M19
+qualifier bullet `211-217` → `336-337`; the byte-model deviation "the unionc
+fixture pins" `215-217` → `340-342`; the string-literal `sizeof` `225-226` →
+`350-351`; the int-family fold `132-135` → `170-173`. One citation could not be
+matched at all: `PLAN.md:2255`, which came from the uncommitted copy — the M34
+entry as committed discusses `sizeof` only at 2302 and 2311, and neither is about
+the int family. The one range re-derived for a finding is the `## Correctness
+policy` passage quoted in *Already decided?*, which is against the current tree.
 
 **1. The file as it stands does not build, and the blockers surface one at a
 time.**
@@ -160,7 +197,13 @@ headline subject.**
   fixture commits lite to GNU89 `inline` semantics — a bare `inline` definition
   is callable — while `-std=gnu99`, the standard every other fixture is measured
   against, says the definition does not exist. `## C subset limitations` does not
-  list that choice; only the M34 milestone prose does (`PLAN.md:2238-2240`).
+  list that choice, and at correction time it still does not: `inline` appears in
+  that section only as an accepted-and-folded qualifier (`PLAN.md:336-337`). The
+  M34 milestone prose this filing cited (`PLAN.md:2238-2240`) came from the
+  uncommitted PLAN it read: `68e4f34`'s M34 entry says nothing about `inline`,
+  and the nearest thing in the current tree is `PLAN.md:80-82`, which records the
+  gcc-side consequence (C99 `inline` emits no definition for `ifunc`, so the
+  fixture links only with `-fgnu89-inline`) rather than lite's commitment.
 
 **6. The lite side could not be re-run at filing time.**
 
@@ -170,7 +213,9 @@ either attempt — `ERROR: Missing expression at "`" T:/CC/CC_PARSE.HC,6059`, a
 `/*`-comment continuation line reached outside a comment. That is a snapshot of a
 tree mid-M34 (the file's size and mtime changed twice during this filing), not a
 claim about the merged tree. The lite-side 40 is therefore transcribed from
-`PLAN.md:2243-2246`, `PLAN.md:2265-2266` and `CC_TEST.HC:289`, not re-derived
+`PLAN.md:2243-2246` and `PLAN.md:2265-2266` — both from the uncommitted PLAN this
+filing read, where no commit can check them; the committed M34 entry states the
+number at `PLAN.md:2395-2396` — and from `CC_TEST.HC:289`, not re-derived
 here. Re-run step 3 against lite once
 the tree bootstraps again; the gcc half is complete and needs no tree state
 beyond the fixture.
@@ -202,7 +247,12 @@ FAIL is still unattributed — the derivation shortens the diagnosis instead of
 replacing it; and PLAN.md is where this lives, and PLAN.md is already the file
 most at risk of being read as intent rather than evidence. Adding the `inline`
 semantics line to `## C subset limitations` is the part of (b) with the least
-cost and the most independent value.
+cost and the most independent value. **A part of (b) has since been written:**
+the sentence PLAN now carries (`PLAN.md:82-85`) records the four C-false checks
+with the four model deviations they pin, and records that gcc's 36 needs lines 12
+and 14 rewritten plus `-fgnu89-inline`. What (b) still has to add is the
+`## C subset limitations` line above, the LP64-luck note on the union sizes, and
+the per-check table itself.
 
 (a) and (b) are not alternatives for the four checks: whichever file layout wins,
 someone has to write down 8/10/15/29 and why. The choice is only about whether

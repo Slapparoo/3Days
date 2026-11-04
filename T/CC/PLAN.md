@@ -75,10 +75,16 @@ the same words.
 **Why gcc is a witness and not the spec.** Its verdicts carry GNU extensions
 and its own inline link semantics; its warnings are numerous and move between
 releases; and on C's undefined behaviour its answer is one of several legal
-ones. `T:/CC/TEST/unionc.c` scores 40 here and 36 under gcc because three of
-its constructs are things C forbids at file scope and M19 folds by design, and
-`int a[3]; a[5]=1;` is UB, which is why the two engines agree on it only by
-accident. Where lite and gcc disagree about a program C considers legal, it is
+ones. `T:/CC/TEST/unionc.c` scores 40 here; gcc gives it 36, but only on a
+copy: as written the file does not build at all — `auto` and `register` at file
+scope are errors (`:14`, `:12`) and C99 `inline` emits no definition for `ifunc`
+(`:29`), so the link fails — the 36 needs those two lines rewritten plus
+`-fgnu89-inline`, and the 4 points it loses are checks 8, 10, 15 and 29: the
+byte model, the slot-sized `sizeof` of the int family, the union one-slot pun
+and literal `sizeof` — four model deviations recorded below, none of them a
+file-scope construct (`suggestion-0001` carries the per-check run). `int a[3];
+a[5]=1;` is UB, which is why the two engines agree on it only by accident.
+Where lite and gcc disagree about a program C considers legal, it is
 either a bug or a paragraph in "C subset limitations" below, and the test for
 telling those apart is: **does the difference change what the program
 *computes*, or only what gets *printed* while compiling it?**
@@ -292,7 +298,7 @@ Not supported — each currently fails with a compile diagnostic:
   types and struct tags so `(c?&p1:&p2)->x` works — except that since M35 a
   pair with ONE floating arm is refused rather than folded, because the middle
   arm's conversion has to happen inside the middle arm's own path.
-- - **Floating point (M35): ONE width, delegated whole to the host's F64.**
+- **Floating point (M35): ONE width, delegated whole to the host's F64.**
   `double` and `float` are the same thing here — the host has no single precision
   at all — so `sizeof(float)` is 8 where C's is 4 and a single-precision
   computation keeps more bits than C would. Every float VALUE comes from the host,
@@ -311,7 +317,7 @@ Not supported — each currently fails with a compile diagnostic:
   integer use (6.4.4.1/5 gives such a constant `unsigned long long`, whose bits are
   that quad) and differs only on the way to a double — so this file is -6.1e18 here
   and 1.2345678901234567e19 in C. Fixing that means converting the quad as unsigned
-  when the destination is a double, and it is M36's. The truthiness of a double is
+  when the destination is a double, and it is M37's. The truthiness of a double is
   "the quad is nonzero", so `-0.0` is truthy here and falsy in C; a hex float
   literal (`0x1p3`) is a syntax error because the kernel answers 0 for one; `%`,
   `~`, `& | ^`, `<< >>` and `switch` on a floating operand are refused, as are
@@ -326,7 +332,17 @@ Not supported — each currently fails with a compile diagnostic:
   types); a conditional with one floating and one integer arm is refused (the
   middle arm's conversion cannot be inserted after its jump was emitted); `printf`
   has no `%f`; and there are no math builtins, so `sqrt(x)` is a call to nothing
-  yet. All of it is on M36's list.
+  yet. All of it is on M37's list.
+- Integer literals have NO suffixes here: `12u`, `12ul` and
+  `12345678901234567LL` are syntax errors (the number token ends at the digits
+  and the suffix is then an identifier), while the FLOAT suffixes M35 folds are
+  accepted. A C-legal spelling that is refused beats the same spelling read
+  wrongly, but `1LL << 40` has to be written `1 << 40` in this dialect. The
+  neighbouring fact, measured in the same run: a literal that does not fit the
+  SIGNED quad wraps into it instead of taking C's unsigned literal type, so
+  `9223372036854775808` is -9223372036854775808 here and `0xFFFFFFFFFFFFFFFF`
+  is -1, where C's literal is `unsigned long long` and both values are positive
+  (6.4.4.1/6).
 - M19 edges: qualifier keywords (`extern static register auto volatile
   inline`, added to `const`) are accepted and folded — with C's
   default-int PROMISE when they stand alone (`static x;` is `static
@@ -588,16 +604,17 @@ Not supported — each currently fails with a compile diagnostic:
   accept a stream argument and ignore it: `cc->out` IS the stdio
   buffer (see M12). `abort()` exits the program with 134 from any
   depth (see the M12.1 nested-return landmine).
-- `sprintf` interprets its format AT RUNTIME (the format may be a
-  variable — the point of the engine): `%d %s %c %x %%`, at most 4
-  conversion arguments (extra user args are a diagnostic; missing ones
-  read as 0), no width/precision flags, `%x` prints the magnitude of
-  a signed value, and the return is the written-character count —
-  never pointer subtraction (arena pointers are relocated per session;
-  subtraction across a saved-object reload is a different arena).
-  `snprintf` deferred: per-write bound guards would bloat every
-  conversion site; the engine writes unguarded into the caller's
-  buffer (caller's responsibility, same as C UB territory).
+- `sprintf` interprets its format AT RUNTIME (the format may be a variable — the
+  point of the engine): `%d %s %c %x %%`, at most 4 conversion arguments (extra
+  user args are a diagnostic; missing ones read as 0), no width/precision flags,
+  `%x` prints the QUAD'S UNSIGNED READING, which is what C and the kernel both
+  print for a 64-bit `int` (M36; it used to print the magnitude, which answered `1`
+  for -1 and a single `0` for the most negative quad, a value with no positive
+  magnitude to print), and the return is the written-character count — never
+  pointer subtraction (arena pointers are relocated per session; subtraction across
+  a saved-object reload is a different arena). `snprintf` deferred: per-write bound
+  guards would bloat every conversion site; the engine writes unguarded into the
+  caller's buffer (caller's responsibility, same as C UB territory).
 - `typedef` binds a name to a base type ONLY in type position, and an
   existing symbol (variable, function) shadows the typedef there, like
   C's ordinary-namespace rule. Struct typedefs are not implemented
@@ -830,23 +847,28 @@ Not supported — each currently fails with a compile diagnostic:
   extern'd in KERNELA.HH) via `cc->ext` staging is a possible further
   delegation, deliberately not done here (C's format-flag semantics
   would have to survive the mapping).
-  **[The delegation rule in "Correctness policy" now asks that question
-  again, and `%f` is where it comes due. M35 turned out to be the F64 value model
-  rather than printing, so the conversion is M36's first item; the kernel formats
-  F64 natively (`A="%6.3f"` in a DolDoc string, KERNELA.HH), so writing a
-  decimal-float dtoa from scratch in the prelude would be the second
-  implementation the rule warns about. suggestion-0002 carries the mapping probe.
-  Its answer: the kernel's `%f` agrees with C for `%w.pf` at or below 15
-  significant digits on ordinary values — the limit shows up both as `%.16f` of
-  1/3 and as `%.6f` of 1e10 (16 digits needed), so C's default precision 6 is
-  inside the exact zone — but the kernel's `%f` defaults to precision 0 when none
-  is stated, and its `%e`/`%g`/`%E`/`%G`, its `-`/`+`/` `/`#` flags and its
-  `inf`/`nan` spellings do not match C at all (a 255-case shape×value sweep gives
-  49 identical outputs). A delegated `%f` therefore has to state the precision,
-  keep it at or below 15, and own the two special values — which is an argument,
-  where M6c's note had only a reason not to. That suggestion also records a live
-  DEFECT it found (lite's `%d` of the most negative quad), filed separately as a
-  bug.]**
+
+  **[The delegation rule in "Correctness policy" now asks that question again, and
+  `%f` is where it comes due. M35 turned out to be the F64 value model rather than
+  printing, so the conversion became M36's subject: its integer half landed (`%d`
+  exact at the most negative quad, `%x` reading the quad instead of the magnitude),
+  and `%f` is the part M36 did not reach; the kernel formats F64 natively
+  (`A="%6.3f"` in a DolDoc string, KERNELA.HH), so writing a decimal-float dtoa
+  from scratch in the prelude would be the second implementation the rule warns
+  about. suggestion-0002 carries the mapping probe. Its answer: the kernel's `%f`
+  agrees with C for `%w.pf` at or below 15 significant digits on ordinary values —
+  the limit shows up both as `%.16f` of 1/3 and as `%.6f` of 1e10 (16 digits
+  needed), so C's default precision 6 is inside the exact zone — but the kernel's
+  `%f` defaults to precision 0 when none is stated, and its `%e`/`%g`/`%E`/`%G`,
+  its `-`/`+`/` `/`#` flags and its `inf`/`nan` spellings do not match C at all (a
+  255-case shape×value sweep gives 49 identical outputs). A delegated `%f`
+  therefore has to state the precision, keep it at or below 15, and own the two
+  special values — which is an argument, where M6c's note had only a reason not to.
+  That suggestion also records a DEFECT it found (lite's `%d` of the most negative
+  quad printing `-(`), filed separately as a bug and closed by M36: the walker no
+  longer negates its own input, and 144 values across the signed-quad range were
+  pinned twice each -- written length and exact content -- with 288/288 matching
+  `gcc`'s `%lld` and `%llx` output.]**
  - [x] **M12** stdlib, delegated to the kernel wherever it exists.
    Two halves. **Delegated** (parser name-dispatch in `CCExprPrimary`
    -> `CCLibCall`): `strlen`->`StrLen`, `memcpy`->`MemCpy`, `memset`->
@@ -2554,7 +2576,7 @@ Not supported — each currently fails with a compile diagnostic:
    integer model instead (what M15 through M34 did for every pair) leaves a
    double's bit pattern in a slot C says holds a number, which is a wrong value
    with no message. Every one of these is written in the limitations list as the
-   thing M36 owes, rather than left as a surprise.
+   thing M37 owes, rather than left as a surprise.
 
    **Six bugs in lite, two defects in the host and four errors in my own probes —
    every one of them found by running something, and the probe errors are listed
@@ -2658,6 +2680,82 @@ Not supported — each currently fails with a compile diagnostic:
    new, none gone. All of it is `T:/` content, so there is no `HCRT.BIN` rebuild
    and no host recompile — the loader is the binary M34 was tested with — and the
    suite is the gate.
+
+ - [x] **M36** the integer conversions `printf` and `sprintf` do, made C-exact.
+   Two wrong values, one of them a filed bug, both caused by the same habit: a
+   conversion that NEGATES ITS OWN INPUT before working on it. `%d` of the most
+   negative quad went through `if (cc_v<0) { putchar(45); cc_v=-cc_v; }`, and
+   `-cc_v` is the same value when `cc_v` is -2^63, so the walker was handed a
+   negative number it believed positive, its `cc_v>=10` recursion test failed, and
+   it printed one digit — `48+(-8)` is `(`, so the answer was `-(` for a
+   twenty-character number (BUG-0001, and sprintf's own `cc_dig` had the identical
+   shape, so the same program produced `-(` there too, with a length of 2 where C
+   returns 20). The fix is a domain rule rather than a special case: THE SIGN IS
+   CHOSEN BY THE CALLER, by negating the side where negating is safe (the
+   non-negative one, whose magnitude always fits), and the walker takes values `<=
+   0` and never negates. `cc_v-cc_v/10*10` then lies in [-9,0] for every input
+   because `/` truncates toward zero (the emitted `IDIV`), so the digit needs no
+   sign fix and -2^63 needs no exception. `CCItoaNeg` and `cc_dig` are the same
+   rule with two sinks — `putchar` for printf's byte stream, buffer-plus-count for
+   sprintf, whose return value is a documented API and is why one function cannot
+   serve both — and both comments state the rule because `%f` will be the third
+   sink, which is the point of writing it down twice. `%x` was the same habit one
+   step away: it negated, so it printed the MAGNITUDE of a signed value, which was
+   lite's documented deviation (`1` for -1) and had no answer at all for -2^63,
+   where it printed a single `0`. Hex needs no division, so it does not need a
+   domain at all: `cc_hexd` now walks the sixteen nibbles from the top with `>>`
+   and a mask and skips leading zeros, and masking AFTER the shift makes it
+   irrelevant that lite's `>>` is arithmetic. That is C's `%x` for a 64-bit `int`,
+   and it is also what the kernel prints, so this removed a documented divergence
+   instead of adding one: `ffffffffffffffff` for -1 and `8000000000000000` for the
+   most negative quad. The `## C subset limitations` bullet that promised the
+   magnitude was rewritten in the same change, because a document that describes a
+   wrong value has to stop describing it when the value stops being wrong.
+   **Delegation was asked and answered, not assumed.** The host prints this value
+   correctly through both of its routes (`StrPrintJoin` and its own `print`,
+   measured on 12 values including the edge), so the delegation rule asks why the
+   walker stayed in the prelude. The answer is a cost comparison, and it is narrow:
+   the host route replaces ~35 lines of prelude C with a helper, a slot and a
+   registration, AND buys a per-call-site tax suggestion-0002 measured — about 14
+   bytes and an RDI touch per conversion, two of the four `ext` slots — plus two
+   things the prelude does not need: a destination, because `StrPrintJoin` takes no
+   capacity argument and printf's sink is a byte stream, so `%d` would format into
+   a scratch buffer and then be copied out by `CCStr`; and a count, because
+   sprintf's return value cannot come from pointer subtraction in generated code (a
+   saved object re-answers arena addresses per session). The walker, by contrast,
+   is now exact for every value the model can hold, and that is a measurement
+   rather than a belief (below). For `%f` there is no such choice: lite owns no
+   decimal-float algorithm, so writing one in the prelude WOULD be the second
+   implementation the rule exists to prevent, and M37 delegates it. Verification:
+   144 values across the signed-quad range — the edge and its neighbours, every
+   power of ten that fits, powers of two, the 32-bit edge, and 60 random quads —
+   each pinned TWICE through `sprintf`: the written length (the return value, which
+   an approximately-right walk cannot fake) and the exact content via `strcmp`,
+   against python's own arbitrary-precision spelling of the same value. **288 of
+   288 checks pass in lite, and 288 of 288 in `gcc`** on the equivalent program,
+   which is the control that says the oracle is C's answer and not mine. The
+   `printf` path was checked separately against the same reference, and that
+   comparison needed TWO transforms rather than one: `%d` to `%lld` (C's `%d` is
+   32-bit and lite's `int` is a quad — untransformed, gcc answered `0` for the most
+   negative quad) and unsuffixed literals to `LL` (an unsuffixed `-11` passed to
+   `%lld` is undefined, and gcc printed `4294967285` for it). Getting either half
+   wrong produces a reference that is quietly not the same program. `sprintf.c`
+   gained checks 12-14 (the quad edge, its two neighbours, and the `%x` reading),
+   every one of them expanded and verified TRUE under C on its own, and its
+   assertion moved 12 to 15; check 9's comment — "widest %d" over a 32-bit value —
+   was corrected, since that label is what let a 19-digit failure read as covered.
+   Suite: 86 PASS with `CC TESTS: 0 failed`, identical across two runs, with no
+   FAULT line in either. Saved objects: the prelude is compiled into every module,
+   so 13 fixtures (the whole printing family plus the M35 set) were saved and run
+   three times each — obj/obj/obj/direct, 0 mismatches, sprintf 15 15 15 15. Two
+   host facts came out of the work and are recorded rather than fixed: the host's
+   own `%d` is correct where lite's was not (so this was the second implementation
+   disagreeing with the thing it duplicated), and lite accepts NO integer literal
+   suffixes — `12345678901234567LL`, `12u` and `12ul` are syntax errors, while the
+   float suffixes M35 folds are accepted — a C-legal spelling lite refuses, so the
+   sweep's lite source spells every literal unsuffixed while its C reference spells
+   the same values `LL` — the two programs differ in spelling and not in value,
+   which is the only reason the reference is trustworthy.
 
 ## HolyC dialect gotchas (all verified in this build)
 

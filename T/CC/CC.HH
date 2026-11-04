@@ -200,11 +200,13 @@
 #define CC_LIB_FNE	16
 #define CC_LIB_I2D	17
 #define CC_LIB_D2I	18
-#define CC_LIB_SLOTS	32	//13 in use; room for the float family to grow
-				//(a slot is one quad in CCCtrl, addressed
-				//through the CC_B_LIB table base, so a saved
-				//object rebinds to the loading session's
-				//helpers with no object-format change)
+#define CC_LIB_SLOTS	32	//19 installed: 0-5 stdlib (M12), 6-18 the
+				//float family (M35) — see CCSetLib.  A slot is
+				//one quad in CCCtrl, addressed through the
+				//CC_B_LIB table base, so a saved object rebinds
+				//to the loading session's helpers with no
+				//object-format change; growing the count costs
+				//nothing at the object level.
 /* M13 preprocessor-lite + typedef tables (compile-time only: a saved
  * object carries code and relocations, never source-level names, so
  * CCSave/CCLoad ignore all of these). */
