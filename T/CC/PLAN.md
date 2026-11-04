@@ -81,9 +81,12 @@ getc fputc putc fputs abort` (see M12.1) — the usual operators —
 `++ -- & * []` (M28: both spellings of `++`/`--`, prefix and postfix, on
 any modifiable lvalue the chain can produce), comma, short-circuit logic,
 bitwise `& | ^`, shifts
-`<< >>`, `~`, all ten compound assignments (`p+=n` scales), chained
+`<< >>`, `~`, all ten compound assignments, chained
 `a=b=5` — with C's full precedence chain (shift vs relational vs the
-three bitwise levels are pinned by `bitops.c`). M15 adds `sizeof`
+three bitwise levels are pinned by `bitops.c`), and C's pointer-arithmetic
+rules whole (M29: `p+n`/`n+p` scale by the element step, `p-q` is an element
+count, struct tags and 2-D rows step whole, and `p+q`/`n-p`/`p+=q` diagnose).
+M15 adds `sizeof`
 (C-truth sizes — see M15) and C casts (`(char)` truncates, `(char*)`/
 `(int*)` retype pointers, `(struct T *)` keeps the tag for `->`).
 M13 adds the type
@@ -112,9 +115,11 @@ HEAD). New C-faithful diagnostic in the same arm: subscripting a SCALAR
 (`v[0]`, `RED[0]`, `tab[0][0][0]`) is "array subscript requires a pointer
 or array" — gcc says the same thing, and the old "lenient: index a plain
 int as slots" rule dereferenced the int as an address and faulted.
-Residual model choices, both documented below: struct-pointer arithmetic
-scales by 8 while `ps[i]` strides by the tag size, and arrays of function
-pointers stay unsupported.
+Residual model choices, documented below: the slot-size convention for
+`sizeof` of aggregates and `int`, ONE pointer code for every non-byte
+pointee (`struct P **` is indistinguishable from `int *`), and fp arrays
+having arrived at M26 with their own edges. Arithmetic and indexing stopped
+being two different rules at M29.
 
 Not supported — each currently fails with a compile diagnostic:
 
@@ -156,9 +161,10 @@ Not supported — each currently fails with a compile diagnostic:
   8-byte slot per byte (element COUNTS and strides are byte-true since
   M25, the frame density is not); `sizeof(char c[1])==1` and
   `sizeof(int b[1])==8` follow the model's slot convention while pointer
-  and byte element sizes are C-true; and struct-pointer arithmetic
-  (`ps+=1`, `ps++`) scales by 8 where `ps[i]` strides by the tag size —
-  a pre-existing inconsistency, unchanged here, so prefer `ps[i]`.
+  and byte element sizes are C-true. The struct-pointer inconsistency this
+  bullet used to describe (`ps+1` stepped 8 while `ps[i]` strode the tag)
+  is closed: since M29 arithmetic and indexing read the SAME element step,
+  so `sp+1`, `sp+=1`, `sp++` and `sp[1]` all move a whole tag.
 - `else if` chains parse; nested `switch` works (M14 — but nested
   switches exposed the sharing bug: per-statement parse state must be
   CALL-LOCAL, the ctrl-array version let an inner switch overwrite its
@@ -256,28 +262,34 @@ Not supported — each currently fails with a compile diagnostic:
   dim/dim2 only); `sizeof(m[i])` on a row goes through the expression
   path and reports the POINTER size (C's row size needs the bare
   `sizeof m` / div by dim, or a dims-carrying symbol the expr path
-  does not read); elements of pointer-arrays (`char *ap[2]`) are
-  int-shaped — `ap[1][0]` loads the pointer then indexes the QUAD at
-  it, so byte access takes the temp-variable form (`p=ap[1]; p[0]`)
-  or a cast (`*(char *)(ap[1])`) — the model has one pointer kind;
+  does not read); elements of pointer-arrays (`char *ap[2]`) became
+  element-faithful at M25 — `ap[1][0]` strides and loads BYTES through a
+  `char *` element (what used to answer 31096 for "xy"), and a pointer
+  ELEMENT is still a slot, which is C's size for one; the model keeps one
+  pointer CODE (`struct P **` and `int *` are both TY_PTR, so `**pp` needs
+  the temp-variable form), just not one element size;
   subscripting a string LITERAL works since M19 (`"ab"[1]` is 'b', and
   `*("ab")` too) — and it writes into the WRITABLE data arena, so
   `++"ab"[1]` really does change that pool string for the rest of the run
   (C: undefined behavior; a variable is the portable spelling);
-  `++`/`--` on a POINTER-TO-ROW steps by element size, not row size;
+  `++`/`--` on a 2-D array BASE diagnoses (arrays are not incrementable,
+  M27/M28) while `m+n` steps a whole ROW and `(m+1)[0][0]` indexes it
+  (M29); `int (*p)[3]` (pointer to array) is a diagnostic declarator;
   array PARAMETERS discard the first dimension (the caller owns the
   count) and keep the second; struct members may not be arrays.
-- **Pointer DIFFERENCES are byte counts, not element counts** (silent,
-  measured while verifying M28, pre-existing): `int a[4]; p=a; ++p; ++p;`
-  then `p-a` is 16 here where C says 2, because subtraction is the ordinary
-  integer subtract and nothing divides by the element scale. `++p`/`p++`
-  DO scale (by 8 for slots, by 1 for bytes — `incr.c` pins both), so the
-  walk is right and only the difference is byte-shaped. Byte pointers are
-  correct by construction (`q-w` on `char *` is the byte count C reports),
-  which is why this hides: the common `strlen`-style difference works. Until
-  it is fixed, carry an index alongside the pointer when you need an element
-  count, and note that `sizeof(*fp)` and struct-pointer steps keep their own
-  documented model sizes.
+- Pointer arithmetic follows C's rules since M29 (`ptrmath.c`, 32 checks
+  cross-checked against gcc): `p+n` and `n+p` scale by the ELEMENT step in
+  either operand order, `p-q` is an element COUNT in units of the left
+  operand's step (not a byte count, and the result is an int, so `a[p-a]`
+  and `(p-a)/2` behave), `p+q`, `n-p`, `p+=q`/`p-=q` and any arithmetic on a
+  struct OBJECT diagnose as C's constraint violations. The step is
+  `CCStepOf`/`CCPtrStep`, one answer shared by `+ - += -= ++ --` and the
+  subscript scale: 1 for bytes, 8 for slots and untagged pointers, the TAG
+  SIZE for `struct P *p` and for `struct P st[]`, and the ROW size for a 2-D
+  array. Two model choices survive: mixing a tagged pointer with an untagged
+  one is ACCEPTED (a slot pointer cannot be told from `int *`/`void **`
+  here) and divides by the left operand's step; and `sizeof(*fp)` still
+  reports 8 where C rejects a function type.
 - `sizeof`/cast edges not supported: `sizeof` needs parentheses (and
   its expression form decays arrays to pointer size there — `sizeof
   f(x)` and a bare `sizeof x` are diagnostics, and the bare-identifier
@@ -1523,6 +1535,84 @@ Not supported — each currently fails with a compile diagnostic:
    saved-object reloads 42/42/42 with agcopy 28/28/28, fptab 31/31, decay
    28/28, fptr 27/27, ptrinit 25/25 and structinit 22/22 unchanged, clean
    `CC TESTS: 0 failed`.
+ - [x] **M29** pointer arithmetic gets C's rules. The deviation M28 had just
+   documented ("pointer differences are byte counts — until it is fixed,
+   carry an index") became this milestone, and fixing it turned out to be one
+   question, asked in one place: HOW MANY BYTES IS ONE STEP OF THIS VALUE.
+   `CCPtrStep` (for a pointer value) and `CCStepOf` (which also takes the
+   residue fields: row scales first, then the M25 element marker) answer it,
+   and every consumer now goes through them: `p+n`, `n+p`, `p+=n`, `p-=n`,
+   `++`, `--` and the subscript scale. `CCPtrScale`, which answered from the
+   TYPE CODE alone, is deleted. C's operand rules went in beside them in
+   `CCExprAdd`: `p+q`, `n-p`, `p+=q`/`p-=q` and arithmetic on a struct OBJECT
+   are constraint violations and diagnose; `p-q` yields an element COUNT,
+   typed TY_INT with its residue cleared so the next subscript cannot scale
+   it twice. What was silently wrong before, all of it: `p-a` on `int *` was
+   a byte count (16 where C says 2) so `a[p-a]` indexed 16 elements out;
+   `2+a` added two BYTES to an array address; `st+1` on a struct array added
+   a byte to a whole-tag stride so `st+1 == &st[1]` answered FALSE; `m+1` on
+   a 2-D array moved one element instead of a row; `p+q` produced an address
+   SUM typed as a pointer; `s+1` did arithmetic on a struct's own address;
+   and `sp+=1` on a struct pointer moved one byte because the compound path
+   multiplied only when the scale was exactly 8 (ptrmath checks 22/23 — gcc
+   passed them, we failed them). `p++`/`p+=1` on a `struct P *` now step a
+   whole tag, which retires the inconsistency PLAN had carried since M25
+   between struct arithmetic (8) and struct indexing (the tag): subscripting
+   already strode the tag, and the two rules now read the same number.
+   **A step is not an element size.** `CCArrEltSize` (M25) answers "how big is
+   one element" and `CCPtrStep` answers "how far does one step go", and a
+   pointer gives two different numbers: `struct P *pa[2]` has 8-byte elements
+   (they ARE pointers) while `struct P *p` steps a whole tag. Keeping them as
+   two functions is what makes `pa[i]` and `p+i` both right; merging them, or
+   answering both from a type code, is the trap `CCPtrScale` was in — a type
+   code cannot answer either question once tags exist.
+   **Landmine — residue only means something to a value that can have a
+   shape.** My first `CCStepOf` consulted `celem`/`esz2` unconditionally.
+   Those fields are written by the arm that PRODUCES a base and cleared by
+   only SOME of the layers that combine values, so a parenthesized comparison
+   came back carrying its last operand's element marker: `tot + (fp[0]==fq[0])`
+   looked like int + pointer, took the reversed-operand branch, multiplied
+   `tot` by 8 and added a pointer to it. fptab answered 1487 instead of 31 and
+   sizeof 117 instead of 26 — 79 green cases dropped to 77 on the first run.
+   The fix is a type-first guard: only TY_PTR/TY_CHARP/TY_STRUCT can have a
+   step, and a scalar's residue is simply ignored. The same discipline moved
+   the scalar-subscript diagnosis AHEAD of the element-marker branch, so `5[0]`
+   is refused whatever the residue says. Clearing residue at every producer
+   was the tempting alternative and it is worse: there are a dozen of them,
+   new operators get written, and the authority should be the TYPE. Two
+   residue-carrying values survive on purpose: `*pp` keeps its pointee's
+   marker so `*pp+1` and `(*pp)[0]` work through the flattened `int **`, and
+   `&st` keeps the array marker because a pointer to an ARRAY is not
+   representable here (its step is approximate, and `p - &st` mixes units).
+   **Landmine — the ModRM byte names the DESTINATION in its reg field.**
+   `IMUL r64,r/m64,imm32` with RCX on both sides is `48 69 C9`, and my first
+   try wrote `C1`, which is `IMUL RAX,RCX,imm32`: it multiplied the POINTER,
+   stored into RAX, and left the UNSCALED integer in RCX for the ADD that
+   followed, so `2+a` became `a*8+2` and faulted on the next load. Every other
+   IMUL in this file targets RAX with `0xC0` and copies without complaint,
+   which is why the wrong encoding looked like it worked. Capstone named the
+   bug the moment the bytes were decoded (`rip - cc.code - entry_off` maps a
+   fault into the dumped bytes); the bit arithmetic `mod 11 | reg<<3 | rm` is
+   worth writing out whenever a register other than RAX is the destination.
+   **Landmine — a fixture comment missing its `*/` deletes an assertion, and
+   both engines delete it identically.** Polishing check 12's comment dropped
+   its terminator; check 13's assertion then lived inside the comment, gcc and
+   CC agreed on everything, and only the mark count (31 printed for 32
+   assertions) showed a line had vanished. Two rules: check that a `/*`-style
+   comment is closed on the same line or ends with `*/`, and COUNT THE MARKS —
+   a cross-check compares engines against each other, never against the
+   fixture's intent, so it is blind to a source both of them misread.
+   Verification: full suite re-run after each edit (the two regressions came
+   from a rule every existing fixture touches, and only the full run could see
+   them), then the marked-copy diff against `gcc -std=gnu99` — 32 checks,
+   0 mismatches, NO model adjustment needed (element semantics never touch
+   byte sizes), and the two checks that first failed were ours, not the
+   oracle's. Error paths pinned: `p+q` for slot pointers and for byte
+   pointers, `2-p`, `p+=q`, `p-=q`, `s+1`, `1+s`, `p-s`, `int *` minus
+   `char *`, `struct P *` minus `struct Q *`, `p-[1]`. 80 cases (ptrmath.c:
+   32 checks + closer), green x3, saved-object reloads 33/33/33 with agcopy
+   28/28/28, incr 42/42/42, fptab 31/31, decay 28/28, fptr 27/27, ptrinit
+   25/25 and structinit 22/22 unchanged, clean `CC TESTS: 0 failed`.
 
 ## HolyC dialect gotchas (all verified in this build)
 
@@ -1551,6 +1641,19 @@ Not supported — each currently fails with a compile diagnostic:
   including your controls, suspect the umbrella and diff against the pre-edit
   snapshot; a splice's old region and new text must each end at a line
   boundary.
+- **An x86 ModRM reg field is the DESTINATION** in the `r64,r/m64,imm32`
+  forms: `IMUL RCX,RCX,imm32` is `48 69 C9`, while `48 69 C1` is
+  `IMUL RAX,RCX,imm32` — which multiplies the other operand and leaves the
+  scaled result in a register nothing reads (M29 turned `2+a` into `a*8+2`
+  that way). Every other IMUL in CC_PARSE.HC targets RAX with `0xC0`, so a
+  wrong reg field is silent. When a new encoding misbehaves, decode it: the
+  map from a fault line is `rip - cc.code - entry_off` into the dumped bytes.
+- **A fixture comment that does not end in `*/` deletes the next line, and
+  deletes it for gcc too.** Polishing a check marker dropped one terminator
+  and the following assertion became part of the comment: engine and oracle
+  then agreed on everything and the only evidence was 31 marks printed for 32
+  checks. Count the marks against the checks; a cross-check compares two
+  engines, never an engine against the fixture's intent.
 - Classes must end with `};`.
 - **`if` and `else` guard EXACTLY ONE statement** (verified by probe:
   `if (0) x=1;x=5;` leaves x=5; `if (1) x=1; else x=2;x=7;` leaves
@@ -1705,6 +1808,17 @@ Not supported — each currently fails with a compile diagnostic:
   instead of decaying). New cross-file helpers of this unit get their
   prototypes in CC.HH's forward block, and no function-like macro exists
   in the host dialect to shorten the encoding.
+- Expression SHAPE beats residue (M29): `CCStepOf` and the subscript arm read
+  `celem`/`celebsty`/`esz`/`esz2` ONLY for a pointer-typed value, because
+  those fields are written by whichever arm produced a base and cleared by
+  only some of the layers that combine values — a comparison or a `sizeof`
+  hands back an integer still carrying its last operand's marker, and trusting
+  it turns `tot + (p==q)` into a scaled pointer add. Every step consumer goes
+  through `CCPtrStep`/`CCStepOf` so `p+n`, `n+p`, `p+=n`, `++` and `p[n]`
+  cannot drift apart, and `CCPtrStep` (step) stays a SEPARATE function from
+  `CCArrEltSize` (element size): a pointer is an 8-byte element that steps
+  sizeof(pointee). A COUNT result is typed TY_INT with esz/esz2/celem cleared,
+  or the next subscript scales it a second time.
 - `cc->fpdim` (M26) is transient declarator OUTPUT, reset at the top of
   CCParseFunPtrDecl: every caller peeks with a snapshot and rewinds on
   FALSE, so residue from a failed attempt is a lie to the next one (the

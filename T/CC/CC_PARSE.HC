@@ -152,16 +152,6 @@ U0 CCVal(CCCtrl *cc)
 				//Postfix index arm reads esz2 BEFORE this
 				//runs on the base; see CC.HH).
 
-/* Element size an expression addresses/points to: 1 byte or 8. */
-I64 CCPtrScale(I64 ty)
-{
-  if (ty==TY_CHARP)
-    return 1;
-  if (ty==TY_PTR)
-    return 8;
-  return 0;		//not pointer-like
-}
-
 /* M13 type layer. The compiler has ONE int width (8-byte slots) and a
  * byte model for char, so unsigned/long/signed fold to TY_INT, const
  * is a no-op qualifier, and void maps to the byte (char) model —
@@ -1294,6 +1284,61 @@ U0 CCSetArrTy(CSym *s)
   s->aelsty=s->sty;		//TY_INT IS 0, so the stored form must
 }				//be offset (see the CC.HH note)
 
+/* M29: how far ONE STEP of a pointer-shaped value moves, in bytes — the
+ * operand of `p+n`, of `p+=n`, and the delta behind `++`. This is NOT the
+ * same question as "how big is one element" (CCArrEltSize above): a pointer
+ * answers "element size" with 8 (a pointer is a slot) and "step" with
+ * sizeof(what it points at), and `struct P *pa[2]` versus `struct P *p`
+ * differ in exactly that way — `pa+i` moves a pointer, `p+i` moves a whole
+ * tag. The old CCPtrScale() answered both questions from the TYPE CODE
+ * alone, so a tagged pointer stepped 8 where subscripting it already strode
+ * the tag size (the two rules PLAN documented as a residual inconsistency),
+ * and a struct OBJECT — which has no step at all — got 0 and then silently
+ * did integer arithmetic on its own address. 0 here means "no step exists",
+ * and callers turn that into a diagnostic instead of an add. */
+I64 CCPtrStep(CCCtrl *cc,I64 ty,I64 sty)
+{
+  if (ty==TY_CHARP)
+    return 1;
+  if (ty==TY_PTR)
+  {
+    if (sty>=0)
+      return cc->st[sty].size;	//`struct P *p` steps a whole tag, as C does
+    return 8;
+  }
+  return 0;
+}
+
+/* M29: the step of the value THIS expression state describes, which may be
+ * an array rather than a pointer. Three shapes, in the order their evidence
+ * arrives: a decayed 2-D array steps a whole ROW (esz/esz2 are the row
+ * scales and its first subscript already uses them); any other array steps
+ * one ELEMENT, and CCArrEltSize is the authority on element size (1 for
+ * bytes, 8 for slots and for pointers, the tag size for whole structs —
+ * `cel` is the M25 encoded element type, so decode with -1); and a pointer
+ * VARIABLE defers to CCPtrStep. A struct OBJECT answers 0: C forbids
+ * arithmetic on it, and the caller says so. */
+I64 CCStepOf(CCCtrl *cc,I64 ty,I64 sty,I64 cel,I64 celsty,I64 esz,I64 esz2)
+{
+  //The TYPE answers first, and that ordering is load-bearing: only a
+  //pointer-shaped value has a step at all, so whatever the residue fields
+  //say about a scalar is meaningless. The element/row fields are written by
+  //the arm that produces a base and cleared by some (not all) of the layers
+  //that combine values, so `tot + (a[0]==b[0])` arrived with the last
+  //operand's marker still on the comparison's integer result and the
+  //additive scaled a `+1` by 8 — 1487 instead of 31 in fptab, 117 instead
+  //of 26 in sizeof. Reading residue only for types that can have a shape
+  //makes the rule local and total, instead of asking every producer in the
+  //parser to remember to clear.
+  if ((ty!=TY_PTR)&&(ty!=TY_CHARP)&&(ty!=TY_STRUCT))
+    return 0;
+  if (esz2)
+    return esz;
+  if (cel)
+    return CCArrEltSize(cc,cel-1,celsty);
+  return CCPtrStep(cc,ty,sty);
+}
+
 /* M28: the ++/-- emitter, shared by BOTH forms. Precondition: RAX holds
  * the ADDRESS of a modifiable lvalue (cc->is_addr==1) and cc->aty/cc->ety
  * describe what it points at, which is the state Primary's chain, the
@@ -1308,7 +1353,8 @@ U0 CCIncDecAt(CCCtrl *cc,I64 inc,I64 prefix)
   I64 byte_aty,scale,delta;
 
   byte_aty=cc->aty;
-  scale=CCPtrScale(cc->ety);
+  scale=CCPtrStep(cc,cc->ety,cc->sty);	//M29: the same question `p+n` asks,
+  					//answered the same way
   delta=1;
   if (scale>0)
     delta=scale;
@@ -1335,6 +1381,10 @@ U0 CCIncDecAt(CCCtrl *cc,I64 inc,I64 prefix)
   //hit anyway).
   if (!prefix)
     CCByte(cc,0x50);				//PUSH RAX (old: the result)
+  //delta is an ELEMENT size: 1 (byte), 8 (slot/pointer) or a tag, and
+  //CC_MAX_MEMBERS is 8, so a tag is at most 64 bytes and ADD/SUB r64,imm8
+  //reaches every value this compiler can produce. If the member cap ever
+  //grows past 15 slots this must widen to imm32 — the wrap would be silent.
   CCByte(cc,0x48);
   CCByte(cc,0x83);
   if (inc)
@@ -1419,8 +1469,6 @@ U0 CCPostfix(CCCtrl *cc)
         ekind=cc->esz;
         hijack=1;
       }
-      else if (ael)
-        ekind=CCArrEltSize(cc,aelt,asty);	//M25: sized by the element
       else if ((cc->ety==TY_CHAR)||(cc->ety==TY_INT))
       {
         //C: one operand of `[]` must have pointer type. Reaching here
@@ -1431,9 +1479,18 @@ U0 CCPostfix(CCCtrl *cc)
         //vector") AND the lenient path faulted: it dereferenced the int as
         //an address (97 for "ab"). Diagnosing is both C-faithful and the
         //only sane reading, and nothing in the suite indexed a scalar.
+        //
+        //M29: this test MOVED AHEAD of the element-marker branch below, for
+        //the same reason CCStepOf now reads the type first: `ael` is residue
+        //that a previous operand can leave on an integer result, and a
+        //scalar base must be refused whatever the residue says. An array is
+        //never scalar-typed here (array symbols are stored pointer-typed),
+        //so no legitimate subscript reaches this arm.
         CCError(cc,"array subscript requires a pointer or array");
         return;
       }
+      else if (ael)
+        ekind=CCArrEltSize(cc,aelt,asty);	//M25: sized by the element
       else if (cc->ety==TY_STRUCT)
       {
         bsty=cc->sty;
@@ -1448,7 +1505,7 @@ U0 CCPostfix(CCCtrl *cc)
       }
       else
       {
-        ekind=CCPtrScale(cc->ety);
+        ekind=CCPtrStep(cc,cc->ety,cc->sty);
         if (!ekind)
           ekind=8;		//insurance: every scalar base is diagnosed
         				//above, so only a pointer-shaped type
@@ -1608,6 +1665,16 @@ U0 CCLibCall(CCCtrl *cc,I64 slot,I64 argc,I64 rty)
 
 U0 CCExprPrimary(CCCtrl *cc)
 {
+  //M29: every chain ROOT states celem/celebsty itself (the identifier arms
+  //write a symbol's element type; the arms below write 0), so starting from
+  //0 means a LITERAL can never inherit the marker of whatever was parsed
+  //last. That residue was the bug: in `p=a+2` the `2` arrived with a's
+  //element marker still set, so the additive read TWO pointer operands and
+  //answered "pointer + pointer is not defined" about ordinary array
+  //arithmetic. Clearing per-producer beats clearing per-consumer: the
+  //value's own arm knows what shape it has.
+  cc->celem=0;
+  cc->celebsty=-1;
   CSym *s,*hs;
   I64 n,cv,cn,cnext,ci;		//M28: inc/delta/scale/byte_aty left with
   				//the increment block (CCIncDecAt now owns
@@ -2019,8 +2086,10 @@ U0 CCExprUnary(CCCtrl *cc)
     CCExprUnary(cc);
     CCVal(cc);
     CCByte(cc,0x48);CCByte(cc,0xF7);CCByte(cc,0xD8);	//NEG RAX
-    cc->ety=TY_INT;
-    return;
+    cc->ety=TY_INT;		//M29: a plain integer result: no element
+    cc->celem=0;		//shape survives (see CCExprPrimary), and
+    cc->celebsty=-1;		//CCStepOf must not read the operand's
+    return;			//marker as this result's
   }
   if (CCAccept(cc,'!'))
   {
@@ -2028,7 +2097,9 @@ U0 CCExprUnary(CCCtrl *cc)
     CCVal(cc);
     CCTestRax(cc);
     CCSetccRax(cc,CC_OPC_EQ);		//!x
-    cc->ety=TY_INT;
+    cc->ety=TY_INT;			//M29: plain integer result
+    cc->celem=0;
+    cc->celebsty=-1;
     return;
   }
   if (CCAccept(cc,'~'))
@@ -2036,7 +2107,9 @@ U0 CCExprUnary(CCCtrl *cc)
     CCExprUnary(cc);
     CCVal(cc);
     CCByte(cc,0x48);CCByte(cc,0xF7);CCByte(cc,0xD0);	//NOT RAX
-    cc->ety=TY_INT;
+    cc->ety=TY_INT;			//M29: plain integer result
+    cc->celem=0;
+    cc->celebsty=-1;
     return;
   }
   if (CCAccept(cc,'&'))
@@ -2155,6 +2228,8 @@ U0 CCExprUnary(CCCtrl *cc)
         cc->aty=0;
         cc->ety=TY_INT;
         cc->sty=-1;
+        cc->celem=0;		//M29: a size is a CONSTANT, it carries
+        cc->celebsty=-1;	//no element shape (see CCExprPrimary)
         return;
       }
       //Not a clean `sizeof(type)`: rewind and read it as an expression.
@@ -2202,6 +2277,8 @@ U0 CCExprUnary(CCCtrl *cc)
           cc->aty=0;
           cc->ety=TY_INT;
           cc->sty=-1;
+          cc->celem=0;		//M29: a size is a CONSTANT, it carries
+          cc->celebsty=-1;	//no element shape (see CCExprPrimary)
           return;
         }
         ti=CCTypedefFind(cc,sstr2);	//sizeof(size_t): C reads it as the TYPE
@@ -2213,6 +2290,8 @@ U0 CCExprUnary(CCCtrl *cc)
           cc->aty=0;
           cc->ety=TY_INT;
           cc->sty=-1;
+          cc->celem=0;		//M29: a size is a CONSTANT, it carries
+          cc->celebsty=-1;	//no element shape (see CCExprPrimary)
           return;
         }
       }
@@ -2229,6 +2308,8 @@ U0 CCExprUnary(CCCtrl *cc)
     cc->aty=0;
     cc->ety=TY_INT;
     cc->sty=-1;
+    cc->celem=0;		//M29: a size is a CONSTANT, it carries
+    cc->celebsty=-1;	//no element shape (see CCExprPrimary)
     return;
   }
   if (CCTkIsPunct(cc,'('))
@@ -2315,7 +2396,12 @@ U0 CCExprMul(CCCtrl *cc)
   {
     if (!cc->is_addr)
       CCError(cc,"assignment to non-lvalue");
-    else if ((cc->is_addr==2)&&(cc->ety!=TY_STRUCT))
+    else if ((cc->is_addr==2)&&((cc->ety!=TY_STRUCT)||(cc->celem)))
+      //M29: is_addr==2 with TY_STRUCT is a struct OBJECT *or* a struct
+      //ARRAY — both keep TY_STRUCT and decay to their own address. `celem`
+      //is the M25 array marker (ael is non-zero for every array symbol), so
+      //it is what tells them apart: `x = q;` on `struct P x[4]` is C's
+      //"assignment to array", not an aggregate copy of one element.
       CCError(cc,"assignment to array");
     else
       //M27: is_addr==2 also covers a STRUCT object (its name is its
@@ -2355,37 +2441,193 @@ U0 CCExprMul(CCCtrl *cc)
   }
 }
 
+/* M29: the additive layer — every rule C has about pointer arithmetic, in
+ * one place. `p+n` scales n by the element step; `n+p` is the SAME sum (C's
+ * + is commutative for pointer+integer), which matters because the left
+ * value is still PUSHed on the machine stack at this point and only
+ * CCBinEmit pops it (into RCX, as its own last act), so scaling the LEFT
+ * side means inserting the multiply inside the pop-add sequence rather than
+ * wrapping it around CCBinEmit. `p-q` yields an ELEMENT COUNT in units of
+ * the pointee size — not a byte count, and not a pointer. `p+q`, `n-p` and
+ * any arithmetic on a struct OBJECT have no meaning in C and diagnose;
+ * before this, `p+q` produced the raw address sum typed as a pointer, `s+1`
+ * added a struct's own address by 1 and called the result an int, and `2+a`
+ * added TWO BYTES to an array address where C moves two elements. Arrays
+ * decay to a pointer to their element, and a result keeps the operand's
+ * element and row shape, so `m+1` steps a whole ROW of a 2-D array and
+ * `(m+1)[0][0]` then indexes it — which is why the row scales are snapshot
+ * BEFORE each CCVal: CCVal spends them (see its comment above). */
+U0 CCExprShape(CCCtrl *cc,I64 ty,I64 sty,I64 cel,I64 celsty,I64 esz,I64 esz2)
+{
+  if ((ty==TY_STRUCT)&&cel)
+  {
+    cc->ety=TY_PTR;		//C: a decayed array plus an integer is a
+    cc->sty=sty;		//pointer to its element. Leaving it typed as
+  }				//the struct (what the state carried) made
+  else				//`struct P *q; q = st+2;` look like an
+  {				//assignment OF a struct value and refuse
+    cc->ety=ty;			//it, and left `q->x` unavailable.
+    cc->sty=sty;
+  }
+  cc->celem=cel;
+  cc->celebsty=celsty;
+  cc->esz=esz;
+  cc->esz2=esz2;
+}
+
 U0 CCExprAdd(CCCtrl *cc)
 {
-  I64 op,lty,rty,scale;
+  I64 op,lty,lsty,lcel,lcelsty,lsz,lsz2,rty,rsty,rcel,rcelsty,rsz,rsz2;
+  I64 ls,rs,samekind;
+
   CCExprMul(cc);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&
       ((cc->tk_num=='+')||(cc->tk_num=='-')))
   {
     op=cc->tk_num;
+    //Everything the left operand's SHAPE needs travels in locals: the right
+    //operand's parse overwrites the very same state fields with its own.
     lty=cc->ety;
-    scale=CCPtrScale(lty);
+    lsty=cc->sty;
+    lcel=cc->celem;
+    lcelsty=cc->celebsty;
+    lsz=cc->esz;
+    lsz2=cc->esz2;
+    ls=CCStepOf(cc,lty,lsty,lcel,lcelsty,lsz,lsz2);
     CCLex(cc);
     CCVal(cc);
-    CCByte(cc,0x50);		//PUSH RAX
+    CCByte(cc,0x50);		//PUSH RAX (left value)
     CCExprMul(cc);
     rty=cc->ety;
-    CCVal(cc);
-    if ((scale!=0)&&((rty==TY_INT)||(rty==TY_CHAR)))
+    rsty=cc->sty;
+    rcel=cc->celem;
+    rcelsty=cc->celebsty;
+    rsz=cc->esz;
+    rsz2=cc->esz2;
+    rs=CCStepOf(cc,rty,rsty,rcel,rcelsty,rsz,rsz2);
+    CCVal(cc);			//RAX = right value
+    if (((lty==TY_STRUCT)&&(!lcel))||((rty==TY_STRUCT)&&(!rcel)))
     {
-      //pointer + integer scales the integer by the element size.
-      if (scale==8)
+      //A struct VALUE on either side: C wants arithmetic operands or two
+      //matching pointers, and a tag is neither. Covers `s+1`, `1+s`, `p-s`
+      //and `s-t`.
+      CCError(cc,"arithmetic needs scalar or pointer operands");
+      return;
+    }
+    if ((ls!=0)&&(rs!=0))
+    {
+      //Two pointer-shaped operands. C: `+` is a constraint violation, and
+      //`-` needs the same pointee type and yields a COUNT.
+      samekind=0;
+      if (op=='-')
       {
-        CCByte(cc,0x48);CCByte(cc,0x6B);CCByte(cc,0xC0);CCByte(cc,0x08);
-        //IMUL RAX,RAX,8
+        if ((lty==TY_CHARP)&&(rty==TY_CHARP))
+          samekind=1;		//byte pointers: the byte difference already
+        else if ((((lty==TY_PTR)||(lty==TY_STRUCT))&&	//IS the element
+                 ((rty==TY_PTR)||(rty==TY_STRUCT)))&&	//count, so ls==1
+                 ((lsty<0)||(rsty<0)||(lsty==rsty)))	//skips the divide
+        {
+          //One byte-address space and one element size. Same-tag struct
+          //shapes belong here: a decayed `struct P st[]` and a
+          //`struct P *p` are the same KIND, which is what makes
+          //`st+1 == &st[1]` come out true as C reports it. Untagged slot
+          //pointers are one class too, because ONE code covers int*,
+          //void**, T** and friends here — refusing a tagged pointer against
+          //an untagged one would refuse every `int *` difference in the
+          //language, since -1 is what every non-struct pointee looks like
+          //to this parser.
+          samekind=1;
+        }
       }
-      cc->ety=lty;		//pointer arithmetic stays pointer-typed
+      if (!samekind)
+      {
+        if (op=='+')
+          CCError(cc,"pointer + pointer is not defined");
+        else if (!cc->errs)
+          CCError(cc,"pointer subtraction needs pointers to the same type");
+      }
+      else
+      {
+        CCBinEmit(cc,op);			//the byte difference
+        if (ls!=1)
+        {
+          //Bytes to ELEMENTS, in units of the left operand's step (samekind
+          //established that both operands move in that size class). A
+          //general IDIV, not a shift: a 3-member tag is 24 bytes and no
+          //shift divides that. RCX is free — CCBinEmit popped the left
+          //operand into it and its last write was RAX — and RDX is scratch
+          //in this model, so this is the same sequence `/` uses. Exact by
+          //construction (samekind means the step divides every legal
+          //difference), and CQO keeps a negative difference signed.
+          CCByte(cc,0x48);
+          CCByte(cc,0xB9);			//MOVABS RCX,imm64
+          CCQuad(cc,ls);
+          CCByte(cc,0x48);
+          CCByte(cc,0x99);			//CQO
+          CCByte(cc,0x48);
+          CCByte(cc,0xF7);
+          CCByte(cc,0xF9);			//IDIV RCX
+        }
+        CCExprShape(cc,TY_INT,-1,0,-1,0,0);	//a COUNT: `a[p-a]` must not
+      }						//scale by 8 a second time
+      if (cc->errs)
+        //No `continue` in this dialect: returning leaves the parse in the
+        //error state every upstream loop already tests.
+        return;
+    }
+    else if (ls!=0)
+    {
+      //pointer (left) +/- integer (right): the integer is in RAX now, so
+      //scale it and let CCBinEmit do the arithmetic. imm32 form rather than
+      //the imm8 shortcut because a struct step is the tag size, not 8.
+      if (ls!=1)
+      {
+        CCByte(cc,0x48);
+        CCByte(cc,0x69);
+        CCByte(cc,0xC0);
+        CCWord(cc,ls);		//IMUL RAX,RAX,imm32
+      }
+      CCBinEmit(cc,op);
+      CCExprShape(cc,lty,lsty,lcel,lcelsty,lsz,lsz2);
+    }
+    else if ((rs!=0)&&(op=='+'))
+    {
+      //integer (left) + pointer (right): the same sum, but the operand to
+      //scale is the one sitting on the machine stack, so the multiply goes
+      //INSIDE the POP/ADD that CCBinEmit would have emitted.
+      CCByte(cc,0x59);		//POP RCX (the integer)
+      if (rs!=1)
+      {
+        CCByte(cc,0x48);
+        CCByte(cc,0x69);
+        //IMUL r64,r/m64,imm32 names the DESTINATION in the ModRM reg field:
+        //mod 11 | reg RCX<<3 | rm RCX = 0xC9. My first try was 0xC1, which
+        //is `IMUL RAX,RCX,imm` — it multiplied the POINTER, wrote the result
+        //to RAX, and left the unscaled integer in RCX for the ADD, so `2+a`
+        //became `a*8+2` and faulted on the very next load. Capstone saw it
+        //immediately; the byte math is worth writing out because every other
+        //IMUL here (subscript, pointer+int) uses 0xC0 and copies fine.
+        CCByte(cc,0xC9);
+        CCWord(cc,rs);		//IMUL RCX,RCX,imm32
+      }
+      CCByte(cc,0x48);
+      CCByte(cc,0x01);
+      CCByte(cc,0xC8);		//ADD RAX,RCX
+      CCExprShape(cc,rty,rsty,rcel,rcelsty,rsz,rsz2);
+    }
+    else if (rs!=0)
+    {
+      //`n-p`: C gives an integer minus a pointer no meaning (the result
+      //would have no type to name), so it diagnoses rather than handing
+      //back a byte difference that looks like an offset.
+      CCError(cc,"pointer subtraction from a non-pointer is not defined");
+      return;
     }
     else
-      cc->ety=TY_INT;
-    CCBinEmit(cc,op);
-    if (scale!=0)
-      cc->ety=lty;
+    {
+      CCBinEmit(cc,op);		//plain integer/enum arithmetic
+      CCExprShape(cc,TY_INT,-1,0,-1,0,0);
+    }
   }
 }
 
@@ -2556,7 +2798,7 @@ U0 CCExprLogOr(CCCtrl *cc)
  * `=`. Parse the RHS and store. Byte-sized when aty was set. */
 U0 CCAssignTail(CCCtrl *cc)
 {
-  I64 saty,lty,lsty,braced,rty,rsty,ns,i;
+  I64 saty,lty,lsty,braced,rty,rsty,rcel,ns,i;
   saty=cc->aty;
   lty=cc->ety;		//lhs type, before the RHS parse overwrites it
   lsty=cc->sty;		//lhs struct tag (valid when lty==TY_PTR)
@@ -2568,6 +2810,9 @@ U0 CCAssignTail(CCCtrl *cc)
   CCExprNC(cc);		//RHS value (another '=' chains right-associatively)
   rty=cc->ety;		//the RHS's own type, before the result re-types
   rsty=cc->sty;		//the expression below
+  rcel=cc->celem;		//M29: non-zero means the RHS is an ARRAY,
+  				//which decayed to an ADDRESS — a completely
+  				//different thing from a struct VALUE.
   CCByte(cc,0x59);	//POP RCX (address)
   if (lty==TY_STRUCT)
   {
@@ -2580,6 +2825,14 @@ U0 CCAssignTail(CCCtrl *cc)
     //is just a one-slot tag, so it copies too. C requires the same tag on
     //both sides (struct A = struct B is a constraint violation even when
     //the shapes match), so that is diagnosed rather than approximated.
+    if (rcel)
+    {
+      //`obj = arr;` — C rejects it (assigning `struct P [4]` to `struct P`
+      //is a constraint violation). Copying arr[0] would be a plausible
+      //approximation, but nobody asked for one.
+      CCError(cc,"cannot assign an array to a struct object");
+      return;
+    }
     if ((rty!=TY_STRUCT)||(rsty!=lsty))
     {
       CCError(cc,"struct assignment needs a right-hand struct of the same tag");
@@ -2624,11 +2877,18 @@ U0 CCAssignTail(CCCtrl *cc)
       CCExpect(cc,'}',"expected '}' after initializer");
     return;
   }
-  if (rty==TY_STRUCT)
+  if ((rty==TY_STRUCT)&&(!rcel))
   {
     //C: `int x; struct S s; x = s;` is a constraint violation. Before
     //M27 this stored the struct's ADDRESS, which read back as a huge
     //number and looked like a working program.
+    //The `!rcel` half of this test is the M27 regression M29 found: with a
+    //STRUCT ARRAY on the right (`struct P *q; q = x;` where x is x[4]) the
+    //RHS is a decayed ADDRESS, exactly the pointer C assigns there, and the
+    //plain quad store below is right. Keying only on ety==TY_STRUCT made
+    //legal array-to-pointer decay look like a struct value and refused it —
+    //silent until a probe walked into it, because no fixture had ever
+    //assigned a struct array to a struct pointer.
     CCError(cc,"cannot assign a struct value to a non-aggregate");
     return;
   }
@@ -2721,12 +2981,30 @@ U0 CCCompoundAssign(CCCtrl *cc,I64 op)
   CCExprNC(cc);			//RHS value
   if ((base=='+')||(base=='-'))
   {
-    //`p+=n` scales n by the element size, like CCExprAdd does.
-    scale=CCPtrScale(lty);
-    if ((scale==8)&&((cc->ety==TY_INT)||(cc->ety==TY_CHAR)))
+    //`p+=n` scales n by the element size, like CCExprAdd does. M29: a
+    //POINTER rhs is not allowed here either — C gives `p+=q` (and `p-=q`)
+    //no meaning, and adding two addresses used to store the sum back into
+    //the pointer slot as if it were an offset. `p-=q` is now computed as
+    //the element count only if it is ever reached, so diagnosing is the
+    //honest answer (see CCExprAdd for the plain `-` rule).
+    scale=CCPtrStep(cc,lty,lsty);
+    if ((scale!=0)&&((cc->ety==TY_PTR)||(cc->ety==TY_CHARP)))
     {
-      CCByte(cc,0x48);CCByte(cc,0x6B);CCByte(cc,0xC0);CCByte(cc,0x08);
-      //IMUL RAX,RAX,8
+      CCError(cc,"compound assignment of a pointer to a pointer is not defined");
+      return;
+    }
+    if ((scale!=0)&&(scale!=1)&&((cc->ety==TY_INT)||(cc->ety==TY_CHAR)))
+    {
+      //imm32, not the imm8 shortcut CCExprMul used before M29: since a step
+      //is the ELEMENT size, `sp+=1` on a `struct P *sp` has to scale by the
+      //tag (16 here), and a branch that tested `scale==8` multiplied nothing
+      //at all — the pointer moved ONE BYTE and the next `->x` read a
+      //different member. ptrmath checks 22/23 are that bug: gcc passed them
+      //and we failed them.
+      CCByte(cc,0x48);
+      CCByte(cc,0x69);
+      CCByte(cc,0xC0);
+      CCWord(cc,scale);		//IMUL RAX,RAX,imm32
     }
   }
   CCBinEmit(cc,base);		//pops the OLD value as left operand

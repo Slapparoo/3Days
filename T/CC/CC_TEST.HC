@@ -320,6 +320,9 @@ CCAssert(28,"T:/CC/TEST/agcopy.c","agcopy");
 /* M28: prefix ++/-- parse at all, and postfix moved into the chain so
  * (*p)++ and (v)++ work; one emitter, so both spellings scale alike. */
 CCAssert(42,"T:/CC/TEST/incr.c","incr");
+/* M29: pointer arithmetic — p+n and n+p scale by the element step, p-q is an
+ * element count, struct arrays step tags, 2-D arrays step rows. */
+CCAssert(33,"T:/CC/TEST/ptrmath.c","ptrmath");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */
