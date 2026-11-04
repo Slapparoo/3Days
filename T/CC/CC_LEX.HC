@@ -45,10 +45,101 @@ Bool CIsDigit(I64 ch)
   return (ch>='0')&&(ch<='9');
 }
 
+/* M32: hex digits as one predicate, rather than the three-range chain the
+ * escape table and the #if character-constant reader each repeated. */
+Bool CIsHexCh(I64 ch)
+{
+  return ((ch>='0')&&((ch<='9')||((ch>='a')&&(ch<='f'))))||((ch>='A')&&(ch<='F'));
+}
+
+/* M32: the escape TABLE, in one place. `ch` is the byte that follows the
+ * backslash and `p` points just after `ch` so \x and \ooo can read their
+ * digits; *pv is the byte the escape denotes and *pp the position after it.
+ * Returns FALSE for an escape this table does not know, and then the caller
+ * keeps the byte as it always has: the QUOTE escapes are deliberately NOT here
+ * because they differ by context (a string body escapes `", a char body
+ * escapes '), and each site has its own message for an unknown escape. Before
+ * this existed the table was written out twice in this file and the two copies
+ * had already drifted (one handles \' and the other "); the #if evaluator in
+ * CC_PREP.HC is the third user and it has to agree with the literals below it. */
+Bool CCEscape(CCCtrl *cc,U8 *p,I64 ch,I64 *pv,U8 **pp)
+{
+  I64 ei,d2;
+
+  if (ch=='n')
+    ch='\n';
+  else if (ch=='t')
+    ch='\t';
+  else if (ch=='r')
+    ch='\r';
+  else if (ch=='a')
+    ch=7;
+  else if (ch=='b')
+    ch=8;
+  else if (ch=='f')
+    ch=12;
+  else if (ch=='v')
+    ch=11;
+  else if (ch=='e')
+    ch=27;
+  else if (ch=='\\')
+    ch='\\';
+  else if (ch=='x')
+  {
+    //\xHH: one or two hex digits (C takes more; two is the byte-complete
+    //span and what every fixture exercises). With no digit, as before: the
+    //diagnostic fires and the byte becomes 0, which ends the literal early
+    //exactly the way a NUL would.
+    ei=0;
+    ch=0;
+    while (ei!=2)
+    {
+      d2=*p;
+      if (CIsDigit(d2))
+        d2=d2-'0';
+      else if ((d2>='a')&&(d2<='f'))
+        d2=d2-'a'+10;
+      else if ((d2>='A')&&(d2<='F'))
+        d2=d2-'A'+10;
+      else
+        break;
+      ch=ch*16+d2;
+      p++;
+      ei++;
+    }
+    if (!ei)
+      CCError(cc,"\\x needs a hex digit");
+  }
+  else if ((ch>='0')&&(ch<='7'))
+  {
+    //\nnn octal, up to three digits total (the first is already spent)
+    ch=ch-'0';
+    ei=1;
+    while (ei!=3)
+    {
+      d2=*p;
+      if ((d2<'0')||(d2>'7'))
+        break;
+      ch=ch*8+(d2-'0');
+      p++;
+      ei++;
+    }
+  }
+  else
+  {
+    *pv=ch;
+    *pp=p;
+    return FALSE;
+  }
+  *pv=ch;
+  *pp=p;
+  return TRUE;
+}
+
 U0 CCLex(CCCtrl *cc)
 {
   U8 *p;
-  I64 i,ch,ei,d2;
+  I64 i,ch;
   CCSkipSpace(cc);
   p=cc->pc;
   cc->tk_kw=KW_NONE;
@@ -148,61 +239,10 @@ U0 CCLex(CCCtrl *cc)
       if (ch=='\\')
       {
         ch=*p++;
-        if (ch=='n')
-          ch='\n';
-        else if (ch=='t')
-          ch='\t';
-        else if (ch=='r')
-          ch='\r';
-        else if (ch=='a')
-          ch=7;
-        else if (ch=='b')
-          ch=8;
-        else if (ch=='f')
-          ch=12;
-        else if (ch=='v')
-          ch=11;
-        else if (ch=='e')
-          ch=27;
-        else if (ch=='x')
-        {
-          //\xHH: one or two hex digits (C takes more; two is the
-          //byte-complete span and what every fixture exercises).
-          ei=0;
-          ch=0;
-          while (ei!=2)
-          {
-            d2=*p;
-            if ((d2>='0')&&(d2<='9'))
-              d2=d2-'0';
-            else if ((d2>='a')&&(d2<='f'))
-              d2=d2-'a'+10;
-            else if ((d2>='A')&&(d2<='F'))
-              d2=d2-'A'+10;
-            else
-              break;
-            ch=ch*16+d2;
-            p++;
-            ei++;
-          }
-          if (!ei)
-            CCError(cc,"\\x needs a hex digit");
-        }
-        else if ((ch>='0')&&(ch<='7'))
-        {
-          //\nnn octal, up to three digits total (the first is spent).
-          ch=ch-'0';
-          ei=1;
-          while (ei!=3)
-          {
-            d2=*p;
-            if ((d2<'0')||(d2>'7'))
-              break;
-            ch=ch*8+(d2-'0');
-            p++;
-            ei++;
-          }
-        }
+        if (ch=='"')
+          ch='"';		//the quote this literal is closed by
+        else
+          CCEscape(cc,p,ch,&ch,&p);	//FALSE keeps the byte: an unknown
       }
       if (i>=CC_TOK_MAX-1)
       {
@@ -231,62 +271,10 @@ U0 CCLex(CCCtrl *cc)
     if (ch=='\\')
     {
       ch=*p++;
-      if (ch=='n')
-        ch='\n';
-      else if (ch=='t')
-        ch='\t';
-      else if (ch=='r')
-        ch='\r';
-      else if (ch=='a')
-        ch=7;
-      else if (ch=='b')
-        ch=8;
-      else if (ch=='f')
-        ch=12;
-      else if (ch=='v')
-        ch=11;
-      else if (ch=='e')
-        ch=27;
-      else if (ch=='\\')
-        ch='\\';
-      else if (ch==39)
-        ch=39;
-      else if (ch=='x')
-      {
-        ei=0;
-        ch=0;
-        while (ei!=2)
-        {
-          d2=*p;
-          if ((d2>='0')&&(d2<='9'))
-            d2=d2-'0';
-          else if ((d2>='a')&&(d2<='f'))
-            d2=d2-'a'+10;
-          else if ((d2>='A')&&(d2<='F'))
-            d2=d2-'A'+10;
-          else
-            break;
-          ch=ch*16+d2;
-          p++;
-          ei++;
-        }
-        if (!ei)
-          CCError(cc,"\\x needs a hex digit");
-      }
-      else if ((ch>='0')&&(ch<='7'))
-      {
-        ch=ch-'0';
-        ei=1;
-        while (ei!=3)
-        {
-          d2=*p;
-          if ((d2<'0')||(d2>'7'))
-            break;
-          ch=ch*8+(d2-'0');
-          p++;
-          ei++;
-        }
-      }
+      if (ch==39)
+        ch=39;		//the quote this literal is closed by
+      else
+        CCEscape(cc,p,ch,&ch,&p);	//FALSE keeps the byte
     }
     if (*p!=39)
     {

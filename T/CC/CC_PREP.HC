@@ -87,6 +87,11 @@ class CMacScan
 				//in prose is not — and prose is exactly what the
 				//continuation lines of a multi-line block comment
 				//are to this scanner (M13's line-shaped model)
+  I64	incond;		//1 = this region is the controlling expression
+				//of an #if/#elif, where `defined` is an
+				//operator rather than a name (it travels
+				//into nested scans, because a macro body
+				//may hold `defined(x)`)
   I64	subonly;		//1 = substitute parameters but expand NOTHING
 				//else: names, `#` and `##` stay as written. M31
 				//needs it because C decides an inner invocation's
@@ -113,7 +118,9 @@ class CPrep
   /* Conditional frames: bit0 = this branch emits; bit1 = the #if/#else
    * chain has already taken a branch; bit2 = the enclosing region
    * emitted when the directive ran (so an inner #else cannot resurrect
-   * an outer-skipped region). */
+   * an outer-skipped region); bit3 = an #else has already run at this
+   * level, which is what makes a later #elif a structural error (M32)
+   * rather than just another branch nobody reaches. */
   I64	frm[16];
   I64	sp;
   I64	depth;		//#include recursion counter
@@ -130,6 +137,7 @@ extern I64 CCPrepWord(U8 *p,I64 n,I64 i,U8 *w);
 extern I64 CCPrepLitLen(U8 *p,I64 n,I64 i);
 extern I64 CCPrepComLen(U8 *p,I64 n,I64 i);
 extern I64 CCPrepArgs(CCCtrl *cc,U8 *p,I64 n,I64 *pa,I64 *pn,I64 *pc);
+extern U0 CCPrepDefined(CCCtrl *cc,CPrep *pp,CMacScan *ms,I64 wl);
 extern U0 CCPrepTrim(U8 *p,I64 *pa,I64 *pn);
 extern U8 *CCSrc(U8 *fn);	//defined in CC.HC (file read)
 
@@ -767,6 +775,7 @@ U0 CCPrepFuse(CCCtrl *cc,CPrep *pp,CMacScan *ms,U8 *s,I64 ln)
     bs.dst=ms->dst;
     bs.ex=NULL;
     bs.isarg=0;			//the region is a macro body
+    bs.incond=ms->incond;		//and a body is a RESCAN of the line
     bs.subonly=ms->subonly;
     CCPrepScan(cc,pp,&bs);
     if (cc->errs)
@@ -917,6 +926,14 @@ U0 CCPrepIdent(CCCtrl *cc,CPrep *pp,CMacScan *ms,U8 *w,I64 wl)
     ms->i+=wl;
     return;
   }
+  if ((ms->incond)&&(!StrCmp(w,"defined")))
+  {
+    //Reached only for a `defined` that is not a parameter of the enclosing
+    //invocation: a parameter named `defined` is ordinary substitution, and the
+    //paste and `__VA_ARGS__` paths above already returned.
+    CCPrepDefined(cc,pp,ms,wl);
+    return;
+  }
   mi=CCPrepMacro(cc,w);
   if ((mi<0)||(ms->subonly))
   {
@@ -948,6 +965,7 @@ U0 CCPrepIdent(CCCtrl *cc,CPrep *pp,CMacScan *ms,U8 *w,I64 wl)
     bs.dst=dst;
     bs.ex=NULL;
     bs.isarg=0;			//the region is a macro body
+    bs.incond=ms->incond;		//and a body is a RESCAN of the line
     bs.subonly=ms->subonly;
     CCPrepScan(cc,pp,&bs);
     ms->i+=wl;
@@ -1010,6 +1028,12 @@ U0 CCPrepIdent(CCCtrl *cc,CPrep *pp,CMacScan *ms,U8 *w,I64 wl)
     bs.dst=1;
     bs.subonly=1;
     bs.isarg=1;			//the region IS an argument text
+    bs.incond=0;			//an argument is expanded as its OWN line:
+				//`defined` is an operator only in the stream
+				//this text is placed into (probed: with
+				//`#define A 1` and `#define K(x) x`,
+				//`#if K(defined(A))` expands the argument to
+				//`defined(1)` and diagnoses THAT, not 1)
     bs.ex=ms->ex;
     sv=0;
     sf=0;
@@ -1113,6 +1137,8 @@ U0 CCPrepIdent(CCCtrl *cc,CPrep *pp,CMacScan *ms,U8 *w,I64 wl)
     bs.dst=1;
     bs.subonly=0;
     bs.isarg=1;			//the region IS an argument text
+    bs.incond=0;			//see the pass-1 note: argument text is
+				//expanded outside the #if's operator scope
     bs.ex=ms->ex;			//its parameters are already in the
     sv=0;				//text; this only carries the context a
     sf=0;				//nested call or a `__VA_ARGS__` needs
@@ -1150,6 +1176,8 @@ U0 CCPrepIdent(CCCtrl *cc,CPrep *pp,CMacScan *ms,U8 *w,I64 wl)
   bs.dst=dst;
   bs.ex=&nx;
   bs.isarg=0;			//the region is a macro body
+  bs.incond=ms->incond;		//and a body is a RESCAN of the line, so
+				//`defined` written in one is an operator
   bs.subonly=0;
   CCPrepScan(cc,pp,&bs);
   cnt=0;
@@ -1294,6 +1322,640 @@ U0 CCPrepScan(CCCtrl *cc,CPrep *pp,CMacScan *ms)
   if ((ms->ex)&&(ms->ex->pnext)&&(!cc->errs))
     CCPrepErr(cc,"## at the end of a macro body");	//an operand was owed
 }
+/* Skip whitespace AND comments in a scan region. `defined` may be separated
+ * from its operand or its parenthesis by either: translation phase 3 replaced
+ * every comment with a space before the directive was even recognised. Returns
+ * the position of the next significant byte, or n. */
+I64 CCPrepSkipWS(U8 *p,I64 n,I64 i)
+{
+  while (i!=n)
+  {
+    if ((p[i]==' ')||((p[i]=='\t')||((p[i]=='\n')||(p[i]==13))))
+      i++;
+    else if ((p[i]=='/')&&((i+1)!=n)&&((p[i+1]=='*')||(p[i+1]=='/')))
+      i+=CCPrepComLen(p,n,i);
+    else
+      return i;
+  }
+  return n;
+}
+
+/* M32: handle `defined` in a controlling expression. The operand is read as a
+ * NAME and is never macro-expanded — that is the whole content of the operator
+ * (probed: with `#define HAVE 1`, `#if defined(HAVE)` is 1 and NOT `defined(1)`)
+ * — except that a PARAMETER in that position stands for its argument's EXPANDED
+ * text, because by the time a body is rescanned the substitution has happened
+ * (probed: `#define ISDEF(x) defined(x)` with `#define HAVE2 1` reports
+ * "operator defined requires an identifier", while the same call with an
+ * undefined argument is quietly 0). Both the parenthesised and the bare form
+ * count (`#if defined X` is 0 for an undefined X, probed). The answer is
+ * emitted as a literal 1 or 0 so the evaluator below never has to know the
+ * operator existed. Returns after advancing ms->i, or after reporting. */
+U0 CCPrepDefined(CCCtrl *cc,CPrep *pp,CMacScan *ms,I64 wl)
+{
+  U8 w2[CC_TOK_MAX];
+  U8 *p,*s;
+  CMacExp *ex;
+  I64 n,dst,i,par,open,ln,j,len,ok;
+
+  p=ms->p;
+  n=ms->n;
+  dst=ms->dst;
+  ex=ms->ex;
+  open=0;
+  i=CCPrepSkipWS(p,n,ms->i+wl);
+  if ((i!=n)&&(p[i]=='('))
+  {
+    open=1;
+    i=CCPrepSkipWS(p,n,i+1);
+  }
+  ln=CCPrepWord(p,n,i,w2);
+  i+=ln;
+  par=-1;
+  if (ex)
+    par=CCPrepParam(cc,ex->mi,w2);
+  ok=0;
+  if (par>=0)
+  {
+    //the operand is a parameter of the invocation whose body this is
+    s=pp->sc+ex->expa[par];
+    len=ex->expn[par];
+    j=CCPrepSkipWS(s,len,0);
+    ln=CCPrepWord(s,len,j,w2);
+    if (((ln)&&(((w2[0]=='_')||(CIsAlpha(w2[0])))))&&
+        ((j+ln)==CCPrepSkipWS(s,len,j+ln)))
+      ok=1;			//ONE identifier, and nothing else
+  }
+  else if ((ln)&&(((w2[0]=='_')||(CIsAlpha(w2[0])))))
+    ok=1;
+  if (!ok)
+  {
+    CCPrepErr(cc,"the operand of defined must be an identifier");
+    ms->i=n;
+    return;
+  }
+  if (open)
+  {
+    j=CCPrepSkipWS(p,n,i);
+    if (((j==n)||(p[j]!=')')))
+    {
+      CCPrepErr(cc,"missing ')' after defined");
+      ms->i=n;
+      return;
+    }
+    i=j+1;
+  }
+  if (CCPrepMacro(cc,w2)>=0)
+    CCPrepPut(cc,pp,"1",1,dst);
+  else
+    CCPrepPut(cc,pp,"0",1,dst);
+  ms->i=i;
+}
+
+/* M32: the controlling expression of `#if` and `#elif`. What arrives here has
+ * already been macro-expanded, with `defined` replaced by 1 or 0 during that
+ * scan, so what is left is numbers, character constants, operators,
+ * parentheses and the identifiers that C evaluates as ZERO (6.10.1/3: after
+ * expansion, a name that is still a name has the value 0). A name is
+ * deliberately NOT the start of a call here: `#if NOPE(1)` with NOPE undefined
+ * is a syntax error in C, and reading it as a call would invent a rule.
+ * `live` is how short-circuiting is expressed — `&&`, `||` and `?:` parse both
+ * operands but only one is live, and division by zero is a diagnostic only for
+ * a live one (probed: `#if 1 || 1/0` and `#if 0 && 1/0` are not division
+ * errors, and faulting on them would stop a compile that C completes). */
+class CPrepExpr
+{
+  U8	*p;
+  I64	n;
+  I64	i;		//read position
+  I64	bad;		//a diagnostic has fired: stop evaluating
+  I64	live;		//0 = this operand is parsed, not evaluated
+};
+
+I64 CCPrepExBad(CCCtrl *cc,CPrepExpr *pe,U8 *msg)
+{
+  if (!pe->bad)
+  {
+    CCPrepErr(cc,msg);
+    pe->bad=1;
+  }
+  return 0;
+}
+
+/* Whitespace, and comments as whitespace: translation phase 3 replaced a
+ * comment with a space long before the directive was recognised, so
+ * `#if 1 /* x */ == 1` takes. */
+U0 CCPrepExSpace(CPrepExpr *pe)
+{
+  while (pe->i!=pe->n)
+  {
+    if ((pe->p[pe->i]==' ')||((pe->p[pe->i]=='\t')||((pe->p[pe->i]=='\n')||(pe->p[pe->i]==13))))
+      pe->i++;
+    else if ((pe->p[pe->i]=='/')&&((pe->i+1)!=pe->n)&&((pe->p[pe->i+1]=='*')||(pe->p[pe->i+1]=='/')))
+      pe->i+=CCPrepComLen(pe->p,pe->n,pe->i);
+    else
+      return;
+  }
+}
+
+/* One integer literal. Rules are THIS compiler's, not gcc's, on purpose: hex
+ * and DECIMAL, where a leading zero means decimal because `int x = 017;` is 17
+ * to this front end (no octal) — a literal meaning 15 in a condition and 17 in
+ * the code under it would be worse than the divergence. `0b` is accepted for
+ * parity with gcc even though the C front end rejects it, and a trailing
+ * u/U/l/L is consumed and ignored, because accepting a suffix can only turn a
+ * rejection into an answer. */
+I64 CCPrepExNumber(CPrepExpr *pe,I64 *pv)
+{
+  U8 *p;
+  I64 i,v,ch,rad;
+
+  p=pe->p;
+  i=pe->i;
+  v=0;
+  rad=10;
+  if ((p[i]=='0')&&((i+1)<pe->n)&&(((p[i+1]=='x')||(p[i+1]=='X'))||((p[i+1]=='b')||(p[i+1]=='B'))))
+  {
+    if ((p[i+1]=='b')||(p[i+1]=='B'))
+      rad=2;
+    else
+      rad=16;
+    i+=2;
+  }
+  while (i!=pe->n)
+  {
+    ch=p[i];
+    if (CIsDigit(ch))
+      ch=ch-'0';
+    else if ((ch>='a')&&(ch<='f'))
+      ch=ch-'a'+10;
+    else if ((ch>='A')&&(ch<='F'))
+      ch=ch-'A'+10;
+    else
+      break;
+    if (ch>=rad)
+      break;		//`0b2` and a hex-only letter stop and stay for the
+			//caller to complain about
+    v=v*rad+ch;
+    i++;
+  }
+  while ((i!=pe->n)&&(((p[i]=='u')||((p[i]=='U')||((p[i]=='l')||(p[i]=='L'))))))
+    i++;
+  pe->i=i;
+  *pv=v;
+  return TRUE;
+}
+
+/* A character constant, decoded with the SAME table the literals in the code
+ * below it use (CCEscape in CC_LEX.HC) — a condition and the code it guards may
+ * not read one differently. A multi-character constant packs left to right
+ * (`'ab'` is 0x6162), which is what gcc produces as well. */
+I64 CCPrepExCharLit(CCCtrl *cc,CPrepExpr *pe,I64 *pv)
+{
+  U8 *p;
+  U8 *np;
+  I64 i,v,ch;
+
+  p=pe->p;
+  i=pe->i+1;		//past the opening quote
+  v=0;
+  while ((i!=pe->n)&&(p[i]!=39))
+  {
+    ch=p[i];
+    i++;
+    if (ch=='\\')
+    {
+      if (i==pe->n)
+        return CCPrepExBad(cc,pe,"unterminated character constant in a #if expression");
+      ch=p[i];
+      i++;
+      if ((ch=='x')&&((i==pe->n)||(!CIsHexCh(p[i]))))
+      {
+        //CCEscape would report this through the LEXER's message, which carries
+        //a token context this expression has none of; asking first keeps the
+        //diagnostic in the preprocessor's own words.
+        return CCPrepExBad(cc,pe,"\\x needs a hex digit in a #if character constant");
+      }
+      np=p+i;
+      CCEscape(cc,np,ch,&ch,&np);	//FALSE keeps the byte: an escaped
+      i=np-pe->p;			//quote, or an unknown escape
+    }
+    v=v*256+ch;		//multi-character constants pack left to right
+  }
+  if (i==pe->n)
+    return CCPrepExBad(cc,pe,"unterminated character constant in a #if expression");
+  pe->i=i+1;		//past the closing quote
+  *pv=v;
+  return TRUE;
+}
+
+extern I64 CCPrepExQ(CCCtrl *cc,CPrepExpr *pe);	//see the extern note: a
+//plain prototype here makes a second CCPrepExQ
+
+I64 CCPrepExPrim(CCCtrl *cc,CPrepExpr *pe)
+{
+  U8 w[CC_TOK_MAX];
+  I64 v,ln;
+
+  CCPrepExSpace(pe);
+  if (pe->i==pe->n)
+    return CCPrepExBad(cc,pe,"a #if expression ended too early");
+  if (pe->p[pe->i]=='(')
+  {
+    pe->i++;
+    v=CCPrepExQ(cc,pe);
+    CCPrepExSpace(pe);
+    if ((pe->i==pe->n)||(pe->p[pe->i]!=')'))
+      return CCPrepExBad(cc,pe,"missing ')' in a #if expression");
+    pe->i++;
+    return v;
+  }
+  if (CIsDigit(pe->p[pe->i]))
+  {
+    CCPrepExNumber(pe,&v);
+    return v;
+  }
+  if (pe->p[pe->i]==39)
+  {
+    if (!CCPrepExCharLit(cc,pe,&v))
+      return 0;
+    return v;
+  }
+  if ((pe->p[pe->i]=='_')||(CIsAlpha(pe->p[pe->i])))
+  {
+    //C 6.10.1/3: what survived expansion is ZERO. Not a call, and that is why
+    //`#if NOPE(1)` becomes a syntax error instead of a reference to a function
+    ln=CCPrepWord(pe->p,pe->n,pe->i,w);
+    pe->i+=ln;
+    return 0;
+  }
+  if (pe->p[pe->i]=='"')
+    return CCPrepExBad(cc,pe,"a string literal is not valid in a #if expression");
+  return CCPrepExBad(cc,pe,"unexpected token in a #if expression");
+}
+
+I64 CCPrepExUnary(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v;
+
+  CCPrepExSpace(pe);
+  if ((pe->i!=pe->n)&&(((pe->p[pe->i]=='-')||((pe->p[pe->i]=='+')||((pe->p[pe->i]=='~')||(pe->p[pe->i]=='!'))))))
+  {
+    v=pe->p[pe->i];
+    pe->i++;
+    if (v=='-')
+      return -CCPrepExUnary(cc,pe);
+    if (v=='+')
+      return CCPrepExUnary(cc,pe);
+    if (v=='~')
+      return ~CCPrepExUnary(cc,pe);
+    return !CCPrepExUnary(cc,pe);		//! is the last unary form
+  }
+  return CCPrepExPrim(cc,pe);
+}
+
+/* `live` only guards the division diagnostics: an operand reached through a
+ * short-circuited branch is parsed, and C does not fault it. */
+I64 CCPrepExMul(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,r,op;
+
+  v=CCPrepExUnary(cc,pe);
+  while (!pe->bad)
+  {
+    CCPrepExSpace(pe);
+    if ((pe->i==pe->n)||((pe->p[pe->i]!='*')&&((pe->p[pe->i]!='/')&&(pe->p[pe->i]!='%'))))
+      return v;
+    op=pe->p[pe->i];
+    pe->i++;
+    r=CCPrepExUnary(cc,pe);
+    if (pe->bad)
+      return v;
+    if (op=='*')
+      v=v*r;
+    else if (!r)
+    {
+      if (pe->live)
+        return CCPrepExBad(cc,pe,"division by zero in a #if expression");
+      v=0;		//a dead operand still must not fault
+    }
+    else if (op=='/')
+      v=v/r;
+    else
+      v=v%r;
+  }
+  return v;
+}
+
+I64 CCPrepExAdd(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,r,op;
+
+  v=CCPrepExMul(cc,pe);
+  while (!pe->bad)
+  {
+    CCPrepExSpace(pe);
+    if ((pe->i==pe->n)||((pe->p[pe->i]!='+')&&(pe->p[pe->i]!='-')))
+      return v;
+    op=pe->p[pe->i];
+    pe->i++;
+    r=CCPrepExMul(cc,pe);
+    if (pe->bad)
+      return v;
+    if (op=='+')
+      v=v+r;
+    else
+      v=v-r;
+  }
+  return v;
+}
+
+I64 CCPrepExShift(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,r,left;
+
+  v=CCPrepExAdd(cc,pe);
+  while (!pe->bad)
+  {
+    CCPrepExSpace(pe);
+    if ((pe->i+1)>=pe->n)
+      return v;
+    if (((pe->p[pe->i]=='<')&&(pe->p[pe->i+1]=='<'))||((pe->p[pe->i]=='>')&&(pe->p[pe->i+1]=='>')))
+    {
+      left=(pe->p[pe->i]=='<');
+      pe->i+=2;
+      r=CCPrepExAdd(cc,pe);
+      if (pe->bad)
+        return v;
+      if (left)
+        v=v<<r;
+      else
+        v=v>>r;
+    }
+    else
+      return v;
+  }
+  return v;
+}
+
+I64 CCPrepExRel(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,r,op;
+
+  v=CCPrepExShift(cc,pe);
+  while (!pe->bad)
+  {
+    CCPrepExSpace(pe);
+    if (pe->i==pe->n)
+      return v;
+    //Only `<`, `>` and their `=` forms live at this level. `==` and `!=` are
+    //the CALLER's (CCPrepExEq), so ExRel must leave them: taking `==` here and
+    //then falling through to the `>` case is how `#if SEVEN == 7` asked whether
+    //7 was greater than 7. A lone `=` is left too, and becomes a diagnostic one
+    //level up for want of an operator.
+    op=pe->p[pe->i];
+    if ((op!='<')&&(op!='>'))
+      return v;
+    if (((pe->i+1)!=pe->n)&&(pe->p[pe->i+1]=='='))
+    {
+      pe->i+=2;
+      if (op=='<')
+        op=1;		//<=
+      else
+        op=2;		//>=
+    }
+    else
+    {
+      pe->i++;
+      if (op=='<')
+        op=4;		//<
+      else
+        op=5;		//>
+    }
+    r=CCPrepExShift(cc,pe);
+    if (pe->bad)
+      return v;
+    if (op==1)
+      v=(v<=r);
+    else if (op==2)
+      v=(v>=r);
+    else if (op==4)
+      v=(v<r);
+    else
+      v=(v>r);		//op==5
+  }
+  return v;
+}
+
+I64 CCPrepExEq(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,r,eq;
+
+  v=CCPrepExRel(cc,pe);
+  while (!pe->bad)
+  {
+    CCPrepExSpace(pe);
+    if ((pe->i+1)>=pe->n)
+      return v;
+    if (((pe->p[pe->i]=='=')&&(pe->p[pe->i+1]=='='))||((pe->p[pe->i]=='!')&&(pe->p[pe->i+1]=='=')))
+    {
+      eq=(pe->p[pe->i]=='=');
+      pe->i+=2;
+      r=CCPrepExRel(cc,pe);
+      if (pe->bad)
+        return v;
+      if ((v==r)!=eq)
+        v=0;
+      else
+        v=1;
+    }
+    else
+      return v;
+  }
+  return v;
+}
+
+I64 CCPrepExBAnd(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,r;
+
+  v=CCPrepExEq(cc,pe);
+  while (!pe->bad)
+  {
+    CCPrepExSpace(pe);
+    //a single `&` only: `&&` belongs to the level above
+    if (((pe->i+1)>=pe->n)||((pe->p[pe->i]!='&')||(pe->p[pe->i+1]=='&')))
+      return v;
+    pe->i++;
+    r=CCPrepExEq(cc,pe);
+    if (pe->bad)
+      return v;
+    v=v&r;
+  }
+  return v;
+}
+
+I64 CCPrepExBXor(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,r;
+
+  v=CCPrepExBAnd(cc,pe);
+  while (!pe->bad)
+  {
+    CCPrepExSpace(pe);
+    if ((pe->i==pe->n)||(pe->p[pe->i]!='^'))
+      return v;
+    pe->i++;
+    r=CCPrepExBAnd(cc,pe);
+    if (pe->bad)
+      return v;
+    v=v^r;
+  }
+  return v;
+}
+
+I64 CCPrepExBOr(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,r;
+
+  v=CCPrepExBXor(cc,pe);
+  while (!pe->bad)
+  {
+    CCPrepExSpace(pe);
+    //a single `|` only, for the same reason as `&` above
+    if (((pe->i+1)>=pe->n)||((pe->p[pe->i]!='|')||(pe->p[pe->i+1]=='|')))
+      return v;
+    pe->i++;
+    r=CCPrepExBXor(cc,pe);
+    if (pe->bad)
+      return v;
+    v=v|r;
+  }
+  return v;
+}
+
+I64 CCPrepExAnd(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,r,sv;
+
+  v=CCPrepExBOr(cc,pe);
+  while (!pe->bad)
+  {
+    CCPrepExSpace(pe);
+    if (((pe->i+1)>=pe->n)||((pe->p[pe->i]!='&')||(pe->p[pe->i+1]!='&')))
+      return v;
+    pe->i+=2;
+    sv=pe->live;
+    if (!v)
+      pe->live=0;		//short-circuited: parsed, not evaluated
+    r=CCPrepExBOr(cc,pe);
+    pe->live=sv;
+    if (pe->bad)
+      return v;
+    if (v&&r)
+      v=1;
+    else
+      v=0;		//C says a logical operator yields exactly 0 or 1
+  }
+  return v;
+}
+
+I64 CCPrepExOr(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,r,sv;
+
+  v=CCPrepExAnd(cc,pe);
+  while (!pe->bad)
+  {
+    CCPrepExSpace(pe);
+    if (((pe->i+1)>=pe->n)||((pe->p[pe->i]!='|')||(pe->p[pe->i+1]!='|')))
+      return v;
+    pe->i+=2;
+    sv=pe->live;
+    if (v)
+      pe->live=0;		//short-circuited on the left
+    r=CCPrepExAnd(cc,pe);
+    pe->live=sv;
+    if (pe->bad)
+      return v;
+    if (v||r)
+      v=1;
+    else
+      v=0;
+  }
+  return v;
+}
+
+/* `?:` is the outermost level, and its arms are conditionals too. C evaluates
+ * only the chosen arm, so the other is parsed with live=0 (probed against gcc:
+ * the untaken side of a `?:`, `&&` or `||` does not get to report a division by
+ * zero). Both arms are still PARSED here, because the ':' has to be found. */
+I64 CCPrepExQ(CCCtrl *cc,CPrepExpr *pe)
+{
+  I64 v,t,f,sv;
+
+  v=CCPrepExOr(cc,pe);
+  CCPrepExSpace(pe);
+  if (((pe->bad)||(pe->i==pe->n))||(pe->p[pe->i]!='?'))
+    return v;
+  pe->i++;
+  sv=pe->live;
+  pe->live=sv&&v;
+  t=CCPrepExQ(cc,pe);
+  pe->live=sv;
+  CCPrepExSpace(pe);
+  if (((pe->bad)||(pe->i==pe->n))||(pe->p[pe->i]!=':'))
+    return CCPrepExBad(cc,pe,"missing ':' in a #if expression");
+  pe->i++;
+  pe->live=sv&&(!v);
+  f=CCPrepExQ(cc,pe);
+  pe->live=sv;
+  if (v)
+    return t;
+  return f;
+}
+
+/* Expand a controlling expression and evaluate it. The expanded text goes into
+ * the scratch and is dropped afterwards: nothing else can be looking at it,
+ * because every invocation the expansion opened compacts its own region back
+ * below this one's start, and the scratch never moves. */
+I64 CCPrepExprLine(CCCtrl *cc,CPrep *pp,U8 *q,U8 *e)
+{
+  CPrepExpr pe;
+  CMacScan bs;
+  I64 off,v;
+
+  off=pp->scpos;
+  bs.p=q;
+  bs.n=e-q;
+  bs.i=0;
+  bs.mask=0;
+  bs.dst=1;
+  bs.ex=NULL;
+  bs.isarg=0;
+  bs.incond=1;
+  bs.subonly=0;
+  CCPrepScan(cc,pp,&bs);
+  if (cc->errs)
+  {
+    pp->scpos=off;
+    return FALSE;
+  }
+  pe.p=pp->sc+off;
+  pe.n=pp->scpos-off;
+  pe.i=0;
+  pe.bad=0;
+  pe.live=1;
+  v=CCPrepExQ(cc,&pe);
+  CCPrepExSpace(&pe);
+  if ((pe.i!=pe.n)&&(!pe.bad))
+    CCPrepExBad(cc,&pe,"trailing tokens in a #if expression");
+  pp->scpos=off;		//done with the condition text
+  if ((pe.bad)||(cc->errs))
+    return FALSE;
+  return v!=0;
+}
+
 /* M31: validate a macro's replacement text at DEFINITION time, which is when C
  * diagnoses these three things. For a FUNCTION-like body: a `#` operand must
  * name one of THIS macro's parameters (or `__VA_ARGS__` when the list ended
@@ -1531,6 +2193,14 @@ I64 CCPrepDefine(CCCtrl *cc,U8 *q,U8 *e)
     CCPrepErr(cc,"#define needs a name");
     return FALSE;
   }
+  if (!StrCmp(nm,"defined"))
+  {
+    //C reserves the name (probed: gcc errors at the #define, before any #if
+    //looks at it). Rejecting it here is what keeps `#if defined == 1` from
+    //turning into an expression about whatever `defined` happened to expand to.
+    CCPrepErr(cc,"\"defined\" cannot be used as a macro name");
+    return FALSE;
+  }
   b=CCPrepMacro(cc,nm);
   if (b<0)
   {
@@ -1606,8 +2276,9 @@ U0 CCPrepCond(CPrep *pp,I64 parent,I64 cond)
 I64 CCPrepDirective(CCCtrl *cc,CPrep *pp,U8 *q,U8 *e)
 {
   U8 kw[CC_TOK_MAX],nm[CC_TOK_MAX],path[CC_TOK_MAX],full[CC_TOK_MAX+16];
+  U8 msg[CC_TOK_MAX];
   U8 *inc,*start;
-  I64 accept,par,f,mi,cond,i,close,qw;
+  I64 accept,par,f,mi,cond,i,close;
 
   accept=CCPrepAccept(pp);
   q++;				//'#'
@@ -1733,29 +2404,57 @@ I64 CCPrepDirective(CCCtrl *cc,CPrep *pp,U8 *q,U8 *e)
   {
     par=accept;
     cond=FALSE;
-    qw=0;
-    while ((q<e)&&((*q==' ')||(q=='\t')))
-      q++;
-    if ((q<e)&&(*q=='0'))
+    if (par)
     {
-      qw=TRUE;
-      cond=FALSE;
-    }
-    else if ((q<e)&&(*q=='1'))
-    {
-      qw=TRUE;
-      cond=TRUE;
-    }
-    if (!qw)
-    {
-      if (par)
+      //M32: a real expression, not just a literal 0 or 1. Reported here and
+      //not by the evaluator because C says so ("#if with no expression"), and
+      //because an empty tail would otherwise look like a truncated expression.
+      if (!CCPrepHasText(q,e-q))
       {
-        CCPrepErr(cc,"#if supports only literal 0 or 1");
+        CCPrepErr(cc,"#if with no expression");
         return FALSE;
       }
-      cond=FALSE;
+      cond=CCPrepExprLine(cc,pp,q,e);
+      if (cc->errs)
+        return FALSE;
     }
     CCPrepCond(pp,par,cond);
+    return TRUE;
+  }
+  if (!StrCmp(kw,"elif"))
+  {
+    if (!pp->sp)
+    {
+      CCPrepErr(cc,"#elif without #if/#ifdef/#ifndef");
+      return FALSE;
+    }
+    f=pp->frm[pp->sp-1];
+    par=(f&4);
+    if ((par)&&((f&8)))
+    {
+      //C: an #elif may not follow an #else. Probed: reported even when the
+      //whole chain is untaken, so this is gated on the ENCLOSING region, not
+      //on whether anybody will read this branch.
+      CCPrepErr(cc,"#elif after #else");
+      return FALSE;
+    }
+    cond=FALSE;
+    if ((par)&&(!(f&2)))
+    {
+      //A chain that already took a branch does not evaluate the later
+      //conditions at all (probed: `#if 1` / `#elif 1/0` is not a division
+      //error, and `#elif ))` is not a syntax error) — same reason a skipped
+      //region tolerates junk.
+      if (!CCPrepHasText(q,e-q))
+      {
+        CCPrepErr(cc,"#elif with no expression");
+        return FALSE;
+      }
+      cond=CCPrepExprLine(cc,pp,q,e);
+      if (cc->errs)
+        return FALSE;
+    }
+    pp->frm[pp->sp-1]=cond|((f&2)|(cond<<1))|(f&4)|(f&8);
     return TRUE;
   }
   if (!StrCmp(kw,"else"))
@@ -1767,7 +2466,7 @@ I64 CCPrepDirective(CCCtrl *cc,CPrep *pp,U8 *q,U8 *e)
     }
     f=pp->frm[pp->sp-1];
     cond=(f&4)&&!(f&2);
-    pp->frm[pp->sp-1]=cond|(f&2)|(cond<<1)|(f&4);
+    pp->frm[pp->sp-1]=cond|(f&2)|(cond<<1)|(f&4)|8;	//bit3: an #else has run
     return TRUE;
   }
   if (!StrCmp(kw,"endif"))
@@ -1782,6 +2481,30 @@ I64 CCPrepDirective(CCCtrl *cc,CPrep *pp,U8 *q,U8 *e)
   }
   if (!StrCmp(kw,"pragma"))
     return TRUE;
+  if ((!StrCmp(kw,"error"))||(accept&&(!StrCmp(kw,"warning"))))
+  {
+    //M32: the message is the REST OF THE LINE, as written. C does not macro-
+    //expand it (probed: `#error MSG` with `#define MSG boom` prints MSG), and
+    //a #error is a hard failure while #warning is only a note — so #warning is
+    //recognised solely to report it: silently accepting it would swallow
+    //something the author wrote to be seen.
+    while ((q<e)&&((*q==' ')||(q=='\t')))
+      q++;
+    i=0;
+    while ((q<e)&&(i<(CC_TOK_MAX-1)))
+      msg[i++]=*q++;
+    msg[i]=0;
+    if (!accept)
+      return TRUE;
+    if (!StrCmp(kw,"error"))
+    {
+      "CC ERROR: prep: #error %s\n",msg;
+      cc->errs++;
+      return FALSE;
+    }
+    "WARN: prep: #warning %s\n",msg;
+    return TRUE;
+  }
   if (accept)
   {
     "CC ERROR: prep: unknown directive '#%s'\n",kw;
@@ -1795,7 +2518,13 @@ I64 CCPrepText(CCCtrl *cc,CPrep *pp,U8 *in)
 {
   CMacScan ms;
   U8 *q,*e;
-  I64 accept;
+  I64 accept,sp0;
+
+  //Every file must close the conditionals it opened, whether it is the main
+  //translation unit or an #include: the frame stack is shared, so an open #if
+  //left behind by an included file would silently swallow the rest of the
+  //INCLUDER, not just the header.
+  sp0=pp->sp;
   while (*in)
   {
     q=in;
@@ -1823,6 +2552,7 @@ I64 CCPrepText(CCCtrl *cc,CPrep *pp,U8 *in)
       ms.dst=0;
       ms.ex=NULL;
       ms.isarg=0;			//a source line is neither
+      ms.incond=0;			//and only a directive's text is #if text
       ms.subonly=0;
       CCPrepScan(cc,pp,&ms);
     }
@@ -1833,6 +2563,11 @@ I64 CCPrepText(CCCtrl *cc,CPrep *pp,U8 *in)
       in=e+1;
     else
       in=e;
+  }
+  if (pp->sp!=sp0)
+  {
+    CCPrepErr(cc,"unterminated #if at end of file");
+    return FALSE;
   }
   return TRUE;
 }

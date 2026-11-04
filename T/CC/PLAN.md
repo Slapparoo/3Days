@@ -101,7 +101,9 @@ byte model: `void *` is a byte pointer like memcpy's contract;
 `f(void)` is the zero-arg idiom; anonymous parameters and `...` in
 prototypes parse), `typedef` for scalar/pointer aliases (`typedef
 unsigned long size_t;`), a line-oriented preprocessor-lite (function-like
-`#define` with arguments, `#`, `##`, `...` and `__VA_ARGS__` since M31), and the
+`#define` with arguments, `#`, `##`, `...` and `__VA_ARGS__` since M31, and
+`#if`/`#elif` expressions with `defined()`, `#elif`, `#error` and `#warning`
+since M32), and the
 adapted-musl (MIT) headers in `T:/CC/INC/`: stdio.h, stdlib.h,
 string.h, stddef.h (guarded, include each other by plain name).
 
@@ -313,9 +315,10 @@ Not supported — each currently fails with a compile diagnostic:
   but not `sizeof` or address values; `(struct T)` non-pointer casts
   yield the address as an int; `sizeof(function)` is a diagnostic.
 - Preprocessor pieces that lite skips — M31 closed the function-like
-  `#define F(a)` gap (arguments, nesting, variadic tails, `#` and `##`),
-  so what is left is `#elif`/`#error`/`#line`, expressions
-  in `#if` (only literal `0`/`1`), `defined(X)`, includes relative to
+  `#define F(a)` gap (arguments, nesting, variadic tails, `#` and `##`) and
+  M32 closed the conditional gap (real expressions in `#if`/`#elif`,
+  `defined()`, `#elif`, `#error`, `#warning`), so what is left is `#line`,
+  includes relative to
   the includer's directory (plain names resolve ONLY against
   `T:/CC/INC/`; drive-qualified or leading-`/` paths are opened as
   written), line-continuation backslashes, and `#if` interacting
@@ -328,7 +331,15 @@ Not supported — each currently fails with a compile diagnostic:
   with a MACRO name for `f` leaves `TWO(3)` as text and the C front end
   says "call to undefined function" — loud, not a wrong value; and a
   `#` or `##` in an OBJECT-like body is left as written (gcc pastes
-  `#define OB a##b` to `ab`).
+  `#define OB a##b` to `ab`). Four conditional edges stay open on purpose,
+  all four pinned against `gcc`: a `sizeof` in a condition is not an operator
+  here (it reads as a name, so the expression then has trailing tokens — same
+  verdict as C's rejection, different wording); a `defined` written in a macro
+  BODY is a portability warning in C and is accepted in silence here; `#pragma`
+  is CONSUMED by lite while `gcc -E` forwards it to the compiler proper, so a
+  file containing one cannot be diffed token for token; and `#warning` is a
+  note line here where C99 has no such directive at all (gcc calls it an
+  extension, and `-pedantic-errors` turns it into an error).
 - Structs: no by-value passing or return, no array members and no
   by-value members of MULTI-slot tags (one-slot tags — any union, any
   single-member struct — are by-value since M19), tags must be defined
@@ -425,12 +436,12 @@ Not supported — each currently fails with a compile diagnostic:
 | File        | Contents                                        |
 |-------------|-------------------------------------------------|
 | `CC.HH`     | types, token/opcode constants, `CCCtrl`          |
-| `CC_LEX.HC` | lexer (also where `CCError` lives)               |
+| `CC_LEX.HC` | lexer, `CCError`, and the shared escape table (M32) |
 | `CC_EMIT.HC`| machine-code emitters, prologue/return, patches  |
 | `CC_SYM.HC` | symbol table, variable load/store                |
 | `CC_PARSE.HC`| recursive-descent parser, direct emission      |
 | `CC.HC`     | umbrella include, `CCInit`/`CCSrc`/`CCRunFile`, `CCSave`/`CCLoad` |
-| `CC_PREP.HC`| M13 preprocessor-lite + M31 function-like macros (`#include`/`#define`/`#undef`/conditionals), runs on user text before the prelude is prepended |
+| `CC_PREP.HC`| M13 preprocessor-lite + M31 function-like macros + M32 conditionals (`#include`/`#define`/`#undef`/`#if`-family), runs on user text before the prelude is prepended |
 | `CC_LIB.HC` | M12 zero-arg delegation helpers (spliced into `CC.HC` after `CCCtrl cc;`) |
 | `INC/*.h`   | M13 adapted-musl (MIT) headers: `stdio.h` `stdlib.h` `string.h` `stddef.h` — guarded, trimmed to the implemented surface |
 | `CC_TEST.HC`| test harness (PASS/FAIL per file in `TEST/`)     |
@@ -734,6 +745,12 @@ Not supported — each currently fails with a compile diagnostic:
    `#ifndef`/`#else`/`#endif` (three-bit frames: emit/chain-taken/
    parent-emit — an inner `#else` cannot resurrect an outer-skipped
    region), `#if 0`/`#if 1`, `#pragma`; anything else is a loud error.
+   **[M32 grew the frames to four bits (it adds "an #else has already run at
+   this level"), replaced the literal-only `#if` with a real expression
+   evaluator plus `defined()`, and added `#elif`, `#error`, `#warning` and the
+   unterminated-`#if` check — see M32. What the evaluator cannot fold is still
+   rejected: no `sizeof`, no string literals, and a name that survives
+   expansion is 0, exactly as C says.]**
    Tables (macros, typedefs) live in CCCtrl, are compile-time only,
    and never touch the object format — a header-using program
    save/reloads identically (`objhdr` probe: 16/16 across reloads).
@@ -1014,8 +1031,13 @@ Not supported — each currently fails with a compile diagnostic:
    it). Escapes: \a \b \f \v \e added to both literal kinds, \xHH
    (1-2 hex digits, error on none) and \ooo octal (up to 3 digits —
    `\17z` stops at two because z is non-octal, exactly like C) join
-   them; `\0` in a string lands a NUL, which the pool stores as the
-   terminator (strlen("a\0b")==1 — C-truth by construction). String
+   them; **[the table was written out TWICE in CC_LEX.HC here and the two
+   copies had already drifted — one handles `\'`, the other `\"`. M32 replaced
+   them with ONE `CCEscape`, which the `#if` character-constant reader uses
+   too; the quote escapes stayed per-site because they differ by context, and
+   `CIsHexCh` came out of the same change.]** `\0` in a string lands a NUL,
+   which the pool stores as the terminator (strlen("a\0b")==1 — C-truth by
+   construction). String
    LITERALS now enter Postfix: `"ab"[1]`, `("ab"+1)[0]` — byte scale
    from TY_CHARP, zero new machinery. Python anchor discipline (count==1
    asserts) caught a duplicated declaration block between the two fold
@@ -1851,6 +1873,93 @@ Not supported — each currently fails with a compile diagnostic:
    fptab 31/31, decay 28/28, fptr 27/27, ptrinit 25/25 and structinit 22/22
    unchanged.
 
+ - [x] **M32** the conditional family: `defined()`, real expressions, `#elif`,
+   `#error` — and one escape table instead of two. `#if` and `#elif` carry a C
+   constant expression now: full precedence (`?:` loosest, then `||`, `&&`,
+   `|`, `^`, `&`, `==`/`!=`, the four relational forms, `<<`/`>>`, `+`/`-`,
+   `*`/`/`/`%`, then unary `+ - ~ !`), parentheses, and the rule that a name
+   which survives expansion is ZERO (6.10.1/3), so `#if NOTAD == 0` takes.
+   Literals are hex, decimal and `0b` with a `u`/`l` suffix read and ignored,
+   and character constants decode through the SAME table the literals under the
+   `#if` use, so a condition and the code it guards cannot read `'\x41'`
+   differently. `defined` exists in all four written forms — `defined(X)`,
+   `defined (X)`, `defined X`, `!defined(X)` — and `defined` is no longer an
+   acceptable macro name. **The insight: `defined` is a SCAN-time operator, not
+   a parse-time one, and its scope is the directive line plus any BODY rescan
+   but NOT an argument expansion.** Its operand is never macro-expanded (with
+   `#define HAVE 1`, `#if defined(HAVE)` is 1 and not `defined(1)`), yet a
+   PARAMETER in that position stands for its argument's EXPANDED text, because
+   by the time a body is rescanned the substitution has already happened. Both
+   ways of getting the scope wrong are visible: were argument scans
+   defined-aware, `#if K(defined(A))` with `#define A 1` and `#define K(x) x`
+   would answer 1, where C expands the argument to `defined(1)` and reports
+   "operator defined requires an identifier"; were body scans not,
+   `#define ISDEF(x) defined(x)` would leave `defined` as a name and the answer
+   would depend on which tokens happened to follow. A `defined` written in a
+   body is a portability warning in C and is accepted here in silence.
+   **The second insight: a condition is evaluated only when it can still change
+   the answer.** `#if` and `#elif` evaluate solely when the enclosing region
+   accepts AND no earlier branch of this chain was taken — which is C's own
+   behaviour, and is what makes `#if 1` / `#elif 1/0` / `#elif ))` clean
+   (probed), just as `#error` and `#include "no-such-file.h"` inside `#if 0`
+   are inert. Short-circuiting rides the same channel: `&&`, `||` and `?:` parse
+   both arms but mark the dead one, and division by zero is a diagnostic only
+   for a live operand (`#if 0 && 1/0` and `#if 1 ? 0 : 1/0` are not errors in
+   C, and faulting them would stop compiles C completes). `#elif` after `#else`
+   is the one conditional error that fires even when nobody will read the
+   branch, so the frame needed a fourth bit for "an #else has run at this
+   level", gated on the enclosing region so a skipped outer region still
+   tolerates junk. `#error` prints the rest of its line UNEXPANDED (probed:
+   `#error MSG` prints `MSG`) and fails the compile; `#warning` prints the same
+   shape as a note and continues. Every file must close the conditionals it
+   opened, checked at the end of each CCPrepText, so an included file cannot
+   leave an `#if` open and silently swallow the rest of its INCLUDER.
+   **Landmine — `==` is not the relational level's operator.** The first
+   CCPrepExRel ate `==`, which belongs to its caller CCPrepExEq, and then fell
+   through to the `>` case, so `#if SEVEN == 7` asked whether 7 was greater than
+   7: every equality condition answered wrong in the same direction, and the
+   prep oracle caught it because `(2+3)*4 == 20` came back false. ExRel now
+   leaves anything that is not `<` or `>`. **Landmine — the `#error` and
+   `#warning` arms were inverted,** because `StrCmp` returns 0 on equality:
+   `#error` printed a note and let the compile continue while `#warning` failed
+   it. **Landmine — the condition text goes into the same fixed-capacity scratch
+   as macro arguments.** It is released after evaluating (`pp->scpos = off`),
+   and that is safe only because every invocation the expansion opened compacts
+   its own region back below this one's start; the scratch still never moves, so
+   a condition that expands past the end reports "macro argument text too
+   large". **Landmine — the escape table had been written twice in CC_LEX.HC
+   and the two copies had drifted** (`\'` in one, `\"` in the other — which is
+   also why each literal kind keeps its own quote rule). They are now one
+   `CCEscape` used by both lexers, plus a `CIsHexCh` predicate; checked against
+   gcc on 19 escape shapes across both literal kinds. Divergences, all
+   deliberate and all pinned against `gcc`: no octal in a condition, because
+   `int x = 017;` is 17 to this front end — so `0x10 > 017` is false here and
+   true in C, and `08` is accepted where C errors, a literal meaning one thing
+   in a condition and another in the code under it being worse than the
+   divergence; a decimal literal past I64 wraps with no warning; `'ab'` packs to
+   the value C gives but without C's warning; `sizeof` and string literals are
+   not operators in a condition; and `#pragma` is consumed rather than forwarded
+   to the parser. Verification: the prep oracle compares our expanded text with
+   `gcc -std=gnu99 -Wall -E -P` token for token over 122 shapes — 105 identical,
+   14 reaching the SAME diagnostic where gcc recovers and prints something while
+   we abort, and 3 being the literal rules above. Verdict parity over 83
+   conditional shapes: 79 identical, the 4 misses being C's octal error and
+   three C warnings (an oversized decimal, and a multi-character constant twice)
+   that lite has no notion of; end to end through `CCRunFile`, all nine M32
+   diagnostics abort with `rc=-1` while `#warning` alone continues at 42.
+   cond.c is 42 checks + closer whose ENTIRE preprocessed text matches
+   `gcc -E -P` token for token — so every directive decision in the file is
+   compared, not only its answers — and it was then cross-checked against gcc
+   per check (42 identical increments, both engines 43). The cross-check earned
+   its keep twice more: two of my own expectations were wrong (the value a `?:`
+   gives the directive, and whether `ALIAS` or its expansion is the name
+   `defined` asks about) and both engines disagreed with me in the same way.
+   Suite 83 PASS x3, clean `CC TESTS: 0 failed`, no new `WARN: Unused var`
+   entries; saved-object reloads cond 43/43/43 with macros 45/45/45, agcopy
+   28/28/28, desig 43/43/43, ptrmath 33/33/33, incr 42/42/42, fptab 31/31,
+   decay 28/28, fptr 27/27, ptrinit 25/25 and structinit 22/22 unchanged. Prep
+   and the lexer live under `T/`, so no HCRT.BIN rebuild is involved.
+
 ## HolyC dialect gotchas (all verified in this build)
 
 - **A HolyC identifier can collide with a KERNEL macro.** `pi` is
@@ -1885,6 +1994,20 @@ Not supported — each currently fails with a compile diagnostic:
   the file the umbrella splices first). Missing prototype → a call that
   silently runs nothing (M20); too-late prototype → a link failure (M24).
   When a brand-new call site misbehaves, grep its output for "at &".
+- **A wrapped `if`/`while` condition is the hazard by itself; a comment in it is
+  only one way to hit it.** The bullet below blames a `//` on the `{` line, and
+  that is right, but M32 hit the same failure with no comment anywhere: a
+  condition split over lines whose closing `)` sits alone on its line, followed
+  by `{`, fails as `ERROR: Missing ')' at "{"` pointing at the line AFTER the
+  brace. Keep the whole condition on one line whenever the body is a
+  brace-enclosed block — compute a long test into a local first.
+- **A same-file forward prototype must be `extern`, and the symptom of forgetting
+  is a warning far from the cause.** M32 wrote `I64 CCPrepExQ(CCCtrl *cc,
+  CPrepExpr *pe);` without `extern` ahead of its definition and the build gained
+  `WARN: Unused var 'cc' in 'CCPrepExQ'` and `'pe' in 'CCPrepExQ'`: the host had
+  made a SECOND function whose parameters nobody passes, and reported it as
+  unused-variable noise in a file that compiled. Diff the warning list against
+  the baseline on every run, not just the PASS count.
 - **A `//` comment on the `{` line that follows a multi-line `if`/`while`
   condition breaks the host parse**, reported as `ERROR: Missing ')' at "{"`
   pointing at the line AFTER the brace. A comment inside such a
@@ -2164,4 +2287,21 @@ Not supported — each currently fails with a compile diagnostic:
   A macro's replacement text is validated when it is DEFINED
   (CCPrepCheckBody), and only for a group that is ACCEPTED — a skipped
   `#if 0` region never defines, and so never validates.
+- Conditionals have ONE frame stack with FOUR bits, and `defined` is decided at
+  scan time (M32): `frm[i]` bit0 = this branch emits, bit1 = this chain has
+  taken a branch, bit2 = the enclosing region accepted when the directive ran,
+  bit3 = an `#else` has run at this level. Every writer keeps all four
+  consistent: `#else` sets bit3, `#elif` requires bit3 clear and takes the chain
+  only when bit2 is set and bit1 is clear, and a new `#if` pushes bit3 = 0.
+  A condition is expanded AND evaluated under that same gate, so a decided chain
+  never reaches CCPrepExprLine; making it unconditional there would invent a
+  diagnostic C does not make. `CMacScan.incond` says whether a region is a
+  controlling expression or a rescan of one: it is what makes `defined` an
+  operator, it is propagated into BODY scans and cleared for ARGUMENT scans, and
+  it never reaches the C parser because the expanded condition is evaluated and
+  dropped. The evaluator's `live` flag is the short-circuit channel — both arms
+  of `&&`, `||` and `?:` are parsed, and only a live operand may report division
+  by zero. `CPrepExpr.bad` stops the walk after the first diagnostic so one
+  malformed condition reports once. Condition text shares the fixed
+  CC_PREP_SCRA scratch with macro arguments and is released after use.
 

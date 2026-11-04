@@ -332,6 +332,12 @@ CCAssert(43,"T:/CC/TEST/desig.c","desig");
  * variadic tails (stringized as written, comma-deleted only after a `, ##` that
  * matched nothing), and a paste whose empty operand leaves the other side. */
 CCAssert(45,"T:/CC/TEST/macros.c","macros");
+/* M32: conditionals — defined() in four written forms, a real constant
+ * expression in #if/#elif (C precedence, short-circuit that keeps a dead 1/0
+ * silent, and the zero C gives a surviving identifier), #elif chains that stop
+ * evaluating once a branch is taken, #error/#warning, and text inside #if 0
+ * that must never be parsed, expanded or read. */
+CCAssert(43,"T:/CC/TEST/cond.c","cond");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */
