@@ -100,7 +100,8 @@ keywords `const` (no-op qualifier), `unsigned`/`long`/`signed`/`short`
 byte model: `void *` is a byte pointer like memcpy's contract;
 `f(void)` is the zero-arg idiom; anonymous parameters and `...` in
 prototypes parse), `typedef` for scalar/pointer aliases (`typedef
-unsigned long size_t;`), a line-oriented preprocessor-lite, and the
+unsigned long size_t;`), a line-oriented preprocessor-lite (function-like
+`#define` with arguments, `#`, `##`, `...` and `__VA_ARGS__` since M31), and the
 adapted-musl (MIT) headers in `T:/CC/INC/`: stdio.h, stdlib.h,
 string.h, stddef.h (guarded, include each other by plain name).
 
@@ -311,15 +312,23 @@ Not supported — each currently fails with a compile diagnostic:
   constant" — M20's folder folds literals, enum constants and arithmetic,
   but not `sizeof` or address values; `(struct T)` non-pointer casts
   yield the address as an int; `sizeof(function)` is a diagnostic.
-- Preprocessor pieces that lite skips: function-like `#define F(a)`
-  (expands as a bare object macro and the leftover text fails to
-  parse — loudly, by design), `#elif`/`#error`/`#line`, expressions
+- Preprocessor pieces that lite skips — M31 closed the function-like
+  `#define F(a)` gap (arguments, nesting, variadic tails, `#` and `##`),
+  so what is left is `#elif`/`#error`/`#line`, expressions
   in `#if` (only literal `0`/`1`), `defined(X)`, includes relative to
   the includer's directory (plain names resolve ONLY against
   `T:/CC/INC/`; drive-qualified or leading-`/` paths are opened as
   written), line-continuation backslashes, and `#if` interacting
   inside block comments (prep is line-shaped; keep conditionals and
-  block comments disjoint, as real code does).
+  block comments disjoint, as real code does). Three function-like
+  edges stay open on purpose, all three pinned against `gcc -E`: an
+  argument LIST that runs off its line is an error here and fine in C
+  (line-shaped again); a name that reaches the scanner only by
+  SUBSTITUTION is not rescanned, so `#define APPLY(f,a) f(a)` invoked
+  with a MACRO name for `f` leaves `TWO(3)` as text and the C front end
+  says "call to undefined function" — loud, not a wrong value; and a
+  `#` or `##` in an OBJECT-like body is left as written (gcc pastes
+  `#define OB a##b` to `ab`).
 - Structs: no by-value passing or return, no array members and no
   by-value members of MULTI-slot tags (one-slot tags — any union, any
   single-member struct — are by-value since M19), tags must be defined
@@ -421,7 +430,7 @@ Not supported — each currently fails with a compile diagnostic:
 | `CC_SYM.HC` | symbol table, variable load/store                |
 | `CC_PARSE.HC`| recursive-descent parser, direct emission      |
 | `CC.HC`     | umbrella include, `CCInit`/`CCSrc`/`CCRunFile`, `CCSave`/`CCLoad` |
-| `CC_PREP.HC`| M13 preprocessor-lite (`#include`/`#define`/conditionals), runs on user text before the prelude is prepended |
+| `CC_PREP.HC`| M13 preprocessor-lite + M31 function-like macros (`#include`/`#define`/`#undef`/conditionals), runs on user text before the prelude is prepended |
 | `CC_LIB.HC` | M12 zero-arg delegation helpers (spliced into `CC.HC` after `CCCtrl cc;`) |
 | `INC/*.h`   | M13 adapted-musl (MIT) headers: `stdio.h` `stdlib.h` `string.h` `stddef.h` — guarded, trimmed to the implemented surface |
 | `CC_TEST.HC`| test harness (PASS/FAIL per file in `TEST/`)     |
@@ -719,6 +728,9 @@ Not supported — each currently fails with a compile diagnostic:
    `<x.h>` resolve against `T:/CC/INC/`; paths containing a drive or
    leading `/` open as written; depth-capped), object-like `#define`
    (bodies re-expand, depth-bounded rescans) / `#undef`, `#ifdef`/
+   **[M31 replaced the depth-bounded rescan with a per-expansion disable
+   mask (blue paint) and added function-like macros: arguments, `#`,
+   `##`, `...` and `__VA_ARGS__` — see M31.]**
    `#ifndef`/`#else`/`#endif` (three-bit frames: emit/chain-taken/
    parent-emit — an inner `#else` cannot resurrect an outer-skipped
    region), `#if 0`/`#if 1`, `#pragma`; anything else is a loud error.
@@ -1313,7 +1325,9 @@ Not supported — each currently fails with a compile diagnostic:
    three write sites, decode once at consumption). A `CC_AEL(ty)` macro
    looked tidier and does not exist in this dialect: the HOST
    preprocessor has no FUNCTION-LIKE macros either (the very limitation
-   PLAN documents for CC's own prep-lite), and `#define CC_AEL(ty)
+   PLAN documents for CC's own prep-lite) **[M31 lifted that for CC's OWN
+   prep-lite; the HOST dialect still has no function-like macro, which is
+   the part that bit here.]**, and `#define CC_AEL(ty)
    ((ty)+1)` broke the umbrella with `Invalid lval at "ty"`.
    **Landmine #2 — array PARAMETERS are not decayed objects.** Their
    storage is the argument slot, which HOLDS the pointer, so they need
@@ -1737,9 +1751,132 @@ Not supported — each currently fails with a compile diagnostic:
    saved-object reloads 43/43/43 with agcopy 28/28/28, ptrmath 33/33/33, incr
    42/42/42, fptab 31/31, decay 28/28, fptr 27/27, ptrinit 25/25 and structinit
    22/22 unchanged.
+ - [x] **M31** function-like macros: arguments, `#`, `##`, `...`, and the
+   paint that makes recursion stop. A `(` following the name with NO space
+   makes a macro function-like (`#define F (x)` is an object-like macro whose
+   body is `(x)`, exactly as C says); whitespace before `(` at the CALL site
+   IS allowed, and a function-like name on its own is just an identifier, so
+   a variable may be named `AD2` in the same file as `#define AD2(a,b)`. An
+   argument is expanded ONCE, in the context of its INVOCATION rather than of
+   the macro being expanded, and is then substituted verbatim: `F1(F1(5))`
+   gives `((5))`, and with `#define A A+1` plus `#define F(x) x`, `F(A)` gives
+   `A+1` and NOT `A+1+1`. `#param` stringizes and `param ## x` pastes, with
+   BOTH operands substituted unexpanded (with `#define ONE 1`, `CAT(ONE,x)`
+   is `ONEx`), but the token the paste FORMS is looked up: with `#define code
+   5`, `CAT(co,de)` is 5, while with `#define Z 3`, `a##Z` is the token `1Z`.
+   **The insight: arity is decided by the SUBSTITUTED stream, not by the body
+   text as written — which forces three passes over every invocation.**
+   `#define VP(...) Q(__VA_ARGS__)` against a two-parameter Q is a TWO-argument
+   call, and `#define T(x) S(x)` hands S the argument's text, not its value.
+   So CCPrepIdent first scans each argument with `subonly=1` (substitute the
+   enclosing macro's parameters, expand nothing, leave `#` and `##` as text),
+   splits the result on its top-level commas, and only then expands each
+   piece: an argument's expanded text can carry commas that were never
+   separators (`S(P2(a,b))` stringizes `P2(1,2)`), and substituting first is
+   also what makes a parameter shadow a macro of the same name (`#define X 9`
+   with `#define FX(X) [(X)]` gives `FX(1)` = `[(1)]`). **The second insight:
+   blue paint replaces M13's rescan depth limit.** `CMacScan.mask` is a
+   bitmask of the macros whose expansion is open on this path, threaded into
+   every nested scan — an argument scan gets the CALLER's mask, a body scan
+   gets the caller's mask plus the bit of the macro being expanded — so `SELF`
+   inside `SELF+1` stays a name, `AA`/`BB` mutual recursion stops exactly
+   where gcc's output stops, and no legitimate chain is truncated. **Landmine
+   — raw argument text has to be COPIED.** The `#` and `##` operands are the
+   arguments AS WRITTEN, and the region an invocation was found in is NOT the
+   region its body is scanned in: reading a raw span against the body buffer
+   is how `GC(1,2,3)` emitted scratch garbage where C puts `2,3`. Both
+   argument forms therefore live in the scratch so that ONE base addresses
+   them, and every span is an offset because a put can move the buffer.
+   **Landmine — the scratch is FIXED capacity on purpose.** Every open scan
+   caches a region pointer, so a growing scratch leaves the outer ones reading
+   a freed buffer; growth went back out and overflow became "macro argument
+   text too large". **Landmine — `#__VA_ARGS__` stringizes the tail AS
+   WRITTEN**, its commas and their spacing included (`SV(1, 2)` is `"1, 2"`),
+   and that text exists only in the source: per-argument spans, trimmed and
+   copied one at a time, lose the separator, which is how the first version
+   produced `"12"`. The tail is therefore copied as ONE span, and it has to be
+   copied BEFORE the invocation's scratch mark, because the compaction that
+   ends an invocation slides the body down over everything from the mark
+   onward and would erase it. **Landmine — the paste flag must be cleared on
+   EVERY path that consumes an operand.** The `## __VA_ARGS__` path does not
+   go through CCPrepFuse, so leaving it set made the NEXT body token look like
+   a second operand and `GC(1)` came out `(1 ,)`: the paste re-fired and
+   pasted the held comma onto the closing paren. **Landmine — a paste operand
+   that became empty is not an error, and the deletion rule is narrower than
+   "delete the left side".** C deletes a token only for `, ## __VA_ARGS__`
+   when the tail matched nothing; any other empty operand leaves the OTHER
+   operand standing (probed: `P(,2)` gives 2, `P(1,)` gives 1, and
+   `x##__VA_ARGS__` with no extras keeps `x`). The first version deleted the
+   left side in all three, losing values with no diagnostic. **Landmine — half
+   of these diagnostics must fire at DEFINITION time because that is where C
+   fires them.** `#` not naming a parameter of this macro, `##` at either end
+   of a body, `__VA_ARGS__` in a body whose macro cannot supply it, a trailing
+   comma in a parameter list, a duplicate parameter name, a digit-leading
+   macro name: gcc reports all six even when the macro is never used, so
+   CCPrepCheckBody walks the replacement text when the macro is defined,
+   stepping over literals and comments whole (`#define S(x) ["#x"]` is clean).
+   Checking at use time instead is silence for an unused macro. The one rule
+   that cannot be checked there is `__VA_ARGS__` written in a CALL argument
+   (`V(__VA_ARGS__)` at top level: V's definition is perfectly legal), and
+   there it must be limited to text that arrived FROM THE MACHINERY
+   (`CMacScan.isarg`), because this prep scans a line at a time and the
+   continuation lines of a multi-line block comment are ordinary text —
+   M31's own fixture header comment mentioning `__VA_ARGS__` was a compile
+   error before that restriction existed. Divergences from C, all deliberate
+   and all pinned against `gcc -E`: an argument list that runs off its line;
+   a name that arrives only by SUBSTITUTION is not rescanned, so passing a
+   macro name to `#define APPLY(f,a) f(a)` leaves `TWO(3)` as text (loud:
+   "call to undefined function"); `#` and `##` in an OBJECT-like body stay as
+   written; the pasted result is not validated as a single preprocessing token
+   (`a##+##b` yields `1+2` where gcc errors) because CCPrepTail returns either
+   a whole identifier or one byte, and name+punct could not be rejected either
+   — `1` pasted with `.` is the pp-number `1.`; a redefinition replaces a
+   macro's kind in silence (gcc warns); and where C is permissive-with-a-
+   warning (trailing comma in a parameter list, duplicate parameter names) lite
+   errors, keeping M22's stance. Verification: the prep oracle compares our
+   expanded text with `gcc -std=gnu99 -Wall -E -P` token for token (literals
+   atomic, comments dropped, whitespace collapsed) over 63 shapes — 62
+   identical, and the 63rd (`BR({1,2})`, braces splitting an argument list)
+   reaches the SAME diagnostic wording in both engines. Diagnostic parity over
+   50 further shapes in five sets: 17/18 on the invocation matrix (the miss is
+   the multi-line argument list), 11/11 and 7/7 on the definition-time checks,
+   8/9 on the object-like-`##` set, 5/5 on empty paste operands. macros.c is
+   44 checks + closer driven through real C code paths (array sizes,
+   initializers, case labels, a for header, a static's initializer, string
+   compares) rather than `int a[...]` shapes; cross-checked against
+   `gcc -std=gnu99` with a mark after every check, all 44 increments identical
+   and both engines returning 45. Suite 82 PASS x3, clean `CC TESTS: 0
+   failed`, no new `WARN: Unused var` entries; saved-object reloads 45/45/45
+   with agcopy 28/28/28, desig 43/43/43, ptrmath 33/33/33, incr 42/42/42,
+   fptab 31/31, decay 28/28, fptr 27/27, ptrinit 25/25 and structinit 22/22
+   unchanged.
 
 ## HolyC dialect gotchas (all verified in this build)
 
+- **A HolyC identifier can collide with a KERNEL macro.** `pi` is
+  `#define pi (0x400921FB54442D18(F64))` in KERNELA.HH (with `eps`, `inf`,
+  `ans`, `ON`, `OFF`, `RED`), so a local named `pi` inside the CC unit was
+  substituted before the host parsed it, and the diagnostic was `ERROR:
+  Expecting '*' at "INT:400921FB54442D18"` pointing at a F64 cast — nothing
+  that names the problem. The kernel headers define 2194 macro names; check a
+  new identifier against them (M31's `pi` was the only collision in this
+  unit) before hunting through the parser.
+- **HolyC block comments NEST.** A C example inside kernel prose may itself
+  contain a comment, and `/* ... P2(1 /*c*/, 2) ... */` compiles because the
+  inner `*/` closes only the inner `/*` (probed). The mirror is the hazard: an
+  inner `/*` with no matching `*/` leaves the OUTER comment open, and the host
+  swallows the rest of the file — the statements below it never compile and
+  the only symptom is the loader booting anyway (`ERROR: File not found:
+  "Doc"`). Balance every `/*` you quote inside a comment, or write the example
+  without one.
+- **A fixture mark line must carry exactly ONE `%d`, fed by `tot`.** The gcc
+  cross-check puts `printf("@N=%d\n",tot);` after every check; if the line is
+  built by substituting N into a format that still held two `%d`, the
+  surviving `%d` is fed the line NUMBER, so every mark reads +1 whatever the
+  program computed. That hid a wrong expectation in macros.c (check 3:
+  `ADD(1,TWO(2))` is 5, not 6) until the marks (44) disagreed with `tot` at
+  the return (43). Compare the mark TOTAL against the check count, not just
+  mark against mark.
 - **Prototypes of functions defined in ANOTHER CC_*.HC belong in CC.HH's
   forward block**, not in the consumer's extern list: an `extern` that
   arrives after the definition is a promise from elsewhere and never
@@ -2007,3 +2144,24 @@ Not supported — each currently fails with a compile diagnostic:
 - `CCEmitPutchar` leaves the char in RAX untouched (C putchar returns
   its arg) and touches only RCX/RDX/RSI — all scratch under our
   convention — using exclusively plain-`REX.W` legacy-register forms.
+- Macro expansion has ONE recursion channel and ONE scratch (M31):
+  `CMacScan.mask` is the set of macros whose expansion is open on this path
+  (blue paint) and it is threaded into every nested scan — an argument scan
+  gets the CALLER's mask, a body scan gets the caller's mask plus the bit of
+  the macro being expanded. That pairing is what makes `F1(F1(5))` give
+  `((5))` while `#define SELF SELF+1` expands once; do not add a second
+  guard, and do not bring back a depth limit (M13's `xdepth<4` is gone, and a
+  limit truncates a legitimate chain in silence). The argument scratch is
+  FIXED capacity (CC_PREP_SCRA) because every open scan caches a region
+  pointer — growth would leave the outer scans reading a freed buffer, so
+  overflow is a diagnostic, not a realloc. Raw and expanded argument text
+  BOTH live in the scratch so that one base addresses them; a raw span read
+  against the region a body is being scanned in is garbage. Offsets, never
+  pointers, for anything that outlives a put. `CMacScan.isarg` says whether a
+  region came from the machinery (a body or an argument) or from a source
+  line, and the `__VA_ARGS__` rule depends on it because the continuation
+  lines of a multi-line block comment are ordinary text to this scanner.
+  A macro's replacement text is validated when it is DEFINED
+  (CCPrepCheckBody), and only for a group that is ACCEPTED — a skipped
+  `#if 0` region never defines, and so never validates.
+

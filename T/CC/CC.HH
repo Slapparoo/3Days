@@ -150,6 +150,14 @@
  * CCSave/CCLoad ignore all of these). */
 #define CC_MAX_MACROS	32
 #define CC_MACRO_BODY	256
+#define CC_PREP_SCRA	0x10000	//M31: the macro-argument scratch, FIXED
+				//capacity on purpose: a scanner caches its
+				//region pointer, and a scratch that grows
+				//would leave every open scan pointing into a
+				//freed buffer. Overflow is a diagnostic.
+#define CC_MAX_ARGS	16	//M31: arguments collected for ONE invocation of
+				//a function-like macro (the variadic extras are
+				//part of this count)
 #define CC_MAX_TYPEDEF	32
 #define CC_MAX_CONSTS	64	//M20: enumerator names per module
 #define CC_MAX_ENUMTAGS	16	//M20: enum tags (redefinition check only)
@@ -392,6 +400,19 @@ class CCCtrl
   I64	mn;
   U8	mname[CC_MAX_MACROS][CC_TOK_MAX];
   U8	mbody[CC_MAX_MACROS][CC_MACRO_BODY];
+  /* M31: function-like macros. mnarg[mi] is -1 for an object-like macro and
+   * the number of NAMED parameters for a function-like one (0 = takes `()` and
+   * nothing else); mvar[mi] says the parameter list ended with `...`, which is
+   * what makes `__VA_ARGS__` an operand. mprm[mi] holds the parameter names
+   * separated by newlines (a flat buffer like the member-name table rather than
+   * a third array dimension: 32*8*128 bytes would triple the macro table for a
+   * list that never holds more than eight short names). The `...` itself is not
+   * stored as a name, so nothing in here can match `__VA_ARGS__`. None of this
+   * travels into a saved object: macros are source-level and CCPrep resets the
+   * table at the start of every compile. */
+  U8	mprm[CC_MAX_MACROS][CC_MACRO_BODY];
+  I64	mnarg[CC_MAX_MACROS];
+  I64	mvar[CC_MAX_MACROS];
   I64	tn;
   U8	tname[CC_MAX_TYPEDEF][CC_TOK_MAX];
   I64	tty[CC_MAX_TYPEDEF];

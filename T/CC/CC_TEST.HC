@@ -327,6 +327,11 @@ CCAssert(33,"T:/CC/TEST/ptrmath.c","ptrmath");
  * enclosures take the next SUBOBJECT (a whole element only at an element
  * boundary), designations move that same cursor, and ordering is by target. */
 CCAssert(43,"T:/CC/TEST/desig.c","desig");
+/* M31: function-like macros — arguments expanded once in the caller's context
+ * and substituted without re-expansion, # and ## with unexpanded operands,
+ * variadic tails (stringized as written, comma-deleted only after a `, ##` that
+ * matched nothing), and a paste whose empty operand leaves the other side. */
+CCAssert(45,"T:/CC/TEST/macros.c","macros");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */
