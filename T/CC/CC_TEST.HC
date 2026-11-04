@@ -353,6 +353,16 @@ CCAssert(30,"T:/CC/TEST/cont.c","cont");
  * definition without the slots moving, a tag object declared `extern` already
  * knows its tag, and an extern nothing defines is an error. */
 CCAssert(25,"T:/CC/TEST/decls.c","decls");
+/* M35: C doubles in the F64 model — initializers converting to the object's
+ * type at all five boundaries (global, array element, member, static local,
+ * automatic local), the delegated arithmetic and its truncating divide, casts
+ * crossing the two models, comparison including the negative pair a quad
+ * compare would flip, ++/-- stepping 1.0 rather than the quad 1, argument and
+ * return conversions through a prototype, recursion through a double prototype,
+ * and the sizes the slot model answers C's way.  Values are observable only
+ * through (int) truncation: printf has no %f yet.  Checks 50-53 are deliberately
+ * NOT wrapped in (int), because that is what hid the mixed-type comparison. */
+CCAssert(53,"T:/CC/TEST/float.c","float");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

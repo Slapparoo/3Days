@@ -46,6 +46,13 @@
 #define KW_VOLATILE		29
 #define KW_INLINE		30
 #define KW_ENUM		31	//M20: constants + int-model tag
+#define KW_DOUBLE	32	//M35: the F64 model below
+#define KW_FLOAT	33	//M35: FOLDED to TY_DOUBLE — the host has no
+				//single precision at all (no F32 type, no
+				//single-precision operator), so a C `float`
+				//is a second name for `double` here, which
+				//also matches C's own float->double
+				//promotion; see PLAN M35.
 
 /* Minimal expression types (everything is a 64-bit slot; pointers
  * carry only their element size for scaling). */
@@ -65,6 +72,33 @@
 //fails to parse the umbrella at compile time.
 #define TY_VOID		5	//M13: `void` as written; callers fold it to
 				//the byte (TY_CHAR) model before storing
+/* M35 THE F64 MODEL.  A TY_DOUBLE value is ONE SLOT holding the 64-bit
+ * IEEE-754 binary64 pattern, which is what TempleOS F64 already is (measured:
+ * a `1.0` literal is 4607182418800017408 and the quad<->F64 postfix casts round
+ * trip exactly).  Storage therefore needs NOTHING new: a double is one slot
+ * like an int, so globals, locals, params, returns, struct members, arrays and
+ * pointer steps all work through the existing paths, and only value COMPUTATION
+ * has to be routed.  Computation is delegated: every float operation is one
+ * HolyC expression compiled by the host JIT (see CCF64* in CC_LIB.HC), because
+ * measured over nan/-nan/inf/-inf/+-0.0/1e308/5e-324/0.1/1+2^-52/-7.875/pi, the
+ * host's F64 +,-,*,/ and unary minus on such quads come out BIT-EXACT against
+ * gcc.  The divergences are not in the arithmetic: they are the decimal literal
+ * parser (a few ULP) and the host's `==`/`!=`, which are bitwise so `-0.0 == 0.0`
+ * answers 0 where C says 1 — which is why C's equality and truthiness are
+ * COMPOSED from the ordered compares (which are IEEE for every finite pair,
+ * including two negatives where a quad compare would be wrong) rather than
+ * taken from the host's `==`.  See PLAN M35 for the tables. */
+#define TY_DOUBLE	6	//M35: one slot holding F64 bits (TY_INT is the
+				//integer model; nothing folds them together
+				//implicitly — conversions are explicit calls)
+#define CC_ONE_DOUBLE	4607182418800017408	//the quad that IS 1.0: the bits
+						//of the double 1.0, measured as
+						//a HolyC `1.0` literal, and
+						//what `d++` adds.  Named
+						//because 1 and 1.0 are two
+						//different quads and a `+1`
+						//sneaking into a float path
+						//would be an invisible bug.
 
 /* Two-char punct tokens (single chars come through as their ASCII). */
 #define OP_EQ		200
@@ -144,7 +178,33 @@
 #define CC_LIB_MEMCMP	3
 #define CC_LIB_MALLOC	4
 #define CC_LIB_GETCHAR	5
-#define CC_LIB_SLOTS	8
+/* M35 float delegation slots.  One slot per operation rather than one slot plus
+ * an opcode quad: staging an opcode would need a third ext write and a MOVIMM
+ * per op, and it would put the operation in MEMORY where a nested float call
+ * could overwrite it between staging and execution.  A slot is chosen at emit
+ * time, so nothing about which operation this is can be clobbered at run time.
+ * Each of these is a zero-arg HolyC helper in CC_LIB.HC that reads cc->ext[]
+ * and returns in RAX; its body is one line of the shared CCF64* routines, which
+ * the compile-time constant folder calls directly — so the compiler and the
+ * compiled program compute a given operation with the SAME expression. */
+#define CC_LIB_FADD	6
+#define CC_LIB_FSUB	7
+#define CC_LIB_FMUL	8
+#define CC_LIB_FDIV	9
+#define CC_LIB_FNEG	10
+#define CC_LIB_FLT	11
+#define CC_LIB_FGT	12
+#define CC_LIB_FLE	13
+#define CC_LIB_FGE	14
+#define CC_LIB_FEQ	15
+#define CC_LIB_FNE	16
+#define CC_LIB_I2D	17
+#define CC_LIB_D2I	18
+#define CC_LIB_SLOTS	32	//13 in use; room for the float family to grow
+				//(a slot is one quad in CCCtrl, addressed
+				//through the CC_B_LIB table base, so a saved
+				//object rebinds to the loading session's
+				//helpers with no object-format change)
 /* M13 preprocessor-lite + typedef tables (compile-time only: a saved
  * object carries code and relocations, never source-level names, so
  * CCSave/CCLoad ignore all of these). */
@@ -186,6 +246,24 @@
 #define CC_KI_TAG	2	//`.name` designates one of its members
 #define CC_KI_UNION	3	//`.name` validates; every member IS the slot
 
+/* M35: what one collected initializer VALUE is, in the vk[] slot CCInitCollect
+ * already uses to say "this value needs a relocation base".  -1 meant "a plain
+ * value" and that is still true of both codes below; the split exists because
+ * the quad 3 and the quad holding the bits of 3.0 are two DIFFERENT values in
+ * this model, and only the destination slot can say which one it wants (see
+ * CCInitConv).  Both are negative, so every existing `kind>=0` test for "is
+ * this a relocated pointer" keeps its meaning without being touched. */
+#define CC_VK_INT	(-1)	//a plain quad holding an integer value
+#define CC_VK_FLT	(-2)	//a plain quad holding F64 bits
+
+/* What a float literal scan keeps, and what it only counts: the kernel's
+ * decimal->F64 conversion sums the significant digits it is handed into an
+ * unchecked signed 64-bit integer, so there is a point past which the host has
+ * no answer at all.  See CCNumFloat and CCDigOvf. */
+#define CC_DIG_MAX	24	//significant digit VALUES held, for those tests
+#define CC_SIG_MAX	40	//significant digits COUNTED: past 19 the written
+					//spelling has no reading, and the count
+					//alone says so without the values
 #define CC_INC_MAX	8	//nested-#include depth guard
 #define CC_SWITCH_CASES	32	//M14: case-label cap per switch statement
 #define CC_LABELS	64	//M16: labels + gotos per function
@@ -250,6 +328,17 @@ class CSym
   I64	napatch;		//function's code address (fp = f before
 				//definition); resolved by CCParseFun
   I64	fargc;		//SC_FUN: parameter count (CCFind arg thunks)
+  I64	pflt;		//SC_FUN: bit i set when parameter i is TY_DOUBLE
+  			//(M35).  A prototype is what tells a call site that
+  			//`f(3)` into `f(double)` must CONVERT 3 to 3.0 — the
+  			//slot size says nothing, because a double is one slot
+  			//too, and passing the integer made every such call
+  			//hand the callee 1.5e-323 instead of 3.0.  Only the
+  			//floatness is recorded, in one quad, because that is
+  			//the only thing a call site cannot infer from the
+  			//argument it already parsed; a call with no visible
+  			//prototype has no mask to consult, which is C's own
+  			//"default promotions apply" case.
   I64	extstub;	//cached address of the zero-arg ext[] stub
 			//(CCExtStub); 0 = not built yet; resets with CCInit
 };
@@ -268,6 +357,12 @@ class CCCtrl
   I64	tk_kw;		//keyword id when tk==TK_IDENT
   U8	tk_str[CC_TOK_MAX];	//identifier text
   I64	tk_num;		//number value / punct char
+  I64	tk_isf;		//M35: TRUE when the TK_NUM above came from a
+  			//float spelling (`1.5`, `1e10`, `2.`, `.5`) and so
+  			//holds the IEEE-754 bits of that value rather than
+  			//an integer.  Cleared with tk_kw at the top of
+  			//CCLex, exactly like tk_kw: a token's floatness is
+  			//the lexer's answer, never a leftover.
   U8	*code;		//executable code buffer (MAlloced)
   U8	*ep;		//emit pointer
   U8	*stack;		//private C stack (HolyC fp calls enter with rsp at
@@ -328,6 +423,12 @@ class CCCtrl
 			//that the difference between a DEFINITION and a
 			//declaration that only names an object living
 			//elsewhere, so the declarator has to know it.
+  I64	spec_flt;	//M35: CCAcceptBase chose the FLOATING model for this
+  			//spec.  The function-pointer parser needs that answer
+  			//after it has already swallowed the parameter list,
+  			//and it is the one site all six fp declarators share
+  			//— so the base type travels in a field rather than as
+  			//six copies of the same check (CCParseFunPtrDecl).
   I64	sym_base;	//M21: waterline of the innermost open scope:
   				//CCSymNew's dup check stops here (inner scopes
   				//may redeclare — that is shadowing)
@@ -350,6 +451,21 @@ class CCCtrl
   			//which also keeps forward-call bookkeeping clean).
   			//String pooling and symbol lookups still happen: the
   			//region allocates a little unused pool, by design.
+  I64	cur_rty;	//M35: the RETURN type of the function whose body is
+  			//being parsed (CCParseFun sets it).  A `return`
+  			//converts its value to this, because the caller
+  			//reads the returned quad as this type and nothing
+  			//downstream can recover the difference.
+  I64	c_isf;		//M35: the constant the folder just produced is a
+  			//FLOATING one — its I64 is the IEEE-754 bit pattern,
+  			//not a number to add or subtract.  Set by
+  			//CCConstPrim from cc->tk_isf and carried up by the
+  			//CCConst* ladder; CCConstExpr clears it before each
+  			//evaluation so a caller can never read a stale one.
+  			//The integer-only consumers (array lengths, case
+  			//labels, enumerators) refuse when it is set, which
+  			//is what C's "must be an integer constant expression"
+  			//asks for.
   I64	entry_off;	//code offset of 'main' after parse (-1 = none)
   I64	entry_inject;	//entry prologue should write argc/argv into the
   			//leading parameter slots (set for main only)
@@ -457,6 +573,17 @@ extern U0 CCError(CCCtrl *cc,U8 *msg);
 
 /* Lexer: advance to the next token. */
 extern U0 CCLex(CCCtrl *cc);
+
+/* M35: the constant folder's route to the delegated float helpers, which live
+ * in CC_LIB.HC — spliced into CC.HC after CC_PARSE.HC is included, so the folder
+ * needs this prototype, and `extern` is what makes a same-file forward reference
+ * bind here (see the note above). */
+extern I64 CCFold(CCCtrl *cc,I64 slot,I64 a,I64 b);
+
+/* The operator-to-slot map lives with the code-emitting layers, but the
+ * constant folder (which is above them in the file) folds through it too, so
+ * the two cannot drift into different answers for `1.5 + 2.5`. */
+extern I64 CCFloatOp(CCCtrl *cc,I64 op,I64 lty,I64 rty,I64 *plc,I64 *prc);
 
 /* Emit helpers. */
 extern U0 CCByte(CCCtrl *cc,I64 b);

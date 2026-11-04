@@ -83,6 +83,32 @@ either a bug or a paragraph in "C subset limitations" below, and the test for
 telling those apart is: **does the difference change what the program
 *computes*, or only what gets *printed* while compiling it?**
 
+**Delegation is the default, because this is an adapter layer, not a standalone
+C implementation.** Anything the host can already do, lite *should* get by
+asking the host to do it, not by reimplementing it in generated C or in emitted
+bytes. The mechanism is established and cheap: a zero-argument HolyC helper
+(compiled by the host JIT, sitting in `CC_LIB.HC` or the `CC_PRELUDE`'s helper
+array) reads `cc->ext[]` slots, uses whatever the host already has — F64
+arithmetic, `StrLen`, `Prnt`'s formatting, `Sqrt` — and returns the answer in
+RAX; generated code reaches it through `MOVABS RAX,&lib[slot]; CALL [RAX]`, a
+relocatable call (`CC_B_LIB`) with no calling-convention reversal. Where a
+host behaviour lite inherits, the host's behaviour *is* then lite's behaviour,
+and any divergence from C that comes along with it is recorded as such instead
+of being papered over by writing a second implementation.
+
+Delegation is not mandatory in exactly two cases, and both must be argued in
+the milestone entry rather than assumed: the host genuinely cannot do the job
+(`qsort`'s comparator contract, `strdup`'s allocation contract, C's
+initialiser ordering — the kernel has no equivalent, which is why M12's other
+half is pure C), or the delegation costs more than the thing it replaces, as
+M27's whole-struct copy argued (the builtin needed an argument-push sequence
+and a runtime length; the inline walk is one instruction per slot and records
+no relocation). Where the host does it *almost* right but the mapping needs
+care — `Prnt`'s `%w.pf` against C's `%f` flags — the delegation is still the
+first choice, with the mismatch written down; that is the difference between
+an adapter with documented seams and a compiler with an undocumented second
+implementation hidden inside it.
+
 ## C subset limitations
 
 Supported: `int`/`char` scalars, pointers, arrays (M17: up to two
@@ -155,6 +181,18 @@ whose zero initializer is the zeroed arena it already sits in, every declaration
 of one file-scope name binds ONE object at ONE address, only one declaration may
 carry an initializer, and the length of an `extern int a[]` may arrive later —
 from brackets or from an initializer — without the object moving.
+M35 adds C floating point: `double` and `float`, literals (`1.5`, `.5`, `2.`,
+`1e10`, the `f`/`F`/`l`/`L` suffixes folded), `+ - * /`, unary minus, all six
+comparisons, `(double)`/`(int)` casts crossing the two models, conversion at
+every boundary C converts at (assignment, an argument going through a prototype,
+`return`, an initializer — aggregate, member, array and `static` ones included),
+compound assignment, `++`/`--`, arrays of double with their element type
+surviving subscripts and 2-D rows, `double` struct and union members,
+`double t[]` parameters, functions returning `double` (and recursing through
+that prototype), and `sizeof` — ONE floating width, every value computed by the
+host's F64 operators, and by the same helpers at compile time whenever the
+expression is constant. What is still not supported about floating point is the
+bullet in this section named for M35.
 
 Silent deviations were closed at M25: an array carries its ELEMENT TYPE
 (`s->ael`), decay and every subscript hand it on, and the subscript arm
@@ -238,7 +276,9 @@ Not supported — each currently fails with a compile diagnostic:
   CALL-LOCAL, the ctrl-array version let an inner switch overwrite its
   parent's case table mid-body).
 - `switch` case values must be compile-time integer constants — M20's
-  folder handles literals, enum constants and folded expressions;
+  folder handles literals, enum constants and folded expressions, and M35 added
+  the KIND check (`CCConstWantInt`): a floating case value, and a floating
+  `switch` controlling expression, are diagnosed rather than compared as quads;
   duplicate case values are not diagnosed;
   `continue` inside a `switch` requires an enclosing loop (clean
   diagnostic — switch is not a loop).
@@ -249,8 +289,44 @@ Not supported — each currently fails with a compile diagnostic:
   labels; a ternary's middle arm tolerates unparenthesized commas
   (C requires parens — we eat them as the operator, harmless); mixed-
   type arms fold to the int model, identical-kind arms keep element
-  types and struct tags so `(c?&p1:&p2)->x` works.
-- `float`/`double`.
+  types and struct tags so `(c?&p1:&p2)->x` works — except that since M35 a
+  pair with ONE floating arm is refused rather than folded, because the middle
+  arm's conversion has to happen inside the middle arm's own path.
+- - **Floating point (M35): ONE width, delegated whole to the host's F64.**
+  `double` and `float` are the same thing here — the host has no single precision
+  at all — so `sizeof(float)` is 8 where C's is 4 and a single-precision
+  computation keeps more bits than C would. Every float VALUE comes from the host,
+  so the host's differences from C are lite's and are listed here instead of being
+  papered over by a second implementation. Measured in ULPs of the value C requires
+  (the spacing of doubles at that value, so the errors are whole): plain decimals
+  are exact except `0.15` (+1), and a scaled form lite could not fold to a plain
+  spelling drifts with its exponent — `1e10` -23, `1e19` -16, `1e100` -117, `1e308`
+  -160, `3.141592653589793` +9 — and the host's own literal parser drifts the same
+  way, so `0.1 + 0.2 == 0.3` is TRUE here and FALSE in C. A scaled form lite COULD
+  fold (`1e2`, `1e10`, `100e-2`) is exact, because the fold moves it onto the
+  accumulate-then-convert path. A decimal integer literal with no dot and no
+  exponent (`double x = 12345678901234567890;`) is not a float spelling at all and
+  takes the INTEGER path, which sums into the same unchecked I64: lite holds
+  -6101065172474983726 where C holds 12345678901234567890, which matches C for
+  integer use (6.4.4.1/5 gives such a constant `unsigned long long`, whose bits are
+  that quad) and differs only on the way to a double — so this file is -6.1e18 here
+  and 1.2345678901234567e19 in C. Fixing that means converting the quad as unsigned
+  when the destination is a double, and it is M36's. The truthiness of a double is
+  "the quad is nonzero", so `-0.0` is truthy here and falsy in C; a hex float
+  literal (`0x1p3`) is a syntax error because the kernel answers 0 for one; `%`,
+  `~`, `& | ^`, `<< >>` and `switch` on a floating operand are refused, as are
+  `case` labels, array lengths, enumerators and designation indices with a floating
+  value — C forbids all of them, and the integer path would have computed the bit
+  pattern of no answer. **`double *` is refused at every declarator site** (local,
+  global, parameter, struct member, typedef and cast): the pointer model records no
+  pointee type, so `*p` would be the integer model applied to a bit pattern —
+  `double a[4]` with `a[i]`, and a `double t[]` parameter, are how several doubles
+  travel today. A function pointer may not return a double, and its parameter list
+  may not contain one (M18 records neither an fp's return type nor its argument
+  types); a conditional with one floating and one integer arm is refused (the
+  middle arm's conversion cannot be inserted after its jump was emitted); `printf`
+  has no `%f`; and there are no math builtins, so `sqrt(x)` is a call to nothing
+  yet. All of it is on M36's list.
 - M19 edges: qualifier keywords (`extern static register auto volatile
   inline`, added to `const`) are accepted and folded — with C's
   default-int PROMISE when they stand alone (`static x;` is `static
@@ -545,10 +621,10 @@ Not supported — each currently fails with a compile diagnostic:
 | `CC_LEX.HC` | lexer, `CCError`, and the shared escape table (M32) |
 | `CC_EMIT.HC`| machine-code emitters, prologue/return, patches  |
 | `CC_SYM.HC` | symbol table, variable load/store                |
-| `CC_PARSE.HC`| recursive-descent parser, direct emission, M34 object merging |
+| `CC_PARSE.HC`| parser, direct emission, M34 merging, M35 float routing |
 | `CC.HC`     | umbrella include, `CCInit`/`CCSrc`/`CCRunFile`, `CCSave`/`CCLoad` |
 | `CC_PREP.HC`| M13 preprocessor-lite + M31 macros + M32 conditionals + M33 continuations and relative includes (`#include`/`#define`/`#undef`/`#if`-family), runs on user text before the prelude |
-| `CC_LIB.HC` | M12 zero-arg delegation helpers (spliced into `CC.HC` after `CCCtrl cc;`) |
+| `CC_LIB.HC` | M12 + M35 delegation helpers and `CCFold` (in `CC.HC`) |
 | `INC/*.h`   | M13 adapted-musl (MIT) headers: `stdio.h` `stdlib.h` `string.h` `stddef.h` — guarded, trimmed to the implemented surface |
 | `CC_TEST.HC`| test harness (PASS/FAIL per file in `TEST/`)     |
 
@@ -750,9 +826,27 @@ Not supported — each currently fails with a compile diagnostic:
   mid-program flush paths are what produce it): 56
   cases, green twice, clean summary. Delegation note: `%d` digit
   conversion still runs in compiled-C (CCItoa); routing conversions
-  through kernel `Prnt` via `cc->ext` staging is a possible further
+  through the kernel's format engine (`StrPrintJoin`, T:/STRPRINT.HC,
+  extern'd in KERNELA.HH) via `cc->ext` staging is a possible further
   delegation, deliberately not done here (C's format-flag semantics
   would have to survive the mapping).
+  **[The delegation rule in "Correctness policy" now asks that question
+  again, and `%f` is where it comes due. M35 turned out to be the F64 value model
+  rather than printing, so the conversion is M36's first item; the kernel formats
+  F64 natively (`A="%6.3f"` in a DolDoc string, KERNELA.HH), so writing a
+  decimal-float dtoa from scratch in the prelude would be the second
+  implementation the rule warns about. suggestion-0002 carries the mapping probe.
+  Its answer: the kernel's `%f` agrees with C for `%w.pf` at or below 15
+  significant digits on ordinary values — the limit shows up both as `%.16f` of
+  1/3 and as `%.6f` of 1e10 (16 digits needed), so C's default precision 6 is
+  inside the exact zone — but the kernel's `%f` defaults to precision 0 when none
+  is stated, and its `%e`/`%g`/`%E`/`%G`, its `-`/`+`/` `/`#` flags and its
+  `inf`/`nan` spellings do not match C at all (a 255-case shape×value sweep gives
+  49 identical outputs). A delegated `%f` therefore has to state the precision,
+  keep it at or below 15, and own the two special values — which is an argument,
+  where M6c's note had only a reason not to. That suggestion also records a live
+  DEFECT it found (lite's `%d` of the most negative quad), filed separately as a
+  bug.]**
  - [x] **M12** stdlib, delegated to the kernel wherever it exists.
    Two halves. **Delegated** (parser name-dispatch in `CCExprPrimary`
    -> `CCLibCall`): `strlen`->`StrLen`, `memcpy`->`MemCpy`, `memset`->
@@ -2296,6 +2390,275 @@ Not supported — each currently fails with a compile diagnostic:
    `fptr.c` 27, the three fixtures these fixes forced, are unchanged.
    Everything lives under `T/`, so no `HCRT.BIN` rebuild is involved.
 
+ - [x] **M35** `double`, delegated whole: the F64 value model, where storage needed
+   nothing at all and only computation and literals had to be routed. A double in
+   this model is ONE slot holding the IEEE-754 binary64 pattern — which is what a
+   TempleOS `F64` already is (measured: a `1.0` literal arrives as
+   4607182418800017408, and a `quad -> F64 -> quad` postfix cast round-trips
+   exactly) — so globals, locals, statics, parameters, returns, struct and union
+   members, arrays with their subscripts and element types, the arena and its
+   relocations all already moved the right number of bytes, and `sizeof(double)`
+   answered 8 before anyone asked. Everything M35 adds is therefore about VALUES:
+   13 zero-argument HolyC helpers in `CC_LIB.HC` (`CCXFAdd/Sub/Mul/Div/Neg/Lt/Gt/
+   Le/Ge/Eq/Ne`, `CCXFItoD`, `CCXFDtoI`) read `cc->ext[]`, evaluate one line of
+   host F64 work, and answer in RAX. lite implements no float arithmetic, no
+   rounding mode, no conversion algorithm and emits no SSE encoding; a float value
+   is not a register class here, it is a kind of quad. `CCFold(cc,slot,a,b)` gives
+   the constant folder the same route, so `double g = 1.5 + 2.5;` and the same sum
+   computed at run time are evaluated by THE SAME FUNCTION — agreement by
+   construction, instead of a second float evaluator that has to be kept in step,
+   which is what the delegation rule is for. Two things are deliberately not
+   delegated and both are argued rather than assumed: where C's answer needs a
+   distinction the host's operators do not make (`==` on a pair that is
+   bitwise-different and numerically-equal), lite COMPOSES it from the host's other
+   operators; and where the host's own reading of a literal is wrong in a way the
+   program could never see, lite changes the SPELLING it hands over (below).
+   One slot per operation rather than one slot plus an opcode quad, for the same
+   reason: staging an opcode would put THE OPERATION in memory, where a nested
+   float call could overwrite it between staging and execution, and
+   `CC_LIB_SLOTS` went 8 -> 32 so the family can grow without an object-format
+   change (a slot is one quad in `CCCtrl`, reached through the `CC_B_LIB` table
+   base, so a saved object rebinds to the loading session's helpers).
+
+   **The whole representation is one distinction, measured on both sides before it
+   was leaned on.** Assignment CONVERTS and the postfix cast REINTERPRETS: `r=9` on
+   an `F64` gives 9.0 exactly, `a=qa(F64)` gives the double whose bits are `qa`,
+   `ri=b` where `b` is an `F64` truncates toward zero (7.875 -> 7, -7.875 -> -7,
+   C's answer), and out of quad range the host lands on 0x8000000000000000 as
+   `cvttsd2si` does where C leaves it undefined. Casts, arguments, returns,
+   assignment, initializers, `++` and the constant folder all cross that boundary
+   in one of those two spellings and in nothing else.
+
+   **Host semantics, measured rather than assumed.** On reinterpreted quads the
+   host's `+ - * /` and unary minus are BIT-EXACT against gcc over nan, -nan, inf,
+   -inf, +-0.0, 1e308, 5e-324, 0.1, 1+2^-52, -7.875 and pi. Its ordered compares
+   are IEEE for every finite pair — proven with the pairs a quad compare must get
+   backwards (two negatives: -7.875 vs -1.0, and -2.0 vs -4.0, both answering C's
+   way) — and for a NaN pair `< > <= >=` all answer 0, which is what C defines. Its
+   `==`/`!=` are BITWISE, and that is where the divergence lives: `-0.0 == 0.0`
+   answers 0 where C says 1, and a NaN equals itself, so `CCXFEq`/`CCXFNe` compose
+   C's equality from the ordered compares — measured over 16 pairs (both zeros,
+   four NaN forms, both infinities, subnormals, equal and unequal finite values)
+   with 0 disagreements against C where the host's own `==` had 3, at the price of
+   one extra compare and no new mechanism. The `ext[]` staging ABI was proved safe
+   for NESTED evaluation before it was used for arithmetic (10 shapes of nested
+   `strlen` calls with runtime operands, all equal to gcc): a partially evaluated
+   operand lives on the machine stack, not in `ext[]`, and a conversion helper
+   touches only `ext[0]` as its scratch, so a staged `ext[1]` cannot be clobbered
+   underneath it.
+
+   **The kernel's decimal parser has two silent wrong-value modes, and both are
+   repaired in the lexer rather than passed through.** Measured with `Str2F64`
+   direct and again through compiled C:
+   - It STOPS at an exponent's `+`. `Str2F64("1e+2")` answers 1.0 — the mantissa
+     alone, where C says 100 — and `1E+2` and `1.5e+2` answer 1.0 and 1.5 the same
+     way, while `1e2` and `1e02` both parse. That is a wrong VALUE two orders of
+     magnitude off, not a rounding difference, and the only symptom a program
+     would get is an answer.
+   - It sums the significant digits into a SIGNED 64-BIT INTEGER and checks
+     nothing: `12345678901234567890` came back -6.1e18 and
+     `0.12345678901234567890` came back -0.061, each with its end-pointer argument
+     reporting that the whole text was read, so the conversion does not even know
+     it failed. Leading zeros reach the accumulator on neither side
+     (`000000000000000000001` is 1 in both), and 20 significant digits are always
+     past 0x7FFFFFFFFFFFFFFF. The scale is applied AFTER that sum, in floating
+     point, which is why the error survives being scaled correctly:
+     `1234567890123456789012345e-6` answers 1096246371337.5599 where C says
+     1.2345678901234568e+18 — the same wrapped accumulator, divided by 1e6. And
+     m35exp2.py spelled ONE value six ways: the five whose digits fit returned
+     the same quad every time (0.7 ULP below C's), and the 20-digit spelling that
+     does not fit is the odd one out. It is the digit count that decides, not the
+     exponent — which is why the repair is a digit test and not a rounding fix,
+     and why every spelling lite can build from digits it has checked is as good
+     as the host gets.
+   `CCNumFloat` now does DECIMAL bookkeeping — no rounding, no binary, no float
+   arithmetic — and checks the answer. `CCDigOvf` is the test the host omits; the
+   `+` is dropped from the text, because C's exponent is `e [sign] digits` and a
+   `+` exponent IS the unmarked one; a literal whose written digits overflow goes
+   as the shortest spelling lite can build from digits it has already checked fit;
+   and `Str2F64`'s end pointer is compared against the text handed over, so a
+   spelling the host cannot read is a diagnostic instead of a number. Verified:
+   `1e+2`, `1E+2`, `1.5e+2`, `0e+5` and `1e+02` each compare equal to the same
+   literal spelled without the `+`, in BOTH engines — an assertion that holds
+   whichever way the decimal parser rounds.
+
+   **A positive exponent is folded into the digits, because that path is exact.** A
+   positive exponent is applied by multiplication and drifts — `1e2` comes back
+   99.99999999999997 and `1e10` 9999999999.9999561, where C99 6.4.4/6 requires
+   exactly 100 and exactly 10000000000 — so `1e2 == 100` was false here and true in
+   C, a wrong answer about an ordinary literal. Writing the same rational number
+   without an exponent puts it on the accumulate-then-convert path, which is exact
+   twice over: the accumulator holds the integer (the overflow test is what makes
+   that certain) and an `I64 -> F64` conversion is correctly rounded. Measured over
+   40 exponent spellings against the value python's correctly-rounded parser gives:
+   every shifted form whose digits fit came back exact (`1e1`->`10`,
+   `1e10`->`10000000000`, `1.5e3`->`1500`, `100e-2`->`1`), and lite uses that
+   spelling when it fits. A NEGATIVE exponent gains nothing from it, and that is a
+   measurement and not an assumption: m35neg.py spells 19 such values both ways and
+   every pair returned the IDENTICAL quad (`1e-5` and `0.00001` are both 12 ULP
+   high, `1e-7` and `0.0000001` both 4), so there is no better spelling to choose
+   and lite attempts no shift. A plain spelling for `1e19`, `1e100` or `1e308`
+   would not fit the accumulator either, so those keep the spelling the program
+   wrote, and their drift is recorded here rather than papered over. In ULPs of the
+   value C requires — the spacing of doubles there, which is why every one of these
+   is a whole number (m35drift.py prints the table): `1e2` -2, `1e10` -23, `1e18`
+   -22, `1.5e18` -14, `1e19` -16, `1e100` -117, `1e308` -160,
+   `1.7976931348623157e308` -225, `1e-308` +64, `3.141592653589793` +9, `1e-5` +12,
+   `1e-7` +4, `0.15` +1 and `5e-324` -1, the kernel having underflowed that one to
+   zero. Plain decimal spellings came back exact across the measured set (`1.5`,
+   `2.5`, `.5`, `2.`, `0.1`, `100`, `1000.0`, `123456.789`, `123456789012345678`),
+   with `0.15` the one ULP-high exception. Overflow and underflow agree with C:
+   `1e400` is infinity and `1e-400` is zero. The host's OWN literals drift the same
+   way — its `0.3` is one ULP high, which is why `0.1+0.2==0.3` answers 1 here and
+   0 in C — so a program comparing a decimal LITERAL for exact equality with a
+   computed value can differ from gcc, and closing that would mean writing a
+   correctly-rounded decimal->binary converter: the second implementation the
+   delegation rule exists to avoid. `0x1p3`-style hex floats stay unsupported (the
+   kernel answers 0 for them, so the lexer keeps the digits an INTEGER and the
+   program gets the syntax error a compiler without hex floats reports, rather than
+   the value 0 with no comment).
+
+   **What the host does differently from C, and what lite does about it.** C's
+   truthiness of a floating value stays the bits-nonzero test the integer model
+   uses (`!`, `&&`, `||`, `if`), so `-0.0` is truthy here and falsy in C: one
+   divergence, chosen over adding a second way to test truth, because the folder
+   and the program agreeing about it is worth more than one zero's sign. `float`
+   folds to `double` because the host has no single precision at all (no `F32`, no
+   single-precision operator), which agrees with C wherever C itself promotes
+   (arithmetic, varargs) and differs visibly only in `sizeof(float)` (8 here, 4 in
+   C) and in the last bits of a single-precision computation.
+
+   **Refusals, every one of them "the integer path would have computed a
+   number".** `%`, `~`, `& | ^`, `<< >>` and `switch` on floating operands — for
+   `switch` the dispatch chain compares QUADS, so a double would report "no match"
+   for a label C says matches, which is wrong control flow rather than a wrong
+   number; `case` labels, array lengths, enumerators and designation indices whose
+   value is floating, which is why `CCConstWantInt` exists: once the folder folded
+   floats for `double g = 2.0 * 3.0;`, "is this the right KIND of constant
+   expression" stopped being a property of the expression and became a property of
+   the CONTEXT, so it is phrased in one place. `double *` is refused at every
+   declarator site — local, global, parameter, struct member, typedef and cast —
+   because a pointer slot records no pointee type and `*p` would be the integer
+   model applied to a bit pattern; `double a[4]` indexed with `a[i]`, and a
+   `double t[]` parameter, are how several doubles are passed around today, because
+   an array symbol DOES carry its element type (M25's `ael`). A function pointer
+   cannot return a double and its parameter list cannot contain one, because M18
+   records neither an fp's return type nor its argument types: `double (*f)(int)`
+   would type `f(2)`'s result as an integer, and `g(3)` through `int (*g)(double)`
+   would hand the callee the denormal whose bits are 3 where C gives 3.0. A
+   conditional with one floating and one integer arm is refused because C converts
+   BOTH arms to their common type, and the middle arm's conversion belongs inside
+   the middle arm's own path — but that path's jump is emitted before the third
+   arm's type is known, so lite cannot go back and insert it; the fix is the silent
+   look-ahead parse `sizeof` and the cast arm already use. Typing that pair as the
+   integer model instead (what M15 through M34 did for every pair) leaves a
+   double's bit pattern in a slot C says holds a number, which is a wrong value
+   with no message. Every one of these is written in the limitations list as the
+   thing M36 owes, rather than left as a surprise.
+
+   **Six bugs in lite, two defects in the host and four errors in my own probes —
+   every one of them found by running something, and the probe errors are listed
+   because a wrong expectation is the harder kind to notice.** `CCFloatBin` popped
+   with `0x59`, which is POP RCX, not POP RAX: the left operand landed in the
+   register the very next instruction was about to overwrite, and the failure only
+   showed up in the program that used the value. **Inserting an `if` above an
+   `if`/`else if` ladder does not skip the ladder's arms** — each arm emits its own
+   operation — so `CCExprAdd`'s new float branch emitted the add, fell through, and
+   the ladder's final `else` emitted it a second time with a second POP, which ate
+   the destination address `CCAssignTail` was about to store through: `u = 1.0 +
+   1.0` answered 0 and `a = a + 1.0` on a local faulted. Making the float case the
+   ladder's FIRST arm is not cosmetic. `<=`/`>=` had been composed as `!(a>b)` and
+   `!(a<b)`, and **a `!` written directly on a parenthesized FLOATING comparison
+   answers 0 for every pair in this HolyC build** (measured: `!(1.0 > 1.0)` gives 0
+   where C wants 1, and `!(1.0 < 2.0)` gives 0 where C wants 1, while `r = a > b;
+   return !r;` gives the right 1 both times), so both helpers reported false for
+   every input; the visible symptom was not a wrong value but THE LOADER
+   SEGFAULTING, because a `<=` that never becomes true turns a bounded recursion
+   into an unbounded one and the C program runs out of its private stack — a
+   runaway recursion in generated code looks like a compiler crash, not like a
+   wrong comparison, so check the guard before blaming the codegen. The fix
+   delegates further rather than composing around the bug: the host's own
+   `a<=b`/`a>=b` are correct for every pair in the measured set, NaN included.
+
+   **The conversion map had to be widened to the comparisons, and only a probe
+   found that it had not been.** `CCFloatOp` asked for the int->F64 conversion of a
+   mixed pair on `+ - * /` and not on `== != < > <= >=`, so a mixed comparison put
+   the F64 BITS of one side against the NUMBER on the other and was right only
+   where they happened to agree: `x == 100` on a double holding exactly 100.0
+   answered 0 and `1.5 < 2` answered 0, while `x == 0` on 0.0 and `-2.5 < -2`
+   answered 1 by luck (the bits of 0.0 ARE 0, and the bits of -2.5 are a negative
+   quad). Measured over 25 shapes against gcc, 15 of them wrong, in both operand
+   orders and in the constant folder as well as in the emitted code. That the
+   fixture missed it through 49 green checks is the more useful finding: every
+   float in it was observed through `(int)… == n`, which makes BOTH sides integers
+   and hides the operand type entirely. A value model that is only ever observed by
+   converting the value away exercises the conversion, not the model, so checks
+   50-53 of `TEST/float.c` are deliberately unwrapped comparisons, one of them
+   against a variable. **A symmetric rule has to be tested in both directions**: I
+   gated the new initializer conversion on "the destination wants F64 bits", which
+   made `double a[] = {1, 2}` right and left `int a[] = {1.5}` storing a bit
+   pattern; the gate is the MISMATCH. Initial global and aggregate initializers
+   needed the same treatment for a different reason — C converts an initializer to
+   the type of the object being initialized (6.7.9/19), and storing the integer 3
+   into a double slot is the denormal whose bits are 3 — which is why a value's own
+   floatness now travels in the `vk[]` slot that already carried its relocation
+   base, and why `CCInitConv` is the one place the five initializer writers
+   convert. And a hand-written IEEE constant nearly cost an hour: `-(bits of 1.0)`
+   is NOT bits of -1.0 (setting the sign bit ADDs 2^63, it does not negate), so a
+   probe meant to compare -2.0 with -1.0 had been comparing -2.0 with -4.0 and came
+   back looking like a host bug. Print the value a quad actually holds — `%12.5f`
+   on an `F64` loaded from the quad prints it (verified: the bits of pi print
+   `3.142`) — and generate test constants with a tool. The other three were mine in
+   the same way: two sweep cases I "expected" to be 1 where C says 0 (`1e400` and
+   `1e399` are both infinity, and infinity is not greater than itself); the
+   leading-0 case, where lite's 17-for-017 is a deviation M32 already records and I
+   asserted 15 as though it were new; and a stress harness that compared the word
+   `direct` against a number and reported ten correct results as ten mismatches.
+   Two more were wrong TOOLS: I re-ran `/tmp/opencode/prepcmp.py` with no arguments
+   and called its 63 built-in cases the prep oracle, when the oracle is that script
+   with its seven case files and 153 shapes (see M33/M34); and I compared against a
+   HEAD worktree without copying `./3d_loader` into it — the binary is a build
+   product, not tracked, so the comparison ran nothing and said so with exit 127,
+   which is the right answer to the wrong question.
+
+   Verification: `TEST/float.c`, 53 checks + closer, THE SAME VALUE from gcc
+   (-std=gnu99) and from lite, and bisected to the check: 82 prefixes of `main`,
+   each compiled and run by both engines (m35bisl2.py) — 0 prefixes where lite
+   disagrees with C, 0 crashed, 0 prefixes gcc refused. 28 mixed floating/integer
+   comparison shapes (m35mix.py): 0 disagreements after the conversion fix, 15
+   before it, over both operand orders, all six operators, a `char`, a `static` and
+   a subscripted operand, a value past `int` range, and the constant-folded form of
+   each. The literal corpus separates what must agree from what need not
+   (m35lex.py, 53 spellings in five classes): 33 exact-value cases and the 6 `e+`
+   rewrites agree with gcc to the bit, 7 differ as the measured drift says they
+   should, 5 C-illegal spellings are refused, and 2 are recorded deviations (`017`,
+   and the 20-digit integer constant above). Host-side evidence, one probe per
+   question: m35end.py (the end-pointer report, and the digit-sum wrap),
+   m35cliff2.py (exact at 9223372036854775807, negative at 9223372036854775808),
+   m35shift.py and m35exp2.py (spellings of one value: the positive-exponent fold
+   is exact and the exponent path is not), m35neg.py (19 negative-exponent pairs,
+   every one the identical quad), m35trunc.py (409 long literals: the re-spelling
+   changed the double in none), m35drift.py (the ULP table quoted above) and
+   m35huge.HC (1e1000000 is infinity, 1e-1000000 is zero). Suite: 3 runs, 86 PASS
+   and `CC TESTS: 0 failed` in each and identical across them, and the kernel's
+   five compile notices (`mS`, `max_ona`, `min_ona` in `Noise`; `t` in
+   `CCParseFun`; `total` in `CCLoad`) are the same set a HEAD worktree produces —
+   none added, none removed. A/B against that worktree, five runs each: HEAD 85
+   PASS, this tree 86 (the extra PASS is float.c), 0 FAULT lines in either; that
+   comparison is in here because a SIGSEGV partway through one suite run appeared
+   once while an edit was in flight, and ten clean runs on both trees is what says
+   the edit raced the run rather than the code being flaky. Saved-object stress: 10
+   fixtures x 4 modes (compile-run, save+reload, reload twice, direct), 0
+   mismatches, float.c at 53 in every mode — the F64 constants this milestone
+   writes into the arena and into MOVABS operands survive a reload. Operator and
+   refusal sweep: 37 shapes, 37 as expected, the 12 refusals still refusing; fold
+   and initializer sweep: 23 shapes, 0 needing attention. The 153-shape prep
+   oracle, run with the seven case files that make it 153 shapes and compared with
+   the same grep and sort that produced the M34 baseline list: 18 divergences, none
+   new, none gone. All of it is `T:/` content, so there is no `HCRT.BIN` rebuild
+   and no host recompile — the loader is the binary M34 was tested with — and the
+   suite is the gate.
+
 ## HolyC dialect gotchas (all verified in this build)
 
 - **A HolyC identifier can collide with a KERNEL macro.** `pi` is
@@ -2556,10 +2919,64 @@ Not supported — each currently fails with a compile diagnostic:
   the last statement's RAX by luck. Any rewind that saves only `pc`
   is a bug waiting for a statement whose first token matters.
 
+- **A `!` written directly on a parenthesized FLOATING comparison answers 0
+  for every pair in this build** (verified by probe): `!(a > b)` on two `F64`s
+  gives 0 when the compare gives 0 AND when it gives 1, while
+  `r = a > b; return !r;` returns the right answer both times. `<=`/`>=` first
+  shipped as `!(a>b)`/`!(a<b)` and were therefore always false, and the symptom
+  was a SEGFAULT of the loader, not a wrong number: a `<=` that never becomes
+  true turns a bounded C recursion into an unbounded one and the generated
+  program runs out of its private stack. Negate through an `I64` temporary, or
+  delegate the comparison to the host's own `<=`/`>=` (measured correct for
+  finite pairs, for signed zero and for NaN pairs). The same hazard does NOT
+  apply to `!(a<b || b<a)`, where `||` has already produced an integer.
+- **On an `F64` lvalue, assignment CONVERTS and only a POSTFIX cast
+  reinterprets** (verified by probe): `a = 4616189618054758400;` puts the
+  NUMBER 4.6e18 into `a`, while `a = qa(F64);` puts the double whose bits are
+  `qa` into it. A probe that assigned bit patterns to `F64` locals without the
+  cast spent an hour reporting arithmetic that was never the arithmetic under
+  test. Related: comparing an `F64` against a literal (`x != 0.0`) gets folded
+  into a sign test and mis-classifies `-0.0`, so operands whose zero-ness
+  matters must arrive from memory.
+- **`-(bits of x)` is not `bits of -x`.** Setting the sign bit ADDS 2^63;
+  negating the quad flips the whole two's-complement value. A hand-written
+  constant for -1.0 (`-4607182418800017408`) is the pattern of -4.0, and a
+  "two-negative pair" built from it tests something else entirely. Generate
+  these constants with a tool, and print what a quad actually holds: `%10.3f`
+  formats the double whose bits the quad carries (verified: the bits of pi
+  print ` 3.142`), which is how the mismatch was found.
+- **A runaway recursion in GENERATED code looks like a compiler crash.** An
+  emitted C program that recurses without a reachable base case exhausts its
+  private stack and the loader dies with SIGSEGV and no `[3d] FAULT` line,
+  because the fault is in the code buffer, not in HolyC. Before suspecting the
+  codegen, check whether the loop/recursion guard is the thing that is wrong.
 ## Codegen invariants
 
 - Expression value always lands in RAX; binary ops `PUSH` the left
   half and `POP` it back into RCX.
+- **A `TY_DOUBLE` value is one quad holding F64 bits, and the only thing that
+  may be done with it is hand it to a delegated helper** (M35). `CCFloatOp` is
+  the single place an operator chooses between the integer and the floating
+  model, and it answers `-1` when the integer model handles the operator, so a
+  float branch is additive to every layer rather than a rewrite of one; the
+  constant folder folds through the SAME map (`CCConstFoldBin`) and the SAME
+  helpers (`CCFold`), which is why the compiler and the compiled program cannot
+  disagree about `1.5 + 2.5`. Crossings between the models are explicit and
+  there are exactly five: cast, assignment, argument, `return` and initializer.
+  The first four are emitted calls (`CCConvRax` while the value is still in
+  RAX); the fifth is compile-time (`CCInitConv`, with the value's own floatness
+  travelling in `vk[i]` as `CC_VK_FLT`) because initializers are folded into
+  arena bytes and MOVABS operands before anything runs. Refusing a crossing is
+  always allowed; letting a double's bits flow into the integer model is not:
+  it produces a number, which is the one outcome the correctness policy
+  disallows. The SAME map decides WHICH operand is converted (`lconv`/`rconv`),
+  and C converts both operands before every comparison (6.5.8/6.5.9) as well as
+  before the arithmetic — so a delegated operator that wants F64 bits in both
+  slots has to say so HERE, not in the caller, or it compares the bits of one
+  side against the number on the other. `ext[0]`/`ext[1]` hold a delegated
+  helper's two operands, and a conversion helper writes only `ext[0]` — that is
+  what makes it safe to convert one operand while the other is staged in
+  `ext[1]`.
 - Every emit goes through `CCByte`/`CCWord`/`CCQuad` (bounds-checked).
 - Initializer stores must use the SAME element scale the index path uses
   (1 for char arrays, 8 otherwise) and a byte store must name a low byte

@@ -136,13 +136,367 @@ Bool CCEscape(CCCtrl *cc,U8 *p,I64 ch,I64 *pv,U8 **pp)
   return TRUE;
 }
 
+/* M35: is there an EXPONENT at p?  Shared by the caller's "might be a float"
+ * peek and by the scanner below, so the two cannot drift apart (PLAN's mirror
+ * hazard).  C wants digits after e/E, so `1e` is NOT an exponent: it stays the
+ * integer 1 followed by the identifier e. */
+I64 CCExpAt(U8 *p)
+{
+  if ((*p!='e')&&(*p!='E'))
+    return FALSE;
+  p++;
+  if ((*p=='+')||(*p=='-'))
+    p++;
+  return CIsDigit(*p);
+}
+
+/* The kernel's decimal conversion sums the digits it is handed into a SIGNED
+ * 64-BIT integer and never checks it.  Measured (m35end.py):
+ * `12345678901234567890` came back -6.1e18 and `0.12345678901234567890` came back
+ * -0.061, each with the end pointer reporting that the whole text was read.
+ * 1.2e19 walked through the sign bit, and the conversion never noticed.  This is
+ * the test the host omits: TRUE when the `n` digits in sd[] (most significant
+ * first, then `zeros` more of them) cannot be summed that way without passing
+ * 0x7FFFFFFFFFFFFFFF.  922337203685477580 is that limit divided by ten, with 7
+ * left over.  Called with zeros==0 it asks about the digits as they stand; with
+ * the zeros an exponent would add, it asks about the plain spelling of the same
+ * value. */
+Bool CCDigOvf(I64 *sd,I64 n,I64 zeros)
+{
+  I64 i,acc,d;
+
+  acc=0;
+  for (i=0;i!=n;i++)
+  {
+    d=sd[i];
+    if ((acc>922337203685477580)||((acc==922337203685477580)&&(d>7)))
+      return TRUE;
+    acc=acc*10+d;
+  }
+  for (i=0;i!=zeros;i++)
+  {
+    if (acc>922337203685477580)
+      return TRUE;
+    acc=acc*10;
+  }
+  return FALSE;
+}
+
+/* M35: a C floating literal.  lite implements NO float parser: no decimal->binary
+ * algorithm, no rounding decision, no binary exponent.  The text is handed to the
+ * kernel's own conversion (Str2F64, KERNELA.HH) and the token value is the 64-bit
+ * pattern that F64 arrives in — which is what a TY_DOUBLE slot holds, so nothing
+ * downstream converts it either.  What this function does instead is DECIMAL
+ * bookkeeping: digit placement, the overflow test above, and a check of the
+ * answer.  Three measurements decided its shape (m35end.py, m35cliff.py,
+ * m35shift.py; tables in PLAN.md M35):
+ *
+ * 1. THE HOST SUMS DIGITS IN AN UNCHECKED I64, AND SAYS NOTHING WHEN IT WRAPS.
+ *    Only significant digits count (leading zeros reach the accumulator on
+ *    neither side: `000000000000000000001` is 1 in both), and 20 of them are
+ *    always past the limit.  A literal whose written digits overflow is not
+ *    handed over at all: digits past what fits are dropped and the exponent
+ *    absorbs them, which was measured (m35trunc.py, 409 long literals) never to
+ *    change which double the literal rounds to.  What it replaces is exact and
+ *    worth naming: the host's answer for an overflowing digit string is the digit
+ *    sum reduced modulo 2^64 and read as a signed integer, so
+ *    `12345678901234567890` comes back -6.1010651724749834e18 where C says
+ *    1.2345678901234567e19 — low by exactly 2^64, sign included.
+ *
+ * 2. AN INTEGER-VALUED DECIMAL IS EXACT, SO A POSITIVE EXPONENT IS FOLDED IN.
+ *    A positive exponent is applied by multiplication and drifts: `1e2` comes
+ *    back 99.99999999999997 and `1e10` 9999999999.9999561, where C99 6.4.4/6
+ *    requires exactly 100 and exactly 10000000000 — `1e2 == 100` is false here
+ *    and true in C, which is a wrong answer about an ordinary literal.  The same
+ *    rational written without an exponent goes down the sum-then-convert path,
+ *    exact twice over: the sum holds the integer (rule 1 is what makes that
+ *    certain) and an I64->F64 conversion is correctly rounded (CC_LIB.HC), which
+ *    is the value C asks for.  Measured: every shifted form whose digits fit came
+ *    back EXACT — `1e1`->`10`, `1e10`->`10000000000`, `1.5e3`->`1500`,
+ *    `100e-2`->`1` — while the exponent spellings did not.  A NEGATIVE exponent
+ *    gains nothing, and that is measured rather than assumed: m35neg.py spells 19
+ *    such values both ways and EVERY pair returned the identical quad (`1e-5` and
+ *    `0.00001` are both 12 ULP high, `1e-7` and `0.0000001` both 4), so there is
+ *    no better spelling to choose and no shift is attempted.  A plain spelling
+ *    that would not fit (1e19, 1e100, 1e308) cannot be built either, so those
+ *    keep the spelling the program wrote and come with the drift recorded below.
+ *
+ * 3. STR2F64 REPORTS WHERE IT STOPPED, AND THE REPORT IS CHECKED.
+ *    On a spelling it does not know it stops early and answers the part it read:
+ *    `1e+2` stops after `1e` and answers 1.0 where C says 100 — a wrong VALUE
+ *    with no diagnostic.  A delegation that cannot tell whether the host
+ *    understood its input is a guess, so the stop point is compared with the text
+ *    handed over.  The one spelling difference that carries no information — an
+ *    exponent's `+`, since C's exponent is `e [sign] digits` and a `+` exponent
+ *    IS the unmarked one — is dropped when the text is built, so the ordinary
+ *    case is repaired rather than merely caught.
+ *
+ * What is left over is the host's own rounding, recorded rather than chased:
+ * chasing it means a correctly-rounded decimal->binary converter, the second
+ * implementation the delegation rule in PLAN.md exists to avoid.  Measured against
+ * gcc in ULPs of the value C requires (the spacing of doubles at that value, so
+ * the errors come out whole): `0.123456789012345` +11, `0.1234567890123456789`
+ * +28, `3.141592653589793` +9, `1e-5` +12, `1e-7` +4, `0.15` +1, `1.5e18` -14,
+ * `1e19` -16, `1e100` -117, `1.7976931348623157e308` -225 — while `1.5`, `2.5`,
+ * `.5`, `2.`, `0.1`,
+ * `100`, `1000.0`, `123456.789` and `123456789012345678` come back EXACT.  The
+ * host's OWN literals drift the same way (its `0.3` is one ULP high, which is why
+ * `0.1+0.2==0.3` answers 1 here and 0 in C), so a program comparing a decimal
+ * LITERAL for exact equality with a computed value can differ from gcc.  Overflow
+ * and underflow agree with C: `1e400` is infinity and `1e-400` is zero (m35huge),
+ * and an exponent clamped here is already past both.  `0x1p3`-style hex floats are
+ * not supported: the caller keeps hex digits as an integer because Str2F64 answers
+ * 0 for them, and the parse then reports the syntax error a compiler without hex
+ * floats reports.  The `f`/`F`/`l`/`L` suffixes are consumed and ignored: `float`
+ * and `long double` are TY_DOUBLE.
+ * p points at the first digit, or at the '.' of a `.5` spelling; the caller has
+ * already established that a digit or this dot starts a number token. */
+Bool CCNumFloat(CCCtrl *cc,U8 *p)
+{
+  U8 *s;
+  U8 *tc;
+  U8 *me;			//end of the mantissa+exponent, before the suffix
+  U8 *end;
+  U8 tx[8];
+  F64 f;
+  I64 sd[CC_DIG_MAX];
+  I64 nd,intdig,lz,sig,keep,started,sawdot,dotrel,ev,expsgn,expcnt,plain,wrote,n;
+  I64 e2,e1,i,d,tl;
+
+  s=p;
+  nd=0;
+  intdig=0;
+  lz=0;
+  sig=0;
+  keep=0;
+  started=0;
+  sawdot=0;
+  ev=0;
+  expsgn=1;
+  expcnt=0;
+  while (1)
+  {
+    if (CIsDigit(*p))
+    {
+      d=*p-'0';
+      nd++;
+      if (!sawdot)
+        intdig++;
+      if (!started)
+      {
+        if (d)
+          started=1;
+        else
+          lz++;			//a leading zero reaches neither accumulator
+      }
+      if (started)
+      {
+        if (sig<CC_SIG_MAX)
+          sig++;		//counted past the cap: it decides the spelling
+        if (keep<CC_DIG_MAX)
+        {
+          sd[keep]=d;
+          keep++;
+        }
+      }
+      p++;
+    }
+    else if ((*p=='.')&&(!sawdot))
+    {
+      sawdot=1;
+      p++;
+    }
+    else
+    {
+      break;
+    }
+  }
+  if (CCExpAt(p))
+  {
+    p++;
+    expsgn=1;
+    if (*p=='+')
+      p++;
+    else if (*p=='-')
+    {
+      expsgn=-1;
+      p++;
+    }
+    while (CIsDigit(*p))
+    {
+      if (expcnt<6)
+      {
+        ev=ev*10+(*p-'0');	//clamped: past a million the value is already
+        expcnt++;		//zero or infinity, which is C's answer too
+      }
+      p++;
+    }
+    if (expsgn<0)
+      ev=-ev;
+  }
+  else if (!sawdot)
+    return FALSE;			//plain integer: `12`, or `1e` with no
+  					//digits after the e (CCExpAt requires a
+  					//digit after the optional sign)
+  if (!nd)
+    return FALSE;			//at least one digit: `.5` and `5.` are
+   					//C-legal, a bare `.` is not a number
+  me=p;
+  if ((*p=='f')||(*p=='F')||(*p=='l')||(*p=='L'))
+    p++;				//folded: float == long double == double,
+   					//and consumed HERE: the suffix is C's,
+   					//the host's parser knows no such thing,
+   					//and handing it over makes Str2F64 stop
+   					//after the mantissa (it read `1.5` out of
+   					//`1.5f` and reported exactly that)
+  if (!keep)
+  {
+    //Every digit was a zero: the value is zero whatever the exponent says, and
+    //"0" is the one spelling that says so with nothing left to place.
+    cc->tk_str[0]='0';
+    cc->tk_str[1]=0;
+    n=1;
+  }
+  else
+  {
+    //Could the host sum the digits exactly as this program wrote them?  Twenty
+    //significant digits are always past the limit, and nineteen can be (nineteen
+    //nines are), so both the count and the sum are asked.  `wrote` is what
+    //decides whether the written spelling may be handed over at all.
+    wrote=1;
+    if (sig>19)
+      wrote=0;
+    else if (CCDigOvf(sd,sig,0))
+      wrote=0;
+    while ((keep>1)&&(sd[keep-1]==0))
+      keep--;			//a trailing zero belongs to the exponent, not to
+    				//the digit string: `100e-2` is the integer 1
+    while ((keep>1)&&CCDigOvf(sd,keep,0))
+      keep--;			//rule 1: drop the least significant digit, which
+    				//the exponent below absorbs
+    dotrel=intdig-lz;		//where the point sits, counted from the first
+    				//significant digit: `0.00123` gives -2
+    e2=dotrel-keep+ev;		//the power of ten that goes with the kept digits
+    plain=0;
+    if ((e2>=0)&&((keep+e2)<=CC_DIG_MAX)&&(!CCDigOvf(sd,keep,e2)))
+      plain=1;			//rule 2: an integer decimal that the host can sum
+    n=0;
+    if (plain)
+    {
+      for (i=0;i!=keep;i++)
+      {
+        cc->tk_str[n]='0'+sd[i];
+        n++;
+      }
+      for (i=0;i!=e2;i++)
+      {
+        cc->tk_str[n]='0';
+        n++;
+      }
+      cc->tk_str[n]=0;
+    }
+    else if (wrote&&(me-s)<CC_TOK_MAX)
+    {
+      //The literal as written: the host can sum every one of its digits, and the
+      //only spelling change worth making is the exponent's `+` (rule 3).  A
+      //negative exponent is left exactly as the program wrote it, because the
+      //measurement says folding it in would not improve the answer.
+      tc=s;
+      while (tc!=me)
+      {
+        if ((*tc=='+')&&((tc[-1]=='e')||(tc[-1]=='E')))
+          tc++;
+        else
+        {
+          cc->tk_str[n]=*tc;
+          n++;
+          tc++;
+        }
+      }
+      cc->tk_str[n]=0;
+    }
+    else
+    {
+      //Too many significant digits for the host's sum, or too many characters
+      //for the token buffer: the written spelling cannot be handed over, so what
+      //goes instead is the same value in the shortest form lite can build from
+      //digits it has already checked fit.
+      cc->tk_str[0]='0'+sd[0];
+      n=1;
+      if (keep>1)
+      {
+        cc->tk_str[n]='.';
+        n++;
+        for (i=1;i!=keep;i++)
+        {
+          cc->tk_str[n]='0'+sd[i];
+          n++;
+        }
+      }
+      cc->tk_str[n]='e';
+      n++;
+      e1=dotrel-1+ev;		//the exponent of sd[0].sd[1..]
+      if (e1>1000000)
+        e1=1000000;		//past this every double is 0 or infinity, so the
+      if (e1<-1000000)		//clamp cannot change the answer (measured for
+        e1=-1000000;		//1e1000000 and 1e-1000000)
+      if (e1<0)
+      {
+        cc->tk_str[n]='-';
+        n++;
+        e1=-e1;
+      }
+      tl=0;
+      while ((tl<7)&&(e1!=0))
+      {
+        tx[tl]='0'+(e1%10);
+        e1=e1/10;
+        tl++;
+      }
+      if (!tl)
+        tx[tl++]='0';		//an exponent of zero still needs a digit
+      while (tl)
+      {
+        tl--;
+        cc->tk_str[n]=tx[tl];
+        n++;
+      }
+      cc->tk_str[n]=0;
+    }
+  }
+  end=0;
+  f=Str2F64(cc->tk_str,&end);
+  if ((!end)||(end!=(cc->tk_str+n)))
+  {
+    //The host did not read the whole text it was handed, so the number it
+    //returned is the number of the part it DID read: `1e+2` answering 1.0 is what
+    //this test exists for.  lite built both spellings it can hand over, so a
+    //mismatch here is a disagreement about grammar, and reporting it beats
+    //returning a value nobody asked for.
+    CCError(cc,"the kernel's decimal conversion did not read this literal whole");
+    cc->tk_isf=0;
+    cc->tk=TK_NUM;
+    cc->pc=p;
+    return TRUE;
+  }
+  cc->tk_num=f(I64);			//the bits; no lite-side conversion
+  cc->tk_isf=1;
+  cc->tk=TK_NUM;
+  cc->pc=p;
+  return TRUE;
+}
+
 U0 CCLex(CCCtrl *cc)
 {
   U8 *p;
-  I64 i,ch;
+  U8 *s;
+  I64 i,ch,ish;
   CCSkipSpace(cc);
   p=cc->pc;
   cc->tk_kw=KW_NONE;
+  cc->tk_isf=0;		//M35: floatness is the lexer's answer for THIS token,
+  			//cleared with tk_kw so a number token never inherits
+  			//the previous literal's bits-as-float status.
   if (!*p)
   {
     cc->tk=TK_EOF;
@@ -222,6 +576,11 @@ U0 CCLex(CCCtrl *cc)
       cc->tk_kw=KW_INLINE;
     else if (!StrCmp(cc->tk_str,"enum"))
       cc->tk_kw=KW_ENUM;
+    else if (!StrCmp(cc->tk_str,"double"))
+      cc->tk_kw=KW_DOUBLE;	//M35: the F64 model (TY_DOUBLE)
+    else if (!StrCmp(cc->tk_str,"float"))
+      cc->tk_kw=KW_FLOAT;	//folded to TY_DOUBLE: the host has no
+      				//single precision to fold it INTO
     return;
   }
   if (*p=='"')
@@ -291,9 +650,12 @@ U0 CCLex(CCCtrl *cc)
   }
   if (CIsDigit(*p))
   {
+    s=p;
+    ish=0;
     cc->tk_num=0;
     if ((*p=='0')&&((p[1]=='x')||(p[1]=='X')))
     {
+      ish=1;
       p+=2;
       while (TRUE)
       {
@@ -313,9 +675,25 @@ U0 CCLex(CCCtrl *cc)
     else
       while (CIsDigit(*p))
         cc->tk_num=cc->tk_num*10+(*p++-'0');
+    //M35: a dot or an exponent makes this a float spelling.  The peek is
+    //deliberately more permissive than the scan itself (`1e` peeks positive and
+    //CCNumFloat then declines it, which is right: that is the integer 1 plus the
+    //identifier e), and HEX is excluded because the kernel's Str2F64 answers 0
+    //for `0x1p3` — silently taking 0 for a hex float would be a wrong value,
+    //where leaving the digits as an integer gives a syntax error instead.
+    if (!ish)
+    {
+      if (((*p=='.')||CCExpAt(p))&&CCNumFloat(cc,s))
+        return;
+    }
     cc->pc=p;
     cc->tk=TK_NUM;
     return;
+  }
+  if ((*p=='.')&&CIsDigit(p[1]))		//`.5`: C-legal, and unambiguous —
+  {					//a '.' in a member access is always
+    if (CCNumFloat(cc,p))			//followed by an identifier, so a
+      return;				//digit after it means a number here
   }
   //3-char ops must be tested before their 2-char prefixes.
   if ((p[0]=='<')&&(p[1]=='<')&&(p[2]=='='))

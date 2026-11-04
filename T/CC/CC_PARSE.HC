@@ -250,14 +250,16 @@ U0 CCConstPrim(CCCtrl *cc,I64 *pv)
   if (cc->tk==TK_NUM)
   {
     *pv=cc->tk_num;
-    CCLex(cc);
-    return;
-  }
+    cc->c_isf=cc->tk_isf;	//M35: the lexer's own answer, not a guess.
+    CCLex(cc);			//A float literal's I64 is the IEEE-754
+    return;			//pattern, so the folder must not add,
+  }				//divide or negate it as an integer.
   if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_NONE))
   {
     if (CCConstFind(cc,cc->tk_str,&v))
     {
-      *pv=v;
+      cc->c_isf=0;		//M35: an enumerator is an INTEGER constant,
+      *pv=v;			//always: enum values fold in the int model
       CCLex(cc);
       return;
     }
@@ -293,7 +295,15 @@ U0 CCConstUnary(CCCtrl *cc,I64 *pv)
     CCConstUnary(cc,pv);	//unary chains fold: `- -3` is 3
     if (cc->errs)
       return;
-    *pv=-*pv;
+    if (cc->c_isf)
+      *pv=CCFold(cc,CC_LIB_FNEG,*pv,0);	//M35: negating a double is its sign
+      					//bit, not two's complement of its
+      					//quad: 2.0 is 0x4000000000000000 and
+      					//the integer negation of that is the
+      					//bits of -4.6e18, not of -2.0.  Same
+      					//helper the compiled program calls.
+    else
+      *pv=-*pv;
     return;
   }
   if (CCTkIsPunct(cc,'+'))
@@ -320,24 +330,77 @@ U0 CCConstUnary(CCCtrl *cc,I64 *pv)
     CCConstUnary(cc,pv);
     if (cc->errs)
       return;
+    if (cc->c_isf)
+    {
+      //M35: C 6.5.6.3 wants an integral operand, and the runtime path says
+      //so too; the folder must not be the one place a floating `~` folds
+      //into a number nobody asked for.
+      CCError(cc,"~ needs an integer operand");
+      return;
+    }
     *pv=(0-*pv)-1;		//~v == -v-1 in two's complement;
     return;			//spelled so the fold never depends on
   }				//host ~ semantics
   CCConstPrim(cc,pv);
 }
 
+/* M35: the folder's route for a binary operation with a floating operand.
+ * It asks CCFloatOp — the runtime layers' OWN operator-to-slot map — what the
+ * operation is and what each side still needs, then evaluates it through
+ * CCFold, which calls the same zero-arg HolyC helpers the compiled program
+ * calls.  A compile-time float expression and the same expression at run time
+ * therefore agree by construction rather than by coincidence: there is no
+ * second float evaluator to keep in step.  The right-hand flag is read from
+ * cc->c_isf (the rhs parse just set it); the left-hand flag had to be saved by
+ * the caller.  Answers FALSE when the operation was diagnosed — C forbids `%`,
+ * the bitwise family and the shifts on floating operands, and CCFloatOp says
+ * so — and the caller must bail. */
+Bool CCConstFoldBin(CCCtrl *cc,I64 op,I64 *pv,I64 r,I64 lf)
+{
+  I64 slot,lc,rc,lty,rty,v;
+  if (lf)
+    lty=TY_DOUBLE;
+  else
+    lty=TY_INT;
+  if (cc->c_isf)
+    rty=TY_DOUBLE;
+  else
+    rty=TY_INT;
+  slot=CCFloatOp(cc,op,lty,rty,&lc,&rc);
+  if (slot<0)
+    return FALSE;		//CCFloatOp printed the diagnostic
+  v=*pv;
+  if (lc>=0)
+    v=CCFold(cc,lc,v,0);
+  if (rc>=0)
+    r=CCFold(cc,rc,r,0);
+  v=CCFold(cc,slot,v,r);
+  *pv=v;
+  if (((op=='+')||((op=='-')||((op=='*')||(op=='/')))))
+    cc->c_isf=1;		//arithmetic answers floating
+  else
+    cc->c_isf=0;		//a comparison answers an integer 0/1
+  return TRUE;
+}
+
 U0 CCConstMul(CCCtrl *cc,I64 *pv)
 {
-  I64 r,op;
+  I64 r,op,lf;
   CCConstUnary(cc,pv);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&(((cc->tk_num=='*')||(cc->tk_num=='/'))||(cc->tk_num=='%')))
   {
     op=cc->tk_num;
-    CCLex(cc);
-    CCConstUnary(cc,&r);
+    lf=cc->c_isf;		//M35: the left flag is overwritten by the
+    CCLex(cc);			//right operand's fold, exactly like the left
+    CCConstUnary(cc,&r);	//type in the code-emitting layers
     if (cc->errs)
       return;
-    if (op=='*')
+    if ((lf)||(cc->c_isf))
+    {
+      if (!CCConstFoldBin(cc,op,pv,r,lf))
+        return;
+    }
+    else if (op=='*')
       *pv=*pv*r;
     else if (op=='/')
     {
@@ -362,16 +425,22 @@ U0 CCConstMul(CCCtrl *cc,I64 *pv)
 
 U0 CCConstAdd(CCCtrl *cc,I64 *pv)
 {
-  I64 r,op;
+  I64 r,op,lf;
   CCConstMul(cc,pv);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&((cc->tk_num=='+')||(cc->tk_num=='-')))
   {
     op=cc->tk_num;
+    lf=cc->c_isf;		//M35: see CCConstMul
     CCLex(cc);
     CCConstMul(cc,&r);
     if (cc->errs)
       return;
-    if (op=='+')
+    if ((lf)||(cc->c_isf))
+    {
+      if (!CCConstFoldBin(cc,op,pv,r,lf))
+        return;
+    }
+    else if (op=='+')
       *pv=*pv+r;
     else
       *pv=*pv-r;
@@ -380,15 +449,21 @@ U0 CCConstAdd(CCCtrl *cc,I64 *pv)
 
 U0 CCConstShift(CCCtrl *cc,I64 *pv)
 {
-  I64 r,op;
+  I64 r,op,lf;
   CCConstAdd(cc,pv);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&((cc->tk_num==OP_SHL)||(cc->tk_num==OP_SHR)))
   {
     op=cc->tk_num;
-    CCLex(cc);
-    CCConstAdd(cc,&r);
+    lf=cc->c_isf;		//M35: C 6.5.7 wants integer operands, and the
+    CCLex(cc);			//runtime layer refuses, so the folder must not
+    CCConstAdd(cc,&r);		//be the place that folds one anyway
     if (cc->errs)
       return;
+    if ((lf)||(cc->c_isf))
+    {
+      CCError(cc,"shifts need integer operands");
+      return;
+    }
     if (op==OP_SHL)
       *pv=*pv<<r;
     else
@@ -398,16 +473,22 @@ U0 CCConstShift(CCCtrl *cc,I64 *pv)
 
 U0 CCConstRel(CCCtrl *cc,I64 *pv)
 {
-  I64 r,op;
+  I64 r,op,lf;
   CCConstShift(cc,pv);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&((((cc->tk_num=='<')||(cc->tk_num=='>'))||(cc->tk_num==OP_LE))||(cc->tk_num==OP_GE)))
   {
     op=cc->tk_num;
-    CCLex(cc);
-    CCConstShift(cc,&r);
-    if (cc->errs)
+    lf=cc->c_isf;		//M35: a floating comparison folds through the
+    CCLex(cc);			//delegated ordered compares — the same ones the
+    CCConstShift(cc,&r);	//compiled program calls, including the composed
+    if (cc->errs)		//`<=`/`>=` that answer C's way for a NaN
       return;
-    if (op=='<')
+    if ((lf)||(cc->c_isf))
+    {
+      if (!CCConstFoldBin(cc,op,pv,r,lf))
+        return;
+    }
+    else if (op=='<')
     {
       if (*pv<r)
         *pv=1;
@@ -440,16 +521,22 @@ U0 CCConstRel(CCCtrl *cc,I64 *pv)
 
 U0 CCConstEq(CCCtrl *cc,I64 *pv)
 {
-  I64 r,op;
+  I64 r,op,lf;
   CCConstRel(cc,pv);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&((cc->tk_num==OP_EQ)||(cc->tk_num==OP_NE)))
   {
     op=cc->tk_num;
-    CCLex(cc);
-    CCConstRel(cc,&r);
-    if (cc->errs)
-      return;
-    if ((op==OP_EQ)&&(*pv==r))
+    lf=cc->c_isf;		//M35: `==`/`!=` on doubles fold through the
+    CCLex(cc);			//composed helper, so a compile-time `1.0 ==
+    CCConstRel(cc,&r);		//-1.0*-1.0` and the run-time version of the
+    if (cc->errs)		//same test answer the same way, and neither
+      return;			//uses the host's bitwise `==`
+    if ((lf)||(cc->c_isf))
+    {
+      if (!CCConstFoldBin(cc,op,pv,r,lf))
+        return;
+    }
+    else if ((op==OP_EQ)&&(*pv==r))
       *pv=1;
     else if ((op==OP_NE)&&(*pv!=r))
       *pv=1;
@@ -460,42 +547,60 @@ U0 CCConstEq(CCCtrl *cc,I64 *pv)
 
 U0 CCConstBitAnd(CCCtrl *cc,I64 *pv)
 {
-  I64 r;
+  I64 r,lf;
   CCConstEq(cc,pv);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&(cc->tk_num=='&'))
   {
-    CCLex(cc);
+    lf=cc->c_isf;		//M35: refused, as in CCExprBitAnd — AND on
+    CCLex(cc);			//two bit patterns is the bits of no answer
     CCConstEq(cc,&r);
     if (cc->errs)
       return;
+    if ((lf)||(cc->c_isf))
+    {
+      CCError(cc,"bitwise operators need integer operands");
+      return;
+    }
     *pv=*pv&r;
   }
 }
 
 U0 CCConstBitXor(CCCtrl *cc,I64 *pv)
 {
-  I64 r;
+  I64 r,lf;
   CCConstBitAnd(cc,pv);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&(cc->tk_num=='^'))
   {
+    lf=cc->c_isf;		//M35: see CCConstBitAnd
     CCLex(cc);
     CCConstBitAnd(cc,&r);
     if (cc->errs)
       return;
+    if ((lf)||(cc->c_isf))
+    {
+      CCError(cc,"bitwise operators need integer operands");
+      return;
+    }
     *pv=*pv^r;
   }
 }
 
 U0 CCConstBitOr(CCCtrl *cc,I64 *pv)
 {
-  I64 r;
+  I64 r,lf;
   CCConstBitXor(cc,pv);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&(cc->tk_num=='|'))
   {
+    lf=cc->c_isf;		//M35: see CCConstBitAnd
     CCLex(cc);
     CCConstBitXor(cc,&r);
     if (cc->errs)
       return;
+    if ((lf)||(cc->c_isf))
+    {
+      CCError(cc,"bitwise operators need integer operands");
+      return;
+    }
     *pv=*pv|r;
   }
 }
@@ -514,6 +619,13 @@ U0 CCConstLogAnd(CCCtrl *cc,I64 *pv)
       *pv=1;		//skipping a short-circuit fold is safe
     else
       *pv=0;
+    cc->c_isf=0;		//M35: a logical operator answers an INTEGER
+    				//0/1 whatever its operands were.  The truth
+    				//test just above is the same "is the quad
+    				//nonzero" that CCTestRax gives the compiled
+    				//program, so `-0.0` diverges from C here in
+    				//exactly the way it does there — once, and
+    				//recorded, not two different ways.
   }
 }
 
@@ -531,7 +643,22 @@ U0 CCConstLogOr(CCCtrl *cc,I64 *pv)
       *pv=1;
     else
       *pv=0;
+    cc->c_isf=0;		//M35: see CCConstLogAnd
   }
+}
+
+/* M35: C asks for an INTEGER constant expression in four places this compiler
+ * folds: an array length (6.7.6.2), a case label (6.8.4.2), an enumerator
+ * (6.7.7.2) and an initializer designation index (6.7.9).  The folder now folds
+ * floating constants too, because a global `double g = 2.0 * 3.0;` needs it, so
+ * "is this the right KIND of constant" became a question only the CONTEXT can
+ * answer — and this is the one place it is phrased.  The answer is cc->c_isf,
+ * which CCConstExpr clears on the way in so that reading it on the way out
+ * describes this expression and not whichever fold ran last. */
+U0 CCConstWantInt(CCCtrl *cc,U8 *msg)
+{
+  if (cc->c_isf)
+    CCError(cc,msg);
 }
 
 /* Entry: fold a full constant expression; returns the value and
@@ -540,9 +667,12 @@ I64 CCConstExpr(CCCtrl *cc)
 {
   I64 v;
   v=0;
-  CCConstLogOr(cc,&v);
-  return v;
-}
+  cc->c_isf=0;		//M35: cleared on the way IN so that reading it on
+  CCConstLogOr(cc,&v);	//the way out is a statement about THIS expression
+  return v;		//and never about whichever fold ran last.  The
+}			//integer-only consumers (array lengths, case labels,
+				//enumerators, designator indexes) ask
+				//CCConstWantInt after this returns.
 
 I64 CCEnumTagFind(CCCtrl *cc,U8 *nm)
 {
@@ -597,6 +727,7 @@ U0 CCEnumDef(CCCtrl *cc,U8 *tag)
       val=CCConstExpr(cc);
       if (cc->errs)
         return;
+      CCConstWantInt(cc,"enumerator value must have an integer type");
     }
     if (CCSymFind(cc,nm))
     {
@@ -645,6 +776,13 @@ I64 CCTokTypeStart(CCCtrl *cc)
     return TRUE;
   if ((kw==KW_SIGNED)||(kw==KW_LONG))
     return TRUE;
+  if ((kw==KW_DOUBLE)||(kw==KW_FLOAT))
+    return TRUE;		//M35: without this the statement dispatcher
+    				//never recognizes `double x;` as a declaration
+    				//at all, and the error a program gets back is
+    				//"undefined variable ... str='double'" — the
+    				//lexer knew the word and the parser pretended
+    				//it was an identifier.
   if (kw==KW_SHORT)
     return TRUE;
   if (kw==KW_NONE)
@@ -660,12 +798,20 @@ I64 CCTokTypeStart(CCCtrl *cc)
 I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
 {
   I64 ty=-1,ti,had_int,had_char,tent,isun;
+  I64 had_flt,had_intkw,had_unskw;
   *pstag=-1;
   had_int=0;
   had_char=0;
   tent=0;
+  had_flt=0;
+  had_intkw=0;
+  had_unskw=0;
   cc->spec_static=0;		//M21: the static PROMISE is per-spec;
   cc->spec_extern=0;		//M34: and so is the extern one
+  cc->spec_flt=0;		//M35: and so is the floating one — clearing
+  			//it here is what keeps a `double` in the previous
+  			//declaration from poisoning this one's function
+  			//pointer (the M34 gotcha, same shape).
   //No `continue` in HolyC (the keyword does not exist in this dialect):
   //the fold is one if/else chain per token, and each arm advances or
   //breaks. See PLAN.
@@ -696,8 +842,18 @@ I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
     }
     else if ((cc->tk_kw==KW_UNSIGNED)||((cc->tk_kw==KW_LONG)||((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_SHORT))))
     {
+      if (had_flt&&((cc->tk_kw==KW_INT)||((cc->tk_kw==KW_SHORT)||
+          (cc->tk_kw==KW_UNSIGNED))))
+      {
+        //M35: C forbids combining a floating type with an integer one, in
+        //either keyword order.  `long double` is the one combination that
+        //IS legal, and it is handled by the arm below.
+        CCError(cc,"type keyword conflict (double with an integer type)");
+        return -1;
+      }
       if (cc->tk_kw==KW_UNSIGNED)
       {
+        had_unskw=1;
         if (ty<0)
           ty=TY_INT;		//bare `unsigned x` = unsigned int
       }
@@ -709,13 +865,20 @@ I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
       else
       {
         had_int=1;
-        ty=TY_INT;
+        if (cc->tk_kw==KW_INT)
+          had_intkw=1;
+        if (!had_flt)		//`long double` / `short double`: the float
+          ty=TY_INT;		//keyword already chose TY_DOUBLE and `long`
+      				//adds nothing to a model with ONE float
+      				//width.  C allows `long double` and forbids
+      				//`short double`; lite folds both, a
+      				//leniency recorded in PLAN.
       }
       CCLex(cc);
     }
     else if (cc->tk_kw==KW_CHAR)
     {
-      if (had_int||(ty==TY_VOID))
+      if (had_int||(had_flt)||(ty==TY_VOID))
       {
         CCError(cc,"type keyword conflict");
         return -1;
@@ -729,6 +892,31 @@ I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
       ty=TY_CHAR;		//unsigned/signed char both land here:
       CCLex(cc);		//the model's char already zero-extends
     }
+    else if ((cc->tk_kw==KW_DOUBLE)||(cc->tk_kw==KW_FLOAT))
+    {
+      //M35: both keywords land in the ONE floating model.  C has three
+      //floating widths; the host has one (F64 — no single precision, no
+      //extended precision), so `float` and `long double` are the same slot
+      //and the same value as `double` here.  That agrees with C exactly
+      //where C promotes float to double (arithmetic, varargs) and diverges
+      //only in sizeof and in the last few bits of a single-precision
+      //computation, both recorded in PLAN rather than papered over.
+      if (had_flt)
+      {
+        CCError(cc,"duplicate double/float");
+        return -1;
+      }
+      if (had_char||had_intkw||had_unskw)
+      {
+        CCError(cc,"type keyword conflict (double with an integer type)");
+        return -1;
+      }
+      had_flt=1;
+      tent=0;			//a bare-qualifier promise (`const double x`)
+      cc->spec_flt=1;		//is overwritten here, as char and void do.
+      ty=TY_DOUBLE;		//M35: spec_flt tells the declarator, after
+      CCLex(cc);		//an fp parameter list has been swallowed,
+    }				//what the base type was (CCParseFunPtrDecl).
     else if (cc->tk_kw==KW_VOID)
     {
       if ((ty>=0)&&(tent==0))
@@ -842,6 +1030,16 @@ U0 CCParseTypedef(CCCtrl *cc)
     CCExpect(cc,';',"expected ';' after typedef");	//call site's business
     return;
   }
+  //M35: `typedef double *dp;` is refused for the same reason the declarators
+  //refuse `double *p` — see CCDeclOne.  The pointer model records no pointee
+  //scalar type, so a dereference would answer with the integer model applied
+  //to a double's bits: a wrong number, not a refusal.  Refusing here keeps
+  //the gap visible until the pointee type is carried (PLAN: M36 item 1).
+  if ((ty==TY_DOUBLE)&&CCTkIsPunct(cc,'*'))
+  {
+    CCError(cc,"pointer to double is not supported yet");
+    return;
+  }
   while (CCAccept(cc,'*'))
   {
     if (ty==TY_CHAR)
@@ -886,10 +1084,14 @@ I64 CCSizeOfEty(CCCtrl *cc,I64 ty,I64 sty)
 I64 CCTrySpec(CCCtrl *cc,I64 *pstag)
 {
   I64 ty=-1,ti,had_int,had_char,tent;
+  I64 had_flt,had_intkw,had_unskw;
   *pstag=-1;
   had_int=0;
   had_char=0;
   tent=0;
+  had_flt=0;
+  had_intkw=0;
+  had_unskw=0;
   //M19: exact silent mirror of CCAcceptBase's fold rules (see there).
   while (cc->tk==TK_IDENT)
   {
@@ -906,8 +1108,14 @@ I64 CCTrySpec(CCCtrl *cc,I64 *pstag)
     }
     else if ((cc->tk_kw==KW_UNSIGNED)||((cc->tk_kw==KW_LONG)||((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_SHORT))))
     {
+      if (had_flt&&((cc->tk_kw==KW_INT)||((cc->tk_kw==KW_SHORT)||
+          (cc->tk_kw==KW_UNSIGNED))))
+        return -1;		//M35: same conflict rules as CCAcceptBase,
+      				//silently (this is the speculative mirror —
+      				//see the note at the top of this function)
       if (cc->tk_kw==KW_UNSIGNED)
       {
+        had_unskw=1;
         if (ty<0)
           ty=TY_INT;
       }
@@ -916,16 +1124,28 @@ I64 CCTrySpec(CCCtrl *cc,I64 *pstag)
       else
       {
         had_int=1;
-        ty=TY_INT;
+        if (cc->tk_kw==KW_INT)
+          had_intkw=1;
+        if (!had_flt)		//`long double` stays TY_DOUBLE below
+          ty=TY_INT;
       }
       CCLex(cc);
     }
     else if (cc->tk_kw==KW_CHAR)
     {
-      if (had_int||(ty==TY_VOID)||(had_char))
+      if (had_int||(had_flt)||(ty==TY_VOID)||(had_char))
         return -1;
       had_char=1;
       ty=TY_CHAR;
+      CCLex(cc);
+    }
+    else if ((cc->tk_kw==KW_DOUBLE)||(cc->tk_kw==KW_FLOAT))
+    {
+      if (had_flt||(had_char)||(had_intkw)||(had_unskw))
+        return -1;
+      had_flt=1;
+      tent=0;
+      ty=TY_DOUBLE;
       CCLex(cc);
     }
     else if (cc->tk_kw==KW_VOID)
@@ -1116,7 +1336,9 @@ U0 CCCompareEmit(CCCtrl *cc,I64 op)
  * dependent in C. */
 I64 CCParseFunPtrDecl(CCCtrl *cc,U8 *name)
 {
-  I64 depth;
+  I64 depth,fsw;
+  fsw=0;			//M35: did a float keyword appear in the
+  				//parameter list being swallowed below?
   cc->fpdim=0;			//M26: reset for EVERY attempt — a peek
   name[0]=0;			//that fails gets rewound by its caller,
   CCLex(cc);			//consume '('	//so stale declarator state
@@ -1142,6 +1364,8 @@ I64 CCParseFunPtrDecl(CCCtrl *cc,U8 *name)
     else				//pointers, which the consumers record
     {				//as ael so `tab[i](x)` and
       cc->fpdim=CCConstExpr(cc);	//`tab[i][j]`-style element typing
+      if (!cc->errs)
+        CCConstWantInt(cc,"array length must have an integer type");
       if (cc->errs)		//work; -1 means the size comes from
         return FALSE;		//the initializer or is unknown (a
       if ((cc->fpdim<1)||(cc->fpdim>2048))
@@ -1193,12 +1417,41 @@ I64 CCParseFunPtrDecl(CCCtrl *cc,U8 *name)
       depth++;
     else if (CCTkIsPunct(cc,')'))
       depth--;
+    else if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_DOUBLE)||(cc->tk_kw==KW_FLOAT)))
+    {
+      fsw=1;			//M35: noted here, refused below.  Noting it
+      				//inside the existing swallow keeps this
+      				//scan's shape identical to M18's, so the
+      				//paren counter stays the only thing that
+      				//decides where the parameter list ends.
+    }
     if (depth)
       CCLex(cc);		//nested declarators inside parse their
   }				//own parens — the counter keeps the
   CCExpect(cc,')',"expected ')' after function-pointer parameter list");	//swallow honest
   if (cc->errs)
     return FALSE;
+  //M35: a double does not survive a function pointer in this model, in either
+  //direction, and both cases are silently WRONG VALUES rather than errors:
+  //   the RETURN type is lost — an fp variable is TY_PTR whatever it points at
+  //   (M18's design), so `double (*f)(int)` would type `f(2)`'s result as the
+  //   integer model applied to a double's bits;
+  //   the PARAMETER types are dropped by the swallow above exactly as M18
+  //   records, so `g(3)` through `int (*g)(double)` hands the callee 3 where C
+  //   gives 3.0, and C has no implicit conversion waiting on the other side.
+  // Refusing the declaration keeps the gap in the compiler's output instead of
+  // in the program's answer.  The fix is to carry return and parameter types on
+  // the fp itself, which is a milestone of its own (PLAN: M36).
+  if (cc->spec_flt)
+  {
+    CCError(cc,"a function pointer cannot return a double yet");
+    return FALSE;
+  }
+  if (fsw)
+  {
+    CCError(cc,"a double in an fp parameter list is not supported yet");
+    return FALSE;
+  }
   return TRUE;
 }
 
@@ -1389,6 +1642,45 @@ U0 CCIncDecAt(CCCtrl *cc,I64 inc,I64 prefix)
   delta=1;
   if (scale>0)
     delta=scale;
+  if (cc->ety==TY_DOUBLE)
+  {
+    //M35: `d++` adds 1.0, and 1.0 is a DIFFERENT quad from 1: the
+    //ADD RAX,delta shortcut the integer path uses would step 1.0's bits
+    //0x3FF0000000000000 to 0x3FF0000000000008, which is still about 1.0 —
+    //a nearly-invisible wrong answer, the worst kind.  So this goes through
+    //the delegated add, and the address cannot ride in RCX across the call
+    //(a JIT-compiled callee uses RCX freely), so it travels on the machine
+    //stack.  The old value the postfix form owes its caller rides there too;
+    //RDX is scratch in this model (see CCAssignTail's struct-copy note), so
+    //the two pops land in the right registers without a third save.
+    CCByte(cc,0x50);				//PUSH RAX (address)
+    CCByte(cc,0x48);CCByte(cc,0x8B);CCByte(cc,0x00);	//MOV RAX,[RAX]
+    if (!prefix)
+      CCByte(cc,0x50);			//PUSH RAX (old: the result)
+    CCPushExt(cc,0);			//the old value, operand 0
+    CCMovImmRax(cc,CC_ONE_DOUBLE);	//1.0, not 1
+    CCPushExt(cc,1);
+    if (inc)
+      CCEmitLibCall(cc,CC_LIB_FADD);
+    else
+      CCEmitLibCall(cc,CC_LIB_FSUB);
+    if (!prefix)
+    {
+      CCByte(cc,0x5A);			//POP RDX (old value: the result)
+      CCByte(cc,0x59);			//POP RCX (address)
+    }
+    else
+      CCByte(cc,0x59);			//POP RCX (address)
+    CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0x01);	//MOV [RCX],RAX
+    if (!prefix)
+      CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0xC2);	//MOV RAX,RDX (old back)
+    cc->is_addr=0;
+    cc->aty=0;
+    cc->sty=-1;
+    cc->celem=0;
+    cc->celebsty=-1;			//the operand's type is already
+    return;				//TY_DOUBLE and stays, as the integer
+  }					//path keeps a pointer's
   CCByte(cc,0x48);CCByte(cc,0x89);CCByte(cc,0xC1);	//MOV RCX,RAX
   if (byte_aty)
   {
@@ -1706,8 +1998,10 @@ U0 CCExprPrimary(CCCtrl *cc)
   //value's own arm knows what shape it has.
   cc->celem=0;
   cc->celebsty=-1;
-  CSym *s,*hs;
-  I64 n,cv,cn,cnext,ci;		//M28: inc/delta/scale/byte_aty left with
+  CSym *s,*hs,*cs;		//cs: the callee, looked up before its args
+  				//are parsed so their conversions can be
+  				//decided one argument at a time (M35)
+  I64 n,cv,cn,cnext,ci,pf;		//M28: inc/delta/scale/byte_aty left with
   				//the increment block (CCIncDecAt now owns
   				//them, and one copy serves both spellings)
   U8 catbuf[CC_TOK_MAX];
@@ -1723,7 +2017,12 @@ U0 CCExprPrimary(CCCtrl *cc)
     CCMovImmRax(cc,cc->tk_num);
     cc->is_addr=0;
     cc->aty=0;
-    cc->ety=TY_INT;
+    if (cc->tk_isf)
+      cc->ety=TY_DOUBLE;	//M35: the lexer already put the IEEE-754 bits in
+    else			//tk_num (see CCNumFloat), so a float literal is
+      cc->ety=TY_INT;		//a quad like any other and needs no special
+      				//load — only a different TYPE, because the
+      				//same bits mean a different thing.
     cc->sty=-1;
     CCLex(cc);
     return;
@@ -1888,12 +2187,32 @@ U0 CCExprPrimary(CCCtrl *cc)
         cc->sty=-1;
         return;
       }
+      //M35: C converts every argument to the type the PROTOTYPE declares for
+      //that parameter, and nothing else here can infer it: a double occupies
+      //one quad exactly like an int, so `f(3)` into `f(double)` would hand the
+      //callee the denormal whose bit pattern is 3 instead of 3.0, and a double
+      //into an `int` parameter would hand it a bit pattern where C gives the
+      //truncated value.  That is why the callee is looked up BEFORE its
+      //arguments are parsed.  No prototype in scope means no conversion, which
+      //is C's own answer for a call with no visible prototype (default
+      //promotions: an int stays an int), and an argument past the declared
+      //parameter count is a vararg slot, where C leaves the argument exactly
+      //as written as well — so both gaps are the right answer, not a gap.
+      cs=CCSymFind(cc,save_name);
       n=0;
       if (!CCTkIsPunct(cc,')'))
       {
         while ((!cc->errs)&&(cc->tk!=TK_EOF))
         {
           CCExprNC(cc);		//commas here are ARGUMENT separators
+          if ((cs!=NULL)&&((cs->kind==SC_FUN)&&(n<cs->fargc)))
+          {
+            pf=(cs->pflt>>n)&1;
+            if (pf&&(cc->ety!=TY_DOUBLE))
+              CCConvRax(cc,CC_LIB_I2D);
+            else if ((!pf)&&(cc->ety==TY_DOUBLE))
+              CCConvRax(cc,CC_LIB_D2I);
+          }
           CCByte(cc,0x50);		//PUSH RAX (arg)
           n++;
           if (CCAccept(cc,','))
@@ -1944,7 +2263,17 @@ U0 CCExprPrimary(CCCtrl *cc)
       CCPopArgs(cc,n);
       cc->is_addr=0;
       cc->aty=0;
-      cc->ety=TY_INT;
+      if ((s->kind==SC_FUN)&&(s->ty==TY_DOUBLE))
+        cc->ety=TY_DOUBLE;	//M35: a call yields what its declared return
+      else			//type is.  Only TY_DOUBLE needs recording:
+        cc->ety=TY_INT;		//every other type a function can return is
+      				//already a quad that means the same thing in
+      				//the integer model, and TY_INT is what M15
+      				//through M34 measured for every call.  A
+      				//double result typed as the integer model
+      				//would be converted AGAIN by the next
+      				//float operation, which is how `f(1)+1.0`
+      				//used to become 4.6e18.
       cc->sty=-1;
       return;
     }
@@ -2116,6 +2445,18 @@ U0 CCExprUnary(CCCtrl *cc)
   {
     CCExprUnary(cc);
     CCVal(cc);
+    if (cc->ety==TY_DOUBLE)
+    {
+      //M35: negating a double is NOT `NEG RAX`.  C negates a floating value
+      //by flipping its sign bit; two's-complement negation of the QUAD does
+      //no such thing — the bits of 2.0 are 0x4000000000000000 and their
+      //integer negation is 0xC000000000000000, which is the bits of
+      //-4.6e18, not of -2.0.  So this reaches the host's unary minus on F64
+      //instead (measured bit-exact for 4.0, -0.0, NaN, inf and 1e308).
+      CCFloatNeg(cc,-1);
+      cc->ety=TY_DOUBLE;
+      return;
+    }
     CCByte(cc,0x48);CCByte(cc,0xF7);CCByte(cc,0xD8);	//NEG RAX
     cc->ety=TY_INT;		//M29: a plain integer result: no element
     cc->celem=0;		//shape survives (see CCExprPrimary), and
@@ -2137,6 +2478,14 @@ U0 CCExprUnary(CCCtrl *cc)
   {
     CCExprUnary(cc);
     CCVal(cc);
+    if (cc->ety==TY_DOUBLE)
+    {
+      //M35: C 6.5.6.3 requires an integral operand, and `NOT RAX` on the
+      //bits would flip the exponent and the sign along with everything else:
+      //~1.0 would answer -2.0, a number no C program asked for.
+      CCError(cc,"~ needs an integer operand");
+      return;
+    }
     CCByte(cc,0x48);CCByte(cc,0xF7);CCByte(cc,0xD0);	//NOT RAX
     cc->ety=TY_INT;			//M29: plain integer result
     cc->celem=0;
@@ -2355,7 +2704,7 @@ U0 CCExprUnary(CCCtrl *cc)
     //cast; anything else rewinds and Primary handles the paren group.
     //Names must not collide with the sizeof arm above: HolyC local
     //scope is function-flat ("Duplicate member" otherwise).
-    I64 cty,cstag,cty2,cstars;
+    I64 cty,cstag,cty2,cstars,oety;
     I64 ctk,ckw,cnum;
     U8 *cpc;
     U8 cstr[CC_TOK_MAX];
@@ -2390,8 +2739,18 @@ U0 CCExprUnary(CCCtrl *cc)
       return;
     }
     CCLex(cc);		//consume ')' of the cast
+    if (cstars&&(cty==TY_DOUBLE))
+    {
+      //M35: see CCDeclOne.  This is the one place the speculative scan can
+      //still say "no", and it is deliberately AFTER the rewind path above:
+      //`(double *)x` only reaches here once the scan has proven it is a cast,
+      //so the answer is a diagnostic, not a silent TY_PTR.
+      CCError(cc,"pointer to double is not supported yet");
+      return;
+    }
     CCExprUnary(cc);
     CCVal(cc);
+    oety=cc->ety;		//what the operand WAS, before this arm re-types it
     cc->is_addr=0;
     cc->aty=0;
     cc->sty=-1;
@@ -2402,6 +2761,22 @@ U0 CCExprUnary(CCCtrl *cc)
         cc->sty=cstag;		//(struct T *)p keeps the tag: `->` must work
       return;
     }
+    //M35: a cast is where C's conversion between the two models becomes
+    //explicit — and it is the ONLY thing allowed to cross the boundary
+    //implicitly nowhere: integer to double is the host's numeric widening,
+    //double to integer its truncation toward zero (measured: (int)7.875 is 7
+    //and (int)-7.875 is -7; out of quad range C is undefined and lands on
+    //0x8000000000000000, as x86 cvttsd2si does).  `(char)` keeps its own
+    //MOVZX afterwards, which is C's order: convert to the integer model,
+    //then take the low byte.
+    if ((cty==TY_DOUBLE)&&(oety!=TY_DOUBLE))
+    {
+      CCConvRax(cc,CC_LIB_I2D);
+      cc->ety=TY_DOUBLE;
+      return;
+    }
+    if ((cty!=TY_DOUBLE)&&(cty!=TY_VOID)&&(oety==TY_DOUBLE))
+      CCConvRax(cc,CC_LIB_D2I);	//then the arms below finish the job
     if (cty==TY_CHAR)
     {
       CCByte(cc,0x0F);CCByte(cc,0xB6);CCByte(cc,0xC0);	//MOVZX RAX,AL
@@ -2424,9 +2799,93 @@ U0 CCExprUnary(CCCtrl *cc)
   CCExprPrimary(cc);
 }
 
+/* M35: which delegated operation a binary operator becomes once C's usual
+ * arithmetic conversions have spoken, and what each operand still needs to get
+ * there.  Answers -1 when the integer model handles the operator (which is
+ * every case M34 and earlier built), so each layer keeps its existing path
+ * untouched and the float branch is additive.  `*plc`/`*prc` are the conversion
+ * slots (-1 = nothing needed): C converts an integer operand to the floating
+ * type when the other one is floating, and that conversion is the ONLY thing
+ * mixing the two models means — a double is not "bigger" than an int here, it
+ * is a different kind of quad, and an unconverted integer hand to a float
+ * operation is a denormal, not a small number.
+ *
+ * The operators C restricts to integer operands are diagnosed rather than
+ * folded into the integer path, because silently running them there would
+ * compute something: integer IMUL/IDIV/AND on two bit patterns produce a number
+ * that is the bit pattern of no answer at all, and "wrong value, no message" is
+ * the one outcome the correctness policy says lite may not choose. */
+I64 CCFloatOp(CCCtrl *cc,I64 op,I64 lty,I64 rty,I64 *plc,I64 *prc)
+{
+  I64 flt,cmp;
+  flt=((lty==TY_DOUBLE)||(rty==TY_DOUBLE));
+  *plc=-1;
+  *prc=-1;
+  if (!flt)
+    return -1;
+  //An integer operand of ANY of the delegated operators converts first, not
+  //just an operand of the arithmetic ones: C converts both operands to the
+  //common type before a comparison runs either (6.5.8/6.5.9), and the host's
+  //F64 operators read F64 out of both slots.  Without this the mixed comparison
+  //compares the BITS of the floating side against the NUMBER on the other, so
+  //it is right only when they happen to agree — `x == 0` on 0.0 answers 1 and
+  //`x == 100` on a double holding exactly 100.0 answers 0.  Measured over 25
+  //shapes before the fix; the map is shared with CCConstFoldBin, so the folder
+  //gets the same answer the compiled program does.
+  cmp=0;
+  if ((op==OP_EQ)||(op==OP_NE))
+    cmp=1;
+  else if (((op=='<')||(op=='>'))||((op==OP_LE)||(op==OP_GE)))
+    cmp=1;
+  if (cmp||((op=='/')||((op=='*')||((op=='+')||(op=='-')))))
+  {
+    if (lty!=TY_DOUBLE)
+      *plc=CC_LIB_I2D;
+    if (rty!=TY_DOUBLE)
+      *prc=CC_LIB_I2D;
+  }
+  if (op=='+')
+    return CC_LIB_FADD;
+  if (op=='-')
+    return CC_LIB_FSUB;
+  if (op=='*')
+    return CC_LIB_FMUL;
+  if (op=='/')
+    return CC_LIB_FDIV;
+  if (op=='%')
+  {
+    CCError(cc,"% needs integer operands (C forbids floating ones)");
+    return -1;
+  }
+  if (op==OP_EQ)
+    return CC_LIB_FEQ;
+  if (op==OP_NE)
+    return CC_LIB_FNE;
+  if (op=='<')
+    return CC_LIB_FLT;
+  if (op=='>')
+    return CC_LIB_FGT;
+  if (op==OP_LE)
+    return CC_LIB_FLE;
+  if (op==OP_GE)
+    return CC_LIB_FGE;
+  if ((op=='&')||(op=='|')||(op=='^'))
+  {
+    CCError(cc,"bitwise operators need integer operands");
+    return -1;
+  }
+  if ((op==OP_SHL)||(op==OP_SHR))
+  {
+    CCError(cc,"shifts need integer operands");
+    return -1;
+  }
+  CCError(cc,"this operator needs integer operands");
+  return -1;
+}
+
 U0 CCExprMul(CCCtrl *cc)
 {
-  I64 op;
+  I64 op,lty,rty,opc,lconv,rconv;
   CCExprUnary(cc);
   if ((!cc->errs)&&CCTkIsPunct(cc,'='))
   {
@@ -2467,14 +2926,25 @@ U0 CCExprMul(CCCtrl *cc)
       (((cc->tk_num=='*')||(cc->tk_num=='/'))||(cc->tk_num=='%')))
   {
     op=cc->tk_num;
-    CCLex(cc);
-    CCVal(cc);
+    lty=cc->ety;		//M35: read the LEFT type before the right
+    CCLex(cc);			//operand's parse overwrites it (same reason
+    CCVal(cc);			//CCExprAdd keeps its left shape in locals)
     CCByte(cc,0x50);		//PUSH RAX
     CCExprUnary(cc);
     CCVal(cc);
-    CCBinEmit(cc,op);
-    cc->ety=TY_INT;
-  }
+    rty=cc->ety;
+    opc=CCFloatOp(cc,op,lty,rty,&lconv,&rconv);
+    if (opc>=0)
+    {
+      CCFloatBin(cc,opc,lconv,rconv);
+      cc->ety=TY_DOUBLE;
+    }
+    else if (!cc->errs)		//CCFloatOp diagnosed (`%` on a double is a
+    {				//C constraint violation) or the integer model
+      CCBinEmit(cc,op);	//handles this operator.  No `continue` exists in
+      cc->ety=TY_INT;		//this HolyC dialect, so the else-if is what
+    }				//keeps a diagnosed case from also emitting
+  }				//the integer operation it just refused.
 }
 
 /* M29: the additive layer — every rule C has about pointer arithmetic, in
@@ -2515,6 +2985,7 @@ U0 CCExprAdd(CCCtrl *cc)
 {
   I64 op,lty,lsty,lcel,lcelsty,lsz,lsz2,rty,rsty,rcel,rcelsty,rsz,rsz2;
   I64 ls,rs,samekind;
+  I64 opc,lconv,rconv;
 
   CCExprMul(cc);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&
@@ -2542,7 +3013,36 @@ U0 CCExprAdd(CCCtrl *cc)
     rsz2=cc->esz2;
     rs=CCStepOf(cc,rty,rsty,rcel,rcelsty,rsz,rsz2);
     CCVal(cc);			//RAX = right value
-    if (((lty==TY_STRUCT)&&(!lcel))||((rty==TY_STRUCT)&&(!rcel)))
+    //M35: a floating operand joins this ladder as its FIRST arm, and that is
+    //not cosmetic: the ladder is one if/else-if chain whose arms each emit the
+    //operation themselves.  When I first put this branch ABOVE the ladder, the
+    //float case emitted the add, fell through, and the ladder's final else
+    //emitted it a second time — and CCBinEmit's POP took the top of the stack
+    //that the float path had already popped.  `u = 1.0 + 1.0` answered 0 and
+    //`a = a + 1.0` on a local faulted, because the extra pop ate the
+    //destination address CCAssignTail was about to store through.
+    if ((lty==TY_DOUBLE)||(rty==TY_DOUBLE))
+    {
+      //A double is not pointer-shaped (CCStepOf answers 0 for it), so a
+      //pointer scale reaching this arm means the OTHER operand is a pointer:
+      //`p + 1.5`, which C forbids outright (6.5.6: pointer arithmetic wants an
+      //integer on the other side).  lite refuses instead of scaling a bit
+      //pattern and calling the sum an address.
+      if ((ls!=0)||(rs!=0))
+      {
+        CCError(cc,"pointer arithmetic needs an integer operand");
+        return;
+      }
+      opc=CCFloatOp(cc,op,lty,rty,&lconv,&rconv);
+      if (opc>=0)
+      {
+        CCFloatBin(cc,opc,lconv,rconv);
+        CCExprShape(cc,TY_DOUBLE,-1,0,-1,0,0);
+      }
+      if (cc->errs)
+        return;
+    }
+    else if (((lty==TY_STRUCT)&&(!lcel))||((rty==TY_STRUCT)&&(!rcel)))
     {
       //A struct VALUE on either side: C wants arithmetic operands or two
       //matching pointers, and a tag is neither. Covers `s+1`, `1+s`, `p-s`
@@ -2550,7 +3050,7 @@ U0 CCExprAdd(CCCtrl *cc)
       CCError(cc,"arithmetic needs scalar or pointer operands");
       return;
     }
-    if ((ls!=0)&&(rs!=0))
+    else if ((ls!=0)&&(rs!=0))
     {
       //Two pointer-shaped operands. C: `+` is a constraint violation, and
       //`-` needs the same pointee type and yields a COUNT.
@@ -2670,17 +3170,24 @@ U0 CCExprAdd(CCCtrl *cc)
 //C precedence: shifts bind tighter than relational ops.
 U0 CCExprShift(CCCtrl *cc)
 {
-  I64 op;
+  I64 op,lty,rty;
   CCExprAdd(cc);
   while ((!cc->errs)&&(cc->tk==TK_PUNCT)&&
       ((cc->tk_num==OP_SHL)||(cc->tk_num==OP_SHR)))
   {
     op=cc->tk_num;
-    CCLex(cc);
-    CCVal(cc);
-    CCByte(cc,0x50);		//PUSH RAX
-    CCExprAdd(cc);
-    CCVal(cc);
+    lty=cc->ety;		//M35: C 6.5.7 wants integer type on BOTH
+    CCLex(cc);			//operands, and lite refuses rather than
+    CCVal(cc);			//running an integer SHL on a bit pattern:
+    CCByte(cc,0x50);		//PUSH RAX	that yields the bits of some
+    CCExprAdd(cc);		//number, which is a wrong value with no
+    CCVal(cc);			//message, the one thing the correctness
+    rty=cc->ety;		//policy does not allow.
+    if ((lty==TY_DOUBLE)||(rty==TY_DOUBLE))
+    {
+      CCError(cc,"shifts need integer operands");
+      return;
+    }
     CCBinEmit(cc,op);
     cc->ety=TY_INT;
   }
@@ -2688,36 +3195,68 @@ U0 CCExprShift(CCCtrl *cc)
 
 U0 CCExprRelational(CCCtrl *cc)
 {
-  I64 op;
+  I64 op,lty,rty,opc,lconv,rconv;
   CCExprShift(cc);
   while ((!cc->errs)&&((cc->tk==TK_PUNCT)&&
       (((cc->tk_num=='<')||(cc->tk_num=='>'))||
       ((cc->tk_num==OP_LE)||(cc->tk_num==OP_GE)))))
   {
     op=cc->tk_num;
-    CCLex(cc);
+    lty=cc->ety;		//M35: see CCExprMul for why the left type is
+    CCLex(cc);			//read before the right operand is parsed
     CCVal(cc);
     CCByte(cc,0x50);		//PUSH RAX
     CCExprShift(cc);
     CCVal(cc);
-    CCCompareEmit(cc,op);
+    rty=cc->ety;
+    opc=CCFloatOp(cc,op,lty,rty,&lconv,&rconv);
+    if (opc>=0)
+    {
+      //A floating comparison answers the SAME 0/1 integer the integer one
+      //does — that is what makes `if (a<b)` need no float case anywhere
+      //downstream — but the answer comes from the ordered compares, and C's
+      //`==`/`!=` come from them too (see CCXFEq).
+      CCFloatBin(cc,opc,lconv,rconv);
+      cc->is_addr=0;
+      cc->aty=0;
+      cc->ety=TY_INT;
+      cc->sty=-1;
+    }
+    else if (!cc->errs)
+      CCCompareEmit(cc,op);
   }
 }
 
 U0 CCExprEquality(CCCtrl *cc)
 {
-  I64 op;
+  I64 op,lty,rty,opc,lconv,rconv;
   CCExprRelational(cc);
   while ((!cc->errs)&&((cc->tk==TK_PUNCT)&&
       ((cc->tk_num==OP_EQ)||(cc->tk_num==OP_NE))))
   {
     op=cc->tk_num;
+    lty=cc->ety;		//M35: see CCExprRelational
     CCLex(cc);
     CCVal(cc);
     CCByte(cc,0x50);		//PUSH RAX
     CCExprRelational(cc);
     CCVal(cc);
-    CCCompareEmit(cc,op);
+    rty=cc->ety;
+    opc=CCFloatOp(cc,op,lty,rty,&lconv,&rconv);
+    if (opc>=0)
+    {
+      //C's `==` on floating operands is NOT the host's `==` (which is
+      //bitwise, so -0.0 != 0.0 there and a NaN equals itself): the delegated
+      //helper composes C's answer from the ordered compares, and this is the
+      //only place that distinction has to be made.
+      CCFloatBin(cc,opc,lconv,rconv);
+      cc->is_addr=0;
+      cc->aty=0;
+      cc->ety=TY_INT;
+      cc->sty=-1;
+    }
+    else if (!cc->errs)
+      CCCompareEmit(cc,op);
   }
 }
 
@@ -2726,14 +3265,22 @@ U0 CCExprEquality(CCCtrl *cc)
 //binary — unary '&' sits in prefix position (CCExprUnary).
 U0 CCExprBitAnd(CCCtrl *cc)
 {
+  I64 lty,rty;
   CCExprEquality(cc);
   while ((!cc->errs)&&CCTkIsPunct(cc,'&'))
   {
-    CCLex(cc);
+    lty=cc->ety;		//M35: bitwise operators need integer operands
+    CCLex(cc);			//(C 6.5.10) — refused, not run on the bits.
     CCVal(cc);
     CCByte(cc,0x50);		//PUSH RAX
     CCExprEquality(cc);
     CCVal(cc);
+    rty=cc->ety;
+    if ((lty==TY_DOUBLE)||(rty==TY_DOUBLE))
+    {
+      CCError(cc,"bitwise operators need integer operands");
+      return;
+    }
     CCBinEmit(cc,'&');
     cc->ety=TY_INT;
   }
@@ -2741,14 +3288,22 @@ U0 CCExprBitAnd(CCCtrl *cc)
 
 U0 CCExprBitXor(CCCtrl *cc)
 {
+  I64 lty,rty;
   CCExprBitAnd(cc);
   while ((!cc->errs)&&CCTkIsPunct(cc,'^'))
   {
+    lty=cc->ety;		//M35: same rule as CCExprBitAnd
     CCLex(cc);
     CCVal(cc);
     CCByte(cc,0x50);		//PUSH RAX
     CCExprBitAnd(cc);
     CCVal(cc);
+    rty=cc->ety;
+    if ((lty==TY_DOUBLE)||(rty==TY_DOUBLE))
+    {
+      CCError(cc,"bitwise operators need integer operands");
+      return;
+    }
     CCBinEmit(cc,'^');
     cc->ety=TY_INT;
   }
@@ -2756,14 +3311,22 @@ U0 CCExprBitXor(CCCtrl *cc)
 
 U0 CCExprBitOr(CCCtrl *cc)
 {
+  I64 lty,rty;
   CCExprBitXor(cc);
   while ((!cc->errs)&&CCTkIsPunct(cc,'|'))
   {
+    lty=cc->ety;		//M35: same rule as CCExprBitAnd
     CCLex(cc);
     CCVal(cc);
     CCByte(cc,0x50);		//PUSH RAX
     CCExprBitXor(cc);
     CCVal(cc);
+    rty=cc->ety;
+    if ((lty==TY_DOUBLE)||(rty==TY_DOUBLE))
+    {
+      CCError(cc,"bitwise operators need integer operands");
+      return;
+    }
     CCBinEmit(cc,'|');
     cc->ety=TY_INT;
   }
@@ -2849,6 +3412,20 @@ U0 CCAssignTail(CCCtrl *cc)
   rcel=cc->celem;		//M29: non-zero means the RHS is an ARRAY,
   				//which decayed to an ADDRESS — a completely
   				//different thing from a struct VALUE.
+  //M35: C converts the right side to the left side's type as part of the
+  //assignment, and crossing the model boundary needs the host to do it:
+  //storing the integer 3 into a double slot is the bits of 1.5e-323, and
+  //storing a double's bits into an int slot is whatever huge number the
+  //pattern happens to be.  Doing it HERE, while the value is still in RAX,
+  //is what makes the rest of the store path (byte vs quad, the address POP)
+  //need no float case at all.  The destination address is safe: it was
+  //PUSHed above, and a zero-arg helper call cannot disturb the machine
+  //stack below its own return address.
+  if ((lty==TY_DOUBLE)&&(rty!=TY_DOUBLE)&&(rty!=TY_STRUCT))
+    CCConvRax(cc,CC_LIB_I2D);	//a pointer into a double takes the address as
+  else if ((lty!=TY_DOUBLE)&&(rty==TY_DOUBLE))
+    CCConvRax(cc,CC_LIB_D2I);	//the integer value, which is what lite's
+   				//pointer-as-integer leniency already means
   CCByte(cc,0x59);	//POP RCX (address)
   if (lty==TY_STRUCT)
   {
@@ -2940,7 +3517,10 @@ U0 CCAssignTail(CCCtrl *cc)
   cc->aty=0;
   //The assign-expression takes the LHS type. Typing every '=' result as
   //a pointer made `(a=5)+1` scale the 1 by 8; only real pointers may.
-  if ((lty==TY_PTR)||(lty==TY_CHARP))
+  //M35 adds TY_DOUBLE for the same reason: `(d = 1.5) + 1.0` must see a
+  //double, because the quad in RAX is a double's bits and typing it as the
+  //integer model would convert those bits again.
+  if ((lty==TY_PTR)||(lty==TY_CHARP)||(lty==TY_DOUBLE))
     cc->ety=lty;
   else
     cc->ety=TY_INT;
@@ -2963,6 +3543,7 @@ U0 CCAssignTail(CCCtrl *cc)
 U0 CCCompoundAssign(CCCtrl *cc,I64 op)
 {
   I64 base,lty,saty,lsty,scale;
+  I64 rty,opc,lconv,rconv;
   switch (op)
   {
     case OP_PLUSEQ:
@@ -3043,7 +3624,32 @@ U0 CCCompoundAssign(CCCtrl *cc,I64 op)
       CCWord(cc,scale);		//IMUL RAX,RAX,imm32
     }
   }
-  CCBinEmit(cc,base);		//pops the OLD value as left operand
+  rty=cc->ety;			//M35: the RHS type, read before anything
+  				//below re-types it (the scale block only
+  				//looks at it, so this is the last moment it
+  				//is intact).
+  if ((lty==TY_DOUBLE)||(rty==TY_DOUBLE))
+  {
+    //M35: `d *= 2.0;` and `i += 1.5;` are both C-legal and both cross the
+    //model boundary: the operation runs in the type C chooses for it (the
+    //floating one, if either side is floating) and the RESULT is then
+    //converted back to the left operand's type by the assignment at the
+    //end.  C's `%=` and the bitwise/shift compound ops are integer-only,
+    //and CCFloatOp says so rather than running them on the bits.
+    opc=CCFloatOp(cc,base,lty,rty,&lconv,&rconv);
+    if (opc>=0)
+    {
+      CCFloatBin(cc,opc,lconv,rconv);	//pops the OLD value as its left
+      					//operand, exactly like CCBinEmit
+      if (lty!=TY_DOUBLE)
+        CCConvRax(cc,CC_LIB_D2I);	//the assignment half: C converts
+      					//the sum back to the lhs type
+    }
+    if (cc->errs)
+      return;
+  }
+  else
+    CCBinEmit(cc,base);		//pops the OLD value as left operand
   CCByte(cc,0x59);		//POP RCX (address)
   if (saty)
   {
@@ -3055,10 +3661,10 @@ U0 CCCompoundAssign(CCCtrl *cc,I64 op)
   }
   cc->is_addr=0;
   cc->aty=0;
-  if ((lty==TY_PTR)||(lty==TY_CHARP))
-    cc->ety=lty;
-  else
-    cc->ety=TY_INT;
+  if ((lty==TY_PTR)||(lty==TY_CHARP)||(lty==TY_DOUBLE))
+    cc->ety=lty;		//M35: TY_DOUBLE for the same reason
+  else			//CCAssignTail needed it: the value of `d += 1`
+    cc->ety=TY_INT;		//is the double that was stored, not its bits
   if (lty==TY_PTR)
     cc->sty=lsty;		//p+=1 stays a struct pointer
   else
@@ -3228,6 +3834,11 @@ U0 CCExprConditional(CCCtrl *cc)
   CCPatchJmp(cc,pz);
   CCExprConditional(cc);	//third arm, right-associative
   CCVal(cc);		//NC normalized the middle arm; normalize this one
+  //M35: patched BEFORE the type merge below, so a diagnostic there can leave
+  //without stranding the jump the middle arm needs.  Nothing between here and
+  //the end of the function emits code, so the target is the same address
+  //either way.
+  CCPatchJmp(cc,pj);
   if ((mty==cc->ety)&&(msty==cc->sty))
   {
     //Same type both arms: it stands (pointers keep their element kind
@@ -3235,6 +3846,21 @@ U0 CCExprConditional(CCCtrl *cc)
   }
   else
   {
+    if ((mty==TY_DOUBLE)||(cc->ety==TY_DOUBLE))
+    {
+      //C converts BOTH arms to their common type, and the middle arm's
+      //conversion belongs inside its own path — but that path's jump was
+      //emitted above, before this arm's type was known, so lite cannot go back
+      //and insert it.  Typing the mismatch as the integer model instead (what
+      //M15 through M34 did for every pair) leaves a double's bit pattern in a
+      //slot C says holds a number: `(c ? 1.0 : 2)` would then be converted
+      //AGAIN by whatever consumes it, which is a wrong value with no message.
+      //Refusing keeps the gap in the compiler's output; the fix is a silent
+      //look-ahead of the third arm's type (the sizeof/cast pattern) so the
+      //middle arm can be converted before its jump.  PLAN: M36.
+      CCError(cc,"one floating and one integer conditional arm is unsupported");
+      return;
+    }
     cc->ety=TY_INT;
     cc->sty=-1;
   }
@@ -3248,7 +3874,6 @@ U0 CCExprConditional(CCCtrl *cc)
   }
   cc->is_addr=0;
   cc->aty=0;
-  CCPatchJmp(cc,pj);
 }
 
 /* Comma-free expression: the value consumers (return, if/while cond,
@@ -3394,6 +4019,16 @@ U0 CCSwitchStmt(CCCtrl *cc)
   CCExpect(cc,'(',"expected '(' after switch");
   CCExpr(cc);
   CCExpect(cc,')',"expected ')' after switch expression");
+  if (cc->ety==TY_DOUBLE)
+  {
+    //M35: C 6.8.4.2 wants an integer-typed controlling expression, and the
+    //dispatch chain below compares the parked value against the case values as
+    //QUADS.  Running that on a double's bits would report "no match" for a
+    //label C says matches — a wrong control flow, not a wrong number — so this
+    //refuses at the header, where the program can still be told why.
+    CCError(cc,"switch expression must have an integer type");
+    return;
+  }
   //Park the value in its own local slot (the frame size is patched
   //at function end, so growing lofs here is safe).
   cc->lofs++;
@@ -3418,6 +4053,7 @@ U0 CCSwitchStmt(CCCtrl *cc)
       v=CCConstExpr(cc);	//M20: literals, enum constants, and
       if (cc->errs)		//folded expressions (`case ROW*2:`)
         return;			//all qualify — anything else diagnoses
+      CCConstWantInt(cc,"case label value must have an integer type");
       CCExpect(cc,':',"expected ':' after case value");
       if (nc>=CC_SWITCH_CASES)
       {
@@ -3857,6 +4493,27 @@ I64 CCInitOne(CCCtrl *cc,I64 *pkind,I64 *pisstr)
   return CCConstExpr(cc);
 }
 
+/* M35: C converts an initializer to the type of the object being initialized
+ * (6.7.9/19), and in this model that conversion is REAL: storing the integer 3
+ * into a double slot is the denormal whose bit pattern is 3, and storing a
+ * double's bits into an int slot is 4611686018427387904 where C promises 1.
+ * Only the DESTINATION knows which kind of quad it wants, and only the folder
+ * knows which kind it produced — so the two meet here, at the places a folded
+ * constant becomes a stored quad.  The folder is the thing doing the arithmetic
+ * (CCFold calls the same HolyC helpers the compiled program calls), so an
+ * initializer converts at COMPILE time and the generated program carries no
+ * run-time conversion for it.  `isf` is the value's own floatness (cc->c_isf
+ * after CCInitOne, or vk[i]==CC_VK_FLT after the collector); `want` is whether
+ * the target slot holds F64 bits. */
+I64 CCInitConv(CCCtrl *cc,I64 v,I64 isf,I64 want)
+{
+  if (isf==want)
+    return v;
+  if (isf)
+    return CCFold(cc,CC_LIB_D2I,v,0);	//double's bits -> integer value
+  return CCFold(cc,CC_LIB_I2D,v,0);	//integer value -> double's bits
+}
+
 /* M30: parse one DESIGNATION — C's designator list (`[0]`, `[0][1]`, `.a`,
  * `.v.i`) — and resolve it against the target SHAPE the writer supplied,
  * writing the coordinates it designates into pend_e/pend_off. A designation
@@ -3903,6 +4560,8 @@ U0 CCInitDesign(CCCtrl *cc,I64 *shp,I64 ingrpid,I64 *pe,I64 *po)
       }
       CCLex(cc);		//consume '['
       v=CCConstExpr(cc);	//a designator index must FOLD, like every
+      if (!cc->errs)
+        CCConstWantInt(cc,"designation index must have an integer type");
       if (cc->errs)		//other constant site (case label, array size,
         return;		//global initializer), so enum constants work
       CCExpect(cc,']',"expected ']' after designator index");
@@ -4288,6 +4947,11 @@ I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 *shp,I6
         vals[n]=CCInitOne(cc,&vk[n],&ek);	//M24: constants, strings
         if (cc->errs)				//and function/global
           return -1;				//addresses all arrive here
+        if ((vk[n]==CC_VK_INT)&&(cc->c_isf))
+          vk[n]=CC_VK_FLT;		//M35: a folded float constant is a
+          					//different quad from the integer it
+          					//looks like, and the writers are the
+          					//ones who know which one fits
         vgrp[n]=grp;
         dE[n]=pend_e;		//M30: flush the designation onto this value
         doff[n]=pend_off;	//(-1 in both means "sequential position")
@@ -4504,7 +5168,7 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
   I64 doff[CC_INIT_MAX];		//(-1 = "no designation: sequential")
   I64 dfl[CC_INIT_MAX];		//M30: 1 when the slot came from a designation
   I64 shp[6];			//M30: written BEFORE its brace, see CCInitMap
-  I64 isstr,total,n,i,stride,v,A,e,hw,vi,kind,charr,desig,narr;
+  I64 isstr,total,n,i,stride,v,A,e,hw,vi,kind,charr,desig,narr,wantf;
   U8 *bp;
 
   if (s->ty==TY_CHARP)
@@ -4625,6 +5289,23 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
     stride=1;
   else
     stride=8;
+  //M35: what KIND of quad every element of this object wants.  The element type
+  //lives on the symbol (M25's ael is the only place it is recorded), and a
+  //group's values land in ELEMENTS, so one answer covers every slot the writers
+  //touch — including a row of a 2-D array, whose elements are the same type as
+  //the array's.  base is the fallback: `double a[]` deducing its length from
+  //`{1,2}` has the type from the spec and the elements from it too.
+  if (s->ael)
+  {
+    if ((s->ael-1)==TY_DOUBLE)
+      wantf=1;
+    else
+      wantf=0;
+  }
+  else if (base==TY_DOUBLE)
+    wantf=1;
+  else
+    wantf=0;
   vi=0;
   if (use_arena)
   {
@@ -4641,6 +5322,14 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
         kind=vk[vi];		//M24: a pointer element carries the
         vi++;			//base it must be re-derived from
       }
+      if (kind<0)
+        //M35: `double a[2]={1,2}` and `int a[2]={1.5}` are the same question
+        //from opposite sides, so the conversion is gated on the MISMATCH, not
+        //on wantf: gating it on wantf truncated only the double destinations and
+        //let a float constant into an int array as its raw bit pattern.  Only a
+        //plain value converts — an ADDRESS element belongs to a pointer array,
+        //which is never a double array.
+        v=CCInitConv(cc,v,(kind==CC_VK_FLT),wantf);
       if (kind>=0)
         CCArenaPtr(cc,bp-cc->locals,kind,v);
       else
@@ -4685,6 +5374,11 @@ U0 CCArrayInit(CCCtrl *cc,CSym *s,I64 base,I64 stag,I64 pend,I64 use_arena)
       kind=vk[vi];
       vi++;
     }
+    if (kind<0)
+      //M35: the frame writer stores the SAME converted constant the arena
+      //writer does (see above), so `double a[]={1,2}` means the same thing
+      //in a local as in a global, and `int a[]={1.5}` truncates in both.
+      v=CCInitConv(cc,v,(kind==CC_VK_FLT),wantf);
     CCByte(cc,0x48);CCByte(cc,0xB9);	//MOVABS RCX,
     if (kind>=0)
       CCQuadAbs(cc,kind,v);		//M24: a pointer operand relocates
@@ -4729,7 +5423,7 @@ U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
   I64 doff[CC_INIT_MAX];
   I64 dfl[CC_INIT_MAX];		//M30: designation written before its brace
   I64 shp[6];			//M30: the target shape, see CC.HH
-  I64 isstr,n,hw,A,total,e2,vi,v,memb,off2,prev,kind,desig,ekind,narr;
+  I64 isstr,n,hw,A,total,e2,vi,v,memb,off2,prev,kind,desig,ekind,narr,wantm;
   U8 *bp;
 
   //Members are never byte arrays (struct members may not be arrays), so
@@ -4840,6 +5534,18 @@ U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
         vi++;
       }
       memb=e2%A;
+      //M35: the member's OWN type decides (mty is on the tag, so a struct with
+      //`int i; double d;` converts only the second initializer).  A union takes
+      //member 0's type: every member shares the one slot, so the first member's
+      //type is the one this model reports — recorded, not hidden.
+      if (kind<0)
+      {
+        if (cc->st[stag].mty[memb]==TY_DOUBLE)
+          wantm=1;
+        else
+          wantm=0;
+        v=CCInitConv(cc,v,(kind==CC_VK_FLT),wantm);
+      }
       //Member offsets are a table, not a stride: recompute the target
       //address from the tag every time (element = e2/A, member = e2%A).
       bp=cc->locals+s->offset+((e2-memb)/A)*cc->st[stag].size+cc->st[stag].moff[memb];
@@ -4880,6 +5586,15 @@ U0 CCStructInit(CCCtrl *cc,CSym *s,I64 stag,I64 pend,I64 use_arena)
       vi++;
     }
     memb=e2%A;
+    if (kind<0)
+    {
+      //M35: see the arena writer above: same conversion, same answer.
+      if (cc->st[stag].mty[memb]==TY_DOUBLE)
+        wantm=1;
+      else
+        wantm=0;
+      v=CCInitConv(cc,v,(kind==CC_VK_FLT),wantm);
+    }
     off2=((e2-memb)/A)*cc->st[stag].size+cc->st[stag].moff[memb];
     if (off2!=prev)
     {
@@ -4996,6 +5711,8 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
         if (cc->errs)
           return;
         if (ivk<0)
+          val=CCInitConv(cc,val,cc->c_isf,(s->ty==TY_DOUBLE));
+        if (ivk<0)
         {
           for (vi=0;vi!=8;vi++)
             cc->locals[s->offset+vi]=val>>(8*vi);
@@ -5026,6 +5743,20 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     else if (fpar&&(fpar<0))
       CCError(cc,"array size missing");	//`int (*t[])(int);` needs an
     return;				//initializer to say how many
+  }
+  //M35: `double *p;` is refused.  A pointer here is ONE slot holding an
+  //address, and the model records nothing about what it points at, so `*p`
+  //would load the slot and call the result an integer — reading a double's
+  //bit pattern as a number, which is a wrong value with no message.  Arrays
+  //are the way to have several doubles (`double a[4]`, `a[i]`): an array
+  //symbol DOES carry its element type (M25's ael), so the float type survives
+  //subscripts, initializers and array parameters.  Pointers are M36's first
+  //item, with the pointee type to match.  `double (*f)(int)` is a different
+  //question and is answered by the function-pointer check below.
+  if ((ty==TY_DOUBLE)&&CCTkIsPunct(cc,'*'))
+  {
+    CCError(cc,"pointer to double is not supported yet");
+    return;
   }
   while (CCAccept(cc,'*'))
   {
@@ -5066,6 +5797,8 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     else
     {
       n=CCConstExpr(cc);		//M20: constant expressions (enum
+      if (!cc->errs)
+        CCConstWantInt(cc,"array length must have an integer type");
       if (cc->errs)			//sizes) fold here
         return;
       CCExpect(cc,']',"expected ']' after array size");
@@ -5085,6 +5818,8 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
         return;
       }
       n2=CCConstExpr(cc);		//M20: constant expressions (enum
+      if (!cc->errs)
+        CCConstWantInt(cc,"array length must have an integer type");
       if (cc->errs)			//sizes) fold here
         return;
       CCExpect(cc,']',"expected ']' after second array size");
@@ -5144,6 +5879,10 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
       val=CCInitOne(cc,&ivk,&iisstr);
       if (cc->errs)
         return;
+      if (ivk<0)
+        //M35: `static double s=3;` — C converts the initializer to the
+        //object's type before it is stored (see CCInitConv).
+        val=CCInitConv(cc,val,cc->c_isf,(s->ty==TY_DOUBLE));
       if (ivk>=0)
         CCArenaPtr(cc,s->offset,ivk,val);
       else
@@ -5156,6 +5895,17 @@ U0 CCDeclOne(CCCtrl *cc,I64 base,I64 stag)
     CCVarAddr(cc,s);
     cc->is_addr=1;
     cc->aty=(s->ty==TY_CHAR);
+    //M35: CCAssignTail takes the LHS type from cc->ety, and this is the one
+    //place that builds an lvalue by hand instead of going through Primary's
+    //identifier arm — so it has to state the type itself, which it had never
+    //needed to do while lty only fed the struct/array checks.  `double x=3;`
+    //as an automatic local is the first case where the stale value mattered:
+    //it made the int->double conversion depend on whichever expression ran
+    //last.  celem is 0 because `isarr` took the array forms above.
+    cc->ety=s->ty;
+    cc->sty=s->sty;
+    cc->celem=0;
+    cc->celebsty=-1;
     CCAssignTail(cc);		//consumes '='; ety typed from lhs
   }
   else if (pend)
@@ -5311,6 +6061,18 @@ U0 CCStmt(CCCtrl *cc)
     if (!CCTkIsPunct(cc,';'))
       CCExpr(cc);
     CCExpect(cc,';',"expected ';'");
+    //M35: the value leaves through RAX and the CALLER reads it as whatever the
+    //prototype says the function returns — no type information survives the
+    //return, so the conversion has to happen HERE or never.  `return 3;` from
+    //`double f(void)` would otherwise hand back the denormal whose bits are 3;
+    //`return 1.5;` from an `int f(void)` would hand back 4611618994944016794
+    //where C says 1.  A function returning double is the only non-integer
+    //return type this model records (see CCParseFun), so there are two answers
+    //and both are one call.
+    if ((cc->cur_rty==TY_DOUBLE)&&(cc->ety!=TY_DOUBLE))
+      CCConvRax(cc,CC_LIB_I2D);
+    else if ((cc->cur_rty!=TY_DOUBLE)&&(cc->ety==TY_DOUBLE))
+      CCConvRax(cc,CC_LIB_D2I);
     CCFunRet(cc,cc->cur_entry);
     return;
   }
@@ -5423,15 +6185,24 @@ U0 CCParseParams(CCCtrl *cc)
       }
       if (!fpok)
       {
-      while (CCAccept(cc,'*'))
-      {
-        //char* -> byte pointer; any further pointer (char**, int**) —
-        //and struct pointers — are modeled as pointers to 8-byte slots.
-        if (cc->pty[cc->nparam]==TY_CHAR)
-          cc->pty[cc->nparam]=TY_CHARP;
-        else
-          cc->pty[cc->nparam]=TY_PTR;
-      }
+        if ((cc->pty[cc->nparam]==TY_DOUBLE)&&CCTkIsPunct(cc,'*'))
+        {
+          //M35: see CCDeclOne — no pointee type means no honest dereference
+          //inside the callee.  A `double x[]` parameter DOES work (M25 records
+          //its element type), and that is how a function receives several
+          //doubles today.
+          CCError(cc,"pointer to double is not supported yet");
+          return;
+        }
+        while (CCAccept(cc,'*'))
+        {
+          //char* -> byte pointer; any further pointer (char**, int**) —
+          //and struct pointers — are modeled as pointers to 8-byte slots.
+          if (cc->pty[cc->nparam]==TY_CHAR)
+            cc->pty[cc->nparam]=TY_CHARP;
+          else
+            cc->pty[cc->nparam]=TY_PTR;
+        }
       }
       i=cc->nparam;
       cc->pname[i*CC_TOK_MAX]=0;	//empty name = anonymous parameter
@@ -5512,15 +6283,27 @@ U0 CCParseParams(CCCtrl *cc)
  * (M13: the path every #include'd C declaration takes). '(' already
  * consumed. entry is the code offset; the private-stack stub is
  * emitted only for 'main'. */
-U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
+U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry,I64 rty)
 {
-  I64 sub_pos,i,entryflag,t,apv,fmark,fbase,nframe;
+  I64 sub_pos,i,entryflag,t,apv,fmark,fbase,nframe,pmask;
   U8 *app;
   CSym *f,*s;
 
   CCParseParams(cc);
   if (cc->errs)
     return;
+  //M35: the parameter-float mask, computed while the parameter types are still
+  //in hand.  A call site cannot infer any of this from the argument or the slot
+  //size — a double is one quad exactly like an int — so only the prototype
+  //knows that `f(3)` into `f(double)` means 3.0.  The parameter SYMBOLS are
+  //gone by the time a later function's call is parsed (they are erased at '}'),
+  //so the answer has to live on the function symbol: one quad covers
+  //CC_MAX_PARAMS (8) parameters, and floatness is the only property that is
+  //not recoverable from the model, so it is the only one recorded.
+  pmask=0;
+  for (i=0;i!=cc->nparam;i++)
+    if (cc->pty[i]==TY_DOUBLE)
+      pmask=pmask|(1<<i);
   if (!CCTkIsPunct(cc,'{'))
   {
     //Prototype declaration: no body. Register (or merge with a
@@ -5543,6 +6326,21 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
     {
       if (f->offset<0)
         f->fargc=cc->nparam;	//definition overwrites on merge
+      //M35: C requires every declaration of a function to agree on its type.
+      //lite records only the return type it cannot guess (TY_DOUBLE — every
+      //other return type is a quad that means the same thing in the integer
+      //model), so this catches `double f(); int f();`, where silently typing
+      //later calls as integers would misread every double that function
+      //returns.  The reverse order is indistinguishable from a forward call
+      //that created the symbol, and is a recorded leniency (PLAN).
+      if ((f->ty==TY_DOUBLE)&&(rty!=TY_DOUBLE))
+        CCError(cc,"function redeclared with a different return type");
+      else
+      {
+        if (rty==TY_DOUBLE)
+          f->ty=TY_DOUBLE;
+        f->pflt=pmask;
+      }
     }
     return;
   }
@@ -5570,6 +6368,18 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
   }
   f->offset=entry;
   f->fargc=cc->nparam;		//CCFind builds arg-copying thunks
+  //M35: same two records as the prototype path (see the note there).  A
+  //definition IS a declaration, and the body's own calls need the mask too:
+  //`double f(double x) { return f(x + 1.0) - 1.0; }` recurses through a
+  //symbol that must already know what it returns.
+  if ((f->ty==TY_DOUBLE)&&(rty!=TY_DOUBLE))
+    CCError(cc,"function redeclared with a different return type");
+  else
+  {
+    if (rty==TY_DOUBLE)
+      f->ty=TY_DOUBLE;
+    f->pflt=pmask;
+  }
   for (i=0;i!=f->npatch;i++)
     CCPatchCallPos(cc,f->patches[i],entry);
   f->npatch=0;
@@ -5627,6 +6437,8 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
     }
   }
   cc->cur_argc=cc->nparam;
+  cc->cur_rty=rty;		//M35: `return <expr>` in the body needs to know
+  					//what the caller will read the quad as
   cc->lofs=0;		//locals restart per function
   cc->lofs_peak=0;
   cc->nlab=0;		//M16: label scope is per-function too (C functions
@@ -5855,6 +6667,9 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         return FALSE;
       if (ivk<0)
       {
+        //M35: see CCInitConv — `double g=3;` needs 3.0's bits here or the
+        //program reads a denormal out of its own global.
+        val=CCInitConv(cc,val,cc->c_isf,(s->ty==TY_DOUBLE));
         gp=cc->locals+s->offset;
         for (i=0;i!=8;i++)
           gp[i]=val>>(8*i);
@@ -5875,6 +6690,13 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     //`extern` declaration (see the PLAN gotcha).
     if (!cc->spec_extern)
       s->def=1;
+    return FALSE;
+  }
+  if ((ty==TY_DOUBLE)&&CCTkIsPunct(cc,'*'))
+  {
+    //M35: see CCDeclOne — the pointee type is what a dereference needs and
+    //the pointer model does not carry one.
+    CCError(cc,"pointer to double is not supported yet");
     return FALSE;
   }
   while (CCAccept(cc,'*'))
@@ -5900,7 +6722,10 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     }
     CCLex(cc);
     entry=cc->ep-cc->code;
-    CCParseFun(cc,name,entry);
+    CCParseFun(cc,name,entry,ty);	//M35: `ty` is the declared RETURN type
+      					//here (the stars above were applied to
+      					//it before the name), which is what
+      					//a later call needs
     if (!StrCmp(name,"main"))
       cc->entry_off=entry;
     return TRUE;
@@ -5927,6 +6752,8 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     else
     {
       n=CCConstExpr(cc);		//M20: constant expressions (enum
+      if (!cc->errs)
+        CCConstWantInt(cc,"array length must have an integer type");
       if (cc->errs)			//sizes) fold here
         return FALSE;
       CCExpect(cc,']',"expected ']' after global array size");
@@ -5945,6 +6772,8 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         return FALSE;
       }
       n2=CCConstExpr(cc);		//M20: constant expressions (enum
+      if (!cc->errs)
+        CCConstWantInt(cc,"array length must have an integer type");
       if (cc->errs)			//sizes) fold here
         return FALSE;
       CCExpect(cc,']',"expected ']' after second global array size");
@@ -6035,6 +6864,8 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
     val=CCInitOne(cc,&ivk,&iisstr);
     if (cc->errs)
       return FALSE;
+    if (ivk<0)
+      val=CCInitConv(cc,val,cc->c_isf,(s->ty==TY_DOUBLE));	//M35
     if (iisstr)
     {
       if ((s->ty!=TY_PTR)&&(s->ty!=TY_CHARP))
@@ -6161,10 +6992,18 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag,I64 is_union)
         return -1;
       }
     }
-    else if ((cc->tk==TK_IDENT)&&((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_CHAR)))
+    else if ((cc->tk==TK_IDENT)&&
+        (((cc->tk_kw==KW_INT)||(cc->tk_kw==KW_CHAR))||
+        ((cc->tk_kw==KW_DOUBLE)||(cc->tk_kw==KW_FLOAT))))
     {
+      //M35: KW_DOUBLE added to the member fast path.  A double member is one
+      //slot, so nothing else about the member machinery changes: CCStructDef
+      //sizes members in slots and the Postfix '.' arm hands back the declared
+      //type, which is now able to say TY_DOUBLE.
       if (cc->tk_kw==KW_CHAR)
         mty=TY_CHAR;
+      else if ((cc->tk_kw==KW_DOUBLE)||(cc->tk_kw==KW_FLOAT))
+        mty=TY_DOUBLE;
       else
         mty=TY_INT;
       CCLex(cc);
@@ -6187,6 +7026,14 @@ I64 CCStructDef(CCCtrl *cc,U8 *tag,I64 is_union)
       }
       else
       {
+        if ((mty==TY_DOUBLE)&&CCTkIsPunct(cc,'*'))
+        {
+          //M35: see CCDeclOne — a `double *m` member would be read back as
+          //the integer model applied to an address, and lite has no way to
+          //say what it points at.
+          CCError(cc,"pointer to double is not supported yet");
+          return -1;
+        }
         while (CCAccept(cc,'*'))
         {
           if (mty==TY_CHAR)

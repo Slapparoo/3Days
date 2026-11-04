@@ -864,6 +864,63 @@ U0 CCEmitLibCall(CCCtrl *cc,I64 slot)
   CCByte(cc,0xFF);CCByte(cc,0x10);	//CALL QWORD PTR [RAX]
 }
 
+/* M35: convert the value in RAX through a single-operand helper (CC_LIB_I2D or
+ * CC_LIB_D2I).  The helper READS cc->ext[0] and answers in RAX: it writes no
+ * ext slot, which is what makes it safe to run one conversion while another
+ * operand is already staged in ext[1] (see CCFloatBin). */
+U0 CCConvRax(CCCtrl *cc,I64 slot)
+{
+  CCPushExt(cc,0);
+  CCEmitLibCall(cc,slot);
+}
+
+/* M35: a delegated float binary operator.  Invariant shared with CCBinEmit: the
+ * left value is on the machine stack, the right value is in RAX.  `lconv`/
+ * `rconv` are the conversion each operand still needs to reach the operation's
+ * operand type (-1 = none): C's usual arithmetic conversions turn `i + d` into
+ * "convert i, then add doubles", and they are applied while the value they
+ * describe is still in hand — the right one while it is in RAX, the left one
+ * immediately after it is popped back.  Then both quads sit in ext[] and the
+ * HolyC helper for this operation computes the result into RAX.
+ *
+ * Order matters and is load-bearing: stage the RIGHT operand first (ext[1]),
+ * because converting the left one goes through ext[0] as scratch, so the right
+ * operand must already be somewhere else. */
+U0 CCFloatBin(CCCtrl *cc,I64 slot,I64 lconv,I64 rconv)
+{
+  if (rconv>=0)
+    CCConvRax(cc,rconv);
+  CCPushExt(cc,1);			//right operand, converted
+  CCByte(cc,0x58);			//POP RAX (left operand) — 0x58, not
+  					//0x59: 0x59 is POP RCX, which is what
+  					//I first wrote here, and it left the
+  					//left operand in a register the next
+  					//CCPushExt was about to overwrite.
+  if (lconv>=0)
+    CCConvRax(cc,lconv);
+  CCPushExt(cc,0);			//left operand, converted
+  CCEmitLibCall(cc,slot);
+  cc->is_addr=0;
+  cc->aty=0;
+  cc->sty=-1;
+  cc->celem=0;		//M29 discipline: an arithmetic result states its
+  cc->celebsty=-1;	//own shape, so a literal parsed next cannot
+}			//inherit this operand's element marker
+
+/* M35: the one-operand form (unary minus). */
+U0 CCFloatNeg(CCCtrl *cc,I64 conv)
+{
+  if (conv>=0)
+    CCConvRax(cc,conv);
+  CCPushExt(cc,0);
+  CCEmitLibCall(cc,CC_LIB_FNEG);
+  cc->is_addr=0;
+  cc->aty=0;
+  cc->sty=-1;
+  cc->celem=0;
+  cc->celebsty=-1;
+}
+
 /* ADD RSP,8n (caller pops args; n<=15 fits the imm8 form). */
 U0 CCPopArgs(CCCtrl *cc,I64 n)
 {
