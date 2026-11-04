@@ -3,9 +3,13 @@
  * literal opacity, #ifdef/#else, #if 0 skipping garbage vs #if 1,
  * #undef/redefine, #pragma. Each tot=tot+ line is one numbered check;
  * main returns that count plus the always-one closer. Expect 12. */
-#include "T:/CC/TEST/pp1.h"
-#include "T:/CC/TEST/pp1.h"
-#include "T:/CC/TEST/pp2.h"
+/* M33: these names are PLAIN, and they resolve because a quoted include is
+ * searched for in the directory of the file that contains the directive before
+ * the header home is tried — this file is in T:/CC/TEST/, so pp1.h and pp2.h
+ * are found beside it.  (Before M33 they had to be spelled with the drive.) */
+#include "pp1.h"
+#include "pp1.h"
+#include "pp2.h"
 #define CAP 60
 #define SZ 4
 #define NAME "cap"

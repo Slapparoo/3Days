@@ -124,6 +124,12 @@ class CPrep
   I64	frm[16];
   I64	sp;
   I64	depth;		//#include recursion counter
+  /* M33: the directory of the file whose text is being scanned at each
+   * #include depth, always with a trailing '/', or "" when the name says
+   * nothing about a directory (a bare name, or a caller that named no file at
+   * all).  A quoted `#include "x.h"` looks here first; `<x.h>` never does,
+   * which is what gcc does with angle brackets too. */
+  U8	dir[CC_INC_MAX+2][CC_TOK_MAX];
 };
 
 /* Same-unit forward declarations use `extern` (see the CC.HH note:
@@ -140,6 +146,7 @@ extern I64 CCPrepArgs(CCCtrl *cc,U8 *p,I64 n,I64 *pa,I64 *pn,I64 *pc);
 extern U0 CCPrepDefined(CCCtrl *cc,CPrep *pp,CMacScan *ms,I64 wl);
 extern U0 CCPrepTrim(U8 *p,I64 *pa,I64 *pn);
 extern U8 *CCSrc(U8 *fn);	//defined in CC.HC (file read)
+extern U0 CCPrepDir(CPrep *pp,I64 k,U8 *fn);
 
 U0 CCPrepErr(CCCtrl *cc,U8 *msg)
 {
@@ -2275,10 +2282,18 @@ U0 CCPrepCond(CPrep *pp,I64 parent,I64 cond)
 
 I64 CCPrepDirective(CCCtrl *cc,CPrep *pp,U8 *q,U8 *e)
 {
-  U8 kw[CC_TOK_MAX],nm[CC_TOK_MAX],path[CC_TOK_MAX],full[CC_TOK_MAX+16];
+  U8 kw[CC_TOK_MAX],nm[CC_TOK_MAX];
+  /* A name read from the directive is at most CC_TOK_MAX-16 characters, but the
+   * path that gets OPENED can be longer than that: it is the includer's
+   * directory (up to CC_TOK_MAX-1 characters, since that is what CCPrepDir can
+   * store) joined with the name.  Both the join buffer and `path` are sized for
+   * the pair, because the winner of the search is copied back into `path` and a
+   * 128-byte destination for a 240-byte source would have written off the end of
+   * this function's stack frame (M33). */
+  U8 path[2*CC_TOK_MAX],full[2*CC_TOK_MAX];
   U8 msg[CC_TOK_MAX];
   U8 *inc,*start;
-  I64 accept,par,f,mi,cond,i,close;
+  I64 accept,par,f,mi,cond,i,close,hit;
 
   accept=CCPrepAccept(pp);
   q++;				//'#'
@@ -2354,16 +2369,36 @@ I64 CCPrepDirective(CCCtrl *cc,CPrep *pp,U8 *q,U8 *e)
     while ((start<q)&&(i<(CC_TOK_MAX-16)))
       path[i++]=*start++;
     path[i]=0;
-    //Plain names come from the header home; explicit paths pass
-    //through untouched (drive-qualified or leading '/').
-    if ((path[0]=='/')||(path[1]==':'))
-      ;
-    else
+    //M33: an explicit path (a leading '/', or a drive letter at [1]) opens as
+    //written.  Otherwise the QUOTED form looks in the directory of the file
+    //that contains the directive first and only then in the header home, while
+    //the angle-bracket form goes straight to the header home — the split gcc
+    //makes between `"` and `<`.  FileFind is the probe because, unlike
+    //FileRead, it says nothing when the answer is no: without it, every quoted
+    //include of a header that lives in the header home would print a kernel
+    //"File not found" line for the attempt that legitimately failed first.
+    hit=0;
+    if (!((path[0]=='/')||(path[1]==':')))
     {
-      StrCpy(full,"T:/CC/INC/");
-      i=StrLen(full);
-      StrCpy(full+i,path);
-      StrCpy(path,full);
+      if (((close=='"')&&(pp->dir[pp->depth][0])))
+      {
+        StrCpy(full,pp->dir[pp->depth]);
+        i=StrLen(full);
+        StrCpy(full+i,path);
+        if (FileFind(full))
+        {
+          StrCpy(path,full);
+          hit=1;
+        }
+      }
+      if (!hit)
+      {
+        //Plain names come from the header home.
+        StrCpy(full,"T:/CC/INC/");
+        i=StrLen(full);
+        StrCpy(full+i,path);
+        StrCpy(path,full);
+      }
     }
     if (pp->depth>=CC_INC_MAX)
     {
@@ -2377,6 +2412,8 @@ I64 CCPrepDirective(CCCtrl *cc,CPrep *pp,U8 *q,U8 *e)
       cc->errs++;
       return FALSE;
     }
+    //The file just opened is the includer for anything IT includes (M33).
+    CCPrepDir(pp,pp->depth+1,path);
     pp->depth++;
     f=CCPrepText(cc,pp,inc);
     pp->depth--;
@@ -2514,25 +2551,158 @@ I64 CCPrepDirective(CCCtrl *cc,CPrep *pp,U8 *q,U8 *e)
   return TRUE;
 }
 
+/* M33: the directory a file lives in, with its trailing '/', written into
+ * pp->dir[k].  "" when the name has no directory part: that is the case where
+ * only the header home can be searched, and it is also what a driver that hands
+ * prep bare text gets, so the feature costs nothing where it cannot apply. */
+U0 CCPrepDir(CPrep *pp,I64 k,U8 *fn)
+{
+  U8 *d;
+  I64 i,last;
+
+  d=pp->dir[k];
+  i=0;
+  last=-1;
+  while ((fn[i])&&(i<(CC_TOK_MAX-1)))
+  {
+    if (fn[i]=='/')
+      last=i;
+    i++;
+  }
+  if (last<0)
+  {
+    d[0]=0;
+    return;
+  }
+  i=0;
+  while (i<=last)
+  {
+    d[i]=fn[i];
+    i++;
+  }
+  d[i]=0;
+}
+
+/* M33: is the physical line [p,p+n) continued onto the next one?  Returns the
+ * offset of the splicing backslash, or -1.  C splices a backslash immediately
+ * followed by a new-line; a backslash with spaces or tabs between it and the
+ * new-line is not a splice in C99, but gcc splices it anyway (with a warning)
+ * and deletes only the backslash, keeping the whitespace — and that is the
+ * shape real code uses, so lite follows gcc's reading and stays silent.  The
+ * backslash must have a new-line after it: a file that ENDS with a backslash
+ * and no new-line keeps it as an ordinary byte (probed against gcc). */
+I64 CCPrepCont(U8 *p,I64 n)
+{
+  I64 i;
+
+  i=n;
+  while ((i!=0)&&(((p[i-1]==' ')||(p[i-1]=='\t'))))
+    i--;
+  if (((i==0)||(p[i-1]!='\\')))
+    return -1;			//i==0: the line was nothing but whitespace,
+				//and `i` did NOT move only when the line ended
+				//in whitespace-or-nothing, so it is not itself a
+				//sign of anything — a line that ends directly
+				//in the backslash leaves `i` at `n`, and that is
+				//the common case (my first version treated it as
+				//the odd one and never spliced anything).
+  return i-1;
+}
+
+/* M33: assemble the logical line that starts at `in` — one physical line, plus
+ * every physical line a trailing backslash splices onto it — and return its
+ * text: `in` unchanged when nothing was spliced, otherwise a copy in the line
+ * buffer (*plnb, allocated on first use and never freed, like the rest of the
+ * unit's small buffers).  *plen is the LENGTH OF THAT TEXT and must be used with
+ * the pointer it is returned with — the two only live in the same buffer when
+ * something was spliced, and a pointer into the original text paired with a
+ * pointer into the copy would let a directive scan read across two unrelated
+ * allocations.  *pterm receives the terminator byte ('\n' or NUL) of the LAST
+ * physical line consumed, which is where the caller resumes, and *plines the
+ * number of physical lines it took, because the caller emits one output newline
+ * per physical line so the line structure the C parser sees still matches the
+ * source.  Joining
+ * happens here, before anything recognises a directive, a comment or a literal,
+ * because that is the order the translation phases have: it is why `// foo \`
+ * swallows the following line, why a `#define` body can continue, and why
+ * `a1\` + newline + `2[3];` declares `a12`. */
+U8 *CCPrepLogical(U8 *in,U8 **pterm,I64 *plen,I64 *plines,U8 **plnb,I64 *pcap)
+{
+  U8 *q,*e,*out;
+  I64 lines,off,bs;
+
+  e=in;
+  while ((*e)&&(*e!='\n'))
+    e++;
+  if (((*e!='\n')||(CCPrepCont(in,e-in)<0)))
+  {
+    *pterm=e;
+    *plen=e-in;
+    *plines=1;
+    return in;				//the ordinary case: no copy at all
+  }
+  if (!(*plnb))
+  {
+    //The joined text is always SHORTER than what is still ahead of us, so one
+    //allocation for the rest of this file is enough and never overruns.
+    *pcap=StrLen(in)+16;
+    *plnb=MAlloc(*pcap);
+  }
+  out=*plnb;
+  off=0;
+  lines=0;
+  q=in;
+  while (TRUE)
+  {
+    e=q;
+    while ((*e)&&(*e!='\n'))
+      e++;
+    lines++;
+    bs=0;
+    if (*e=='\n')
+      bs=CCPrepCont(q,e-q);		//-1 when this line ends the logical line
+    if (bs<0)
+    {
+      MemCpy(out+off,q,e-q);		//the whole last physical line
+      off+=e-q;
+      break;
+    }
+    MemCpy(out+off,q,bs);		//everything except the backslash
+    off+=bs;
+    if (!(*(e+1)))
+      break;				//a trailing backslash with no line after
+    q=e+1;
+  }
+  out[off]=0;
+  *pterm=e;
+  *plen=off;
+  *plines=lines;
+  return out;
+}
+
 I64 CCPrepText(CCCtrl *cc,CPrep *pp,U8 *in)
 {
   CMacScan ms;
-  U8 *q,*e;
-  I64 accept,sp0;
+  U8 *q,*e,*txt,*lnb,*term;
+  I64 accept,sp0,lines,len,k,lncap;
 
   //Every file must close the conditionals it opened, whether it is the main
   //translation unit or an #include: the frame stack is shared, so an open #if
   //left behind by an included file would silently swallow the rest of the
   //INCLUDER, not just the header.
   sp0=pp->sp;
+  lnb=NULL;				//the joined-line buffer, allocated by
+  lncap=0;				//CCPrepLogical on the first splice
   while (*in)
   {
-    q=in;
+    //M33: one logical line per iteration.  Ordinarily that IS the physical
+    //line and `txt` is `in` unchanged; only a line that ends with a backslash
+    //costs a copy.
+    txt=CCPrepLogical(in,&term,&len,&lines,&lnb,&lncap);
+    e=txt+len;				//the end of THIS text, in THIS buffer
+    q=txt;
     while ((*q==' ')||(q=='\t'))
       q++;
-    e=q;
-    while ((*e)&&(*e!='\n'))
-      e++;
     accept=CCPrepAccept(pp);
     if (*q=='#')
     {
@@ -2541,12 +2711,12 @@ I64 CCPrepText(CCCtrl *cc,CPrep *pp,U8 *in)
     }
     else if (accept)
     {
-      //Scan from `in`, not `q`: q exists only to find the '#' —
+      //Scan from `txt`, not `q`: q exists only to find the '#' —
       //scanning from it would silently strip each line's indentation.
       //A source line is scanned with nothing disabled (ms.mask 0), no
       //invocation in progress (ms.ex NULL) and the output as destination.
-      ms.p=in;
-      ms.n=e-in;
+      ms.p=txt;
+      ms.n=e-txt;
       ms.i=0;
       ms.mask=0;
       ms.dst=0;
@@ -2557,12 +2727,21 @@ I64 CCPrepText(CCCtrl *cc,CPrep *pp,U8 *in)
       CCPrepScan(cc,pp,&ms);
     }
     //Preserve the line, even for dropped text: the parser sees the
-    //same line structure the source had.
-    CCPrepPut(cc,pp,"\n",1,0);
-    if (*e)
-      in=e+1;
+    //same line structure the source had.  A logical line that ate N physical
+    //lines emits N newlines, so splicing does not shift the lines after it
+    //(M33) — the joined text lands where the first line was and the rest of
+    //the lines it consumed become blank ones, which is what the C parser
+    //makes of them anyway.
+    k=0;
+    while (k!=lines)
+    {
+      CCPrepPut(cc,pp,"\n",1,0);
+      k++;
+    }
+    if (*term)
+      in=term+1;
     else
-      in=e;
+      in=term;
   }
   if (pp->sp!=sp0)
   {
@@ -2582,6 +2761,11 @@ U8 *CCPrep(CCCtrl *cc,U8 *text)
   pp.pos=0;
   pp.sp=0;
   pp.depth=0;
+  //M33: the directory of the file being compiled, so a quoted include in the
+  //main file finds a header lying beside it.  `cc->fn` is set by whoever read
+  //the text; when nobody did, this is "" and only the header home is searched,
+  //which is exactly the old behavior.
+  CCPrepDir(&pp,0,cc->fn);
   //M31: the argument scratch starts the same size as the output. It holds, at
   //any moment, only the expanded arguments of the invocations currently open,
   //so it stays small in ordinary code even when a header defines dozens of

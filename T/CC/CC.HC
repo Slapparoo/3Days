@@ -17,7 +17,15 @@ CCCtrl cc;
 
 U0 CCInit(CCCtrl *c)
 {
+  U8 nm[CC_TOK_MAX];
+  //M33: the caller names the file whose text is about to be compiled BEFORE
+  //calling in, and prep needs that name to resolve `#include "x.h"` against the
+  //includer's directory, so the zeroing has to carry it across.  A fixed-size
+  //MemCpy rather than a string copy: `fn` is an array, not a promise that a NUL
+  //is anywhere inside it.
+  MemCpy(nm,c->fn,CC_TOK_MAX);
   MemSet(c,0,sizeof(CCCtrl));
+  MemCpy(c->fn,nm,CC_TOK_MAX);
   //sty/psty carry tag ids; the zeroed image would alias tag 0, so the
   //"not a struct" sentinel has to be -1 from the start.
   c->sty=-1;
@@ -414,12 +422,21 @@ I64 CCRunArgv(U8 *fn,I64 argc,U8 **argv)
 {
   U8 *text=CCSrc(fn);
   I64 (*entry)();
-  I64 rc;
+  I64 rc,i;
   if (!text)
   {
     "CC ERROR: cannot read %s\n",fn;
     return -1;
   }
+  //M33: hand prep the name of the file the text came from.  Bounded copy: the
+  //driver's string can be longer than the field.
+  i=0;
+  while ((fn[i])&&(i<(CC_TOK_MAX-1)))
+  {
+    cc.fn[i]=fn[i];
+    i++;
+  }
+  cc.fn[i]=0;
   if (!CCCompile(&cc,text))
     return -1;
   //Set AFTER CCCompile: CCInit zeroes the control block.

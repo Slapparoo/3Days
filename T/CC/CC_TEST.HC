@@ -338,6 +338,14 @@ CCAssert(45,"T:/CC/TEST/macros.c","macros");
  * evaluating once a branch is taken, #error/#warning, and text inside #if 0
  * that must never be parsed, expanded or read. */
 CCAssert(43,"T:/CC/TEST/cond.c","cond");
+/* M33: line continuations and includer-relative #include — a body, a parameter
+ * list, a name, a ## operand, an #if condition, a call's argument list, a
+ * string, a character constant, an identifier, an initializer and a for header
+ * all crossing the splice; the whitespace that survives on each side of it; a
+ * `//` line and a block comment both claiming the line below them; and a quoted
+ * name resolving against the directory of the header that wrote it rather than
+ * the main file's directory. */
+CCAssert(30,"T:/CC/TEST/cont.c","cont");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

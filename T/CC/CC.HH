@@ -245,6 +245,12 @@ class CSym
 class CCCtrl
 {
   U8	*src;		//source text (MAlloced, NUL terminated)
+  U8	fn[CC_TOK_MAX];	//M33: the file that text came from, set by the caller
+			//that read it ("" when nobody knows).  Only the
+			//preprocessor looks at it: it is what lets
+			//`#include "x.h"` find a header beside the includer.
+			//Prep-time only, like the macro table, and never in a
+			//saved object.
   U8	*pc;		//lexer cursor into src
   I64	tk;		//current token kind
   I64	tk_kw;		//keyword id when tk==TK_IDENT

@@ -103,7 +103,8 @@ prototypes parse), `typedef` for scalar/pointer aliases (`typedef
 unsigned long size_t;`), a line-oriented preprocessor-lite (function-like
 `#define` with arguments, `#`, `##`, `...` and `__VA_ARGS__` since M31, and
 `#if`/`#elif` expressions with `defined()`, `#elif`, `#error` and `#warning`
-since M32), and the
+since M32, line continuations and a `#include "x.h"` that is searched for
+beside the file that writes it since M33), and the
 adapted-musl (MIT) headers in `T:/CC/INC/`: stdio.h, stdlib.h,
 string.h, stddef.h (guarded, include each other by plain name).
 
@@ -317,14 +318,16 @@ Not supported — each currently fails with a compile diagnostic:
 - Preprocessor pieces that lite skips — M31 closed the function-like
   `#define F(a)` gap (arguments, nesting, variadic tails, `#` and `##`) and
   M32 closed the conditional gap (real expressions in `#if`/`#elif`,
-  `defined()`, `#elif`, `#error`, `#warning`), so what is left is `#line`,
-  includes relative to
-  the includer's directory (plain names resolve ONLY against
-  `T:/CC/INC/`; drive-qualified or leading-`/` paths are opened as
-  written), line-continuation backslashes, and `#if` interacting
-  inside block comments (prep is line-shaped; keep conditionals and
-  block comments disjoint, as real code does). Three function-like
-  edges stay open on purpose, all three pinned against `gcc -E`: an
+  `defined()`, `#elif`, `#error`, `#warning`), and M33 closed the two shape
+  gaps that were left: `\` at the end of a line now splices the next one in,
+  and a quoted `#include` name is searched for in the directory of the file
+  that contains the directive before the header home is tried (a
+  drive-qualified or leading-`/` name is still opened exactly as written, and
+  `<name>` still goes only to `T:/CC/INC/`). What is left of M13's list is
+  `#line` and `#if` interacting inside block comments (prep is line-shaped;
+  keep conditionals and block comments disjoint, as real code does). Three
+  function-like edges stay open on purpose, all three pinned against
+  `gcc -E`: an
   argument LIST that runs off its line is an error here and fine in C
   (line-shaped again); a name that reaches the scanner only by
   SUBSTITUTION is not rescanned, so `#define APPLY(f,a) f(a)` invoked
@@ -339,7 +342,22 @@ Not supported — each currently fails with a compile diagnostic:
   is CONSUMED by lite while `gcc -E` forwards it to the compiler proper, so a
   file containing one cannot be diffed token for token; and `#warning` is a
   note line here where C99 has no such directive at all (gcc calls it an
-  extension, and `-pedantic-errors` turns it into an error).
+  extension, and `-pedantic-errors` turns it into an error). Three
+  continuation edges stay open on purpose, all three pinned against `gcc`:
+  lite splices where C99 says a splice needs the `\` and the new-line adjacent
+  and gcc only warns (`backslash and newline separated by space`), it splices a
+  `\` + new-line that ends the FILE (gcc warns `backslash-newline at end of
+  file`) while the backslash that ends a file with NO new-line stays an ordinary
+  byte and is a stray-character error in both engines, and it never says
+  anything, so all three costs are silence where gcc prints a warning — never a
+  different translation unit. Two path limits bound where a relative include can
+  reach, and neither is new with M33: only `CC_TOK_MAX-1` characters of an
+  includer's directory are kept, so a chain of directories deeper than that stops
+  resolving relative names, and the file layer caps a NAME at 37 characters —
+  probed through `FileFind` and `FileRead` on both drives, a 37-character final
+  component opens and a 38-character one is simply not there, while a 153- and an
+  182-character PATH of short components opens happily. A header whose own name is
+  38 characters or longer therefore cannot be included at all, from any rule.
 - Structs: no by-value passing or return, no array members and no
   by-value members of MULTI-slot tags (one-slot tags — any union, any
   single-member struct — are by-value since M19), tags must be defined
@@ -441,7 +459,7 @@ Not supported — each currently fails with a compile diagnostic:
 | `CC_SYM.HC` | symbol table, variable load/store                |
 | `CC_PARSE.HC`| recursive-descent parser, direct emission      |
 | `CC.HC`     | umbrella include, `CCInit`/`CCSrc`/`CCRunFile`, `CCSave`/`CCLoad` |
-| `CC_PREP.HC`| M13 preprocessor-lite + M31 function-like macros + M32 conditionals (`#include`/`#define`/`#undef`/`#if`-family), runs on user text before the prelude is prepended |
+| `CC_PREP.HC`| M13 preprocessor-lite + M31 macros + M32 conditionals + M33 continuations and relative includes (`#include`/`#define`/`#undef`/`#if`-family), runs on user text before the prelude |
 | `CC_LIB.HC` | M12 zero-arg delegation helpers (spliced into `CC.HC` after `CCCtrl cc;`) |
 | `INC/*.h`   | M13 adapted-musl (MIT) headers: `stdio.h` `stdlib.h` `string.h` `stddef.h` — guarded, trimmed to the implemented surface |
 | `CC_TEST.HC`| test harness (PASS/FAIL per file in `TEST/`)     |
@@ -751,6 +769,13 @@ Not supported — each currently fails with a compile diagnostic:
    unterminated-`#if` check — see M32. What the evaluator cannot fold is still
    rejected: no `sizeof`, no string literals, and a name that survives
    expansion is 0, exactly as C says.]**
+   **[M33 put a line-shape step in front of the line loop: a trailing `\`
+   splices the next physical line into the one the scanner sees, so a
+   directive, a comment and a literal are all recognised on the JOINED line,
+   and it made `"x.h"` resolve against the directory of the file that contains
+   the directive before `T:/CC/INC/` (while `<x.h>` still goes only to
+   `T:/CC/INC/`) — see M33. Skipped regions still emit one newline, now per
+   PHYSICAL line consumed, so a splice shifts nothing.]**
    Tables (macros, typedefs) live in CCCtrl, are compile-time only,
    and never touch the object format — a header-using program
    save/reloads identically (`objhdr` probe: 16/16 across reloads).
@@ -1960,6 +1985,105 @@ Not supported — each currently fails with a compile diagnostic:
    decay 28/28, fptr 27/27, ptrinit 25/25 and structinit 22/22 unchanged. Prep
    and the lexer live under `T/`, so no HCRT.BIN rebuild is involved.
 
+ - [x] **M33** line continuations, and `#include "x.h"` resolved against the
+   file that wrote it — the last two gaps on M13's own list of what
+   preprocessor-lite skips. A backslash ending a physical line now splices the
+   next one into it, and it happens where the text is READ: `CCPrepText` asks
+   `CCPrepLogical` for one logical line before deciding whether it is a
+   directive, so a `#define` BODY, its PARAMETER list, its NAME, the right
+   operand of a `##`, an `#if` condition, an `#ifdef` name, an `#include` name,
+   a macro call's ARGUMENT LIST, one argument of it, a call in ordinary text, a
+   string literal, a character constant, an identifier in a declarator, an
+   initializer list and a `for` header all cross the splice through one call,
+   and the C parser downstream never learns that anything happened. The same
+   order is what makes a `//` claim the following line, makes a block comment
+   pick its terminator up from the line below, and makes a body swallow a whole
+   line even when that line was a directive — with `#define EATS \` above
+   `#define INSIDE2 1`, INSIDE2 is NOT defined, because the directive that
+   would define it became the tail of the body. **The insight: the observable
+   rule is about whitespace, not about the backslash.** The newline and the
+   backslash are both deleted and every other byte keeps its place, so the space
+   BEFORE a backslash survives (`STR(1 ` + splice + `2)` stringizes `1 2`, two
+   tokens, not `12`) while whitespace AFTER it goes with the newline (`12` +
+   backslash + two spaces + newline + `34` is the one number 1234, and `12 \` +
+   newline + `34` is `12 34`, two numbers). C99 requires the `\` and the new-line
+   to be adjacent, gcc splices anyway with `backslash and newline separated by
+   space`, and lite follows gcc's result and stays silent — a divergence in
+   noise, never in a translation unit. A `\` that ends a file WITH a new-line is
+   still a splice (warning in gcc, silence here); a `\` that ends a file with NO
+   new-line is not a splice at all and stays an ordinary byte, which is why both
+   engines call `int a[1];\` at EOF a stray character. One output newline is
+   emitted per PHYSICAL line consumed, so M13's rule that the parser sees the
+   source's line structure survives a splice instead of being broken by it.
+   **The second insight: the includer's directory is per include DEPTH, not a
+   fact about the main file.** `CPrep.dir[depth]` is filled from the path that
+   was opened at that depth, so `contaux.h` in `T:/CC/TEST/` reaches
+   `sub/leafh.h` from the main file's directory while `leafh.h` reaches
+   `leafb.h` from ITS OWN — and the `leafb.h` lying beside the main file, same
+   macro with a different value, is never opened. Proving that needed two
+   probes that a token diff cannot supply: headers with the SAME name in the
+   includer's directory and in the header home with DIFFERENT bodies, so the
+   VALUE that comes out says which directory answered, and a decoy in the main
+   file's directory that only a header-relative rule would skip. `<name>` keeps
+   going straight to the header home, the split gcc makes between the two forms.
+   `FileFind` is the existence probe, not `FileRead`: a fallback chain that
+   asked `FileRead` would print a kernel `File not found` line for every
+   home-resident header, on the attempt that was always going to fail. The name
+   of the file being compiled travels in `CCCtrl.fn` — `CCRunArgv` records it,
+   `CCInit` carries it across the zeroing (a fixed-size `MemCpy`, because it is
+   an array and nobody promised a NUL inside it), `CCPrep` seeds `dir[0]` from
+   it — so a driver that reads text itself has to name the file too: the reload
+   driver's stale name was correct only because all twelve of its fixtures share
+   one directory, which is the worst kind of passing test. **Landmine: the
+   scan-back's "did not move" index is the COMMON case, not the failure.**
+   `CCPrepCont` finds the backslash by stepping back over trailing spaces, so a
+   line that ends directly in the backslash leaves the index where it started;
+   reading that as "no continuation" spliced nothing, and every shape then
+   failed with its own unrelated message (`bad parameter name in #define`,
+   `unterminated argument list in a macro invocation`, `unexpected token in a
+   #if expression`) so it looked like four bugs. The corpus diff named it in one
+   line: our output still contained the backslash. **Landmine: a helper that
+   returns text from either of two buffers must return the length with it.** A
+   caller that kept computing the line end from the original text paired a
+   pointer into one allocation with a length from another, a directive scanned
+   unrelated bytes, and the diagnostic was `unknown directive '#'` in a file
+   with no stray `#`. **Landmine: the joined path is longer than either of its
+   parts.** An includer directory of up to `CC_TOK_MAX-1` characters joined with
+   a name of up to `CC_TOK_MAX-16` needs more than `CC_TOK_MAX` to hold it, and
+   the winner of the search is copied back into the caller's `path` — sized for
+   the pair now, or it would have written off the end of the HolyC stack frame.
+   **Landmine: a fixture has to be RUN.** My `for (j=0;j!=3;j++) j=j+1;` check
+   incremented `j` twice per lap, so it went 0, 2, 4 and never equalled 3: an
+   infinite loop, in BOTH engines, in perfect agreement. A token diff against
+   `gcc -E -P` cannot see that, and agreement between two compilers about a
+   wrong loop is not evidence. Verification: the continuation corpus is 30 shapes
+   compared with `gcc -std=gnu99 -Wall -E -P` token for token — 29 identical,
+   including `//` swallowing a line, a block comment ending on a continued line,
+   a `##` operand and an `#ifdef` name arriving from the next line, a chain of
+   three splices and the four whitespace shapes above — and the 30th (`junk`
+   pulled into a skipped `#if`) reaches the same VERDICT in both engines with
+   different wording. The include harness is 13 cases against `gcc -std=gnu99
+   -Wall -I T:/CC/INC` and all 13 agree, six of them because a twin header in
+   both directories makes the answer observable; the verdict matrix is 20 shapes
+   and 15 agree, the five misses being warnings lite does not have (`backslash
+   and newline separated by space` twice, `backslash-newline at end of file`
+   three times — warnings even under `-pedantic-errors`) where the translation
+   unit is identical. `cont.c` is 29 checks + closer whose ENTIRE preprocessed
+   text matches `gcc -E -P`, cross-checked against gcc per check (29 identical
+   increments, both engines 30) after the loop bug above was fixed, and it pins
+   the path rules with real files: `contaux.h` reached by a plain name, its own
+   sibling include beating the decoy, and `contaux3.h` beside the main file
+   reachable only if the directory stack unwound. `preproc.c` no longer has to
+   spell its includes with a drive letter and is still 12. The suite is 84 PASS
+   x3, clean `CC TESTS: 0 failed`, with the `WARN: Unused var` set unchanged, and
+   the whole 153-shape prep oracle re-ran with exactly ONE new divergence — the
+   both-error wording case — so replacing the line loop did not move anything
+   else about prep. Saved-object reloads give cont 30/30/30 with cond 43/43/43,
+   macros 45/45/45, agcopy 28/28/28, desig 43/43/43, ptrmath 33/33/33, incr
+   42/42/42, fptab 31/31, decay 28/28, fptr 27/27, ptrinit 25/25 and structinit
+   22/22 unchanged. Prep and the drivers live under `T/`, so no HCRT.BIN rebuild
+   is involved.
+
 ## HolyC dialect gotchas (all verified in this build)
 
 - **A HolyC identifier can collide with a KERNEL macro.** `pi` is
@@ -1970,6 +2094,24 @@ Not supported — each currently fails with a compile diagnostic:
   that names the problem. The kernel headers define 2194 macro names; check a
   new identifier against them (M31's `pi` was the only collision in this
   unit) before hunting through the parser.
+- **A helper that can return text from either of two buffers must return its
+  LENGTH, and the caller must pair them.** M33's `CCPrepLogical` hands back the
+  line to scan: unchanged when nothing was spliced, a copy when something was.
+  A caller that still computed the line end from the ORIGINAL text paired a
+  pointer into one allocation with a length from another, and a directive then
+  scanned unrelated bytes — the symptom was `unknown directive '#'` in a file
+  with no stray `#` anywhere, in a function that had compiled for ten
+  milestones. Same shape in C, same trap: `ptr` and `len` are one value here.
+- **"Nothing moved" is not the same as "not found" — check which of the two is
+  the COMMON case before writing the guard.** `CCPrepCont` finds the splicing
+  backslash by scanning back over trailing spaces and tabs; when a line ends
+  directly in the backslash the scan does not move at all, so my first version
+  read the unchanged index as "no continuation" and spliced nothing. Every
+  construct that needs a splice then failed with a DIFFERENT message (`bad
+  parameter name in #define`, `unterminated argument list in a macro
+  invocation`, `unexpected token in a #if expression`), which is what made it
+  look like four bugs instead of one: the corpus diff said "our output still has
+  the backslash in it" in a single line.
 - **HolyC block comments NEST.** A C example inside kernel prose may itself
   contain a comment, and `/* ... P2(1 /*c*/, 2) ... */` compiles because the
   inner `*/` closes only the inner `/*` (probed). The mirror is the hazard: an
@@ -1977,7 +2119,12 @@ Not supported — each currently fails with a compile diagnostic:
   swallows the rest of the file — the statements below it never compile and
   the only symptom is the loader booting anyway (`ERROR: File not found:
   "Doc"`). Balance every `/*` you quote inside a comment, or write the example
-  without one.
+  without one. M33 nearly shipped exactly that: the comment above
+  `CCAssert(30,...,"cont")` quoted a `/*` to describe what the fixture pins, and
+  a HolyC comment that never closes eats every assert below it. Caught by
+  reading the inserted comment rather than by a run: as the paragraph above
+  says, the file would still have compiled, and the only sign was a PASS count
+  that had stopped growing.
 - **A fixture mark line must carry exactly ONE `%d`, fed by `tot`.** The gcc
   cross-check puts `printf("@N=%d\n",tot);` after every check; if the line is
   built by substituting N into a format that still held two `%d`, the
@@ -2304,4 +2451,22 @@ Not supported — each currently fails with a compile diagnostic:
   by zero. `CPrepExpr.bad` stops the walk after the first diagnostic so one
   malformed condition reports once. Condition text shares the fixed
   CC_PREP_SCRA scratch with macro arguments and is released after use.
+- Prep reads LOGICAL lines and knows ONE directory per include depth (M33):
+  `CCPrepText` asks `CCPrepLogical` for the line to scan, and that helper
+  either hands back `in` unchanged or a copy in its own buffer — so the length
+  and the terminator it reports must be used WITH the pointer it returned, never
+  mixed with the original text (`e = txt + len`, `in = term + 1`). Joining
+  happens before a directive, a comment or a literal is recognised, which is the
+  only reason one mechanism covers a body, a name, a condition and a call's
+  argument list; the C parser is downstream and knows nothing about it. One
+  output newline per physical line consumed keeps that line structure.
+  `CPrep.dir[depth]` is the directory of the file being scanned at that depth
+  (`""` when the name says nothing about a directory), seeded from `cc->fn` —
+  the file whose text is being compiled, which the caller that read the text is
+  responsible for setting, `CCInit` deliberately carrying it across the
+  zeroing — and pushed per include from the path that was opened. A quoted name
+  searches `dir[depth]` first and the header home second; an angle-bracket name
+  skips the first, and `FileFind` is the probe because `FileRead` prints when
+  the answer is no.
+
 
