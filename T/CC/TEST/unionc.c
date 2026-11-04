@@ -5,6 +5,10 @@
  * kinds, and string-literal indexing. Expect 40. */
 static int sg=7;
 extern int eg;
+/* M34: `extern` only DECLARES eg. lite has one translation unit, so the object
+ * a check writes has to be defined in this file too, and C says a declaration
+ * followed by a definition of the same name is one object, not two. */
+int eg;
 register int rg;
 volatile int vg;
 auto int ag;

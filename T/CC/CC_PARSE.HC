@@ -99,6 +99,34 @@ Bool CCAcceptKw(I64 kw,CCCtrl *cc)
   return FALSE;
 }
 
+/* M34: `struct` and `union` share ONE tag namespace in C, so a use of a tag name
+ * has to name the kind it was defined as: after `struct pt { int w; };`, the
+ * declaration `union pt u;` is a constraint violation, not a second type with
+ * the same name.  A DEFINITION (`struct pt {`) is already refused outright by
+ * CCStructDef, which never looks at the kind because any redefinition fails.
+ * A USE went straight to CCStagFind and dropped the keyword, so until M34 a
+ * mismatched `union pt u;` was caught only by the "global redefined" refusal
+ * downstream; once redeclarations merged, that refusal went away and the object
+ * silently took the STRUCT's layout while the source said union.  Both
+ * tag-lookup-for-a-use sites call this. */
+I64 CCStagUse(CCCtrl *cc,U8 *tag,I64 is_union)
+{
+  I64 ti;
+
+  ti=CCStagFind(cc,tag);
+  if (ti<0)
+  {
+    CCError(cc,"undefined struct tag");
+    return -1;
+  }
+  if (cc->st[ti].isu!=is_union)
+  {
+    CCError(cc,"tag redeclared as the wrong kind (struct with union)");
+    return -1;
+  }
+  return ti;
+}
+
 Bool CCExpect(CCCtrl *cc,I64 ch,U8 *msg)
 {
   if (CCAccept(cc,ch))
@@ -631,12 +659,13 @@ I64 CCTokTypeStart(CCCtrl *cc)
  * int family, or void with anything, is an error. */
 I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
 {
-  I64 ty=-1,ti,had_int,had_char,tent;
+  I64 ty=-1,ti,had_int,had_char,tent,isun;
   *pstag=-1;
   had_int=0;
   had_char=0;
   tent=0;
   cc->spec_static=0;		//M21: the static PROMISE is per-spec;
+  cc->spec_extern=0;		//M34: and so is the extern one
   //No `continue` in HolyC (the keyword does not exist in this dialect):
   //the fold is one if/else chain per token, and each arm advances or
   //breaks. See PLAN.
@@ -652,7 +681,9 @@ I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
   {
     if ((cc->tk_kw==KW_CONST)||((cc->tk_kw==KW_SIGNED)||((cc->tk_kw==KW_EXTERN)||((cc->tk_kw==KW_STATIC)||((cc->tk_kw==KW_REGISTER)||((cc->tk_kw==KW_AUTO)||((cc->tk_kw==KW_VOLATILE)||(cc->tk_kw==KW_INLINE))))))))
     {
-      if (cc->tk_kw==KW_STATIC)
+      if (cc->tk_kw==KW_EXTERN)	//M34: `extern` is what separates a
+        cc->spec_extern=1;	//file-scope DEFINITION from a declaration
+      if (cc->tk_kw==KW_STATIC)	//of an object defined elsewhere, and a
         cc->spec_static=1;	//M21: CCDeclOne reads this after the
       if (ty<0)			//base folds — static block objects get
       {				//arena slots (see CCDeclOne)
@@ -732,18 +763,16 @@ I64 CCAcceptBase(CCCtrl *cc,I64 *pstag)
         return -1;
       }
       tent=0;
-      CCLex(cc);
+      isun=(cc->tk_kw==KW_UNION);	//M34: the kind this use claims, read
+      CCLex(cc);			//before 'struct'/'union' is consumed
       if (cc->tk!=TK_IDENT)
       {
         CCError(cc,"expected struct tag name");
         return -1;
       }
-      ti=CCStagFind(cc,cc->tk_str);
+      ti=CCStagUse(cc,cc->tk_str,isun);	//the name must be THAT kind of tag
       if (ti<0)
-      {
-        CCError(cc,"undefined struct tag");
         return -1;
-      }
       *pstag=ti;
       ty=TY_STRUCT;
       CCLex(cc);
@@ -2253,6 +2282,11 @@ U0 CCExprUnary(CCCtrl *cc)
           CCLex(cc);
           if (sym->ael)
           {
+            if (!sym->dim)		//M34: `extern int a[];` has a base slot
+            {				//and no length, and C measures only
+              CCError(cc,"sizeof of an array of unknown length");
+              return;
+            }
             //M25: keyed on the array marker, not dim>1, so `sizeof(c)`
             //for `char c[1]` is now 1 (C truth) instead of the pointer
             //size the else arm below reports for a real pointer.
@@ -4071,11 +4105,18 @@ I64 CCInitCollect(CCCtrl *cc,I64 *vals,I64 *vgrp,I64 *vk,I64 *pisstr,I64 *shp,I6
         CCError(cc,"array initializer too large");
         return -1;
       }
-      vals[n++]=ch;
-      i++;
-      if (!ch)
-        break;			//the literal's own NUL ends the list
-    }
+      vals[n]=ch;
+      vk[n]=-1;			//M34: these are VALUES, not pointers.
+      n++;			//Leaving vk[] untouched here made the
+      i++;			//arena writer read a kind out of an
+      if (!ch)			//uninitialised stack slot and take its
+        break;			//pointer branch per byte: an 8-byte
+    }				//write and an arena relocation at a BYTE
+				//offset.  The bytes still came out right in
+				//place, which is why only a saved-object
+				//reload showed it — the patch put an
+				//address where the next element lived.
+    //the literal's own NUL ends the list
     CCLex(cc);
     if (depth)
     {
@@ -5626,6 +5667,77 @@ U0 CCParseFun(CCCtrl *cc,U8 *name,I64 entry)
   CCFunRet(cc,entryflag);	//fall-off end: implicit return
 }
 
+/* M34 IMPLEMENTATION LIMIT (not a C rule): an arena object's elements start at
+ * the slot its symbol claimed and grow upward from there, so a length that
+ * arrives LATER than the declaration — `extern int a[];` ... `int a[3];` — can
+ * only be laid down while that slot is still the top of the arena.  C lays such
+ * an array out anywhere it likes; lite bakes `locals + offset` into every
+ * function compiled in between, so it refuses rather than lay one object's
+ * elements over another's.  A first declaration satisfies this by construction,
+ * its symbol having been created a moment earlier. */
+Bool CCGlobalTopUp(CCCtrl *cc,CSym *s)
+{
+  if (cc->goff==(s->offset+8))
+    return TRUE;
+  CCError(cc,"array length completed after other globals were declared");
+  return FALSE;
+}
+
+/* M34: one file-scope name is ONE object with ONE type. This checks the
+ * declarator against the declaration that already holds the storage and, when
+ * the earlier one left the length unknown (`extern int a[]`), completes it —
+ * the only new arena a redeclaration can need, and it is the same top-up
+ * CCReserveArray does for a known length. `wantty`/`wantsty` are what THIS
+ * declarator would have stored, computed exactly the way the first-declaration
+ * path stores them, including the array decay (a stored array symbol holds the
+ * DECAYED type plus its element type in `ael`, so comparing raw `ty` against it
+ * would call every array redeclaration a type conflict). Returns FALSE after
+ * reporting. */
+Bool CCGlobalSame(CCCtrl *cc,CSym *s,I64 ty,I64 base,I64 stag,I64 n,I64 n2,I64 isarr)
+{
+  I64 wantty,wantsty,m;
+
+  wantty=ty;
+  wantsty=-1;
+  if (base==TY_STRUCT)
+    if ((ty==TY_STRUCT)||(ty==TY_PTR))
+      wantsty=stag;
+  if (isarr)
+  {
+    if (wantty==TY_CHAR)
+      wantty=TY_CHARP;		//the decay the first declaration already ran
+    else if (wantty!=TY_STRUCT)
+      wantty=TY_PTR;
+  }
+  if ((s->ty!=wantty)||(s->sty!=wantsty))
+  {
+    CCError(cc,"redeclaration has a conflicting type");
+    return FALSE;
+  }
+  if (!n)
+    return TRUE;			//`[]`, or no brackets: no length stated
+  if (!s->dim)
+  {
+    if (!CCGlobalTopUp(cc,s))		//nothing has claimed above this
+      return FALSE;			//object since its slot, so its length
+    s->dim=n;				//can grow here.  The earlier
+					//declaration was the
+    s->dim2=n2;				//`extern int a[]` that left this open
+    m=n;
+    if (n2)
+      m=m*n2;
+    CCReserveArray(cc,s,base,stag,m,TRUE);
+    return TRUE;
+  }
+  if ((s->dim!=n)||((n2)&&(s->dim2!=n2)))
+  {
+    CCError(cc,"redeclaration disagrees about the array length");
+    return FALSE;
+  }
+  return TRUE;
+}
+
+
 /* One declarator of an `int|char|struct Tag` top-level statement:
  * [*] name [[n]] [= const-init], or `name(...) {` when allow_fun.
  * base==TY_STRUCT: starless == struct object (sized by the tag),
@@ -5635,6 +5747,7 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
 {
   U8 name[CC_TOK_MAX];
   I64 ty=base,val,n,n2,i,entry,fpok,pend,isarr,ivk,iisstr,fpar;
+  I64 merge,arrpend,m,grow;
   I64 stk,skw,snum;
   U8 *spc;
   U8 sstr[CC_TOK_MAX];
@@ -5652,25 +5765,71 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
   }
   if (fpok)
   {
-    s=CCSymNew(cc,fpname,SC_GLOBAL);
-    if (!s)
-      return FALSE;
-    s->ty=TY_PTR;
-    s->sty=-1;
-    s->dim=1;
-    s->dim2=0;
-    fpar=cc->fpdim;		//M26: `int (*gt[2])(int)` — an fp array
-    if (fpar)			//is an array whose elements are
-    {				//pointers: same layout, ael and
-      if (fpar>0)		//initializer machinery as any other
+    fpar=cc->fpdim;		//M26: `int (*gt[2])(int)` — an fp array is
+    s=CCSymFind(cc,fpname);	//an array whose elements are pointers: the
+    merge=0;			//same layout, ael and initializer machinery
+    if (s)			//as any other.  M34: the one-name-one-object
+    {				//rule applies here too, and this arm had no
+      merge=1;			//check at all — two declarations claimed two
+      if ((s->ty!=TY_PTR)||((s->sty)!=(-1)))
+      {
+        CCError(cc,"redeclaration has a conflicting type");
+        return FALSE;
+      }
+      if (fpar>0)		//a length is stated HERE
+      {
+        if (!s->dim)		//and the earlier declaration left it
+        {			//open, so this one completes it.  Growing
+          if (!CCGlobalTopUp(cc,s))	//means placing slots ABOVE the ones
+            return FALSE;		//this object owns, and only while
+          s->dim=fpar;		//nothing has claimed them: CCGlobalTopUp
+          CCReserveArray(cc,s,TY_PTR,-1,fpar,TRUE);	//is what checks that (an
+        }				//IMPLEMENTATION LIMIT, not a C rule).
+        else if (s->dim!=fpar)
+        {
+          CCError(cc,"redeclaration disagrees about the array length");
+          return FALSE;
+        }
+      }
+      else
+      {
+        grow=0;			//M34: a redeclaration adds no storage,
+      }				//so a brace list below fits the slots
+    }					//that exist instead of deducing more.
+    else
+    {
+      s=CCSymNew(cc,fpname,SC_GLOBAL);
+      if (!s)
+        return FALSE;
+      grow=1;
+      s->dim2=0;
+      if (fpar>0)		//a stated length reserves its slots now
       {
         s->dim=fpar;
         CCReserveArray(cc,s,TY_PTR,-1,fpar,TRUE);
       }
-      CCSetArrTy(s);
+      else if (fpar<0)
+        s->dim=0;		//M34: `dim==0` on an array means NO
+      else			//DECLARATION has stated a length.  The brace
+        s->dim=1;		//list above may still deduce one; otherwise
+      //the end-of-CCParse pass resolves it to the ONE slot this symbol
+      //claimed (see M34 and the limitations bullet) — the assumption lite
+      //already makes about a subscript past the declared length
+      //(`int a[3]; a[5]=1;`).  A plain `int (*gf)(int)` is one slot.
     }
+    s->ty=TY_PTR;
+    s->sty=-1;
+    if (fpar)
+      CCSetArrTy(s);
     if (CCTkIsPunct(cc,'='))
     {
+      if (s->has_init)		//M34: one definition, one initializer
+      {
+        CCError(cc,"redefinition");
+        return FALSE;
+      }
+      s->def=1;
+      s->has_init=TRUE;
       //M24: a global fp CAN initialize. A DEFINED function's address is
       //an arena pointer with a relocation (so a saved object re-derives
       //it after a code-buffer move), and NULL lands as plain bytes.
@@ -5678,8 +5837,17 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
       if (fpar)
       {
         //M26: the brace-list form goes through the aggregate placer,
-        //which records an arena relocation per pointer slot.
-        CCArrayInit(cc,s,TY_PTR,-1,(fpar<0),TRUE);
+        //which records an arena relocation per pointer slot.  M34: the list
+        //DEDUCES a length only where this declaration owns the layout
+        //(`grow`) — where it created the object, or where it is completing
+        //the length an earlier `extern` declaration left open.  A later
+        //declaration fits the slots that already exist, because a file-scope
+        //object cannot move once earlier code has baked its address.
+        //Deducing means growing, so the contiguity question is asked first.
+        arrpend=grow;
+        if ((arrpend)&&(!s->dim)&&(!CCGlobalTopUp(cc,s)))
+          return FALSE;
+        CCArrayInit(cc,s,TY_PTR,-1,arrpend,TRUE);
         return FALSE;
       }
       val=CCInitOne(cc,&ivk,&iisstr);
@@ -5699,9 +5867,15 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         return FALSE;
       }
     }
-    else if (fpar&&(fpar<0))
-      CCError(cc,"array size missing");	//`int (*gt[])(int);` is an
-    return FALSE;		//incomplete type with no initializer
+    //M34: the same tentative-definition rule as the object declarator
+    //below — a file-scope definition with no initializer is complete,
+    //because the arena it sits in is already zero.  The `return FALSE`
+    //below is NOT part of that guard: this arm always ends the statement
+    //here, and a return that slid inside the guard was skipped for every
+    //`extern` declaration (see the PLAN gotcha).
+    if (!cc->spec_extern)
+      s->def=1;
+    return FALSE;
   }
   while (CCAccept(cc,'*'))
   {
@@ -5731,19 +5905,15 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
       cc->entry_off=entry;
     return TRUE;
   }
+  /* M34: the brackets are read into n/n2/pend BEFORE the symbol is touched,
+   * so an earlier declaration of the same name can be compared with what this
+   * one says before either of them allocates anything — and the storage of a
+   * merged object belongs to the first declaration, so the second must not
+   * claim a slot of its own. */
   s=CCSymFind(cc,name);
-  if (s)
-  {
-    CCError(cc,"global redefined");
-    return FALSE;
-  }
-  s=CCSymNew(cc,name,SC_GLOBAL);
-  s->ty=ty;
-  if (base==TY_STRUCT)
-    if ((ty==TY_STRUCT)||(ty==TY_PTR))
-      s->sty=stag;
-  s->dim=1;
-  s->dim2=0;
+  merge=0;
+  n=0;
+  n2=0;
   pend=0;
   isarr=0;
   if (CCAccept(cc,'['))
@@ -5765,7 +5935,6 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         CCError(cc,"array size out of range");
         return FALSE;
       }
-      s->dim=n;
     }
     if (CCTkIsPunct(cc,'['))		//M17: second dimension
     {
@@ -5784,33 +5953,77 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         CCError(cc,"second array size out of range");
         return FALSE;
       }
-      s->dim2=n2;
     }
-    if (!pend)
-    {
-      n=s->dim;			//total elements across both dims (no
-      if (s->dim2)		//ternary in the host dialect)
-        n=n*s->dim2;
-      CCReserveArray(cc,s,base,stag,n,TRUE);
-    }
-    CCSetArrTy(s);		//M25: element type, BEFORE the decay
-    if (s->ty==TY_CHAR)		//conversion below erases it
-      s->ty=TY_CHARP;
-    else if (s->ty!=TY_STRUCT)
-      s->ty=TY_PTR;
   }
-  else if (s->ty==TY_STRUCT)
-    cc->goff+=cc->st[stag].size-8;	//claim the struct's bytes
+  if (!s)
+  {
+    s=CCSymNew(cc,name,SC_GLOBAL);
+    if (!s)
+      return FALSE;
+    s->ty=ty;
+    if (base==TY_STRUCT)
+      if ((ty==TY_STRUCT)||(ty==TY_PTR))
+        s->sty=stag;
+    s->dim=1;
+    s->dim2=0;
+    if (isarr)
+    {
+      if (n)
+      {
+        s->dim=n;
+        s->dim2=n2;
+        m=n;				//total elements across both dims
+        if (n2)				//(no ternary in the host dialect)
+          m=m*n2;
+        CCReserveArray(cc,s,base,stag,m,TRUE);
+      }
+      else
+        s->dim=0;			//M34: `extern int a[]` claims the base
+    }					//slot only; a definition says how long
+    else if (s->ty==TY_STRUCT)
+      cc->goff+=cc->st[stag].size-8;	//claim the struct's bytes
+    if (isarr)
+    {
+      CCSetArrTy(s);			//M25: element type, BEFORE the decay
+      if (s->ty==TY_CHAR)		//conversion below erases it
+        s->ty=TY_CHARP;
+      else if (s->ty!=TY_STRUCT)
+        s->ty=TY_PTR;
+    }
+  }
+  else
+  {
+    merge=1;
+    if (!CCGlobalSame(cc,s,ty,base,stag,n,n2,isarr))
+      return FALSE;
+    if ((pend)&&(!s->dim))		//M34: the initializer below is about
+    {					//to deduce the length of an object
+      if (!CCGlobalTopUp(cc,s))		//whose declaration left it open: the
+        return FALSE;			//same growth question, asked before
+    }					//any of it is written.
+  }
+  arrpend=pend;
+  if ((merge)&&(s->dim))		//M34: the first declaration fixed the
+    arrpend=0;				//length, so this initializer fits it
+					//instead of deducing a new one and
+					//reserving the slots again
   if (CCAccept(cc,'='))
   {
+    if (s->has_init)			//M34: C gives a file-scope object
+    {					//exactly one definition, and only one
+      CCError(cc,"redefinition");	//may carry an initializer
+      return FALSE;
+    }
+    s->def=1;
+    s->has_init=TRUE;
     if (s->ty==TY_STRUCT)		//M23: struct|union (arrays of
     {					//them included) land member by
-      CCStructInit(cc,s,stag,pend,TRUE);	//member in the arena
+      CCStructInit(cc,s,stag,arrpend,TRUE);	//member in the arena
       return FALSE;
     }
     if (isarr)				//M22: aggregate initializers land
     {					//as arena bytes (CCArrayInit
-      CCArrayInit(cc,s,base,stag,pend,TRUE);	//handles deduction and
+      CCArrayInit(cc,s,base,stag,arrpend,TRUE);	//handles deduction and
       return FALSE;			//the tail zeros)
     }
     //M20/M24: literals, enum constants and folded expressions
@@ -5843,13 +6056,21 @@ Bool CCGlobalOne(CCCtrl *cc,I64 base,I64 allow_fun,I64 stag)
         gp[i]=val>>(8*i);		//8 bytes directly.
     }
   }
-  else if (pend)
-    CCError(cc,"array size missing");	//`int g[];` needs an initializer
+  else
+  {
+    if (!cc->spec_extern)
+      s->def=1;				//M34: a file-scope declaration without
+						//`extern` is a TENTATIVE definition, and C
+						//completes it with a zero initializer — which
+						//the already-zeroed arena supplies.  A length
+						//nobody stated (`int a[];`, `extern int a[];`)
+						//is not an error HERE either: the end-of-CCParse
+						//pass reports it, because a later declaration of
+						//the same name may still say how long it is.
+  }
   return FALSE;
 }
-
-/* `struct Tag { ... };` with '{' as the current token. Members are
- * `int|char [*] name ;` — one 8-byte slot each, byte semantics kept for
+/* `int|char [*] name ;` — one 8-byte slot each, byte semantics kept for
  * char — or `struct T *name ;` (T's tag must already be registered:
  * the tag being DEFINED is registered before its '{', so self-referential
  * `struct Node { struct Node *next; }` links work). No member arrays,
@@ -6057,6 +6278,17 @@ U0 CCParseTop(CCCtrl *cc)
   U8 sstr[CC_TOK_MAX];
   U8 tag[CC_TOK_MAX];
 
+  /* M34: a storage-class promise belongs to ONE statement.  Two statements
+   * below bind their names without ever running CCAcceptBase — a tag
+   * definition or declaration WITH declarators, and an enum body with
+   * declarators — because they already know their own type.  A promise the
+   * PREVIOUS statement left in CCCtrl would therefore leak into this one:
+   * `extern int e;` followed by `struct pt g;` would read as
+   * `extern struct pt g;`, and C does not call that a definition.  Clear them
+   * here, where every top-level statement passes through. */
+  cc->spec_extern=0;
+  cc->spec_static=0;
+
   if ((cc->tk==TK_IDENT)&&(cc->tk_kw==KW_TYPEDEF))
   {
     CCParseTypedef(cc);
@@ -6119,12 +6351,9 @@ U0 CCParseTop(CCCtrl *cc)
     }
     else
     {
-      stag=CCStagFind(cc,tag);
-      if (stag<0)
-      {
-        CCError(cc,"undefined struct tag");
+      stag=CCStagUse(cc,tag,isunion);	//M34: a use must name the kind the
+      if (stag<0)			//tag was defined as (see CCStagUse)
         return;
-      }
     }
     while ((!cc->errs)&&(cc->tk!=TK_EOF))
     {
@@ -6138,8 +6367,13 @@ U0 CCParseTop(CCCtrl *cc)
     return;
   }
   //M13: any foldable type sequence opens a top-level statement; the
-  //struct-with-body case was already handled above, so CCAcceptBase
-  //here only ever folds keywords/typedef names (TY_STRUCT cannot).
+  //struct/union case whose BODY is here was already handled above, so
+  //what reaches this CCAcceptBase is keywords and typedef names — plus a
+  //QUALIFIER in front of an existing tag (`extern struct pt g;`), which
+  //does come back TY_STRUCT with its tag id in `stag`. M34: that tag has
+  //to travel to the declarator; dropping it stored the object as
+  //TY_STRUCT with no tag, which made `sizeof` answer one slot and every
+  //member reference fail — a wrong-type global, silently.
   ty=CCAcceptBase(cc,&stag);
   if (ty<0)
   {
@@ -6152,8 +6386,8 @@ U0 CCParseTop(CCCtrl *cc)
   {
     //Only the first declarator of a statement may become a function:
     //`int a,b();` is rejected rather than silently guessed.
-    if (CCGlobalOne(cc,ty,first,-1))
-      return;
+    if (CCGlobalOne(cc,ty,first,stag))	//stag is -1 unless the spec named
+      return;				//a tag (see the comment above)
     if (cc->errs)
       return;
     if (!CCAccept(cc,','))
@@ -6182,6 +6416,25 @@ I64 CCParse(CCCtrl *cc)
       if (s->napatch)		//M18: prototype promised an address
         CCError(cc,"address of undefined function");	//nobody ever defined
     }
+    if ((s->kind==SC_GLOBAL)&&(!s->def)&&(s->refs))
+    {				//M34: `extern int g;` with no definition
+      "CC ERROR: %s is declared extern but never defined\n",s->name;	//anywhere in this unit: C finds the
+      cc->errs++;		//object in another translation unit and
+    }				//lite has only this one, so saying
+    //"it is zero" would be a guess.
+    if ((s->kind==SC_GLOBAL)&&(s->ael)&&(!s->dim))
+    {
+      s->dim=1;			//M34: `int a[];` with no initializer, and
+      s->dim2=0;			//`extern int a[];`, stated no length.  An
+    }				//incomplete type is not a C constraint
+    //violation by itself, and lite has no warning channel, so this is
+    //the model's own choice: the array IS the one slot its symbol
+    //claimed, which is the same assumption lite already makes about a
+    //subscript past the declared length (`int a[3]; a[5]=1;` compiles
+    //and writes).  gcc warns and assumes one element too, so the value
+    //a program sees here is the one C's most common implementation
+    //gives it; only `sizeof` differs, and `sizeof` of an array of
+    //unknown length is a diagnostic in both engines while it is open.
   }
   if (cc->errs)
     return -1;

@@ -346,6 +346,13 @@ CCAssert(43,"T:/CC/TEST/cond.c","cond");
  * name resolving against the directory of the header that wrote it rather than
  * the main file's directory. */
 CCAssert(30,"T:/CC/TEST/cont.c","cont");
+/* M34: file-scope redeclaration — `extern int g;` and a definition of g bind ONE
+ * object at ONE address (a function compiled between them proves it), a
+ * tentative definition is that object's zero initializer, only one declaration
+ * may carry an initializer, an `extern int a[]` gets its length from a later
+ * definition without the slots moving, a tag object declared `extern` already
+ * knows its tag, and an extern nothing defines is an error. */
+CCAssert(25,"T:/CC/TEST/decls.c","decls");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

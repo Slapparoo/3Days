@@ -232,6 +232,18 @@ class CSym
 				//global-arena storage (value survives calls)
   I64	init;		//global constant initializer value
   I64	has_init;
+  I64	refs;		//M34: a name lookup ever asked this GLOBAL for its
+			//storage (CCVarAddr sets it; a silent sizeof scan
+			//does not). C only needs a definition for an object
+			//something actually uses, which is why an unreferenced
+			//`extern int g;` is legal and a referenced one is not.
+  I64	def;		//M34: this file-scope object HAS a definition. A
+			//declaration without `extern` is a TENTATIVE
+			//definition and counts as one (C completes it with
+			//a zero initializer, which is what the zeroed
+			//arena already is); `extern int g;` alone is not,
+			//so a name whose only declarations are extern ones
+			//has no object and CCParse says so.
   I64	patches[CC_PATCHES];	//call sites (rel32 operand pos) awaiting def
   I64	npatch;
   I64	apatch[CC_PATCHES];	//M18: MOVABS-operand positions wanting this
@@ -312,6 +324,10 @@ class CCCtrl
   				//Reset at every declarator entry, since a
   				//failed peek gets rewound by the caller.
   I64	spec_static;	//M21: CCAcceptBase saw `static` in this spec
+  I64	spec_extern;	//M34: CCAcceptBase saw `extern` in this spec. C makes
+			//that the difference between a DEFINITION and a
+			//declaration that only names an object living
+			//elsewhere, so the declarator has to know it.
   I64	sym_base;	//M21: waterline of the innermost open scope:
   				//CCSymNew's dup check stops here (inner scopes
   				//may redeclare — that is shadowing)

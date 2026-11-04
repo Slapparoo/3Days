@@ -41,6 +41,48 @@ CCSave("prog.cco");                  //BEFORE running: saves the
 "rc=%d\n",CCRunObj("prog.cco",2,av); //same object, new argv
 ```
 
+## Correctness policy
+
+**The target is C's behaviour, not gcc's.** "Correct" means: the machine code
+does what C99 requires for a program C accepts, and a program C does *not*
+accept is not silently compiled into something that looks like it worked.
+Three things are easy to conflate and are kept apart deliberately:
+
+- **C's contract** — what a legal program computes. Not negotiable; a
+  difference here is a bug, always.
+- **lite's own model** — the arena, one slot per element, `sizeof` in slots,
+  one translation unit, no section a definition could live in. These are
+  design choices. Where one means lite cannot lay a legal program out the way
+  C would, the choice and its consequence are written down below; that is not
+  conformance, and it is not claimed to be.
+- **gcc's diagnostics** — almost entirely quality of implementation. gcc
+  compiles in `-std=gnu99` mode, has a warning channel, and C99 leaves the
+  boundary between "warning" and "constraint violation" partly to the
+  implementation. lite has **no warning channel**: a program is either
+  compiled or refused. So lite neither matches nor aims to match gcc line for
+  line on *which* messages appear, and a difference in that direction is
+  recorded as a scope note rather than defended as conformance.
+
+**What the verification actually measures.** Fixture VALUES against
+`gcc -std=gnu99` — gcc builds and runs the same source, lite compiles and runs
+it, and the exit codes plus the per-check marks are compared (see M14's
+verification ritual) — and the preprocessor's output against `gcc -E -P` token
+for token, because there a translation unit's token sequence IS the specified
+behaviour. Error paths are exercised, but a refusal is judged by whether
+silent acceptance would have produced wrong code, not by whether gcc printed
+the same words.
+
+**Why gcc is a witness and not the spec.** Its verdicts carry GNU extensions
+and its own inline link semantics; its warnings are numerous and move between
+releases; and on C's undefined behaviour its answer is one of several legal
+ones. `T:/CC/TEST/unionc.c` scores 40 here and 36 under gcc because three of
+its constructs are things C forbids at file scope and M19 folds by design, and
+`int a[3]; a[5]=1;` is UB, which is why the two engines agree on it only by
+accident. Where lite and gcc disagree about a program C considers legal, it is
+either a bug or a paragraph in "C subset limitations" below, and the test for
+telling those apart is: **does the difference change what the program
+*computes*, or only what gets *printed* while compiling it?**
+
 ## C subset limitations
 
 Supported: `int`/`char` scalars, pointers, arrays (M17: up to two
@@ -107,6 +149,12 @@ since M32, line continuations and a `#include "x.h"` that is searched for
 beside the file that writes it since M33), and the
 adapted-musl (MIT) headers in `T:/CC/INC/`: stdio.h, stdlib.h,
 string.h, stddef.h (guarded, include each other by plain name).
+M34 adds C's file-scope redeclaration rules: `extern int g;` DECLARES an object
+without defining it, a declaration with no `extern` is a TENTATIVE definition
+whose zero initializer is the zeroed arena it already sits in, every declaration
+of one file-scope name binds ONE object at ONE address, only one declaration may
+carry an initializer, and the length of an `extern int a[]` may arrive later —
+from brackets or from an initializer — without the object moving.
 
 Silent deviations were closed at M25: an array carries its ELEMENT TYPE
 (`s->ael`), decay and every subscript hand it on, and the subscript arm
@@ -156,8 +204,12 @@ Not supported — each currently fails with a compile diagnostic:
   function-pointer arrays initialize since M26
   (`int (*gt[3])(int)={inc,dbl,neg};`); pointer elements work since M24
   (strings, defined function names, `&globals`) because the arena slots
-  they fill carry relocations of their own. `extern int a[];` (an incomplete array declared extern) is
-  "array size missing". Braced SCALARS are accepted (`int x={5};`).
+  they fill carry relocations of their own. An array whose length no
+  declaration stated (`extern int a[];`, and `int a[];` with no initializer) is
+  ONE SLOT, silently, since M34 — gcc warns "assumed to have one element" and
+  compiles, and lite has no warning channel; see M34. A brace list longer than
+  the slots that exist is refused where gcc warns.
+  Braced SCALARS are accepted (`int x={5};`).
   Initializer VALUE edges (M24): a pointer element in a non-pointer array
   is accepted (`int a[2]={"ab"};` stores the address where C warns); a
   function name must be DEFINED by then (a bare forward reference is
@@ -259,10 +311,46 @@ Not supported — each currently fails with a compile diagnostic:
   counters survive calls, folded initializers, arrays, structs, fps and
   pointers all work — with block-scoped NAMES: independent twins per
   function, and a static may shadow a global of the same name.
-  Remaining scope deviations: a block-scope `extern int x;` becomes an
-  ordinary local (it does not link to a file-scope x); file-scope tentative double
-  definitions (`int g; int g;`) still claim two arena slots where C
-  merges one.
+  File-scope redeclaration is C's rule since M34 (see M34): `extern` declares
+  and does not define, a declaration without `extern` is a tentative definition,
+  one name is one object at one address, and `int g; int g;` costs ONE arena
+  slot. What survives of the old scope-deviation list: a block-scope
+  `extern int x;` becomes an ordinary local (it does not link to a file-scope
+  x), and `int`, `long` and `unsigned` are ONE type in this model, so a
+  redeclaration that swaps one for the other cannot be seen, let alone
+  diagnosed.
+- File-scope redeclaration edges (M34), pinned by a 44-row verdict matrix
+  grouped by the two questions the correctness policy asks: 24 programs C
+  accepts match VALUE, all 11 programs C refuses are refused (3 of them at
+  compile time where C's linker would say it, because lite is one translation
+  unit), and 9 rows are choices lite makes on purpose, listed just below, with
+  nothing unexplained. Those choices: an `extern` object that nothing in the
+  file defines is an error when something reads it and is silent when nothing
+  does, which is exactly the question a linker asks; **an array whose length no
+  declaration ever stated is one slot, silently** — `int a[];` with no
+  initializer and `extern int a[];` — because a file-scope object that IS used
+  needs a real object somewhere, lite has no warning channel to explain an
+  incomplete type, and one slot is the same assumption lite already makes about
+  a subscript past the declared length (`int a[3]; a[5]=1;` compiles and
+  writes); consequently `sizeof` of such an array answers its one slot where C
+  measures bytes, and a brace list of more elements than the slots that exist
+  is refused where gcc warns (`int (*gt[])(int); ... = {f,g};`); a late array
+  length is REFUSED outright when another global was declared between the
+  incomplete declaration and the definition — C lays such an array out anywhere,
+  lite bakes `locals + offset` into everything compiled in between, so it says
+  so rather than put one object's elements on top of another's, and that is an
+  IMPLEMENTATION LIMIT, not a C rule; `static` after `extern`, and `int g;`
+  then `long g;`, are accepted where C6.7.5 and C6.2.7 diagnose — one int type
+  and one translation unit make the difference unobservable here — while
+  `char g; int g;` is refused, because byte elements really are a different
+  object; `struct` and `union` tags share one namespace and the kind must match
+  (C6.7.2.3), so `union pt` after `struct pt {…}` refuses; an unbraced
+  function-pointer array redeclaration is treated as the one-slot object its
+  first declaration laid out; a struct or union BODY behind a storage-class
+  keyword (`extern struct q { int a; } v;`) is not a path lite knows — define
+  the tag on its own line, then declare the object; and a block-scope
+  `extern int x;` is still an ordinary local, the one divergence here that
+  changes a VALUE rather than a message.
 - Enum edges (M20): `enum x;` consumes `x` as a TAG (C's incomplete-type
   object declaration needs a separate declarator); enumerators cap at 64
   per module (CC_MAX_CONSTS), tags at 16; the constants table is flat
@@ -457,7 +545,7 @@ Not supported — each currently fails with a compile diagnostic:
 | `CC_LEX.HC` | lexer, `CCError`, and the shared escape table (M32) |
 | `CC_EMIT.HC`| machine-code emitters, prologue/return, patches  |
 | `CC_SYM.HC` | symbol table, variable load/store                |
-| `CC_PARSE.HC`| recursive-descent parser, direct emission      |
+| `CC_PARSE.HC`| recursive-descent parser, direct emission, M34 object merging |
 | `CC.HC`     | umbrella include, `CCInit`/`CCSrc`/`CCRunFile`, `CCSave`/`CCLoad` |
 | `CC_PREP.HC`| M13 preprocessor-lite + M31 macros + M32 conditionals + M33 continuations and relative includes (`#include`/`#define`/`#undef`/`#if`-family), runs on user text before the prelude |
 | `CC_LIB.HC` | M12 zero-arg delegation helpers (spliced into `CC.HC` after `CCCtrl cc;`) |
@@ -1308,6 +1396,13 @@ Not supported — each currently fails with a compile diagnostic:
    like the code buffer. `extern int a[];` still needs a size (no tentative
    extern), fp initializers take a defined function or 0, and forward uses
    diagnose rather than queue (an arena slot has no patch list).
+   **[M34 added the tentative definition: `extern int a[];` is completed by a
+   later declaration of the same name in this file, or — if none ever states a
+   length — becomes the ONE slot it already owns, and an `extern` object that
+   nothing in the file defines is a diagnostic when something uses it; see M34
+   and the limitations bullet. "An arena slot has no patch list" is unchanged,
+   and so is why a late array length can only extend the arena above its own
+   slot, and never into slots somebody else claimed.]**
    **Negative control, and the reason this is worth stating:** with the
    load-side arena patch loop neutralized, `int gi; int *gp=&gi;` +
    `gp[0]=gp[0]+1` saved once and run three times from the object gives
@@ -2084,6 +2179,123 @@ Not supported — each currently fails with a compile diagnostic:
    22/22 unchanged. Prep and the drivers live under `T/`, so no HCRT.BIN rebuild
    is involved.
 
+ - [x] **M34** file-scope redeclaration: C's tentative definitions, and what
+   `extern` actually means. A file-scope name is now ONE object with ONE
+   address and ONE type, however many times it is declared. `extern int g;`
+   DECLARES: it claims the base slot (lite has no way to name storage it does
+   not own) but is not a definition, so it says nothing until something USES it,
+   and then it says "declared extern but never defined". A declaration with no
+   `extern` IS a definition — C's tentative one — and its zero initializer is
+   not code, it is the zeroed arena the object already sits in, which is why
+   `int g; int g;`, `extern int g;` + `int g;` and `int g=7;` +
+   `extern int g;` all merge into one slot and cost nothing. **The insight: in
+   a compiler that bakes absolute arena addresses, the promise a declaration
+   makes is its OFFSET, not its symbol.** A function compiled between
+   `extern int g;` and `int g;` has already emitted `locals + s->offset`, so the
+   definition must reuse that slot instead of claiming its own — that is the
+   whole reason the first declaration owns the storage and every later one
+   merges into it, why only one declaration may carry an initializer, and why
+   the only thing a redeclaration may still ADD is length above slots nobody
+   has taken. `CSym.def` / `CSym.has_init` record what the declarations have
+   promised; `CCVarAddr` sets `CSym.refs` — the one place a name lookup turns
+   into storage — so the "never defined" report asks the question a linker asks
+   and no more, and a silent `sizeof` scan (`cc->noemit`) deliberately does not
+   answer it. The merge check compares what THIS declarator *would have* stored,
+   decay included (an array symbol holds the decayed type plus `ael`, so
+   comparing raw `ty` calls every array redeclaration a type conflict).
+   **Two silent bugs surfaced because the merge check refused to paper over
+   them.** `extern struct pt g;` does not take `CCParseTop`'s struct branch
+   (that branch requires the statement to START with `struct`), it falls through
+   to the keyword path, which received the tag id from `CCAcceptBase` and then
+   dropped it passing `-1` to the declarator: the object was TY_STRUCT with no
+   tag, so `sizeof` answered one slot and every member reference failed. Until
+   the merge check, the shape was caught only by the downstream "global
+   redefined" refusal — right verdict, wrong reason — and merging removed the
+   refusal. The sibling was `union pt u;` after `struct pt { … };`: C puts
+   struct and union tags in ONE namespace and requires the kind to match, and
+   lite looked the tag up without asking which kind it was, silently giving the
+   object the STRUCT's layout. `CCStagUse` now asks the kind at both tag-USE
+   sites (the definition form was already refused outright by `CCStructDef`) and
+   `CCParseTop` carries the tag to the declarator. **A third bug the fixture
+   caught by accident:** `char gg[4]="ab";` saved to an object and reloaded came
+   back 24 where it compiled 25. The collector's whole-object string arm filled
+   `vals[]` with the literal's bytes and never touched `vk[]`, so the arena
+   writer read a per-value "kind" out of an uninitialised stack slot, took its
+   pointer branch, and called `CCArenaPtr` per byte — an 8-byte write plus a
+   relocation record at a BYTE offset. In place that is invisible (each quad's
+   low byte is the character and the next element overwrites the byte after it),
+   so only a reload exposed it: the loader patches eight bytes at each recorded
+   position, rewriting the string's neighbours with addresses. `nafx` for that
+   test file went 3 → 0. The M30 nested-string arm already set `vk[n]=-1`; only
+   the older arm had missed it.
+   **One rule is lite's, not C's, and is written as such:** an array whose
+   length no declaration ever stated (`int a[];` with no initializer,
+   `extern int a[];`) is ONE SILENT SLOT. C calls it an incomplete type and
+   diagnoses only the uses that need a size; gcc warns "assumed to have one
+   element" and compiles. lite has no warning channel, and an object something
+   reads needs a real object somewhere, so it takes the assumption gcc makes —
+   the same one it already makes for `int a[3]; a[5]=1;`, which compiles and
+   writes. The `dim == 0` state that expresses "nobody has said" is resolved at
+   the END of `CCParse`, because C's rule is about the file and not about any
+   one declaration: `int a[];` then `int a[3];` is a legal pair, and a check
+   welded to the first declaration refused it.
+   **Landmine: a guard owns only the statement under it — reformatting can move
+   a return inside one.** A comment reflow I did while rewriting the
+   function-pointer tail left `return FALSE;` as the BODY of
+   `if (!cc->spec_extern)`. For every `extern` function-pointer declaration the
+   guard was false, the return was skipped, and the parser fell through into the
+   plain-declarator path and reported "expected name after type" — a message
+   about a name where the source has a `(`. Ten shapes, including one
+   `fptr.c` had used since M18, went red. The cause was not the fp rewrite at
+   all: it was doing comment formatting and code motion in the same edit. **And
+   the deeper one: three of the five things I had built here were diagnostics I
+   invented.** The deferred "no known length" report, the arena-contiguity
+   refusal dressed up as conformance, and the fp-array length-completion
+   machinery existed only to match gcc's pedantic warnings; a read of the
+   milestone against the correctness policy cut all three, and the fall-through
+   bug above had been introduced by the cut's own precursor while chasing them.
+   **Landmine: an invariant belongs where the question is meaningful, not in the
+   helper that happens to do the work.** My first draft of the top-up check went
+   INSIDE `CCReserveArray` as "the watermark must still be one slot past this
+   symbol's offset". That holds at every first declaration, but a block-scope
+   `static int (*t[3])(int)` reserves its slots BEFORE `CCMakeStatic` claims the
+   arena slot, so there `s->offset` is a FRAME number and the question cannot be
+   asked; a shape that had worked since M26 (fptab) started erroring. **Landmine:
+   a U0 helper that reports an error is not a guard** — the caller has to be able
+   to decline, and only the fixture noticed. **Landmine: file order is
+   load-bearing in this host.** `CCGlobalTopUp` and `CCStagUse` first went below
+   their callers and the host rejected the unit with `ERROR: Invalid lval at
+   "CCGlobalTopUp"` at the CALL site — not "unknown function" — because an
+   unresolved identifier followed by `(` parses as something else entirely.
+   **Landmine: a multi-file test driver attributes diagnostics to the wrong
+   row.** A driver that runs 12 shapes in one process reports green for shapes
+   that fail, because each run's diagnostics precede its marker line and my
+   parser gave them to the previous row; `extern` function-pointer declarations
+   looked fine for an hour. Re-prove any claim from a multi-file run with one
+   file per process. **Landmine: an existing fixture can be the thing that is
+   wrong, not the code.** `T:/CC/TEST/unionc.c` declared `extern int eg;` and
+   then WROTE eg — legal C to compile, a link failure in C, which is what lite
+   now says at compile time. The fixture got `int eg;` beside its declaration
+   rather than a weaker compiler.
+   **Verification:** `decls.c`, 24 checks + closer = 25, identical in gcc and
+   lite and cross-checked check by check (24 identical increments in both
+   engines); the six identity checks (`pa()==&ga`, `pf()==&gf[0]`, …) put a
+   function between the declaration and the definition so a moved slot shows as
+   a FALSE check rather than as a leak. The 44-row matrix, grouped by the
+   policy's two questions, gives 24/24 value matches on C-legal programs and
+   refuses all 11 C-illegal ones (3 at compile time where C's linker would),
+   with 9 rows that are the choices listed in limitations and nothing
+   unexplained; a 35-shape probe compares VALUES (30 identical); a 12-shape
+   function-pointer-array probe gives 11 identical. The suite is 85 PASS ×3,
+   clean `CC TESTS: 0 failed`, `WARN: Unused var` set unchanged; the saved
+   object for decls reloads 25/25/25 and the 13-fixture reload stress is
+   unchanged (cont 30, cond 43, macros 45, desig 43, agcopy 28, ptrmath 33,
+   incr 42, fptab 31, decay 28, fptr 27, ptrinit 25, structinit 22, decls 25).
+   The 153-shape prep oracle re-ran with an UNCHANGED divergence set (18, the
+   same 18) — M34 touches no prep code. `unionc.c` 40 and `fptab.c` 31 and
+   `fptr.c` 27, the three fixtures these fixes forced, are unchanged.
+   Everything lives under `T/`, so no `HCRT.BIN` rebuild is involved.
+
 ## HolyC dialect gotchas (all verified in this build)
 
 - **A HolyC identifier can collide with a KERNEL macro.** `pi` is
@@ -2094,7 +2306,71 @@ Not supported — each currently fails with a compile diagnostic:
   that names the problem. The kernel headers define 2194 macro names; check a
   new identifier against them (M31's `pi` was the only collision in this
   unit) before hunting through the parser.
+- **A check you add can be the first thing that tells the truth about a bug
+  upstream of it — read a new failure as evidence, not as the bug.** M34's
+  "redeclaration has a conflicting type" fired on `extern struct pt g;` followed
+  by `struct pt g;`, both legal C. The check was right and the OLD declaration
+  was wrong: a qualified tag spec does not take `CCParseTop`'s struct branch (it
+  requires the statement to START with `struct`), it falls through to the keyword
+  path, which received the tag id from `CCAcceptBase` and then passed `-1` to the
+  declarator — so the object was TY_STRUCT with no tag, `sizeof` answered one
+  slot, and every member reference failed. Before the check, the shape was caught
+  only by the downstream "global redefined" refusal: the right verdict for the
+  wrong reason, and merging declarations removed the refusal. The sibling bug was
+  `union pt u;` after `struct pt { … };` — struct and union tags share ONE
+  namespace in C and the kind must match, so looking the tag up without asking
+  its kind silently gave the object the STRUCT's layout. Ask the kind
+  (`CCStagUse`) at every tag USE; the definition form is already refused outright
+  by the redefinition check, which is why that path never needed it.
+- **A guard owns exactly the statement under it — reformatting a comment can
+  move a return inside one.** `if (cond)` followed by `return X;` is one
+  statement; if a comment reflow makes a DIFFERENT line the body, the return
+  becomes conditional and the control flow changes without changing any token
+  that looks suspicious. It happened here: a tail rewrite left
+  `return FALSE;` as the body of `if (!cc->spec_extern)`, so every `extern`
+  function-pointer declaration skipped the return, fell through into the
+  plain-declarator path and reported "expected name after type" pointing at a
+  `(`. Ten shapes went red, one of them a fixture case that had worked since
+  M18, and the fp code I had just rewritten was blamed for all of it. Do not
+  reflow comments and move code in the same edit; when a guard's body is a
+  single statement, put the comment ABOVE the guard, not between it and the
+  statement.
+- **A driver that runs several programs in one process attributes diagnostics
+  to the wrong one.** A compiled C program's `printf` output is produced while
+  its call is evaluated — i.e. BEFORE the harness marker line that reports its
+  exit code — so in a multi-file run the diagnostics for case N appear above
+  case N-1's marker. A collector that files "the lines before each marker"
+  under that marker reports green for shapes that fail, and it did: extern
+  function-pointer declarations looked fine across a 12-shape run while every
+  one of them was failing. Either run one file per process when a verdict
+  matters, or attribute the lines AFTER a marker to it and say which convention
+  you used.
+
+- **Clear a flag where every path passes, not where one path sets it.**
+  `spec_extern` and `spec_static` were reset inside `CCAcceptBase`, but a tag
+  declaration with declarators and an enum body with declarators bind their
+  names without calling `CCAcceptBase` at all, so the PREVIOUS statement's
+  promise leaked into the next: `extern int e;` anywhere earlier in a file made
+  `struct pt g;` read as a non-definition, and the fptab fixture failed on a
+  line three functions away from either declaration — which read like a
+  function-pointer bug and was a statement-boundary bug.
+- **An invariant belongs where the question is meaningful, not in the helper
+  that happens to do the work.** The late-array-length check first went INSIDE
+  `CCReserveArray` as "the arena watermark must still be one slot past this
+  symbol's offset". That is true at every first declaration, but a block-scope
+  `static int (*t[3])(int)` reserves its slots BEFORE `CCMakeStatic` claims the
+  arena slot, so at that call `s->offset` is a FRAME number and the arena
+  invariant cannot be asked at all; a shape that had worked since M26 began
+  erroring. Move it to the two places where a length is genuinely late.
+- **A parallel array read without being written is the PREVIOUS call's data,
+  and that looks plausible.** `CCArrayInit`'s `vk[]` (per-value relocation kind)
+  was read for every initializer value, but the whole-object string arm of the
+  collector wrote only `vals[]`. Bytes came out right in place, so a direct run
+  passed; a saved object reloaded wrong, because the bogus kinds sent byte
+  stores down the pointer path and filed an 8-byte patch at a byte position.
+  When a callee reads two arrays in parallel, grep for every writer of each.
 - **A helper that can return text from either of two buffers must return its
+
   LENGTH, and the caller must pair them.** M33's `CCPrepLogical` hands back the
   line to scan: unchanged when nothing was spliced, a copy when something was.
   A caller that still computed the line end from the ORIGINAL text paired a
@@ -2468,5 +2744,42 @@ Not supported — each currently fails with a compile diagnostic:
   searches `dir[depth]` first and the header home second; an angle-bracket name
   skips the first, and `FileFind` is the probe because `FileRead` prints when
   the answer is no.
+- ONE file-scope name is ONE object at ONE address with ONE type (M34): the
+  first declaration of a name claims the arena slots and every later
+  declaration merges into them, because `CCSymFind` scans newest-first over a
+  table whose file-scope entries are never erased, and `CSym.def` /
+  `CSym.has_init` record what the declarations have promised. Code compiled
+  between two declarations has already baked `locals + s->offset` as an absolute
+  address, so a redeclaration that re-claims storage leaves one half of the
+  program pointing somewhere else and nothing downstream can see it. A later
+  declaration may therefore add NOTHING except the length an `extern int a[]`
+  left open, and that only by extending `cc->goff` above the slot the object
+  already owns (`CCGlobalTopUp` — an implementation limit, not a C rule).
+  `CSym.refs` is set only by `CCVarAddr` — the one place a name lookup turns
+  into storage — and deliberately NOT by a silent `sizeof` scan
+  (`cc->noemit`), so the "declared extern, never defined" report answers the
+  question a linker asks and no more.
+  `s->dim == 0` on a global array means "no declaration has stated a length",
+  in both declarator arms, and it is a PARSING state, not a storage state: the
+  end-of-`CCParse` pass resolves it to 1 (lite's stated assumption, see the
+  limitations bullet), so nothing outside those two places may read it, and a
+  brace list may deduce only on the declaration that owns the layout (`grow` in
+  the function-pointer arm) — a later one fits the slots that exist.
+
+- Every producer of an initializer VALUE must also produce its KIND (M34):
+  `CCArrayInit` and `CCStructInit` read `vk[i]` beside `vals[i]` to decide
+  whether a value is a plain constant or a pointer needing an arena relocation,
+  so an arm of the collector that fills `vals[]` without filling `vk[]` inherits
+  whatever the previous initializer left in that stack slot. Arena relocation
+  positions are therefore 8-byte, slot-aligned quads — a byte-strided array must
+  not take the pointer branch, because the patch the loader applies is eight
+  bytes wide at a one-byte position.
+- A storage-class promise is scoped to ONE statement (M34): `CCAcceptBase` sets
+  `cc->spec_static` / `cc->spec_extern`, and `CCParseTop` CLEARS both at the top
+  of every top-level statement — because two statements bind their names without
+  calling `CCAcceptBase` at all (a tag definition or declaration WITH
+  declarators, and an enum body with declarators) and would otherwise inherit the
+  previous statement's promise.
+
 
 

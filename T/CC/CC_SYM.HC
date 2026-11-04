@@ -111,7 +111,14 @@ I64 CCMemberFind(CCCtrl *cc,I64 t,U8 *mname)
  * parser's job (pending-lvalue model: see CCCtrl is_addr). */
 U0 CCVarAddr(CCCtrl *cc,CSym *s)
 {
-  if (s->persist)
+  if ((s->kind==SC_GLOBAL)&&(!cc->noemit))
+    s->refs=1;		//M34: this is the one place a name lookup turns
+  if (s->persist)	//into storage access, so it is where "something used
+			//this global" gets recorded. C asks that question
+			//only of objects a program actually touches, which
+			//is why an unreferenced `extern int g;` is fine and
+			//a referenced one is not; a silent sizeof scan must
+			//not answer it, hence the noemit test.
   {
     //M21: `static` block object: absolute arena addressing like a
     //global; the NAME is block-scoped through the symbol table.
