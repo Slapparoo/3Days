@@ -60,9 +60,9 @@ public Bool PopUpTransform(I64 *r)
   tf->x_scale=1.0;
   tf->y_scale=1.0;
   tf->z_scale=1.0;
-  tf->é_x=0.0;
-  tf->é_y=0.0;
-  tf->é_z=0.0;
+  tf->\E9_x=0.0;
+  tf->\E9_y=0.0;
+  tf->\E9_z=0.0;
   tf->x_offset=0.0;
   tf->y_offset=0.0;
   tf->z_offset=0.0;
@@ -73,9 +73,9 @@ public Bool PopUpTransform(I64 *r)
     r[10]=tf->z_scale*GR_SCALE;
     r[15]=GR_SCALE;
 
-    Mat4x4RotZ(r,tf->é_z*pi/180.0);
-    Mat4x4RotY(r,tf->é_y*pi/180.0);
-    Mat4x4RotX(r,tf->é_x*pi/180.0);
+    Mat4x4RotZ(r,tf->\E9_z*pi/180.0);
+    Mat4x4RotY(r,tf->\E9_y*pi/180.0);
+    Mat4x4RotX(r,tf->\E9_x*pi/180.0);
 
     r[3] =tf->x_offset*GR_SCALE;
     r[7] =tf->y_offset*GR_SCALE;

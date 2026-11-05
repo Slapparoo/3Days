@@ -247,7 +247,7 @@ CSprite *SpriteTransformEllipse(I64 *r,CSprite *tmpg)
   return tmpg1;
 }
 
-CSprite *SpriteTransformRect(I64 *r,CSprite *tmpg,F64 é)
+CSprite *SpriteTransformRect(I64 *r,CSprite *tmpg,F64 \E9)
 {
   I64 x,y,z,w,h;
   F64 m1,arg1,m2,arg2,s,c,
@@ -261,8 +261,8 @@ CSprite *SpriteTransformRect(I64 *r,CSprite *tmpg,F64 é)
   tmpg1->ppa.x1=x;
   tmpg1->ppa.y1=y;
 
-  c=Cos(-é);
-  s=Sin(-é);
+  c=Cos(-\E9);
+  s=Sin(-\E9);
 
   x=x_radius*c;
   y=x_radius*s;

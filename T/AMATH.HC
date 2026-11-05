@@ -1,7 +1,7 @@
 #help_index "Math"
 public U0 R2P(F64 *_mag=NULL,F64 *_arg=NULL,F64 x,F64 y)
 {//Rect to polar
-//Returns angle in range (-ã,ã]
+//Returns angle in range (-pi,pi]
   if (_arg)
     *_arg=Arg(x,y);
   if (_mag)
@@ -16,13 +16,13 @@ public U0 P2R(F64 *_x=NULL,F64 *_y=NULL,F64 mag,F64 arg)
     *_y=mag*Sin(arg);
 }
 
-public F64 Wrap(F64 é,F64 base=-ã)
-{//Returns angle in range [base,base+2*ã)
-  F64 res=é%(2*ã);
-  if (res>=base+2*ã)
-    res-=2*ã;
+public F64 Wrap(F64 e,F64 base=-pi)
+{//Returns angle in range [base,base+2*pi)
+  F64 res=e%(2*pi);
+  if (res>=base+2*pi)
+    res-=2*pi;
   else if (res<base)
-    res+=2*ã;
+    res+=2*pi;
   return res;
 }
 
@@ -37,7 +37,7 @@ public F64 ASin(F64 s)
   F64 c;
   c=s*s;
   if (c>=1.0)
-    return ã/2.0;
+    return pi/2.0;
   c=Sqrt(1.0-c);
   return ATan(s/c);
 }
@@ -46,7 +46,7 @@ public F64 ACos(F64 c)
 {//Arc Cos (Inverse Cos).
   F64 s;
   if (!c)
-    return ã/2.0;
+    return pi/2.0;
   s=c*c;
   if (s>=1.0)
     return 0.0;
