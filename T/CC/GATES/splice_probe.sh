@@ -16,10 +16,14 @@ TGT=$ROOT/T/CC/CC_TEST.HC
 TMP=${TMPDIR:-/tmp}/opencode/splice.HC
 mkdir -p "${TMPDIR:-/tmp}/opencode"
 
-START=$(grep -n '^/\* M37: the KERNEL side of the ffmt table\.' "$TGT" | cut -d: -f1)
+PAT='^/\* M37: the KERNEL side of the ffmt table\.'
+START=$(grep -n "$PAT" "$TGT" | cut -d: -f1)
 END=$(grep -n '^I64 CCProbeFloat()' "$TGT" | cut -d: -f1)
 END=$(awk 'NR>=n {if ($0 == "}") {print NR; exit}}' n="$END" "$TGT")
-[ -n "$START" ] && [ -n "$END" ] || { echo "probe block not found in $TGT"; exit 1; }
+if [ -z "$START" ] || [ -z "$END" ]
+then
+  echo "probe block not found in $TGT"; exit 1
+fi
 
 {
   head -n $((START - 1)) "$TGT"
@@ -28,4 +32,5 @@ END=$(awk 'NR>=n {if ($0 == "}") {print NR; exit}}' n="$END" "$TGT")
 } > "$TMP"
 
 cp "$TMP" "$TGT"
-echo "replaced lines $START-$END with $(wc -l < "$SRC") lines; file now $(wc -l < "$TGT") lines"
+N1=$(wc -l < "$SRC"); N2=$(wc -l < "$TGT")
+echo "replaced lines $START-$END with $N1 lines; file now $N2 lines"

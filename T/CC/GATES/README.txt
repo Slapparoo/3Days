@@ -1,4 +1,4 @@
-T:/CC/GATES — the M37 float-printing gate battery
+T:/CC/GATES — the gate battery (M37 %f delegation, and the kernel-rebuild probes)
 =================================================
 
 Everything that PROVES a %f claim lives here, in the tree, and not in the host's
@@ -68,10 +68,15 @@ THE GATES
    renders those same directives through the kernel with 1.5's bit pattern
    (K01-K11) and with 10's (K12).  Expect `ACC rc=0` and:
 
-     grep -E '^A[0-9][0-9]\|' refuse.log | cut -d"|" -f2- | sort > a.txt
-     grep -E '^B[0-9][0-9]\|' refuse.log | cut -d"|" -f2- | sort > b.txt
-     grep -E '^K[0-9][0-9]\|' refuse.log | head -11 | cut -d"|" -f2- | sort > k.txt
+     grep -E '^A[0-9][0-9]\|' refuse.log | cut -d"|" -f2 | sort > a.txt
+     grep -E '^B[0-9][0-9]\|' refuse.log | cut -d"|" -f2 | sort > b.txt
+     grep -E '^K[0-9][0-9]\|' refuse.log | head -11 | cut -d"|" -f2 | sort > k.txt
      diff a.txt k.txt ; diff b.txt k.txt    # expect: no output, both
+
+   `-f2`, not `-f2-`: `acc.c` prints `A01|<rendering>|<n>|`, one field more than
+   the `K01|<rendering>|` lines, so `-f2-` would compare the rendering plus a
+   stray `|<count>` against the oracle and report 11 differences that are only
+   the count.  (This was measured on the rebuilt kernel of 2026-11-05.)
 
    The K-lines are the oracle, produced in the same session as the A- and B-
    lines, so this gate needs no external C compiler and no external expectation.
@@ -124,6 +129,39 @@ THE GATES
    wrong the moment someone adds a comment above line 508, and nothing but this
    audit notices.
 
+7. REBUILDING THE KERNEL IMAGE  (only needed when a file HCRT_TOS.HC includes
+   changes; nothing under T:/CC/ is in the image)
+
+     ./3d_loader -t T -c T:/CC/GATES/rebuild.HC           # writes T:/HCRT.NB.*
+     cp T/HCRT.NB.BIN HCRT.BIN && cp T/HCRT.NB.BIN T/HCRT.BIN
+     cp T/HCRT.NB.DBG.Z T/HCRT.DBG.Z
+
+   `rebuild.HC` runs the same call the GUI does, `Cmp("FULL_PACKAGE.HC",
+   "HCRT.NB.DBG.Z","HCRT.NB.BIN")`, but to a SCRATCH name and only after
+   `Cd("T:/")`.  Both details matter.  A -c run starts in the HOST cwd mounted
+   as Z: (`main.c:167-176`), so a relative name is not `T:/` - and a failed
+   `Cmp` does not merely fail, it overwrites its `out_name` with an empty
+   module: 48 bytes here, after which every boot dies with a bare SIGSEGV and
+   no message, because `tos_aot.c:250` dereferences an unchecked symbol lookup
+   before `SetupDebugger()`.  Expect `Errs:0 ... Code:105445 Size:110E70` and a
+   `T:/HCRT.NB.BIN` of the same order as the tracked `HCRT.BIN` (1115856 bytes
+   before the 2026-11-05 rebuild, 1117808 after).  The image and its `.DBG.Z`
+   are a pair - `FULL_PACKAGE.HC`'s boot reads one - so move them together.
+   Then re-run gates 1-5 against the new image: gate 4's 342 `K` rows must come
+   out byte-identical, because they are the kernel's own renderings.
+
+8. WHY THE REBUILD USED TO DIE  (host shell tool; ~60 s, writes nothing)
+
+     sh T/CC/GATES/abprobe.sh
+
+   Compiles one construct six ways against the current kernel and prints which
+   spellings the compiler accepts.  See the header of `abprobe.sh` for the rule
+   it measures and for the five source files it took to find: the kernel's
+   header spells its Greek letters as TEXT (`#define \E3 pi`, `F64 \E8`), and a
+   raw 0xE3 standing alone as a token is rejected, which is what made
+   `T:/AMATH.HC` - and only that file, of 155 - stop the whole build with
+   `Code:0 Size:0`.  Run this before concluding the compiler is broken.
+
 GENERATORS  (host tools; gcc/clang, NOT part of the compiled tree)
 ------------------------------------------------------------------
 
@@ -146,7 +184,12 @@ Each writes into the directory named by its `T:/CC/GATES/...` argument:
 `T:/CC/GATES/x` means `<repo root>/T/CC/GATES/x`.  Set `CC_REPO` to point at a
 different checkout (a worktree, for instance).  A generated file is stamped with
 the T:/ path it was generated as, so a hand edit inside a generated program is
-visible in the next regeneration diff.
+visible in the next regeneration diff.  The compiled generators themselves
+(`genm37`, `genffmt`, `mkrefuse`) are host scratch and are NOT committed; build
+one with `cc -O1 -o genm37 genm37.c` in this directory.  Only their `.c` sources,
+the tables, and the programs that decide something are in the tree - which is
+why `rows.txt` is the one file here whose lines exceed 83 characters: it is a
+table of renderings, one rendering per line, not a program.
 
 LINE LENGTH
 -----------
