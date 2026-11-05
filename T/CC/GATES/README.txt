@@ -119,7 +119,10 @@ THE GATES
 
 6. CITATION AUDIT  (host shell tool; no loader needed)
 
-     sh T/CC/GATES/citeck.sh T/CC/PLAN.md T/CC/CC_TEST.HC tracking/suggestions/*.md
+     sh T/CC/GATES/citeck.sh T/CC/PLAN.md T/CC/CC_TEST.HC T/CC/CC.HH
+         T/CC/CC_LIB.HC T/CC/CC_PARSE.HC T/CC/CC_EMIT.HC T/CC/INC/*.h
+         T/CC/TEST/*.c T/CC/GATES/*.txt T/CC/GATES/*.HC T/CC/GATES/genm38.c
+         tracking/suggestions/*.md
 
    Prints every `T:/file:NNN` reference in the arguments together with the lines
    it lands on, and flags MISSING TARGET and OUT OF RANGE.  It does not judge
@@ -127,7 +130,10 @@ THE GATES
    are there for the author to read.  Run it after any change that moves code in
    a file another file quotes lines from: a PLAN that cites `CC_EMIT.HC:508` is
    wrong the moment someone adds a comment above line 508, and nothing but this
-   audit notices.
+   audit notices.  Give it the files that HOLD citations, not just the plan:
+with no arguments it now refuses, because a run that scanned nothing
+reported nothing and read as a clean audit on 2026-11-05 while 61 fresh
+citations went unchecked.
 
 7. REBUILDING THE KERNEL IMAGE  (only needed when a file HCRT_TOS.HC includes
    changes; nothing under T:/CC/ is in the image)

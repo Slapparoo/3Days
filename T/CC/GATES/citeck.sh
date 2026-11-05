@@ -10,6 +10,15 @@
 # The scratch file below lives under /tmp because it is throwaway; nothing a
 # gate needs in order to survive a host reboot lives there.
 SCRATCH=${TMPDIR:-/tmp}/opencode/citeck.list
+# No arguments means no files were scanned, and a scan that scanned nothing
+# reports no problems.  That is not a pass, so it refuses: on 2026-11-05 a bare
+# `citeck.sh` exited 0 having checked none of the 61 citations the M38 change
+# had just added, and read as a clean audit.
+if [ $# -eq 0 ]; then
+  echo "usage: sh T/CC/GATES/citeck.sh FILE [FILE...]"
+  echo "no arguments means nothing was checked, which is not a pass: refusing"
+  exit 1
+fi
 for f in "$@"; do
   [ -f "$f" ] || continue
   if [ ! -d T/CC ]; then
