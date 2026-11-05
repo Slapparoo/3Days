@@ -1,0 +1,44 @@
+# T:/CC/GATES/mathref.txt -- the reference column of mathulp.HC.
+# One line per kernel expression: the real number it denotes, to 60
+# significant digits, and the bit pattern of the double nearest that
+# number.  sqrt/ln come from a 60-digit decimal library; asin/acos/atan
+# from pi; sin/cos/tan/sinh/cosh of 1 from their Taylor series, which
+# converge far past the last double bit for |x| <= 1.  This is NOT a C
+# library answer -- a C library is not the oracle for this compiler.  It
+# is a ruler: a U line in mathulp.HC prints `kernel quad - reference
+# quad`, which inside one binade IS an ulp count, and 0 means the kernel
+# answered the correctly-rounded double.  round(2.5) and round(3.5) are
+# scored against C's rule (away from zero) because that is the divergence
+# being measured; the kernel's own answer is nearest-even.
+#
+# R label | kernel expression | real value to 60 digits | nearest double
+R sqrt(2)     | Sqrt(2.0)           | 1.4142135623730951454746218587388284504413604
+R pow(2,.5)   | Pow(2.0,0.5)        | 1.4142135623730951454746218587388284504413604
+R sqrt(4)     | Sqrt(4.0)           | 2 | 0x4000000000000000
+R sqrt(.25)   | Sqrt(0.25)          | 0.5 | 0x3FE0000000000000
+R pow(2,10)   | Pow(2.0,10.0)       | 1024 | 0x4090000000000000
+R pow(10,3)   | Pow(10.0,3.0)       | 1000 | 0x408F400000000000
+R pow(-2,.5)  | Pow(-2.0,0.5)       | 1.4142135623730951454746218587388284504413604
+R log10(10)   | Log10(10.0)         | 1 | 0x3FF0000000000000
+R log10(1e3)  | Log10(1000.0)       | 3 | 0x4008000000000000
+R log10(1e6)  | Log10(1000000.0)    | 6 | 0x4018000000000000
+R exp(1)      | Exp(1.0)            | 2.7182818284590450907955982984276488423347473
+R exp(0)      | Exp(0.0)            | 1 | 0x3FF0000000000000
+R exp(1000)   | Exp(1000.0)         | inf | 0x7FF0000000000000
+R ln(1)       | Ln(1.0)             | 0 | 0x0000000000000000
+R ln(2.7)     | Ln(2.7)             | 0.9932517730102834452310389679041691124439239
+R acos(.5)    | ACos(0.5)           | 1.0471975511965978533623911062022671103477478
+R asin(.5)    | ASin(0.5)           | 0.5235987755982989266811955531011335551738739
+R atan(1)     | ATan(1.0)           | 0.7853981633974482789994908671360462903976440
+R sin(1)      | Sin(1.0)            | 0.8414709848078965048756572286947630345821380
+R cos(1)      | Cos(1.0)            | 0.5403023058681397650104827334871515631675720
+R tan(1)      | Tan(1.0)            | 1.5574077246549022923716165678342804312705993
+R sinh(1)     | Sinh(1.0)           | 1.1752011936438013783856604277389124035835266
+R cosh(1)     | Cosh(1.0)           | 1.5430806348152437124099378706887364387512207
+R floor(2.7)  | Floor(2.7)          | 2 | 0x4000000000000000
+R ceil(2.1)   | Ceil(2.1)           | 3 | 0x4008000000000000
+R trunc(2.7)  | Trunc(2.7)          | 2 | 0x4000000000000000
+R trunc(-2.7) | Trunc(-2.7)         | -2 | 0xC000000000000000
+R round(2.5)  | Round(2.5)          | 3 | 0x4008000000000000
+R round(3.5)  | Round(3.5)          | 4 | 0x4010000000000000
+R fabs(-2.5)  | Abs(-2.5)           | 2.5 | 0x4004000000000000

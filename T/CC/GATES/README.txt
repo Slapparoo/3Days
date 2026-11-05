@@ -162,6 +162,85 @@ THE GATES
    `T:/AMATH.HC` - and only that file, of 155 - stop the whole build with
    `Code:0 Size:0`.  Run this before concluding the compiler is broken.
 
+9. THE MATH BUILTINS  (M38: sqrt/pow/sin/... delegated to the kernel's own
+   entries, and pinned against what the kernel prints for them)
+
+      cd <repo root>
+      gcc -O1 -Wall -Wextra -o T/CC/GATES/genm38 T/CC/GATES/genm38.c
+      sh T/CC/GATES/mthgate.sh
+
+    `genm38.c` reads `mthrows.txt` — 34 rows, `K <nn> <kernel expression>
+    [<rendering>]` — and writes the two fixtures, both self-checking in
+    ffmt.c's shape: a cell that matches adds 1 to `tot`, so `rc` IS the pass
+    count and a clean run returns 34.
+
+      T:/CC/TEST/mth.c    sprintf's `%.17f`, compared byte for byte against
+                          the pinned text; `Ms<nn>|<got>|<want>|` rows.
+      T:/CC/TEST/mthp.c   printf's own `%f` in the same row (`Mp<nn>|...`), so
+                          the newer sink is visible in the log, while the cell
+                          is counted by a sprintf of the same call against the
+                          same text — exactly how gs0.c scores a printf cell.
+
+    The wrapper regenerates both from the table, runs them in ONE session
+    through `mthgate.HC` (`RUN ... rc=34` twice), requires `TOT mth 34 34` and
+    `TOT mthp 34 34`, then compares the got and want columns of every `M[sp]`
+    row and prints any row where they differ.  Its last line is `VERDICT:
+    PASS` or `VERDICT: FAIL`, and it exits nonzero on the failure.  CC_REPO
+    picks a different checkout, as for the generators above; the compiled
+    `genm38` is host scratch like `genm37` and is not committed.
+
+    The generator refuses to write ANYTHING unless the table holds exactly 34
+    `K` rows numbered 01 to 34 with no gap and no duplicate, each with a
+    non-empty rendering that fits a fixture buffer, and unless row `<nn>`'s
+    kernel expression is the entry the fixture's cell calls.  That check is
+    the point of the tool living here rather than in `/tmp`: a fixture that
+    quietly lost cells still looks like a self-checking program while `rc`
+    drops, and an expectation that drifted from the expression it describes
+    reports a PASS for the wrong call.  Both are refusals now.
+
+    WHERE THE PINNED TEXT COMES FROM, and how to check it again.  The header
+    of `mthrows.txt` records the md5 of the `HCRT.BIN` and of the `3d_loader`
+    it was measured with — that line IS its provenance, so a rendering is
+    never hand-edited and never taken from a C library: it is RE-MEASURED, and
+    if a re-measurement moves a rendering, the header's md5s move with it
+    (rebuild the image first, README.txt gate 7).  `mthmeas.HC` writes the 34
+    kernel calls out one per cell, renders each through `StrPrintJoin` at
+    `%.17f` — a bare `%f` is precision 0 here — and prints `K <nn>
+    [<rendering>]` and nothing else:
+
+      ./3d_loader -t T -c T:/CC/GATES/mthmeas.HC </dev/null > meas.log
+      grep '^K ' meas.log | awk '{print $2, $NF}' > got.txt
+      awk '/^K /{print $2, $NF}' mthrows.txt > want.txt
+      diff want.txt got.txt    # expect: no output, 34 rows on each side
+
+    Why the kernel and not libm: M38 hands the kernel's entry the argument and
+    prints what comes back, so the kernel's text IS the answer.  Where it
+    differs from C — `Round` is nearest-even, `Pow(-2.0,0.5)` returns a real
+    and not a NaN, and note that `Sqrt(4.0)` PRINTS `1.99999999999999520` even
+    though its quad IS exactly 2.0 (mathulp.HC below) — the difference is
+    the finding, and a glibc diff would hide it.  Same reason as the `%f`
+    gates below: compiling these fixtures with gcc measures the host, not lite.
+
+  Two probes ride along, because a rendering is not a value and the fixture does
+  not enter the hard domains:
+
+    ./3d_loader -t T -c T:/CC/GATES/mathulp.HC </dev/null
+    ./3d_loader -t T -c T:/CC/GATES/edgemth.HC </dev/null
+
+  `mathulp.HC` separates the two effects.  Its R lines render BIT PATTERNS of
+  doubles whose exact decimals are known (1.0, 2.0, 2.5, 3.0, 1024) and the
+  kernel prints them several ulps low -- 1.0 comes out `0.99999999999999760` --
+  so no `%f` can ever settle an ulp question.  Its U lines settle it at the quad,
+  printing `kernel answer - correctly-rounded answer` as an integer (the
+  reference column, with each real value to 60 digits, is `mathref.txt`), and
+  24 of 30 of them come out 0.  `edgemth.c` with `edgemth.HC` covers what the
+  fixture never reaches: NaN, the infinities, signed zero, overflow and
+  underflow -- 15 cells, each printed by lite and by the kernel's own call in the
+  same session, all 15 agreeing: `sqrt(-1)` gives `-92.23372036854775808`, an
+  infinity gives `i` or `-i`, `sqrt(-0.0)` keeps the sign and `fabs(-0.0)` does
+  not.  Neither file pins a golden: they are probes, and what they establish is
+  recorded in T:/CC/PLAN.md.
+
 GENERATORS  (host tools; gcc/clang, NOT part of the compiled tree)
 ------------------------------------------------------------------
 

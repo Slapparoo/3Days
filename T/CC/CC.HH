@@ -201,12 +201,42 @@
 #define CC_LIB_I2D	17
 #define CC_LIB_D2I	18
 #define CC_LIB_FMT	19	//M37: cci_fmt(dst, value_bits, directive_text)
+/* M38: math builtins, ONE slot per kernel entry; a helper body is one direct
+ * call to that entry (CC_LIB.HC), exactly like CCXStrLen and CCXFmt call
+ * theirs.  The set deliberately spans all THREE kinds of kernel math entry,
+ * because whether they bind alike from a JIT'd helper was this milestone's
+ * open question and the answer is that they do: `_intern` opcodes (`Sqrt`,
+ * `Abs`, the trig), asm `_extern` routines (`Exp`, `Floor`, `Pow`) and plain
+ * HolyC functions (`ACos`, `ASin`, `Sinh`, `Cosh`). */
+#define CC_LIB_SQRT	20	//ext[0] -> Sqrt (KERNELA.HH:4174, _intern IC_SQRT)
+#define CC_LIB_FABS	21	//ext[0] -> Abs (KERNELA.HH:4161, _intern IC_ABS)
+#define CC_LIB_EXP	22	//ext[0] -> Exp (KERNELB.HH:28, _extern _EXP)
+#define CC_LIB_LOG	23	//ext[0] -> Ln (KERNELB.HH:34, _extern _LN)
+#define CC_LIB_LOG10	24	//ext[0] -> Log10 (KERNELB.HH:35, _extern _LOG10)
+#define CC_LIB_POW	25	//ext[1]=base, ext[0]=expo (KERNELB.HH:37,
+				//_extern _POW).  PARKED REVERSED, unlike every
+				//other slot: CCLibCallM stages operands high
+				//slot first so ext[0] stays free as the
+				//CCConvRax scratch.  2 operands.
+#define CC_LIB_FLOOR	26	//ext[0] -> Floor (KERNELB.HH:31, _extern _FLOOR)
+#define CC_LIB_CEIL	27	//ext[0] -> Ceil (KERNELB.HH:23, _extern _CEIL)
+#define CC_LIB_TRUNC	28	//ext[0] -> Trunc (KERNELB.HH:41, _extern _TRUNC)
+#define CC_LIB_ROUND	29	//ext[0] -> Round (KERNELB.HH:39, _extern _ROUND)
+#define CC_LIB_SIN	30	//ext[0] -> Sin (KERNELA.HH:4170, _intern IC_SIN)
+#define CC_LIB_COS	31	//ext[0] -> Cos (KERNELA.HH:4163, _intern IC_COS)
+#define CC_LIB_TAN	32	//ext[0] -> Tan (KERNELA.HH:4183, _intern IC_TAN)
+#define CC_LIB_ATAN	33	//ext[0] -> ATan (KERNELA.HH:4160, _intern IC_ATAN)
+#define CC_LIB_ASIN	34	//ext[0] -> ASin (KERNELA.HH:4343, plain public extern)
+#define CC_LIB_ACOS	35	//ext[0] -> ACos (KERNELA.HH:4344, plain public extern)
+#define CC_LIB_SINH	36	//ext[0] -> Sinh (KERNELA.HH:4345, plain public extern)
+#define CC_LIB_COSH	37	//ext[0] -> Cosh (KERNELA.HH:4346, plain public extern)
 				//hands the directive to the kernel's float
 				//printer and returns what it wrote; the
 				//delegation is documented in CC_LIB.HC
-#define CC_LIB_SLOTS	32	//20 installed: 0-5 stdlib (M12), 6-18 the
+#define CC_LIB_SLOTS	40	//38 installed: 0-5 stdlib (M12), 6-18 the
 				//float family (M35), 19 the float printer
-				//(M37) — see CCSetLib.  A slot is
+				//(M37), 20-37 the math builtins (M38) — see
+				//CCSetLib.  A slot is
 				//one quad in CCCtrl, addressed through the
 				//CC_B_LIB table base, so a saved object rebinds
 				//to the loading session's helpers with no

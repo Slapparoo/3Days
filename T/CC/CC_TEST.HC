@@ -231,6 +231,40 @@ U0 CCM10()
     "FAIL objfloat got %d want 63\n",got;
     fails++;
   }
+  /* M38: the math builtins through an object.  A math call reaches the kernel
+   * through cc->lib[slot]: the code names the SLOT (CC_B_LIB) and loads through
+   * the table base, so a reloaded module runs THIS session's helpers -- the same
+   * rebind objstdlib exists to prove, but now for eighteen entries that are
+   * `_intern` opcodes, asm `_extern` routines and plain HolyC functions at once.
+   * The printf sink adds the two rebases objfloat covers for `%f`: &cc->fmtbuf
+   * via CC_B_CTRL and the directive text via CC_B_LOCALS.  Both runs must answer
+   * 34, the number the CCAsserts of the same files report for a direct compile. */
+  got=-1;
+  t=CCSrc("T:/CC/TEST/mth.c");
+  if (t)
+    if (CCCompile(&cc,t))
+      if (CCSave(obj)==0)
+        got=CCRunObjFile(obj);
+  if (got==34)
+    "PASS objmath = 34\n";
+  else
+  {
+    "FAIL objmath got %d want 34\n",got;
+    fails++;
+  }
+  got=-1;
+  t=CCSrc("T:/CC/TEST/mthp.c");
+  if (t)
+    if (CCCompile(&cc,t))
+      if (CCSave(obj)==0)
+        got=CCRunObjFile(obj);
+  if (got==34)
+    "PASS objmathprintf = 34\n";
+  else
+  {
+    "FAIL objmathprintf got %d want 34\n",got;
+    fails++;
+  }
 }
 
 CCAssert(42,"T:/CC/TEST/ret42.c","ret42");
@@ -400,6 +434,19 @@ CCAssert(53,"T:/CC/TEST/float.c","float");
  * fixture printf's is the compile-time path, pinned against the same cells of
  * CCProbeFloat. */
 CCAssert(63,"T:/CC/TEST/ffmt.c","ffmt");
+/* M38: the math builtins.  The expectation is the KERNEL's own rendering of these
+ * same expressions -- T:/CC/GATES/mthrows.txt, measured by calling Sqrt/Pow/ACos
+ * and the rest directly and printing them with StrPrintJoin, the engine this
+ * compiler hands a `%f` to -- never a C library's text.  Each fixture compares
+ * what it rendered against that text and returns the number of cells that
+ * matched, so 34 means all of them.  The cells carry a double literal, an INTEGER
+ * literal, a double variable, an int variable, and pow with an integer in each
+ * position, because that is where C's int->double conversion at a call is
+ * observable: an integer quad that reaches Sqrt unconverted is the denormal
+ * 9.88e-324, and sqrt(2) then answers 0.00000000000000000, which no square root
+ * can. */
+CCAssert(34,"T:/CC/TEST/mth.c","math");
+CCAssert(34,"T:/CC/TEST/mthp.c","mathprintf");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */

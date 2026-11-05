@@ -3410,9 +3410,15 @@ Not supported — each currently fails with a compile diagnostic:
   empty module (48 bytes here) after which every boot SIGSEGVs silently, because
   `tos_aot.c:250` dereferences an unchecked symbol lookup before
   `SetupDebugger()` at `:253` — the same failure that produced the reported
-  "window border, no content". `HCRT_BC.BIN` and `T:/HCRT_BC.DBG.Z` are still
-  the 2022 pair, so `-b` still boots the old bounds-checked image.
-- [ ] **M38** `<math.h>` builtins, delegated whole like `%f`: `sqrt→Sqrt`,
+  "window border, no content".  `HCRT_BC.BIN` and `T:/HCRT_BC.DBG.Z` were
+  the 2022 pair until M38: they are rebuilt now, the same way --
+  `Cmp("FULL_PACKAGE_BC.HC","HCRT_BC.NB.DBG.Z","HCRT_BC.NB.BIN")` after
+  `Cd("T:/")`, giving `Errs:0 Warns:110 Code:304ABC Size:310590` and
+  3212688 bytes (the tracked pair was 3210256) -- so `-b` boots the current
+  sources, and it is gated as `-b`-booted: the suite answers 93 PASS 0 FAIL
+  under `-b` and the refusal gate still refuses 15 and accepts 11 of 11
+  against the kernel in the same run.
+- [x] **M38** `<math.h>` builtins, delegated whole like `%f`: `sqrt→Sqrt`,
   `fabs→Abs`, `exp→Exp`, `log→Ln`, `log10→Log10`, `pow→Pow`, `floor→Floor`,
   `ceil→Ceil` (+ the trig that exists: `Sin Cos Tan ATan ASin ACos Sinh Cosh`).
   The mechanism is PROVEN, so this is now writing, not research: a `CC_LIB`
@@ -3421,18 +3427,91 @@ Not supported — each currently fails with a compile diagnostic:
   (`Sqrt` `Abs`) — no dispatch table and no `CallExtStr`; the AOT `Cmp`+`Load`
   route is dead for other reasons (an AOT unit's scope chains to
   `cmp.asm_hash`, not `Fs->hash_table`, so kernel names are invisible to it).
-  End-to-end shape already runs: 5 new slots + 5 one-call helpers + 5
-  name-dispatch arms + `math.h` produced a fixture whose 8 cells matched the
-  kernel oracle cell for cell, and the SAVED object reproduced all 8 in a NEW
-  process, `rc=0`, no fault. 20 slots installed of `CC_LIB_SLOTS 32`. Two gaps
-  `CCLibCall` must close: no int→double conversion (`sqrt(2)` reinterprets the
-  quad 2 as a denormal and prints 0.00000000000000000) and interception of a
-  user's own `sqrt`/`pow`. Record-not-correct divergences: `pow(-2,0.5)` is
-  +1.414 (C: NaN), `pow(10,3)` is 999.99999999999872, `acos` is 1 ulp low,
-  `exp(1000)` saturates to DBL_MAX rather than +inf, kernel `Round` is
-  nearest-even, a NaN renders with a negative sign. Also M38's, from the float
-  bullet above: converting an overflowing integer literal as UNSIGNED when the
-  destination is a double.
+  LANDED (2026-11-05): 18 builtins, one slot each -- 20..37, `CC_LIB_SLOTS`
+  32→40 (`lib[]` is a field of CCCtrl, so a slot costs the compiler bytes and
+  costs a saved object nothing) -- one `CC_LIB` helper per slot whose entire
+  body is one kernel call, one name-dispatch arm each in `CCExprPrimary`, and
+  `T:/CC/INC/math.h` with the 18 prototypes.  The paragraph above had guessed
+  right: `_intern` opcode entries, asm `_extern` entries and plain HolyC
+  functions all bind identically from a JIT'd helper, and nothing in a helper
+  branches on which kind it is.  `tanh`, `atan2`, `hypot`, `log2`, `frexp`,
+  `ldexp` and `modf` have NO kernel entry, so lite does not provide them at all:
+  an adapter layer does not implement what the kernel does not have.
+  An argument that is not already an F64 quad is widened by GENERATED code, using
+  the M35 call-site rule verbatim (`if (pf&&(cc->ety!=TY_DOUBLE))
+  CCConvRax(cc,CC_LIB_I2D)`, `CC_PARSE.HC:2369-2370`) at the same moment a user
+  call widens one; the test is reliable there because a user `double g(double x)`
+  returning `x + 0.5` answers the same for `g(2)` and `g(2.0)` (an unconverted
+  integer quad would be the denormal 9.88e-324 and answer 0.49999999999999880).
+  What a helper call needs and a user call does not is a slot policy: a user call
+  pushes its arguments, a helper reads fixed `cc->ext[]` slots, and `CCConvRax`
+  borrows `ext[0]` as scratch, so `CCLibCallM` parks operands in REVERSE source
+  order -- which keeps `ext[0]` free and makes `pow` take its base in `ext[1]`
+  and its exponent in `ext[0]`.  Two dead ends are worth keeping.  (a) A
+  per-call "which operand still needs widening" spec, staged as a quad through
+  `CCPushExt`, never reached any helper: `CCPushExt` stores RAX, and RAX is
+  still the operand just parsed, so the spec was overwritten by the value it
+  described and `sqrt(2)` answered 0.00000000000000000.  (b) A probe that seemed
+  to prove `ety` unreliable had read it after `CCExpect(')')` rather than where
+  the established rule reads it.
+  Gates, all of them re-runnable: gate 9 of `T:/CC/GATES/README.txt`.
+  `T:/CC/GATES/mthrows.txt` pins 34 renderings that the KERNEL produced for
+  those 34 calls (measured through `StrPrintJoin`, never a C library),
+  `T:/CC/GATES/mthmeas.HC` re-measures them and comes back identical,
+  `T:/CC/GATES/genm38.c` turns the table into two self-checking fixtures --
+  `T:/CC/TEST/mth.c` (the sprintf sink) and `T:/CC/TEST/mthp.c` (printf's own
+  `%f`) -- each returning the number of cells it matched, and
+  `T:/CC/GATES/mthgate.sh` regenerates, runs and diffs the got/want columns of
+  all 68 rows.  It passes: 34 of 34, both sinks, byte-identical to the kernel.
+  The suite grew from 89 to 93 cases and answers 93 PASS 0 FAIL twice with
+  identical PASS sets, now including `math`, `mathprintf` and the two
+  saved-object twins `objmath` and `objmathprintf` -- which is what proves the
+  math calls survive `CCSave`/`CCLoad`: a call site names only the `cc->lib`
+  SLOT (CC_B_LIB) and reload binds this session's table through the `CALL
+  [RAX]` indirection, while the printf sink also rebases `&cc->fmtbuf`
+  (CC_B_CTRL) and the directive text (CC_B_LOCALS).  Gates 2, 3 and 5 are
+  unchanged (342 printf rows identical to the golden table; 15 refusals with
+  15 `CC ERROR` lines and 11 of 11 acceptances against the kernel; 270 engine
+  rows).  `T:/CC/GATES/edgemth.HC` probes the domains the fixtures do not enter
+  and all 15 match the kernel's own answer, NaN, infinities, signed zero,
+  overflow and underflow included.
+  Divergences from a standard C library, now recorded as QUAD differences and
+  not as renderings, because `T:/CC/GATES/mathulp.HC` established that
+  THE PRINTER is the lossy part of the pipeline: the kernel renders the
+  bit-exact doubles 1.0, 2.0, 3.0 and 1024 as `0.99999999999999760`,
+  `1.99999999999999520`, `2.99999999999999296` and `1023.99999999999888000` --
+  several ulps low on values that are exact in binary -- so an ulp is invisible
+  in a `%f` and the two claims this bullet used to make from renderings were
+  half artifact.  The measurements below are `kernel quad − correctly-rounded
+  quad`, which inside one binade IS an ulp count; the reference is each real
+  value computed to 60 digits and rounded to nearest double (the column is
+  `T:/CC/GATES/mathref.txt`), never a library's text.  Rerun the probe with
+  `./3d_loader -t T -c T:/CC/GATES/mathulp.HC`.  EXACT (diff 0) on the inputs measured: `sqrt(2)`, `sqrt(4)`,
+  `sqrt(0.25)`, `pow(2,10)`, `log10(10)`, `log10(1000)`, `log10(1e6)`, `exp(0)`,
+  `exp(1)` (which is the nearest double to e), `ln(1)`, `ln(2.7)`, `asin(0.5)`,
+  `atan(1)`, `sin(1)`, `cos(1)`, `tan(1)`, `sinh(1)`, `cosh(1)`, `fabs(-2.5)`,
+  and `floor`/`ceil`/`trunc` on every input tried.  ONE ULP LOW: `pow(2,0.5)`,
+  `pow(10,3)`, `pow(-2,0.5)` and `acos(0.5)` -- so the old "acos is 1 ulp low"
+  stands, and the old "`pow(10,3)` is 999.99999999999872" was that same 1 ulp
+  plus the printer's own defect quoted as if it were the value.  The kernel's
+  `Sqrt(2.0)` and `Pow(2.0,0.5)` disagree with EACH OTHER by 1 ulp, so lite
+  inherits a disagreement rather than choosing a side.  Behavior that differs in
+  kind, all of it the kernel's answer, delegated and not emulated: `pow(-2,0.5)`
+  answers a finite +1.414 where C requires NaN; `Round` is nearest-EVEN --
+  bit-exact, `round(2.5)` is the quad for 2.0 and `round(3.5)` the quad for 4.0
+  -- where C rounds away from zero; `exp(1000)` returns DBL_MAX, one step below
+  the overflow C reports as `+inf`; a NaN prints as `92.23372036854775808`, or
+  negative when the sign bit is set (`sqrt(-1)` and `log(-1)` both print
+  `-92.23372036854775808`) -- the printer's saturating integer walk, not `nan`;
+  an infinity prints as `i` / `-i`; a signed zero survives `sqrt(-0.0)`,
+  `trunc(-0.5)` and `round(-0.5)` as `-0.00000000000000000`, and `fabs(-0.0)`
+  does clear the sign bit.  One deviation in the dispatch itself, also
+  record-not-correct and shared with `printf` and `strlen`: the builtin name
+  dispatch runs before the user-symbol lookup, so a program that defines its own
+  `sqrt` or `pow` gets the builtin for the CALL (a variable with one of those
+  names is untouched, because the dispatch only happens behind an `IDENT '('`
+  peek).  Also M38's, from the float bullet above: converting an overflowing
+  integer literal as UNSIGNED when the destination is a double.
 - [ ] **M39** the TinyCC `tests2` port, as its own milestone and not an
   appendage to M38. Verified against repo.or.cz/tinycc.git: the real suite is
   `tests/tcctest.c` (4538 lines) + `tests/tests2/` (141 `.c` with 141 `.expect`

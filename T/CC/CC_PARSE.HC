@@ -1968,6 +1968,59 @@ U0 CCPostfix(CCCtrl *cc)
  * zero-arg — the HolyC JIT's bookkeeping around multi-arg indirect
  * calls is what M11 documented as unreliable, and the main-entry
  * argc/argv bridge already proved the staging pattern end to end. */
+/* M38: staging for a math builtin -- a call to a function whose parameters are
+ * all `double`, which is exactly what T:/CC/INC/math.h declares them to be.  So
+ * the conversion decision is not new code: it is the M35 rule from the user-call
+ * path, verbatim (CCParseFunPtr's call arm: `if (pf&&(cc->ety!=TY_DOUBLE))
+ * CCConvRax(cc,CC_LIB_I2D)`, T:/CC/CC_PARSE.HC:2369-2370), applied at the same
+ * moment -- the value is still in RAX, before anything else can consume it.
+ * Measured through that path (T:/M38P/t3.c): a user `double g(double x)` that
+ * returns `x + 0.5` answers the same for `g(2)` and `g(2.0)`, so the integer
+ * literal really did arrive as 2.0; the unconverted quad would have been the
+ * denormal 9.88e-324 and answered 0.49999999999999880.
+ *
+ * One thing a helper call needs that a user call does not: a user call PUSHES
+ * its arguments, in any order, but a helper reads FIXED cc->ext[] slots, and
+ * CCConvRax uses ext[0] as its scratch (T:/CC/CC_EMIT.HC:973-980: it parks RAX
+ * into ext[0], calls the conversion helper, and answers in RAX).  So the
+ * operands are parked in REVERSE source order -- the first operand parsed goes
+ * to the highest slot -- which leaves ext[0] free as scratch for every
+ * conversion after the first.  A one-argument builtin lands in ext[0] either
+ * way; `pow` ends with its base in ext[1] and its exponent in ext[0], and
+ * CCXPow reads them in that order.  (An earlier version staged in source order
+ * and carried a per-call "which operand still needs widening" spec in a new
+ * CCCtrl field.  Both were mine, neither was needed, and the first attempt
+ * staged that spec through CCPushExt -- which stores RAX, and RAX was still the
+ * last parsed operand, so the spec was overwritten before the helper saw it:
+ * sqrt(2) answered 0.00000000000000000.)
+ *
+ * The result type is TY_DOUBLE because the helper returns an F64's bits, and it
+ * is recorded as such for the same reason M35 records it for a user call: a
+ * downstream operation must not convert the value a second time.  Like every
+ * other builtin arm below, this dispatch runs BEFORE the user-symbol lookup, so
+ * a user-defined `sqrt` is shadowed -- the same deviation printf and strlen
+ * already carry, recorded in PLAN.md rather than papered over. */
+U0 CCLibCallM(CCCtrl *cc,I64 slot,I64 argc,I64 rty)
+{
+  I64 i;
+  for (i=0;i!=argc;i++)
+  {
+    if (i)
+      CCExpect(cc,',' ,"expected ',' in math call");
+    CCExprNC(cc);
+    if (cc->ety!=TY_DOUBLE)
+      CCConvRax(cc,CC_LIB_I2D);		//C's usual conversion, the M35 one
+    CCPushExt(cc,argc-1-i);		//reverse: ext[0] stays free for the
+  					//next operand's conversion scratch
+  }
+  CCExpect(cc,')',"expected ')' after math args");
+  CCEmitLibCall(cc,slot);
+  cc->is_addr=0;
+  cc->aty=0;
+  cc->ety=rty;
+  cc->sty=-1;
+}
+
 U0 CCLibCall(CCCtrl *cc,I64 slot,I64 argc,I64 rty)
 {
   I64 i;
@@ -2122,6 +2175,99 @@ U0 CCExprPrimary(CCCtrl *cc)
       if (!StrCmp(save_name,"strlen"))
       {
         CCLibCall(cc,CC_LIB_STRLEN,1,TY_INT);
+        return;
+      }
+      /* M38: math builtins, name-dispatched exactly like strlen, declared by
+       * T:/CC/INC/math.h.  Each is ONE kernel call; the widening of an integer
+       * argument is decided per operand by CCLibCallM above. */
+      if (!StrCmp(save_name,"sqrt"))
+      {
+        CCLibCallM(cc,CC_LIB_SQRT,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"fabs"))
+      {
+        CCLibCallM(cc,CC_LIB_FABS,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"exp"))
+      {
+        CCLibCallM(cc,CC_LIB_EXP,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"log"))
+      {
+        CCLibCallM(cc,CC_LIB_LOG,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"log10"))
+      {
+        CCLibCallM(cc,CC_LIB_LOG10,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"pow"))
+      {
+        CCLibCallM(cc,CC_LIB_POW,2,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"floor"))
+      {
+        CCLibCallM(cc,CC_LIB_FLOOR,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"ceil"))
+      {
+        CCLibCallM(cc,CC_LIB_CEIL,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"trunc"))
+      {
+        CCLibCallM(cc,CC_LIB_TRUNC,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"round"))
+      {
+        CCLibCallM(cc,CC_LIB_ROUND,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"sin"))
+      {
+        CCLibCallM(cc,CC_LIB_SIN,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"cos"))
+      {
+        CCLibCallM(cc,CC_LIB_COS,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"tan"))
+      {
+        CCLibCallM(cc,CC_LIB_TAN,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"atan"))
+      {
+        CCLibCallM(cc,CC_LIB_ATAN,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"asin"))
+      {
+        CCLibCallM(cc,CC_LIB_ASIN,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"acos"))
+      {
+        CCLibCallM(cc,CC_LIB_ACOS,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"sinh"))
+      {
+        CCLibCallM(cc,CC_LIB_SINH,1,TY_DOUBLE);
+        return;
+      }
+      if (!StrCmp(save_name,"cosh"))
+      {
+        CCLibCallM(cc,CC_LIB_COSH,1,TY_DOUBLE);
         return;
       }
       if (!StrCmp(save_name,"memcpy"))
