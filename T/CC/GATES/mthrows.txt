@@ -1,0 +1,43 @@
+# T:/CC/GATES/mthrows.txt -- what the KERNEL itself prints, at `%.17f`,
+# for the 34 M38 math cells.  Measured inside TempleOS, not from a C
+# library: every value came from a direct kernel call (Sqrt/Pow/ACos/...),
+# rendered by StrPrintJoin with the directive `%.17f` -- the same engine
+# T:/CC/CC_LIB.HC hands a `%f` to.  Re-measure it with
+#   ./3d_loader -t T -c T:/CC/GATES/mthmeas.HC
+# and diff its K rows against this file.  Provenance: 2026-11-05; HCRT.BIN
+# md5 15f9b7039abd6e1b726eea1fa5beecfd, 3d_loader md5
+# 674df9fc78485b576e916ded9e0f554d.  34 cells, 34 rows, nothing omitted.
+K 01 Sqrt(2.0) [1.41421356237309168]
+K 02 Sqrt(2.0) [1.41421356237309168]
+K 03 Sqrt(3.0) [1.73205080756887296]
+K 04 Sqrt(4.0) [1.99999999999999520]
+K 05 Sqrt(4.0) [1.99999999999999520]
+K 06 Sqrt(0.25) [0.49999999999999880]
+K 07 Abs(-2.5) [2.49999999999999392]
+K 08 Exp(1.0) [2.71828182845903872]
+K 09 Exp(0.0) [0.99999999999999760]
+K 10 Ln(1.0) [0.00000000000000000]
+K 11 Ln(2.7) [0.99325177301028112]
+K 12 Log10(10.0) [0.99999999999999760]
+K 13 Log10(1000.0) [2.99999999999999296]
+K 14 Floor(2.7) [1.99999999999999520]
+K 15 Floor(-2.7) [-2.99999999999999296]
+K 16 Ceil(2.1) [2.99999999999999296]
+K 17 Ceil(-2.1) [-1.99999999999999520]
+K 18 Trunc(2.7) [1.99999999999999520]
+K 19 Pow(2.0,0.5) [1.41421356237309152]
+K 20 Pow(2.0,3.0) [7.99999999999998080]
+K 21 Pow(4.0,0.5) [1.99999999999999520]
+K 22 Pow(2.0,10.0) [1023.99999999999888000]
+K 23 Pow(-2.0,0.5) [1.41421356237309152]
+K 24 Round(2.5) [1.99999999999999520]
+K 25 Round(3.5) [3.99999999999999040]
+K 26 Sin(0.0) [0.00000000000000000]
+K 27 Sin(1.0) [0.84147098480789456]
+K 28 Cos(1.0) [0.54030230586813848]
+K 29 Tan(1.0) [1.55740772465489856]
+K 30 ATan(1.0) [0.78539816339744640]
+K 31 ASin(0.5) [0.52359877559829768]
+K 32 ACos(0.5) [1.04719755119659504]
+K 33 Sinh(1.0) [1.17520119364379856]
+K 34 Cosh(1.0) [1.54308063481524000]

@@ -464,6 +464,179 @@ I64 CCXFmt()
   return StrLen(dst);
 }
 
+/* ---------------- M38: math, delegated whole ----------------
+ *
+ * Every body below is ONE direct call to one kernel entry, spelled the way
+ * CCXStrLen and CCXFmt call theirs: no declaration, no CallExtStr, no dlopen.
+ * These helpers live in the session that `#include`s T:/CC/CC.HC, so the JIT
+ * binds the callee the way the interpreter binds Sqrt in a command-line script.
+ * The set spans all THREE kinds of kernel math entry on purpose, because
+ * whether they bind alike from a JIT'd helper was this milestone's open
+ * question and the answer is that they do: `_intern` opcode-backed entries
+ * (`Sqrt`, `Abs`, `Sin`/`Cos`/`Tan`/`ATan`), asm `_extern` routines (`Exp`,
+ * `Ln`, `Log10`, `Pow`, `Floor`, `Ceil`, `Trunc`, `Round`) and plain HolyC
+ * functions (`ASin`, `ACos`, `Sinh`, `Cosh`).  The declarations cited below are
+ * the ones the kernel itself exports; none of these names is invented here.
+ *
+ * A body does no conversion and sees no type: an operand that is not already an
+ * F64 quad was widened by GENERATED code, by the same CC_LIB_I2D helper and the
+ * same `cc->ety != TY_DOUBLE` test that a user call into a `double` parameter
+ * uses (T:/CC/CC_PARSE.HC:2369-2370, and CCLibCallM above for why the operands
+ * arrive in reverse slot order).  A quad is therefore always exactly what C
+ * says it is by the time it reaches here, and the only thing left to do is to
+ * hand it to the kernel and carry its bits back out.
+ *
+ * Operands travel as BITS in and out: a postfix `(F64)` reinterprets a quad as
+ * the double it holds, and `r(I64)` puts the answer back -- the convention
+ * CCXFAdd and the rest of the M35 float family use.  Where the kernel's VALUE
+ * differs from a C library's, lite answers with the kernel: see the divergences
+ * recorded in T:/CC/PLAN.md.  This file neither hides them nor emulates them.
+ */
+I64 CCXSqrt()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Sqrt(a);			//public _intern IC_SQRT, T:/KERNELA.HH:4174
+  return r(I64);
+}
+
+I64 CCXFabs()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Abs(a);			//public _intern IC_ABS, T:/KERNELA.HH:4161
+  return r(I64);
+}
+
+I64 CCXExp()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Exp(a);			//public _extern _EXP, T:/KERNELB.HH:28
+  return r(I64);
+}
+
+I64 CCXLog()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Ln(a);			//public _extern _LN, T:/KERNELB.HH:34
+  return r(I64);
+}
+
+I64 CCXLog10()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Log10(a);			//public _extern _LOG10, T:/KERNELB.HH:35
+  return r(I64);
+}
+
+I64 CCXPow()
+{
+  F64 a,b,r;
+  a=cc.ext[1](F64);		//base: parsed first, parked in the higher
+  b=cc.ext[0](F64);		//slot so ext[0] stayed free as CCConvRax
+  r=Pow(a,b);			//scratch (CCLibCallM).  C order preserved.
+  return r(I64);		//public _extern _POW, T:/KERNELB.HH:37
+}
+
+I64 CCXFloor()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Floor(a);			//public _extern _FLOOR, T:/KERNELB.HH:31
+  return r(I64);
+}
+
+I64 CCXCeil()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Ceil(a);			//public _extern _CEIL, T:/KERNELB.HH:23
+  return r(I64);
+}
+
+I64 CCXTrunc()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Trunc(a);			//public _extern _TRUNC, T:/KERNELB.HH:41
+  return r(I64);
+}
+
+I64 CCXRound()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Round(a);			//public _extern _ROUND, T:/KERNELB.HH:39
+  return r(I64);
+}
+
+I64 CCXSin()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Sin(a);			//public _intern IC_SIN, T:/KERNELA.HH:4170
+  return r(I64);
+}
+
+I64 CCXCos()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Cos(a);			//public _intern IC_COS, T:/KERNELA.HH:4163
+  return r(I64);
+}
+
+I64 CCXTan()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Tan(a);			//public _intern IC_TAN, T:/KERNELA.HH:4183
+  return r(I64);
+}
+
+I64 CCXAtan()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=ATan(a);			//public _intern IC_ATAN, T:/KERNELA.HH:4160
+  return r(I64);
+}
+
+I64 CCXAsin()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=ASin(a);			//public extern, T:/KERNELA.HH:4343
+  return r(I64);
+}
+
+I64 CCXAcos()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=ACos(a);			//public extern, T:/KERNELA.HH:4344
+  return r(I64);
+}
+
+I64 CCXSinh()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Sinh(a);			//public extern, T:/KERNELA.HH:4345
+  return r(I64);
+}
+
+I64 CCXCosh()
+{
+  F64 a,r;
+  a=cc.ext[0](F64);
+  r=Cosh(a);			//public extern, T:/KERNELA.HH:4346
+  return r(I64);
+}
+
 /* Slot order is the ABI shared with CC.HH's CC_LIB_* defines,
  * CCEmitLibCall deltas, and the CCExprPrimary name dispatch. */
 U0 CCSetLib(CCCtrl *c)
@@ -488,4 +661,22 @@ U0 CCSetLib(CCCtrl *c)
   c->lib[CC_LIB_I2D]=&CCXFItoD;
   c->lib[CC_LIB_D2I]=&CCXFDtoI;
   c->lib[CC_LIB_FMT]=&CCXFmt;
+  c->lib[CC_LIB_SQRT]=&CCXSqrt;
+  c->lib[CC_LIB_FABS]=&CCXFabs;
+  c->lib[CC_LIB_EXP]=&CCXExp;
+  c->lib[CC_LIB_LOG]=&CCXLog;
+  c->lib[CC_LIB_LOG10]=&CCXLog10;
+  c->lib[CC_LIB_POW]=&CCXPow;
+  c->lib[CC_LIB_FLOOR]=&CCXFloor;
+  c->lib[CC_LIB_CEIL]=&CCXCeil;
+  c->lib[CC_LIB_TRUNC]=&CCXTrunc;
+  c->lib[CC_LIB_ROUND]=&CCXRound;
+  c->lib[CC_LIB_SIN]=&CCXSin;
+  c->lib[CC_LIB_COS]=&CCXCos;
+  c->lib[CC_LIB_TAN]=&CCXTan;
+  c->lib[CC_LIB_ATAN]=&CCXAtan;
+  c->lib[CC_LIB_ASIN]=&CCXAsin;
+  c->lib[CC_LIB_ACOS]=&CCXAcos;
+  c->lib[CC_LIB_SINH]=&CCXSinh;
+  c->lib[CC_LIB_COSH]=&CCXCosh;
 }
