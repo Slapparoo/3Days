@@ -110,9 +110,19 @@ half is pure C), or the delegation costs more than the thing it replaces, as
 M27's whole-struct copy argued (the builtin needed an argument-push sequence
 and a runtime length; the inline walk is one instruction per slot and records
 no relocation). Where the host does it *almost* right but the mapping needs
-care — `Prnt`'s `%w.pf` against C's `%f` flags — the delegation is still the
-first choice, with the mismatch written down; that is the difference between
-an adapter with documented seams and a compiler with an undocumented second
+care — M37's `%f`, where the host's own conversion scales the value by a table
+it builds with `Pow(10.,i)` and so disagrees with C on 143,569 of 631,424
+cells, 22.74% — the delegation is still the first choice, and it is taken
+WHOLE: lite rebuilds the directive as text, hands it to the kernel's engine
+and prints what comes back, because a host that is a non-conforming
+implementation of floating point is delegated to and then described, not
+repaired piece by piece; the `getchar` bullet below already states that rule
+for keyboard input ("documented deviation, not emulation").  An earlier pass
+of M37 found the seam INSIDE the conversion — the scaling — and split the
+work by step to keep the host's digits and take over that one step, which is
+the shape this paragraph was written for; it measured 0.16% against that
+22.74%, and was abandoned.  That is still the difference between an adapter
+with documented seams and a compiler with an undocumented second
 implementation hidden inside it.
 
 ## C subset limitations
@@ -150,7 +160,10 @@ through `(*fp)`/`(fp)`/member/typedef/param forms) and ARRAYS of them
 (M26: `int (*tab[2])(int)` / `int (*tab[])(int)={f,g}` tables at file,
 block and `static` scope, passed as parameters, called via
 `tab[i](x)`/`(*tab[i])(x)`/`(tab[i])(x)`), `printf` (literal format:
-`%d %s %c %%`), `putchar`, `exit`, and the
+`%d %s %c %%` lowered, and `%f` — flags, field width and a precision of any
+size, all of them the KERNEL's rules — handed to the kernel's float printer
+as text (M37); any other directive, `%x` among them, is a refusal and not a
+silent narrowing), `putchar`, `exit`, and the
 M12 stdlib subset — `strlen strcmp strcpy strchr memmove memcpy memset
 memcmp malloc atoi abs puts srand rand` (delegated to kernel routines
 where they exist; see M12), the M12.1 batch — `strcat strncat strrchr
@@ -317,7 +330,8 @@ Not supported — each currently fails with a compile diagnostic:
   integer use (6.4.4.1/5 gives such a constant `unsigned long long`, whose bits are
   that quad) and differs only on the way to a double — so this file is -6.1e18 here
   and 1.2345678901234567e19 in C. Fixing that means converting the quad as unsigned
-  when the destination is a double, and it is M37's. The truthiness of a double is
+  when the destination is a double, and it is M38's (M37 took `%f` instead). The
+  truthiness of a double is
   "the quad is nonzero", so `-0.0` is truthy here and falsy in C; a hex float
   literal (`0x1p3`) is a syntax error because the kernel answers 0 for one; `%`,
   `~`, `& | ^`, `<< >>` and `switch` on a floating operand are refused, as are
@@ -330,9 +344,28 @@ Not supported — each currently fails with a compile diagnostic:
   travel today. A function pointer may not return a double, and its parameter list
   may not contain one (M18 records neither an fp's return type nor its argument
   types); a conditional with one floating and one integer arm is refused (the
-  middle arm's conversion cannot be inserted after its jump was emitted); `printf`
-  has no `%f`; and there are no math builtins, so `sqrt(x)` is a call to nothing
-  yet. All of it is on M37's list.
+  middle arm's conversion cannot be inserted after its jump was emitted); and
+  there are no math builtins, so `sqrt(x)` is a call to nothing yet. All of that
+  is on M38's list; `printf`'s and `sprintf`'s `%f` arrived in M37.
+
+  The 19-digit spelling this bullet is about is not merely imprecise, it is a
+  DIFFERENT number, and one measurement shows how far: with `a` holding 0.0, the
+  test `a >= 9223372036854775808.0` answered TRUE, because the literal on the
+  right is not 2^63.  The host says the limit out loud — `T:/STRB.HC:529-534`,
+  "Does not allow more than 18-digits before or after the decimal point because
+  the numbers before and after the decimal point are stored in 64-bits" — and has
+  no error path for breaking it, so the overflow is silent and the answer is
+  whatever the wrapped accumulator says (measured: -6101065172474984 for
+  `12345678901234567.891`, whose true integer part is 12345678901234567).  That is
+  also why no value in M37's fixture or sweep is spelled as a decimal float
+  literal: the constructions build a significand and an exact power of two
+  (`T:/CC/TEST/ffmt.c:27-45`) so that lite, its harness probe and the kernel
+  all format one and the same bit pattern.  **[M37's first pass read the same
+  fact as two magnitude gates inside `cci_fmt`, testing the exponent FIELD
+  (1086 for 2^63, 1075 for 2^52) rather than comparing against a literal,
+  because an exponent field is an integer and a 19-digit literal is not. Those
+  gates shipped with that abandoned design and are not in the code now; see
+  M37.]**
 - Integer literals have NO suffixes here: `12u`, `12ul` and
   `12345678901234567LL` are syntax errors (the number token ends at the digits
   and the suffix is then an identifier), while the FLOAT suffixes M35 folds are
@@ -588,10 +621,18 @@ Not supported — each currently fails with a compile diagnostic:
 - `free()` does not exist: this port's `Free()` releases whole poopalloc
   chunks and would pull shared pages out from under live arenas, so
   `malloc()` memory is permanent-by-design (see the CCSrc note in CC.HC).
-- Builtin names bind BUILTINS: `strlen memcpy memset memcmp malloc
+- Builtin names bind BUILTINS: `cci_fmt strlen memcpy memset memcmp malloc
   getchar` (like `printf`/`putchar`/`exit`) are dispatched by name
   before the symbol table, so a user function of the same name is
-  shadowed. The pure prelude half (`strcmp strcpy strcat strncat
+  shadowed.  `cci_fmt` is in that set although no C library has that
+  name: it is lite's `%f` DELEGATION (M37) — it formats nothing, it hands
+  the directive and the value's bits to the kernel's float printer — and
+  name dispatch is the only route a prelude function has to a lib slot:
+  the runtime sprintf engine has to reach the same helper printf's
+  compile-time lowering emits, so one function serves both sinks.  It is a lite
+  extension of the namespace and not a C name, so a program that
+  spells its own `cci_fmt` gets lite's helper and never its own,
+  with no diagnostic.  The pure prelude half (`strcmp strcpy strcat strncat
   strrchr strstr strncmp strncpy strchr memmove memchr strdup calloc
   atoi abs puts fputs fputc putc srand rand sprintf-engine` +
   `CCItoa`) are ordinary symbols BUT pre-reserved: redefining one is
@@ -605,8 +646,23 @@ Not supported — each currently fails with a compile diagnostic:
   buffer (see M12). `abort()` exits the program with 134 from any
   depth (see the M12.1 nested-return landmine).
 - `sprintf` interprets its format AT RUNTIME (the format may be a variable — the
-  point of the engine): `%d %s %c %x %%`, at most 4 conversion arguments (extra
-  user args are a diagnostic; missing ones read as 0), no width/precision flags,
+  point of the engine): `%d %s %c %x %f %%`, at most 4 conversion arguments (extra
+  user args are a diagnostic; missing ones read as 0). What follows the `%` —
+  flags (`- + space #`), a width, a precision — is BUFFERED AND REBUILT AS TEXT
+  (M37), and `%f` hands that text to the kernel's float printer, so width,
+  padding and precision there are TempleOS's rules and not the engine's; every
+  other letter gets the flag/width run as TEXT and keeps its own arm, which is
+  why `("%5d %d",5,7)` now writes `55 7` and `("%*d",10,7)` writes the first
+  argument. A precision IS READ for every directive and only `%f` acts on it, so
+  `%.2d` prints the number where it used to print `.2` as text — the `.2` is now
+  dropped rather than printed — and it is not C's minimum-digit padding; an
+  unrecognised directive character after the `%` is emitted as text and CONSUMES
+  a conversion argument, as it always has. `%f` takes a precision of ANY size and
+  caps it at 600 SILENTLY, with the field width capped at 1000, because
+  `StrPrintJoin` takes no buffer length and a runtime sink has nowhere to report
+  (`CCIClap`, `T:/CC/CC_LIB.HC:358-434`); printf, which reads its format at
+  compile time, shares those caps and keeps its own refusal for a directive
+  whose letter is not `f`.
   `%x` prints the QUAD'S UNSIGNED READING, which is what C and the kernel both
   print for a 64-bit `int` (M36; it used to print the magnitude, which answered `1`
   for -1 and a single `0` for the most negative quad, a value with no positive
@@ -855,15 +911,23 @@ Not supported — each currently fails with a compile diagnostic:
   and `%f` is the part M36 did not reach; the kernel formats F64 natively
   (`A="%6.3f"` in a DolDoc string, KERNELA.HH), so writing a decimal-float dtoa
   from scratch in the prelude would be the second implementation the rule warns
-  about. suggestion-0002 carries the mapping probe. Its answer: the kernel's `%f`
-  agrees with C for `%w.pf` at or below 15 significant digits on ordinary values —
-  the limit shows up both as `%.16f` of 1/3 and as `%.6f` of 1e10 (16 digits
-  needed), so C's default precision 6 is inside the exact zone — but the kernel's
-  `%f` defaults to precision 0 when none is stated, and its `%e`/`%g`/`%E`/`%G`,
-  its `-`/`+`/` `/`#` flags and its `inf`/`nan` spellings do not match C at all (a
-  255-case shape×value sweep gives 49 identical outputs). A delegated `%f`
-  therefore has to state the precision, keep it at or below 15, and own the two
-  special values — which is an argument, where M6c's note had only a reason not to.
+  about. suggestion-0002 carries the mapping probe. M37 ran the measurement that
+  probe was predicting would settle the question, and the prediction did not
+  survive it: routing a double through the kernel's `%f` disagrees with C on
+  143,569 of 631,424 (value, precision) cells — 22.74% — and on 187 of the 342
+  cells of the direct 38-value probe, 91 of them at precisions stated at or
+  below 15. So it fails at precisions the "15 significant digits" rule called
+  safe: `%.15f` of 1.5, a value with no rounding problem at all, comes back
+  `1.499999999999998`. The cause is in the host and not in the precision:
+  `T:/STRPRINT.HC:555-599` scales the value by `Pow10I64(p)` (`:564`, `:567`,
+  `:572`), and `T:/KEND.HC:13` fills that table with
+  `pow10_I64[i+309]=Pow(10.,i)`, a transcendental (suggestion-0004 files it).
+  So the rule the probe offered — state the precision, keep it at or below 15,
+  own the special values — is not sufficient, and neither is the workaround
+  M37 first built from it: scaling only the FRACTION on an exact integer-quad
+  factor, which measured 0.16% and was abandoned. M37 as shipped delegates the
+  conversion WHOLE and records what the host does instead of engineering around
+  it — see the M37 entry.
   That suggestion also records a DEFECT it found (lite's `%d` of the most negative
   quad printing `-(`), filed separately as a bug and closed by M36: the walker no
   longer negates its own input, and 144 values across the signed-quad range were
@@ -2576,7 +2640,7 @@ Not supported — each currently fails with a compile diagnostic:
    integer model instead (what M15 through M34 did for every pair) leaves a
    double's bit pattern in a slot C says holds a number, which is a wrong value
    with no message. Every one of these is written in the limitations list as the
-   thing M37 owes, rather than left as a surprise.
+   thing the next milestone owes. M37 took the `%f` half of that list.
 
    **Six bugs in lite, two defects in the host and four errors in my own probes —
    every one of them found by running something, and the probe errors are listed
@@ -2636,7 +2700,8 @@ Not supported — each currently fails with a compile diagnostic:
    leading-0 case, where lite's 17-for-017 is a deviation M32 already records and I
    asserted 15 as though it were new; and a stress harness that compared the word
    `direct` against a number and reported ten correct results as ten mismatches.
-   Two more were wrong TOOLS: I re-ran `/tmp/opencode/prepcmp.py` with no arguments
+   Two more were wrong TOOLS: I re-ran `prepcmp.py` (a host tool, its /tmp
+   path gone because /tmp does not survive a reboot) with no arguments
    and called its 63 built-in cases the prep oracle, when the oracle is that script
    with its seven case files and 153 shapes (see M33/M34); and I compared against a
    HEAD worktree without copying `./3d_loader` into it — the binary is a build
@@ -2698,8 +2763,12 @@ Not supported — each currently fails with a compile diagnostic:
    sign fix and -2^63 needs no exception. `CCItoaNeg` and `cc_dig` are the same
    rule with two sinks — `putchar` for printf's byte stream, buffer-plus-count for
    sprintf, whose return value is a documented API and is why one function cannot
-   serve both — and both comments state the rule because `%f` will be the third
-   sink, which is the point of writing it down twice. `%x` was the same habit one
+   serve both — and both comments state the rule because `%f` was the third sink
+   this change had to consider, and turned out not to be one at all: M37 hands
+   the whole rendering to the kernel's engine, so no new digit walk joins these
+   two. That is the point of having written the rule down twice — the alternative
+   could be taken against a stated rule rather than by accident. `%x` was the same
+   habit one
    step away: it negated, so it printed the MAGNITUDE of a signed value, which was
    lite's documented deviation (`1` for -1) and had no answer at all for -2^63,
    where it printed a single `0`. Hex needs no division, so it does not need a
@@ -2724,9 +2793,13 @@ Not supported — each currently fails with a compile diagnostic:
    sprintf's return value cannot come from pointer subtraction in generated code (a
    saved object re-answers arena addresses per session). The walker, by contrast,
    is now exact for every value the model can hold, and that is a measurement
-   rather than a belief (below). For `%f` there is no such choice: lite owns no
-   decimal-float algorithm, so writing one in the prelude WOULD be the second
-   implementation the rule exists to prevent, and M37 delegates it. Verification:
+   rather than a belief (below). `%f` needed the same question asked, and the
+   answer came out whole: lite owns no decimal-float algorithm, and the host's
+   `%f` is the kernel's own, so M37 delegates the conversion WHOLE — directive
+   text in, characters out — and records the divergences instead of correcting
+   them. **[M37 first answered this split, delegating the radix walk, the
+   padding and the rounding while keeping the scaling; that design was measured
+   and then abandoned, as its entry says.]** Verification:
    144 values across the signed-quad range — the edge and its neighbours, every
    power of ten that fits, powers of two, the 32-bit edge, and 60 random quads —
    each pinned TWICE through `sprintf`: the written length (the return value, which
@@ -2757,7 +2830,264 @@ Not supported — each currently fails with a compile diagnostic:
    the same values `LL` — the two programs differ in spelling and not in value,
    which is the only reason the reference is trustworthy.
 
-## HolyC dialect gotchas (all verified in this build)
+ - [x] **M37** `%f` for both sinks, delegated WHOLE: lite rebuilds the directive
+   as text, hands it to the kernel's float printer, and emits what comes back.
+   Every divergence from C that follows is a documented non-standard, not a gap
+   to route around.
+
+   **The ruling, and what it settles.** "Use TempleOS we are just delegating."
+   "TempleOS is not wrong, it is a non standard implementation of Float, that is
+   why we are just delegating." A host that is a non-conforming implementation
+   of a C sublanguage is delegated to and then DESCRIBED, not repaired piece by
+   piece, and this file already says exactly that about keyboard input in the
+   `getchar` bullet above: "C byte semantics on a console are documented
+   deviation, not emulation." So M37's subject was never how to make the host
+   agree with C. It is what a C caller still has to be given, and where the
+   host's answer has to be recorded instead of corrected. Three things, and no
+   arithmetic, is the answer.
+
+   **What lite contributes, in full.** (1) The directive is REBUILT AS TEXT and
+   handed over with the value's bits — flags, field width, precision and the
+   letter `f` — from printf's compile-time scan (`T:/CC/CC_PARSE.HC:3822-3854`)
+   or from the prelude's runtime scan (`T:/CC/CC_EMIT.HC:508-531`), so width and
+   padding mean whatever TempleOS says they mean. (2) C's default precision is
+   SPOKEN rather than inferred: the host's bare `%f` prints no fraction digits
+   at all (its precision defaults to 0, measured: 1.5 gives `2`), so both sinks
+   write `.6` into the text whenever the source stated none
+   (`T:/CC/CC_PARSE.HC:3860-3866`; `T:/CC/CC_EMIT.HC:554-558`). (3) The two
+   numeric fields are capped, because `StrPrintJoin` takes no buffer length and
+   a `%5000f` would pad 5000 bytes through `cc->fmtbuf`, which is 1024
+   (`T:/CC/CC.HH:391`): `CCIClap` (`T:/CC/CC_LIB.HC:358-434`) takes a width run
+   down to 1000 and a precision run to 600, keeps a leading `0` because the
+   kernel reads that zero as its pad flag and not as a digit (`%01500f` becomes
+   `%01000f` and still pads with zeros), and rewrites the text in place from a
+   copy of itself — printf's directive lives in the data arena, the rewrite has
+   to be idempotent because a `%f` inside a loop runs more than once, and the
+   destination is the source. A `*` field width is dropped by both scans rather
+   than refused: the engine takes a `*` width from the NEXT argv entry and
+   throws when there is none (`T:/STRPRINT.HC:250-254`, `:261-265`), and the
+   only entry lite has is the value. Beyond those three, nothing: no digit
+   walk, no scaling, no rounding rule, no sign handling, no special values. The
+   helper is `I64 CCXFmt()` (`T:/CC/CC_LIB.HC:444-456`) and its body is a
+   clamp, one call and a length.
+
+   **The ABI, and why the value needs a local.** `cci_fmt` is dispatched BY
+   NAME (`T:/CC/CC_PARSE.HC:2117-2120`, `CCLibCall(cc,CC_LIB_FMT,3,TY_INT)`),
+   which is what lets the prelude's C reach the same helper generated code
+   reaches; its three `ext` slots are destination, value bits and directive
+   text (`T:/CC/CC.HH:203`), the third now a STRING where the number a precision
+   used to be. `StrPrintJoin`'s argv is a COUNT plus an ARRAY of quads
+   (`T:/STRPRINT.HC:208`) and `case 'f':` reads one of them as `(F64)` (`:527`),
+   so `CCXFmt` moves `ext[1]` into a local quad and passes its ADDRESS
+   (`:452-454`): a double's slot value IS its bit pattern (M35), so no
+   conversion and no decimal parsing is on the way in. The engine returns its
+   DESTINATION and not its end (`:875 return buf;`, `buf = dst` at `:228`), so
+   the count comes from `StrLen` (`T:/CC/CC_LIB.HC:455`) — the contract M36
+   recorded, and the reason `cc_w` in the prelude is still a running total
+   rather than pointer subtraction.
+
+   **The kernel's surface, measured and not derived.** All of it came from
+   `StrPrintJoin(buf, dir, 1, &bits)` run in TempleOS on this tree:
+   `T:/CC/GATES/hostcap.HC` measures the flag, width and `*` rows, the
+   `%e`/`%g`/`%E`/`%G` letters and the inf, `-inf` and nan values, and
+   `T:/CC/GATES/rows.txt` holds the 38 bit patterns across 9 directives —
+   the expectation source for the sweep and the float fixture. Their run
+   logs are artifacts and are not committed; rerun the driver for the rows.
+   And lite reproduces every row because lite sends the same text.
+   `%f` lives at `T:/STRPRINT.HC:524` and its mechanism is the scaling and
+   rounding at `:555-599` — `d*=Pow10I64(...)` at `:564`, `:567` and `:572`,
+   then `m=Round(d)` at `:576` — and `Pow10I64` returns a table entry
+   (`T:/KMATH.HC:675-683`) that `T:/KEND.HC:13` filled with
+   `pow10_I64[i+309]=Pow(10.,i)`, a transcendental. A bare `%f` prints NO
+   fraction digits, so 1.5 gives `2`; field width is honored (`%10.3f` of 1.5
+   gives `     1.500`) and so is the `0` pad (`%010.3f` gives `000001.500`);
+   `-` is parsed and then IGNORED for numbers, because `PRTF_LEFT_JUSTIFY` is
+   set at `:240` and read only by `OutStr` (`:29`), never by a numeric padding
+   path, so `%-10.3f` comes back right-justified and `%-8f` gives `       2`;
+   `+`, space and `#` print the REST OF THE DIRECTIVE as text and format
+   nothing (`%+f` gives `f`, `%+.6f` gives `.6f`, `%#f` gives `f`), which is the
+   host's fallback for a modifier it does not implement and therefore lite's
+   answer too — `printf("%+f",1.5)` prints `.6f`; `%e` and `%g` spell
+   `1.50000000e0` (`e0`, not C's `e+00`) and `%E` and `%G` print nothing, none
+   of which reach this path because only the letter `f` is ever handed over;
+   `inf` arrives as `i` and `-inf` as `-i`; and a quiet NaN prints a DECIMAL
+   NUMBER — the default QNaN `0x7FF8000000000000` answers
+   `9223372036854775808` at `%f` — because the engine rounds the value into a
+   quad and has no nan spelling to fall back on. x87's `0.0/0.0` yields the
+   NEGATIVE quiet NaN, which is why the fixture negates it to reach the pattern
+   that was measured (`T:/CC/TEST/ffmt.c:10-12`).
+
+   **The cap, and the warning the host already makes about it.** The digit walks
+   stop at `k<TMP_BUF_LEN-SLOP` — `:579`, `:593`, `:616` and `:625` inside the
+   `%f` arm, with `TMP_BUF_LEN` 256 and `SLOP` 8 at `:205-206` — and the
+   measured ceiling is 248 characters of which 247 are digits: `%f` of 1e300 is
+   pinned as 241 zeros, the point, and six zeros after it, where C prints 301
+   digits (`T:/CC/CC_TEST.HC:679`, `:689`, `:699`, `:709`; the same cells as
+   text at `T:/CC/TEST/ffmt.c:228-237`).  `%100.50f` of 1.5 is pinned at exactly
+   100 characters space-padded left, and `%01000.3f` at exactly 1000
+   (`T:/CC/CC_TEST.HC:911`, `:921`).
+   `StrPrintJoin`'s own docstring warns about this before any of it happens
+   (`T:/STRPRINT.HC:210-216`: do not exceed 18 digits before or after the
+   decimal point, because the two halves are held in 64 bits) and so does the
+   parser (`T:/STRB.HC:529-534`, quoted in the floating-point bullet above). A
+   sink handed a buffer with no length has to keep its own promises, so
+    `CCIClap` is what bounds the write: the engine’s digit walk never
+    emits more than its 248-character bound (`TMP_BUF_LEN` less `SLOP`),
+    a measured rendering topping out at 250 with its sign and point; and
+    the bytes `StrPrintJoin` writes are never more than the directive’s
+    own field width — the pad loop at `T:/STRPRINT.HC:507-511` writes
+    `len-k-i` spaces and then the `k` buffered characters — so capping
+    the width caps the write, which is the worst case `T:/CC/CC.HH:391-402`
+   For `sprintf` the same caps are the only ceiling on how far `%f` can write
+   into a caller's buffer.
+
+   **The two measurements, and their denominators.** Scored against glibc, the
+   kernel's own arithmetic — `F64 * Pow10I64(p)`, then `Round`, then the peel,
+   with the engine's truncation at 17 significant digits — disagrees on 143,569
+   of 631,424 (value, precision) cells, 39,464 values across 16 precisions:
+   **22.74%** (a pure-python reimplementation of the kernel's arithmetic — no
+   loader; `suggestion-0002` records the run and its script). The direct
+   probe is the stronger evidence because it is the host itself: the 38 bit
+   patterns of `T:/CC/GATES/rows.txt` handed to `StrPrintJoin` across
+   `%f %.0f %.1f %.3f %.6f %.15f %.16f %10.3f %.20f` = 342 cells, of which
+   **187 — 54.7% — disagree with C, and 91 of those are cells whose precision
+   is stated and at or below 15** (`rows.txt` scored against a C oracle; per
+   directive, out of 38 values each: `%.0f` 10, `%.1f` 13, `%.3f` 14,
+   `%10.3f` 14, `%.6f` 15, `%.15f` 25). So "state the precision and
+   stay at or below 15" bounds the wrong quantity: the error scales with the
+   value because the FACTOR is what is off, and it shows up at precisions the
+   ceiling calls safe — `%.15f` of 1.5, a value with no rounding problem at all,
+   comes back `1.499999999999998`. Both figures, and the correction to this
+   file's own pairing of 22.74% with the wrong cell count, are in
+   `suggestion-0002` and `suggestion-0004`.
+
+   **Priced and declined: the fraction-scaling design, which is NOT what
+   ships.** An earlier pass of M37 found the seam INSIDE the conversion — the
+   host scales the WHOLE value by a table built with `Pow(10.,i)` — and split
+   the work by step instead of delegating it whole: the radix walk, the left
+   padding and the rounding stayed the host's and only the scaling moved into
+   the helper, on a factor built from exact integer quads (`10^0..10^15` as
+   I64s, converted by assignment, because `F64<-I64` assignment is correctly
+   rounded where a decimal literal is not — `T:/STRB.HC:574` and `:592` are
+   where a literal picks the table up). It was measured before it was dropped,
+   and the numbers are worth keeping as the price of the alternative: 0.1733%
+   for that model on 58,392 values across 16 precisions (934,272 cells; the
+   run is recorded in `suggestion-0002`) and 2253 of 1,396,624 = 0.16% on the
+   sweep that followed,
+   against the 22.74% above. Three rounding rules were priced in the same runs
+   — round the scaled fraction 0.16%, half-away-from-zero `trunc(x*10^p+0.5)`
+   0.51%, the scaled-remainder tie test 0.38% — and a Dekker two-product
+   residual scored WORSE, 0.30%, because its own correction terms round. Two
+   other artifacts went with the design and should not be looked for in the
+   code: a 15-ceiling on precision (printf refusing `%.16f`, sprintf clamping
+   it), and magnitude gates reading the exponent FIELD (`>= 1086` for 2^63,
+   `>= 1075` for 2^52) feeding a significand-doubling route for values a quad
+   cannot hold. The ruling supersedes all of it: a 0.16% implementation of C's
+   `%f` living inside lite IS the second implementation the delegation rule
+   exists to prevent, and correcting the host's float is no longer in scope.
+
+   **What a sink that CAN diagnose refuses.** printf reads its format at compile
+   time, so it refuses any directive whose letter is not `f` — with the message
+   it always gave (`T:/CC/CC_PARSE.HC:3855-3859`). The float arm is now the
+   catch-all `else` (`:3807`), which is what catches a directive that BEGINS
+   with a flag or a width: `%5d`, `%010d`, `%10.3d`, `%.2d`, `%x`, `% c`, `%n`,
+   `%u`, `%5s`, `%e`, `%g`, `%lf`, `%hd`, `%.2e` and `%ld` — 15 directives,
+   each a compile error: `T:/CC/GATES/mkrefuse.c` emits one single-directive
+   program per refusal (`T:/CC/GATES/r01.c`..`r15.c`) plus the acceptance file
+   plus the HolyC driver `T:/CC/GATES/rfdriver.HC`, which runs all 16 through
+   lite and prints each return code — 15/15 rc=-1 on the run of that driver.
+   A precision now takes any value: there is no ceiling left to breach, and the
+   `printf: %f precision over 15` diagnostic is gone. `%n` is refused rather
+   than quietly printing nothing. The acceptance file `T:/CC/GATES/acc.c`
+   compiled and ran rc=0 carrying 11 flag/width/precision directives through
+   BOTH sinks — `%20.15f %010.4f %-10.4f %#10.2f % 10.2f %+10.2f %.600f
+   %999.999f %01000.3f %3.1f %-3.1f` — and its 22 renderings (the `A` rows are
+   sprintf, the `B` rows printf) are byte-identical to the `K` rows the SAME
+   driver run measures from `StrPrintJoin` on the same bits:
+   `     1.499999999999998`, `00001.5000`, `    1.5000`, and `10.2f` three
+   times over for the `#`, space and `+` forms the kernel renders as text. The
+   caps ride along: acc.c spells `%.600f` and `%999.999f`; the driver measures
+   the kernel on exactly those directives — K07 renders `%.600f` as 250
+   characters, `0.` followed by 248 zeros, the engine's own digit-walk cap
+   swallowing the stated precision, and K08 renders `%999.999f` at 999 — and
+   lite's renderings, the second of which reaches the kernel as `%999.600f`,
+   match both byte for byte. The width cap is pinned INSIDE the committed
+   gates: `T:/CC/TEST/ffmt.c:431-452` pins `%01500.3f`, capped to `%01000.3f`
+   before the call, to the 1000-character rendering
+   `T:/CC/CC_TEST.HC:918-927` measures from `%01000.3f` directly.
+
+   **The arity change the new scan forced, measured.** sprintf's non-`f` letters
+   now receive the buffered flag/width run as TEXT and keep their own arms, so
+   `sprintf(b,"%5d %d",5,7)` writes `55 7` where it wrote `5d 7`,
+   `sprintf(b,"%-2d",7)` writes `-27` where it wrote `-2d`, and
+   `sprintf(b,"%*d",10,7)` writes `10` where it wrote `*d` — C prints
+   `         7` for the last. One argument is still consumed per `%`
+   (`T:/CC/CC_EMIT.HC:507`), and a precision is still parse-consumed for every
+   directive but forwarded only by `%f` (`:533-551`, `:552-566`), so `%.2d`
+   prints its number and the `.2` is dropped rather than printed. Three cells in
+   `T:/CC/TEST/ffmt.c` (`:464-482`) pin all three. This is the half of M37 that
+   changes programs which never mention `%f`, and it is a deviation the kernel
+   chose rather than one lite invented.
+
+   **Verification.** Suite: 89 PASS with `CC TESTS: 0 failed`, identical across
+   two runs of `T:/CC/CC_TEST.HC`, no FAULT line in either. The float fixture
+   reports `TOT ffmt 63 63` and `PASS ffmt = 63`
+   (`T:/CC/CC_TEST.HC:402`; 63 cells in `T:/CC/TEST/ffmt.c`) — fixture and
+   probe are both emitted from the `T:/CC/GATES/rows.txt` cell list by
+   `T:/CC/GATES/genffmt.c`, the C view taking each directive as C SOURCE
+   spells it and the probe body taking the one lite WILL send. The fixture's
+   printf line — `ffmtP|1.500000|1.500|1.499999999999998|     1.500|` — is
+   the compile-time path, diffed against the same four cells of the probe.
+   `PASS float kernel = 58 cells` comes from `CCProbeFloat`
+   (`T:/CC/CC_TEST.HC:445-929`), which calls `StrPrintJoin` directly on the
+   same bit patterns with the directives LITE SENDS — `.6` written in where
+   the source stated none, `*` dropped, an over-long field or precision
+   capped — so the pair pins both halves of the contract: lite sends what C
+   means, and the kernel's rendering is the answer. `PASS objfloat = 63`
+   (`T:/CC/CC_TEST.HC:214-233`) compiles the fixture, saves it, reloads the
+   object and runs it: a lowered float directive bakes TWO addresses, the
+   `cc->fmtbuf` field through `CC_B_CTRL` (`T:/CC/CC_PARSE.HC:3885`, `:3896`)
+   and the arena directive string through `CC_B_LOCALS` (`:3890-3892`), and
+   the helper then REWRITES that string in place, so this is the case that
+   proves both rebase. Delegation sweep: 38 bit patterns x 9 directives x 3
+   sinks = **1026 cells**, emitted by `T:/CC/GATES/genm37.c` from the
+   `rows.txt` renderings into `T:/CC/GATES/gs0.c`..`gs9.c` and run by
+   `T:/CC/GATES/gsd.HC`. The 684 sprintf cells self-check INSIDE the program
+   — literal format and variable format, against the kernel text — and each
+   chunk prints its own cell total and failure count, so a truncated run
+   cannot masquerade as a pass; the driver's run sums to 684 cells and 0
+   failures across the 10 chunks. The 342 printf cells print their expected
+   text in the same line and are compared outside the program: **0
+   differences** against the kernel's answers, with the expectation field
+   itself matching the text `genm37.c` read out of `rows.txt`, 342/342. Run
+   the SAME generated programs under gcc instead: **328 of the 684 sprintf
+   cells fail**, and that failure set is exactly the 164 matrix cells whose
+   printf lines disagree with the same expectations — a cell's two sprintf
+   sinks and its printf line fail together or not at all. The mapper's 187
+   is the same finding on the directives as SOURCE spells them: the 23-cell
+   difference is the bare-`%f` column, where the engine prints no fraction
+   digits and C prints six — precisely what the `.6` composition exists to
+   erase, and lite never trips it. Either way the C-versus-kernel
+   disagreement is most of the matrix, and it is the EXPECTED state of
+   affairs now rather than a defect — the same finding as the `%.15f`-of-1.5
+   and `%.6f`-of-1e10 cells, reached from the program side.
+   M36's integer sweep is still 288/288 in both engines and the M35
+   mixed-comparison sweep still 0 differences. No test VALUE in the fixture or
+   the sweep is a decimal float literal: values are built from a significand
+   and an exact power of two (`T:/CC/TEST/ffmt.c:27-45`), because a literal
+   picks up the table's error (`T:/STRB.HC:574`, `:592`) and a formatter checked
+   against drifted inputs proves nothing. No line over 83 characters added.
+
+   **Two traps in the harness itself, kept because both could have hidden a
+   wrong answer.** (1) The first sweep died on `code buffer overflow` and still
+   printed zero failures, because a partial program that never reaches its count
+   line is indistinguishable from a passing one — lite compiles one file into
+   `CC_CODE_SIZE` = 64 KiB (`T:/CC/CC.HH:137`; `CCByte` enforces it at
+   `T:/CC/CC_EMIT.HC:632`), so the harness chunks by emitted weight and each
+   chunk reports its own cell total. (2) The refusal probe passed six
+   conversions to one sprintf call, overrunning lite's 4-argument frame and
+   reporting a parse error instead of the format behaviour it was there to
+   witness.
 
 - **A HolyC identifier can collide with a KERNEL macro.** `pi` is
   `#define pi (0x400921FB54442D18(F64))` in KERNELA.HH (with `eps`, `inf`,

@@ -211,6 +211,26 @@ U0 CCM10()
     "FAIL objstdlib got %d want 52\n",got;
     fails++;
   }
+  /* M37: %f through an object.  A lowered float directive bakes TWO
+   * relocatable addresses — &cc->fmtbuf through CC_B_CTRL and the directive
+   * text through CC_B_LOCALS, the same kind a `%s` literal already used — and
+   * the helper then REWRITES that text in place whenever a width or a
+   * precision is over its cap.  A reloaded module binds this session's ctrl
+   * and gets its own copy of the string data, so the run must answer 63, the
+   * number the CCAssert of the same file reports for a direct compile. */
+  got=-1;
+  t=CCSrc("T:/CC/TEST/ffmt.c");
+  if (t)
+    if (CCCompile(&cc,t))
+      if (CCSave(obj)==0)
+        got=CCRunObjFile(obj);
+  if (got==63)
+    "PASS objfloat = 63\n";
+  else
+  {
+    "FAIL objfloat got %d want 63\n",got;
+    fails++;
+  }
 }
 
 CCAssert(42,"T:/CC/TEST/ret42.c","ret42");
@@ -359,10 +379,27 @@ CCAssert(25,"T:/CC/TEST/decls.c","decls");
  * crossing the two models, comparison including the negative pair a quad
  * compare would flip, ++/-- stepping 1.0 rather than the quad 1, argument and
  * return conversions through a prototype, recursion through a double prototype,
- * and the sizes the slot model answers C's way.  Values are observable only
- * through (int) truncation: printf has no %f yet.  Checks 50-53 are deliberately
- * NOT wrapped in (int), because that is what hid the mixed-type comparison. */
+ * and the sizes the slot model answers C's way.  Its values are observable only
+ * through (int) truncation: that fixture predates M37's %f, which is the check
+ * below.  Checks 50-53 are deliberately NOT wrapped in (int), because that is
+ * what hid the mixed-type comparison. */
 CCAssert(53,"T:/CC/TEST/float.c","float");
+/* M37: %f in BOTH sinks, against the KERNEL's renderings.  The helper does not
+ * print a double: it hands the directive, and the value's bits, to
+ * T:/STRPRINT.HC's `case 'f':` and reports what the kernel wrote — including
+ * the widths and flags it honors (its own), the `i` and `-i` it spells inf
+ * with, and the 248-character ceiling its scratch buffer puts on a digit walk.
+ * What lite adds is the C part: `.6` written into the text when the source
+ * stated no precision (the engine's own default is 0, measured), `*` dropped,
+ * and the width and precision capped to what the 1024-byte destination holds.
+ * The values are significand times exact power of two, so the fixture, the
+ * sweep and CCProbeFloat below all format one and the same double.  No test
+ * value is a decimal float literal: the host's Str2F64 scales by that same
+ * drifting Pow(10.,i) table (measured: 1e15 12 ULP low, 0.25 1 high), and a
+ * formatter checked against drifted inputs proves nothing.  The ffmtP line the
+ * fixture printf's is the compile-time path, pinned against the same cells of
+ * CCProbeFloat. */
+CCAssert(63,"T:/CC/TEST/ffmt.c","ffmt");
 /* M12.1: getchar/fgetc/getc call SHAPE — compile+save gate only. The
  * kernel GetKey blocks with no console input headless, but the object
  * write proves all three call forms lowered and linked. */
@@ -392,6 +429,517 @@ else
 {
   "FAIL tlcall got %d want 1353\n",tlgot;
   fails++;
+}
+/* M37: the KERNEL side of the ffmt table.
+ * bits, same renderings, no lite anywhere in the middle.
+ * StrPrintJoin is called exactly as cci_fmt calls it: argv is the
+ * address of one quad holding the value's bits, and the directive
+ * is the one lite's two sinks COMPOSE: `.6` written in when the
+ * source stated none, `*` dropped, and the width and the precision
+ * capped to what the destination holds.  This says what the kernel
+ * answers; ffmt.c says lite answers the same.  The pair pins the
+ * delegation and the composition.  A rendering too wide for one
+ * source line is pinned by its length, its first character and its
+ * last eight, which is all a padding rule fixes; the digits are
+ * pinned by the short cells of the same directive nearby. */
+I64 CCProbeFloat()
+{
+  U8 out[1100];
+  I64 q,nf,L;
+
+  q=0;
+  nf=0;
+  q=0;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"0.000000"))
+  {
+    "FAIL float cell 0 [%s] want [0.000000]\n",out;
+    nf=nf+1;
+  }
+  q=0;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"0.000"))
+  {
+    "FAIL float cell 1 [%s] want [0.000]\n",out;
+    nf=nf+1;
+  }
+  q=0;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"0.000000000000000"))
+  {
+    "FAIL float cell 2 [%s] want [0.000000000000000]\n",out;
+    nf=nf+1;
+  }
+  q=0;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"     0.000"))
+  {
+    "FAIL float cell 3 [%s] want [     0.000]\n",out;
+    nf=nf+1;
+  }
+  q=-9223372036854775808;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"-0.000000"))
+  {
+    "FAIL float cell 4 [%s] want [-0.000000]\n",out;
+    nf=nf+1;
+  }
+  q=-9223372036854775808;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"-0.000"))
+  {
+    "FAIL float cell 5 [%s] want [-0.000]\n",out;
+    nf=nf+1;
+  }
+  q=-9223372036854775808;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"-0.000000000000000"))
+  {
+    "FAIL float cell 6 [%s] want [-0.000000000000000]\n",out;
+    nf=nf+1;
+  }
+  q=-9223372036854775808;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"    -0.000"))
+  {
+    "FAIL float cell 7 [%s] want [    -0.000]\n",out;
+    nf=nf+1;
+  }
+  q=4607182418800017408;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"1.000000"))
+  {
+    "FAIL float cell 8 [%s] want [1.000000]\n",out;
+    nf=nf+1;
+  }
+  q=4607182418800017408;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"1.000"))
+  {
+    "FAIL float cell 9 [%s] want [1.000]\n",out;
+    nf=nf+1;
+  }
+  q=4607182418800017408;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"0.999999999999998"))
+  {
+    "FAIL float cell 10 [%s] want [0.999999999999998]\n",out;
+    nf=nf+1;
+  }
+  q=4607182418800017408;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"     1.000"))
+  {
+    "FAIL float cell 11 [%s] want [     1.000]\n",out;
+    nf=nf+1;
+  }
+  q=4591870180066957722;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"0.100000"))
+  {
+    "FAIL float cell 12 [%s] want [0.100000]\n",out;
+    nf=nf+1;
+  }
+  q=4591870180066957722;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"0.100"))
+  {
+    "FAIL float cell 13 [%s] want [0.100]\n",out;
+    nf=nf+1;
+  }
+  q=4591870180066957722;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"0.100000000000000"))
+  {
+    "FAIL float cell 14 [%s] want [0.100000000000000]\n",out;
+    nf=nf+1;
+  }
+  q=4591870180066957722;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"     0.100"))
+  {
+    "FAIL float cell 15 [%s] want [     0.100]\n",out;
+    nf=nf+1;
+  }
+  q=4621819117588971520;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"10.000000"))
+  {
+    "FAIL float cell 16 [%s] want [10.000000]\n",out;
+    nf=nf+1;
+  }
+  q=4621819117588971520;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"10.000"))
+  {
+    "FAIL float cell 17 [%s] want [10.000]\n",out;
+    nf=nf+1;
+  }
+  q=4621819117588971520;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"9.999999999999984"))
+  {
+    "FAIL float cell 18 [%s] want [9.999999999999984]\n",out;
+    nf=nf+1;
+  }
+  q=4621819117588971520;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"    10.000"))
+  {
+    "FAIL float cell 19 [%s] want [    10.000]\n",out;
+    nf=nf+1;
+  }
+  q=4756540486875873280;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"9999999999.999998"))
+  {
+    "FAIL float cell 20 [%s] want [9999999999.999998]\n",out;
+    nf=nf+1;
+  }
+  q=4756540486875873280;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"10000000000.000"))
+  {
+    "FAIL float cell 21 [%s] want [10000000000.000]\n",out;
+    nf=nf+1;
+  }
+  q=4756540486875873280;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"9999999999.999995200000000"))
+  {
+    "FAIL float cell 22 [%s] want [9999999999.999995200000000]\n",out;
+    nf=nf+1;
+  }
+  q=4756540486875873280;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"10000000000.000"))
+  {
+    "FAIL float cell 23 [%s] want [10000000000.000]\n",out;
+    nf=nf+1;
+  }
+  q=4698053240436593525;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"1234567.891000"))
+  {
+    "FAIL float cell 24 [%s] want [1234567.891000]\n",out;
+    nf=nf+1;
+  }
+  q=4698053240436593525;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"1234567.891"))
+  {
+    "FAIL float cell 25 [%s] want [1234567.891]\n",out;
+    nf=nf+1;
+  }
+  q=4698053240436593525;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"1234567.890999994240000"))
+  {
+    "FAIL float cell 26 [%s] want [1234567.890999994240000]\n",out;
+    nf=nf+1;
+  }
+  q=4698053240436593525;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"1234567.891"))
+  {
+    "FAIL float cell 27 [%s] want [1234567.891]\n",out;
+    nf=nf+1;
+  }
+  q=9094988921128908188;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  L=248;		/* the measured length of this rendering */
+  if ((StrLen(out)!=L)||(out[0]!='0')||
+      StrCmp(out + L - 8,"0.000000"))
+  {
+    "FAIL float cell 28 len %d [%s]\n",StrLen(out);
+    nf=nf+1;
+  }
+  q=9094988921128908188;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  L=248;		/* the measured length of this rendering */
+  if ((StrLen(out)!=L)||(out[0]!='0')||
+      StrCmp(out + L - 8,"0000.000"))
+  {
+    "FAIL float cell 29 len %d [%s]\n",StrLen(out);
+    nf=nf+1;
+  }
+  q=9094988921128908188;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  L=248;		/* the measured length of this rendering */
+  if ((StrLen(out)!=L)||(out[0]!='0')||
+      StrCmp(out + L - 8,"00000000"))
+  {
+    "FAIL float cell 30 len %d [%s]\n",StrLen(out);
+    nf=nf+1;
+  }
+  q=9094988921128908188;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  L=248;		/* the measured length of this rendering */
+  if ((StrLen(out)!=L)||(out[0]!='0')||
+      StrCmp(out + L - 8,"0000.000"))
+  {
+    "FAIL float cell 31 len %d [%s]\n",StrLen(out);
+    nf=nf+1;
+  }
+  q=9218868437227405312;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"i"))
+  {
+    "FAIL float cell 32 [%s] want [i]\n",out;
+    nf=nf+1;
+  }
+  q=9218868437227405312;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"i"))
+  {
+    "FAIL float cell 33 [%s] want [i]\n",out;
+    nf=nf+1;
+  }
+  q=9218868437227405312;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"i"))
+  {
+    "FAIL float cell 34 [%s] want [i]\n",out;
+    nf=nf+1;
+  }
+  q=9218868437227405312;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"         i"))
+  {
+    "FAIL float cell 35 [%s] want [         i]\n",out;
+    nf=nf+1;
+  }
+  q=-4503599627370496;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"-i"))
+  {
+    "FAIL float cell 36 [%s] want [-i]\n",out;
+    nf=nf+1;
+  }
+  q=-4503599627370496;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"-i"))
+  {
+    "FAIL float cell 37 [%s] want [-i]\n",out;
+    nf=nf+1;
+  }
+  q=-4503599627370496;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"-i"))
+  {
+    "FAIL float cell 38 [%s] want [-i]\n",out;
+    nf=nf+1;
+  }
+  q=-4503599627370496;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"        -i"))
+  {
+    "FAIL float cell 39 [%s] want [        -i]\n",out;
+    nf=nf+1;
+  }
+  q=9221120237041090560;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"9223372036854.775808"))
+  {
+    "FAIL float cell 40 [%s] want [9223372036854.775808]\n",out;
+    nf=nf+1;
+  }
+  q=9221120237041090560;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"9223372036854775.808"))
+  {
+    "FAIL float cell 41 [%s] want [9223372036854775.808]\n",out;
+    nf=nf+1;
+  }
+  q=9221120237041090560;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"9223.372036854775808"))
+  {
+    "FAIL float cell 42 [%s] want [9223.372036854775808]\n",out;
+    nf=nf+1;
+  }
+  q=9221120237041090560;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"9223372036854775.808"))
+  {
+    "FAIL float cell 43 [%s] want [9223372036854775.808]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"1.500000"))
+  {
+    "FAIL float cell 44 [%s] want [1.500000]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.3f",1,&q);
+  if (StrCmp(out,"1.500"))
+  {
+    "FAIL float cell 45 [%s] want [1.500]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.15f",1,&q);
+  if (StrCmp(out,"1.499999999999998"))
+  {
+    "FAIL float cell 46 [%s] want [1.499999999999998]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%10.3f",1,&q);
+  if (StrCmp(out,"     1.500"))
+  {
+    "FAIL float cell 47 [%s] want [     1.500]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.0f",1,&q);
+  if (StrCmp(out,"2"))
+  {
+    "FAIL float cell 48 [%s] want [2]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.1f",1,&q);
+  if (StrCmp(out,"1.5"))
+  {
+    "FAIL float cell 49 [%s] want [1.5]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.16f",1,&q);
+  if (StrCmp(out,"1.4999999999999970"))
+  {
+    "FAIL float cell 50 [%s] want [1.4999999999999970]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.20f",1,&q);
+  if (StrCmp(out,"1.49999999999999648000"))
+  {
+    "FAIL float cell 51 [%s] want [1.49999999999999648000]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%010.3f",1,&q);
+  if (StrCmp(out,"000001.500"))
+  {
+    "FAIL float cell 52 [%s] want [000001.500]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%-10.3f",1,&q);
+  if (StrCmp(out,"     1.500"))
+  {
+    "FAIL float cell 53 [%s] want [     1.500]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%+.6f",1,&q);
+  if (StrCmp(out,".6f"))
+  {
+    "FAIL float cell 54 [%s] want [.6f]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%.6f",1,&q);
+  if (StrCmp(out,"1.500000"))
+  {
+    "FAIL float cell 55 [%s] want [1.500000]\n",out;
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%100.50f",1,&q);
+  L=100;		/* the measured length of this rendering */
+  if ((StrLen(out)!=L)||(out[0]!=' ')||
+      StrCmp(out + L - 8,"00000000"))
+  {
+    "FAIL float cell 56 len %d [%s]\n",StrLen(out);
+    nf=nf+1;
+  }
+  q=4609434218613702656;
+  MemSet(out,0,1100);
+  StrPrintJoin(out,"%01000.3f",1,&q);
+  L=1000;		/* the measured length of this rendering */
+  if ((StrLen(out)!=L)||(out[0]!='0')||
+      StrCmp(out + L - 8,"0001.500"))
+  {
+    "FAIL float cell 57 len %d [%s]\n",StrLen(out);
+    nf=nf+1;
+  }
+  return nf;
+}
+
+
+/* M37: the kernel side of the ffmt table, checked in HolyC in this process
+ * with no C file and no lite formatter in the way.  This is the statement
+ * that the renderings ffmt.c pins are the KERNEL's: 58 cells, the same list,
+ * composed directives, compared against StrPrintJoin directly. */
+I64 ccpf=CCProbeFloat();
+if (ccpf==0)
+  "PASS float kernel = 58 cells\n";
+else
+{
+  "FAIL float kernel: %d of 58 cells\n",ccpf;
+  fails=fails+ccpf;
 }
 "CC TESTS: %d failed\n",fails;
 Exit;

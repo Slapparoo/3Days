@@ -200,8 +200,13 @@
 #define CC_LIB_FNE	16
 #define CC_LIB_I2D	17
 #define CC_LIB_D2I	18
-#define CC_LIB_SLOTS	32	//19 installed: 0-5 stdlib (M12), 6-18 the
-				//float family (M35) — see CCSetLib.  A slot is
+#define CC_LIB_FMT	19	//M37: cci_fmt(dst, value_bits, directive_text)
+				//hands the directive to the kernel's float
+				//printer and returns what it wrote; the
+				//delegation is documented in CC_LIB.HC
+#define CC_LIB_SLOTS	32	//20 installed: 0-5 stdlib (M12), 6-18 the
+				//float family (M35), 19 the float printer
+				//(M37) — see CCSetLib.  A slot is
 				//one quad in CCCtrl, addressed through the
 				//CC_B_LIB table base, so a saved object rebinds
 				//to the loading session's helpers with no
@@ -383,6 +388,21 @@ class CCCtrl
   U8	*lib[CC_LIB_SLOTS];	//M12 stdlib delegation helpers (CC_LIB_*);
 			//CCSetLib fills them, CC_B_LIB relocations rebase
 			//them, CCLoad rebinds them per session
+  U8	fmtbuf[1024];	//M37: where the kernel's float printer writes for
+				//printf, and the address of it is what
+				//generated code hands cci_fmt.  A FIELD OF cc,
+				//so the embedded address rebases through
+				//CC_B_CTRL on a saved-object reload exactly
+				//like &cc->ext[] does.  StrPrintJoin takes no
+				//buffer length, so this MUST outlast the
+				//rendering.  A field width is ALSO the ceiling
+				//on the engine's own output: its pad loop writes
+				//len-k-i spaces and then only the k digits the
+				//walk made, and that walk stops at TMP_BUF_LEN
+				//less SLOP = 248.  Measured max: 250.  cci_fmt
+				//caps the width at 1000 and the precision at 600,
+				//so 1024 holds a 1000-character field plus its NUL,
+				//with margin: the caps are belt, the width rule is braces.
   U8	libscr[512];	//M12: dedicated scratch quads, pointed at via
 			//RDI before any CALL into JIT-compiled HolyC code.
 			//Verified from JIT bytes: a HolyC-compiled callee's

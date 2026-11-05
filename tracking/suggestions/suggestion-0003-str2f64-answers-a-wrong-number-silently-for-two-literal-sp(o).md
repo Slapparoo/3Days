@@ -68,7 +68,27 @@ the same set (`1.5`, `2.5`, `.5`, `2.`, `0.1`, `100`, `1000.0`, `123456.789`).
 Kernel float literals drift the same way (the kernel's own `0.3` is one ULP high,
 so `0.1+0.2==0.3` is TRUE in HolyC and FALSE in C), so this third item is the
 kernel's existing behaviour being what it is; items 1 and 2 are different in kind,
-because they are not rounding.
+because they are not rounding. **[Cause named since filing, for the drift in this
+item: the exponent is applied by multiplying by `Pow10I64`, and `T:/KEND.HC:13`
+fills that table with `Pow(10.,i)` — `T:/STRB.HC:574`, `:590` and `:592` are the
+three sites — so most of this table's ULP counts are the table's error rather than a
+rounding choice (`1e10` parses as `1 * Pow10I64(10)` and a multiply by 1 is exact, so
+this file's −23 ULP row for that literal is the table entry's own error — a derivation
+from this file's measurement plus the source, not a separate probe of `Pow10I64(10)`;
+M37 did probe `Pow10I64(15)` itself and it has exactly the pattern its literal
+produces), and the same table is what the kernel's `%f` scales by. Filed as
+`tracking/suggestions/suggestion-0004-pow10-table-built-from-pow-not-exact-integers(o).md`,
+whose proposal item 1 is this file's proposal item 3 (an exact power-of-ten table)
+and which lists the routine's other consumers — the format engine's `%f`/`%e`/`%g`
+arms and the HolyC compiler's own literal scanner at `T:/LEX.HC:579`, `:598`,
+`:600`, which is why the drift is not C-only. One reading of the table above needs a
+caveat: these ULP counts are the HOST's parse of each spelling, measured through `Str2F64`
+itself. A lite-compiled program does not see most of them — `CCNumFloat` re-spells a literal
+whose positive exponent fits (`T:/CC/CC_LEX.HC:381-397` turns `1e10` into the digit string
+`10000000000` and `1e15` into `1000000000000000`), and the host sums a digit string exactly, so
+those two literals are the exact double in a `T:/CC/` program and drifted in a HolyC probe.
+Items 1 and 2 of this file are
+unaffected by that cause and remain unfixed in the host.]**
 
 ## Why it matters to `T:/CC/`
 
@@ -83,9 +103,11 @@ a guess. So the lexer now:
   not hand over a digit string the host would wrap: the digits past what fits are
   dropped and the exponent absorbs them, so `12345678901234567890` goes as
   `1.234567890123456789e19`. The truncation is measured lossless — 409 such literals
-  (`/tmp/opencode/m35trunc.py`: 400 random 20-to-26-digit integers plus a fractional
+  (a host python script, `m35trunc.py`, built 400 random 20-to-26-digit integers plus a fractional
   tail, leading zeros after the point, and values that round up to the next power of
-  ten) landed on the same double as the written spelling every time, against the
+  ten; **the script ran under `/tmp/opencode/` and is gone with the host `/tmp`, so this
+  409-literal claim is recorded and not re-runnable from the tree**) landed on the same double as
+  the written spelling every time, against the
   host's own answer being off by 2^64. The boundary the test reproduces was verified
   against `9223372036854775807` (exact) and `9223372036854775808` (wrapped);
 - compares `Str2F64`'s own end pointer with the text handed over, and reports rather
@@ -127,15 +149,31 @@ scanner, and 3 is a table.
   path's accuracy.
 - That `Atoa`, `F2Str` or the DolDoc `%f` formatter share this scanner or these
   defects: only `Str2F64` was probed. `%f`'s own mapping onto C's conversions is a
-  separate record (`tracking/suggestions/suggestion-0002-...`).
+  separate record, now closed: `tracking/suggestions/suggestion-0002-printf-number-conversions-
+  never-mapped-onto-kernel-printing(c).md`, `Implemented` — `%f` shipped as whole-value delegation,
+  so the mapping question this pointer used to leave open is answered there, flag by flag, with
+  the acceptance and refusal batteries in `T:/CC/GATES/` as its evidence.
 - That the fix belongs in the kernel rather than in every caller: the proposal
   assumes the kernel is the cheaper place, because there is one kernel and several
   callers, and today `T:/CC/` carries the whole workaround.
 
 ## Reproducing
 
-`/tmp/opencode/m35end.HC` (host-side: the value, the end pointer, and the text
-length per line) and `/tmp/opencode/m35cliff2.HC` (the `0x7FFFFFFFFFFFFFFF`
-boundary) are the measurements; `/tmp/opencode/m35lex.py` runs the same spellings
-through compiled C against `gcc -std=gnu99`, one program per process, and separates
-cases by whether the host's parser was measured exact for that spelling.
+The measurements were host scratch under `/tmp/opencode/` and are **gone with it**:
+`m35end.HC` (host-side: the value, the end pointer and the text length per line) and
+`m35cliff2.HC` (the `0x7FFFFFFFFFFFFFFF` boundary) are the HolyC probes, and `m35lex.py` is what
+ran the same spellings through compiled C against `gcc -std=gnu99`, one program per process,
+separating cases by whether the host's parser had measured exact for that spelling. None of them
+was moved into `T:/CC/GATES/`, which carries the M37 float-printing battery and not this parser
+probe, so the tables in *Finding* are a record and not a gate.
+
+What IS checkable from the tree by reading it, and is the part to check before re-running
+anything: `T:/STRB.HC:580` accepts only `'-'` after an `e`/`E`, so a `'+'` is not consumed as a
+sign and falls to the digit loop at `:585-587`, which takes the exponent as 0 and computes
+`d=i*Pow10I64(j-k)` at `:592` — item 1's `1e+2` answering 1.0; `:567-571` accumulates the digits
+into `i` (`i=i*10+ch-'0'`) with no saturation test and no short end pointer — item 2; and
+`T:/STRB.HC:574`, `:590`, `:592` apply the exponent through `Pow10I64` — item 3's mechanism, whose
+cause `suggestion-0004` files. lite's workarounds are `CCDigOvf` (`T:/CC/CC_LEX.HC:164`), the
+`wrote`/`plain` tests at `:366-397` and the end-pointer refusal at `:468-476`
+(`the kernel's decimal conversion did not read this literal whole`). Re-running the host side
+takes one HolyC file of the reader's own; the numbers above are what this filing's file printed.

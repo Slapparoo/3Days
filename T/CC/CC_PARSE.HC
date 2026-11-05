@@ -2107,6 +2107,18 @@ U0 CCExprPrimary(CCCtrl *cc)
       /* M12: kernel-delegated stdlib (CC_LIB.HC helpers). Results are
        * byte-oriented pointers (TY_CHARP): arrays and literals are
        * byte-addressed in this model; malloc yields byte storage. */
+      /* M37: cci_fmt is the %f DELEGATION shared by printf's compile-time
+       * lowering and the prelude's runtime sprintf engine.  It is dispatched
+       * by name like the other builtins, which is what lets PRELUDE C call it:
+       * sprintf's format is not known at compile time, so its %f arm has to
+       * reach the same helper printf uses.  The helper does not print: it
+       * calls the kernel.  (dst, value_bits, directive_text).
+       */
+      if (!StrCmp(save_name,"cci_fmt"))
+      {
+        CCLibCall(cc,CC_LIB_FMT,3,TY_INT);
+        return;
+      }
       if (!StrCmp(save_name,"strlen"))
       {
         CCLibCall(cc,CC_LIB_STRLEN,1,TY_INT);
@@ -3673,14 +3685,18 @@ U0 CCCompoundAssign(CCCtrl *cc,I64 op)
 
 /* printf: format must be a string literal; `%d %s %c %%` are lowered
  * at compile time to calls into the prelude helpers (CCItoa, CCStr,
- * CCOutByte). Arguments are evaluated left-to-right onto the stack,
- * moved into a fixed 8-slot frame area, then read per directive.
- * Up to 8 args. Returns 0 (C's byte count is not tracked). */
+ * CCOutByte).  `%f` is NOT lowered: its directive is rebuilt as text and
+ * handed to the kernel's float printer at run time, along with the
+ * argument's bits — see CC_LIB.HC's CCXFmt.  Arguments are evaluated
+ * left-to-right onto the stack, moved into a fixed 8-slot frame area, then
+ * read per directive.  Up to 8 args.  Returns 0 (C's byte count is not
+ * tracked). */
 U0 CCPrintf(CCCtrl *cc)
 {
-  I64 i,j,l,n,argp,at;
+  I64 i,j,l,n,argp,at,adv,dot,st,ch;
   U8 fmt[CC_TOK_MAX];
   U8 run[CC_TOK_MAX];
+  U8 dir[CC_TOK_MAX+8];	//M37: a %f directive, rebuilt as text for the kernel
   U8 *sp;
   CSym *hi,*hs,*ho;
   hi=CCSymFind(cc,"CCItoa");
@@ -3753,6 +3769,10 @@ U0 CCPrintf(CCCtrl *cc)
     else
     {
       at=fmt[i+1];
+      adv=2;		//the shared tail advance below.  The float
+				//arm overrides it: `%.6f` is not two
+				//characters, and this dialect has no
+				//`continue` (see this file's own header).
       if (!at)
       {
         CCError(cc,"printf: trailing %");
@@ -3784,12 +3804,105 @@ U0 CCPrintf(CCCtrl *cc)
         CCPopArgs(cc,1);
         argp++;
       }
-      else
-      {
-        CCError(cc,"printf: unsupported format");
-        return;
+      else			//M37: anything left must spell a %f directive, so a
+      {			//flag or a width lands here, and a directive that
+			//does not end in f is refused below with the
+			//message it always got: `%5d` still fails.
+        //M37: `%f`, DELEGATED.  Everything from the percent sign to the letter
+        //is rebuilt as a STRING and handed to the kernel's own float printer
+        //along with the argument's bits; whatever it writes into cc->fmtbuf is
+        //what printf emits.  Flags, field width and precision therefore mean
+        //what TempleOS says they mean — see the note at the top of CC_LIB.HC
+        //and the PLAN's M37 record.  The one thing written in here is C's
+        //default precision: the host's bare `%f` prints NO fraction digits,
+        //and a compiler that let the host decide that would print `2` where
+        //C prints `2.000000`.  `*` is dropped rather than refused: the engine
+        //would look for the width in the NEXT argument slot, and the only slot
+        //lite has is the value.
+        j=i+1;
+        l=1;
+        dir[0]='%';
+        dot=0;
+        st=0;			//0 = flags and width, 1 = past the '.', 2 = done
+        while (st<2)
+        {
+          ch=fmt[j];
+          if ((ch>='0')&&(ch<='9'))
+          {
+            dir[l]=ch;
+            l=l+1;
+            j=j+1;		//a width run and a precision run look the same
+          }				//from here, and the kernel sorts them out
+          else if ((st==0)&&((ch=='-')||(ch=='+')||(ch==' ')||(ch=='#')))
+          {				//again from the text it is handed
+            dir[l]=ch;
+            l=l+1;
+            j=j+1;
+          }
+          else if ((st==0)&&(ch=='.'))
+          {
+            dot=1;
+            st=1;
+            dir[l]='.';
+            l=l+1;
+            j=j+1;
+          }
+          else if (ch=='*')
+            j=j+1;		//dropped, not refused: a width from an argument
+          else			//is one thing lite cannot do, since its args
+            st=2;		//are positional and this one is the value
+        }
+        if (fmt[j]!='f')
+        {
+          CCError(cc,"printf: unsupported format (only %d %s %c %% and %f)");
+          return;
+        }
+        if (!dot)
+        {
+          dir[l]='.';
+          l=l+1;
+          dir[l]='6';		//C's default, spelled out rather than inferred
+          l=l+1;
+        }
+        dir[l]='f';
+        l=l+1;
+        dir[l]=0;
+        if (argp>=n)
+        {
+          CCError(cc,"printf: not enough args");
+          return;
+        }
+        //cci_fmt(cc->fmtbuf, the argument's quad, the directive text).  A
+        //double's slot value IS its bit pattern (M35), so the argument needs
+        //no conversion on the way in, and the helper reads its arguments out
+        //of ext exactly like every other delegated slot.  The destination is a
+        //field of cc so the address embedded here rebases through CC_B_CTRL on
+        //a saved-object reload, exactly as CCPushExt's own &cc->ext[] does; the
+        //directive lives in the string arena and rebases through CC_B_LOCALS
+        //the same way a `%s` literal's does.  The helper caps the two numeric
+        //fields before calling out, so a `%05000f` cannot walk past fmtbuf.
+        CCByte(cc,0x48);CCByte(cc,0xB8);	//MOVABS RAX,&cc->fmtbuf
+        CCQuadAbs(cc,CC_B_CTRL,cc->fmtbuf);
+        CCPushExt(cc,0);
+        CCByte(cc,0x48);CCByte(cc,0x8B);CCByte(cc,0x84);CCByte(cc,0x24);
+        CCWord(cc,8*argp);		//MOV RAX,[RSP+8*slot]
+        CCPushExt(cc,1);
+        sp=CCStrAlloc(cc,dir);
+        CCByte(cc,0x48);CCByte(cc,0xB8);	//MOVABS RAX,dir
+        CCQuadAbs(cc,CC_B_LOCALS,sp);
+        CCPushExt(cc,2);
+        CCEmitLibCall(cc,CC_LIB_FMT);	//RAX is the count; CCStr wants
+        CCByte(cc,0x48);CCByte(cc,0xB8);	//the bytes, so re-emit the
+        CCQuadAbs(cc,CC_B_CTRL,cc->fmtbuf);	//buffer address
+        CCByte(cc,0x50);			//PUSH RAX
+        CCCall(cc,hs);
+        CCPopArgs(cc,1);
+        argp++;
+        adv=j+1-i;		//`%.6f` is not two characters, and this
+				//dialect has no `continue`, so the shared
+				//tail advance is overridden instead
       }
-      i=i+2;
+      i=i+adv;
     }
   }
   //Pop the slot frame AND the n argument pushes.
