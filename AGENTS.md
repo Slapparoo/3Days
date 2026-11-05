@@ -72,9 +72,36 @@ Traps, all verified:
   `BINFILE` "so end-users don't mess up their KERNEL*.HH files", and boot parses the *embedded* copy,
   not the file on disk.
 - Rebuild from `T:/` inside 3Days (GUI or `-c`):
-  `Cmp("FULL_PACKAGE.HC","HCRT.DBG.Z","HCRT.BIN");` → writes `T/HCRT.BIN` + `T/HCRT.DBG.Z`
-  (the embedded boot in `FULL_PACKAGE.HC` calls `DbgInfoRead` on the `.DBG.Z`, so keep the two together).
+  `Cd("T:/");` then `Cmp("FULL_PACKAGE.HC","HCRT.DBG.Z","HCRT.BIN");` → writes
+  `T/HCRT.BIN` + `T/HCRT.DBG.Z` (the embedded boot calls `DbgInfoRead` on the
+  `.DBG.Z` — `FULL_PACKAGE.HC:77-78` — so keep the two together).
   `T/FULL_PACKAGE_BC.HC` is `#define BC_ENABLE 1` + that same file → `HCRT_BC.BIN`.
+  A whole-image build takes ~3 minutes here, not tens.  Prefer
+  `./3d_loader -t T -c T:/CC/GATES/rebuild.HC`, which writes to scratch names.
+- **`Cd()` first is not cosmetic.** A `-c` run mounts the host root at `Z:` and
+  then `Cd()`s the task into the *process* cwd (`main.c:167-176`), so a relative
+  name is the HOST directory: `Cmp("FULL_PACKAGE.HC", …)` without the `Cd("T:/")`
+  looked for `<cwd>/FULL_PACKAGE.HC`, "finished", and wrote a **48-byte empty
+  module** over the destination.  A boot on that module prints only
+  `Using ./HCRT.BIN as the default binary.` and then SIGSEGVs with no fault text
+  and no backtrace, because `tos_aot.c:250` dereferences an unchecked symbol
+  lookup *before* `SetupDebugger()` at `:253`.  Symptom: the host window appears,
+  decorated and permanently empty.
+- **A failed `Cmp` overwrites its `out_name`** with that stub, so build to a
+  scratch name and move it onto `HCRT.BIN` only after the gates pass on it.
+  Compile-only — `Cmp(file, NULL, NULL)` — writes nothing on failure and is the
+  cheap way to ask "does this file still parse?".
+- **The tree could not rebuild itself until 2026-11-05.** `T/AMATH.HC` spelled
+  its π as a raw CP437 *byte*, and a lone raw `0xE3` token is rejected by the
+  compiler (`Invalid lval at <E3>`, `Errs:2 Code:0 Size:0`) — which is why
+  `HCRT.BIN` has been frozen since the 2022 commit that names it.  `KERNELA.HH`
+  spells the same characters as TEXT (`#define \E3 pi` :360, `F64 \E8` :4582,
+  `F64 \E9_x` :5421) and holds no raw high bytes; the image *stores* them as raw
+  bytes (`Mat4x4RotX(I64 *m,F64 <E8>)` is in `HCRT.BIN` as text).  Five
+  definition files — `AMATH.HC`, `DOLDOC/DocGr.HC`, `GR/GrMath.HC`,
+  `GR/GrSpritePlot.HC`, `GR/SpriteEd.HC` — had 25 such tokens; all are now text
+  or ASCII.  `sh T/CC/GATES/abprobe.sh` re-measures the rule in ~60 s; read it
+  before concluding the compiler is broken.
 - The compile lands in `T/`, but the loader reads the **repo root**. Copy `T/HCRT.BIN` → `./HCRT.BIN`,
   or the old kernel keeps booting. History commits the rebuilt `HCRT.BIN` in the same commit as the
   kernel sources it came from — do the same.
@@ -104,10 +131,22 @@ named `3days-0.3.00.pkg`, so the `.pkg` filename does not track the real version
 ## HolyC and file conventions
 
 - Lvalues can be cast: `x(I64*)++;`. Never declare inside a `for` header — `for(I64 i=0;…)` is invalid.
+  Declarations must also precede every statement in a body: `F64 a; a = 1.5;` parses, `a = 1.5;` with no
+  earlier `F64 a;` is `Invalid lval at "a"`.
+- There is **no `FileSize`** entry: the kernel has `FSize(U8i*)` (`T/KERNELA.HH:280`) and
+  `FSize(CFile*)` (`:6495`), two different signatures on one name. Calling an undeclared name faults —
+  and a fault inside JIT'd code can surface as a host-side parse error (`ERROR: Invalid lval at
+  "FileSize"`) or as a bare segfault, so a weird complaint about a *correct* line usually means the
+  line before it called something the image does not export.
 - Top-level statements execute immediately and still need their `;`. Text handed to the compiler as a
   string needs `;;` to terminate: `ExePrint("#define X 1;;")`.
 - `*.Z` files (`T/AMOUSE.HC.Z`, `T/Tmp.DD.Z`) are compressed/encrypted containers, **not text** — never
   edit them with host text tools. Use HolyC `Zip(mask)` / `Unzip(mask)`.
+- A host shell wildcard over `T:/` deletes **tracked** files: `rm T/Q*.HC` catches `T/QSORT.HC`
+  (`#include`d at `T/HCRT_TOS.HC:53`) and `T/QUE.HC` (tracked but included by nothing I could find),
+  and `T/*.DBG.Z` catches the two tracked debug maps. A compile also drops `<src-basename>.BIN.Z`
+  beside its source, so cleanup globs catch sources too. Remove exact filenames; `git status` will
+  not warn you until the deletion is already staged.
 - `T/` paths use `/` even on Windows; `vfs.c` translates (`delim` vs `TOS_delim`) — check it when
   touching path handling.
 - Screen size and font are compile-time constants: `SCREEN_WIDTH`/`SCREEN_HEIGHT` in `3d.h`, fonts
