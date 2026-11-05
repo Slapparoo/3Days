@@ -3378,6 +3378,81 @@ Not supported — each currently fails with a compile diagnostic:
   private stack and the loader dies with SIGSEGV and no `[3d] FAULT` line,
   because the fault is in the code buffer, not in HolyC. Before suspecting the
   codegen, check whether the loop/recursion guard is the thing that is wrong.
+- [x] **The tree could not compile itself, and HCRT.BIN has been frozen since
+  2022 because of it (2026-11-05).** `Cmp("FULL_PACKAGE.HC",…)` died at
+  `T:/AMATH.HC:19` with `Invalid lval at <E3>` and `Errs:2 Code:0 Size:0` — the
+  compiler emitted NOTHING, so the rebuild never produced an image and every
+  edit to a `#include`d kernel file (including the merged `KERNELA.HH`
+  prototype fixes) stayed inert, because `FULL_PACKAGE.HC:29,32` BINFILEs those
+  headers into the image and boot parses the EMBEDDED copy. Measured rule
+  (`sh T:/CC/GATES/abprobe.sh` re-derives it in ~60 s, six compiles of one
+  construct): a raw 0xE3 standing ALONE as a token is rejected; the same
+  character as KERNELA's own TEXT escape is accepted; 0xE3/0xE8/0xE9 inside a
+  longer identifier is accepted; plain ASCII is accepted; and adding
+  `#define \E9 e` does not rescue a lone raw 0xE3, so this is a token rule and
+  not a missing macro. `KERNELA.HH` spells every one of these characters as
+  text (`#define \E3 pi` :360, `F64 \E8` :4582, `F64 \E9_x` :5421) and holds no
+  raw high byte at all, while the IMAGE stores them raw
+  (`Mat4x4RotX(I64 *m,F64 <E8>)` is text inside HCRT.BIN): text-in-source is the
+  supported spelling. Walking all 155 files reachable from FULL_PACKAGE.HC, five
+  definition files held the 25 offending tokens — `AMATH.HC` (12, the only one
+  that stopped the build), `DOLDOC/DocGr.HC` (6), `GR/GrMath.HC` (9),
+  `GR/GrSpritePlot.HC` (6), `GR/SpriteEd.HC` (3) — and all are now text or
+  ASCII with no semantic change: the new `Wrap(F64 e,F64 base=-pi)` is
+  byte-identical to `KERNELA.HH:4340`'s own prototype. A whole-image build is
+  ~3 minutes here (measured: consecutive full builds 16:57 and 17:00), not tens.
+  The rebuilt image (1117808 bytes, `Errs:0 Code:105445 Size:110E70`) was gated
+  before it was staged, and `T:/CC/GATES/host.HC`'s 342 kernel renderings diff
+  EMPTY against the committed `rows.txt`: the new kernel prints every float cell
+  exactly as the 2022 one. Two traps this cost, now in AGENTS.md: a `-c` run
+  Cd()s into the HOST cwd mounted at Z: (`main.c:167-176`), so a relative name
+  in `Cmp` is not `T:/`; and a failed `Cmp` OVERWRITES its `out_name` with an
+  empty module (48 bytes here) after which every boot SIGSEGVs silently, because
+  `tos_aot.c:250` dereferences an unchecked symbol lookup before
+  `SetupDebugger()` at `:253` — the same failure that produced the reported
+  "window border, no content". `HCRT_BC.BIN` and `T:/HCRT_BC.DBG.Z` are still
+  the 2022 pair, so `-b` still boots the old bounds-checked image.
+- [ ] **M38** `<math.h>` builtins, delegated whole like `%f`: `sqrt→Sqrt`,
+  `fabs→Abs`, `exp→Exp`, `log→Ln`, `log10→Log10`, `pow→Pow`, `floor→Floor`,
+  `ceil→Ceil` (+ the trig that exists: `Sin Cos Tan ATan ASin ACos Sinh Cosh`).
+  The mechanism is PROVEN, so this is now writing, not research: a `CC_LIB`
+  helper that makes one direct HolyC call binds an asm-`_extern` math entry
+  (`Exp` `Floor` `Pow`) exactly as well as an `_intern`-backed opcode
+  (`Sqrt` `Abs`) — no dispatch table and no `CallExtStr`; the AOT `Cmp`+`Load`
+  route is dead for other reasons (an AOT unit's scope chains to
+  `cmp.asm_hash`, not `Fs->hash_table`, so kernel names are invisible to it).
+  End-to-end shape already runs: 5 new slots + 5 one-call helpers + 5
+  name-dispatch arms + `math.h` produced a fixture whose 8 cells matched the
+  kernel oracle cell for cell, and the SAVED object reproduced all 8 in a NEW
+  process, `rc=0`, no fault. 20 slots installed of `CC_LIB_SLOTS 32`. Two gaps
+  `CCLibCall` must close: no int→double conversion (`sqrt(2)` reinterprets the
+  quad 2 as a denormal and prints 0.00000000000000000) and interception of a
+  user's own `sqrt`/`pow`. Record-not-correct divergences: `pow(-2,0.5)` is
+  +1.414 (C: NaN), `pow(10,3)` is 999.99999999999872, `acos` is 1 ulp low,
+  `exp(1000)` saturates to DBL_MAX rather than +inf, kernel `Round` is
+  nearest-even, a NaN renders with a negative sign. Also M38's, from the float
+  bullet above: converting an overflowing integer literal as UNSIGNED when the
+  destination is a double.
+- [ ] **M39** the TinyCC `tests2` port, as its own milestone and not an
+  appendage to M38. Verified against repo.or.cz/tinycc.git: the real suite is
+  `tests/tcctest.c` (4538 lines) + `tests/tests2/` (141 `.c` with 141 `.expect`
+  goldens, BSD-3 via picoc) + `tests/pp/`; there is NO `run_test.c`, no `.tc`
+  files and no `libctest` in that history. Its goldens are glibc text produced
+  by gcc — the WRONG oracle for a compiler whose `%f` answer is the TempleOS
+  kernel, which disagrees on 328 of our own 684 sprintf cells — so take the
+  CASES and discard the goldens, converting each into our shape (a
+  self-checking fixture returning a pass count, pinned by `CCAssert`). ~70 of
+  141 use nothing we lack, ~40 are realistically convertible. The glue is the
+  first unit of work: a `cccheck.h` `CK()` macro and a fixture-directory loop
+  in `CC_TEST.HC`. Shortlist chosen for where our fixtures are thinnest:
+  `11_precedence`, `13_integer_literals` (our 19-digit defect),
+  `26_character_constants`, `19_pointer_arithmetic` (feeds `double *`),
+  `90_struct-init` (the non-computed-goto half). Excluded as stated: 32-bit
+  shapes, `long double`/`%Lf`/`%g`/`%a`, computed goto, bitfields, `__asm__`,
+  VLAs, GCC case ranges, stdio-to-a-file, `assert`, argv games, link/bcheck
+  machinery, and `46_grep.c` (DECUS "not for profit"). Vendoring would need
+  `T:/CC/TEST/tcc/LICENSE.txt` plus attribution; paraphrasing the 15-40-line
+  bodies and citing filenames avoids the question.
 ## Codegen invariants
 
 - Expression value always lands in RAX; binary ops `PUSH` the left
